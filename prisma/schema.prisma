@@ -1,0 +1,824 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Beneficiarios {
+  idBeneficiario  Int       @id @default(autoincrement())
+  idCandidato     Int?
+  nombre          String?   @db.VarChar(100)
+  primerApellido  String?   @db.VarChar(100)
+  segundoApellido String?   @db.VarChar(100)
+  fechaNacimiento DateTime? @db.Date
+  IdParentesco    Int?
+}
+
+model Candidatos {
+  idCandidato          Int       @id @default(autoincrement())
+  nombre               String?   @db.VarChar(100)
+  primerApellido       String?   @db.VarChar(100)
+  segundoApellido      String?   @db.VarChar(100)
+  idCampania           Int?
+  idTipoSanguineo      Int?
+  numeroSeguroSocial   String?   @db.VarChar(15)
+  idEstadoCivil        Int?
+  fechaNacimiento      DateTime? @db.Date
+  rfc                  String?   @db.VarChar(18)
+  correo               String?   @db.VarChar(250)
+  telefonoMovil        String?   @db.VarChar(15)
+  telefonoLocal        String?   @db.VarChar(15)
+  idNivelEstudios      Int?
+  tieneInfonavit       Boolean?
+  tieneHijos           Boolean?
+  FechaRegistro        DateTime? @default(now()) @db.Timestamp(0)
+  usuarioRegistro      String?   @db.VarChar(250)
+  idGenero             Int?
+  numeroInfonavit      String?   @db.VarChar(30)
+  numeroHijos          Int?
+  imagenFirmaAutografa String?   @db.VarChar(500)
+}
+
+model CatAreas {
+  idArea         Int      @id @default(autoincrement())
+  idCentroCostos Int
+  idSite         Int?
+  Descripcion    String?  @db.VarChar(200)
+  Encargado      String?  @db.VarChar(150)
+  Correo         String?  @db.VarChar(150)
+  Telefono       String?  @db.VarChar(10)
+  Extension      String?  @db.VarChar(10)
+  Activo         Boolean? @default(true)
+}
+
+model CatCampa_a {
+  idCampa_a   Int     @id @default(autoincrement()) @map("idCampaña")
+  descripcion String  @db.VarChar(255)
+  activo      Boolean @default(true)
+
+  @@map("CatCampaña")
+}
+
+model CatCentroCostos {
+  idCentroCostos Int      @id @default(autoincrement())
+  idEmpresa      Int?
+  Descripcion    String?  @db.VarChar(200)
+  Activo         Boolean? @default(true)
+}
+
+model CatCompetenciaspuesto {
+  idCompetencia Int     @id @default(autoincrement())
+  idArea        Int
+  descripcion   String? @db.Text
+  activo        Boolean @default(true)
+}
+
+model CatComunicacion {
+  idComunicacion Int      @id @default(autoincrement())
+  descripcion    String?  @db.VarChar(45)
+  activo         Boolean? @default(true)
+}
+
+model CatCursos {
+  idCursos    Int      @id @default(autoincrement())
+  idEmpresa   Int
+  Descripcion String?  @db.VarChar(45)
+  activo      Boolean? @default(true)
+  idArea      Int?
+}
+
+model CatDescripcionesPuesto {
+  idDescripcion Int     @id @default(autoincrement())
+  idArea        Int
+  descripcion   String? @db.Text
+  activo        Boolean @default(true)
+}
+
+model CatDocumentos {
+  IdDocumento     Int       @id @default(autoincrement())
+  idEmpresa       Int?
+  Descripcion     String?   @db.VarChar(100)
+  FechaRegistro   DateTime? @db.DateTime(0)
+  UsuarioRegistro String?   @db.VarChar(45)
+  Activo          Boolean?  @default(true)
+}
+
+model CatEmpresas {
+  idEmpresa         Int                 @id @default(autoincrement())
+  razon_social      String              @db.VarChar(200)
+  nombre_comercial  String              @db.VarChar(200)
+  correo            String?             @db.VarChar(200)
+  telefono          String?             @db.VarChar(20)
+  rfc               String?             @db.VarChar(13)
+  logo_empresa      String?             @db.VarChar(300)
+  fechaRegistro     DateTime?           @default(now()) @db.DateTime(0)
+  usuarioRegistro   String?             @db.VarChar(100)
+  activo            Boolean?            @default(true)
+  DomicilioEmpresas DomicilioEmpresas[]
+  RelUsuarioEmpresa RelUsuarioEmpresa[]
+}
+
+model CatEquipo {
+  idEquipo    Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(200)
+  Activo      Boolean? @default(true)
+}
+
+model CatEscolaridad {
+  idNivelEstudios Int      @id @default(autoincrement())
+  Descripcion     String?  @db.VarChar(50)
+  Activo          Boolean? @default(true)
+}
+
+model CatEstadoCivil {
+  idEstadoCivil Int      @id @default(autoincrement())
+  Descripcion   String?  @db.VarChar(200)
+  Activo        Boolean? @default(true)
+}
+
+model CatEstatusDocumentos {
+  idEstatusDocumento Int      @id @default(autoincrement())
+  Descripcion        String?  @db.VarChar(45)
+  Activo             Boolean?
+}
+
+model CatEstatusEntrevista {
+  idEstatusEntrevista Int      @id @default(autoincrement())
+  descripcion         String?  @db.VarChar(45)
+  activo              Boolean?
+}
+
+model CatEstatusExpedientes {
+  IdEstatus   Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(150)
+  Activo      Boolean? @default(true)
+}
+
+model CatEstatusVacante {
+  idEstatusVacante Int      @id @default(autoincrement())
+  decripcion       String?  @db.VarChar(45)
+  activo           Boolean?
+}
+
+model CatFuncionespuesto {
+  idFuncion   Int     @id @default(autoincrement())
+  idArea      Int
+  descripcion String? @db.Text
+  activo      Boolean @default(true)
+}
+
+model CatGenero {
+  idGenero    Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(50)
+  Activo      Boolean? @default(true)
+}
+
+model CatHabilidades {
+  idHabilidad Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(45)
+  Activo      Boolean? @default(true)
+}
+
+model CatIdiomas {
+  idIdioma    Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(50)
+  Activo      Boolean? @default(true)
+}
+
+model CatModalidad {
+  idModalidad Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(100)
+  Activo      Boolean? @default(true)
+}
+
+model CatModulos {
+  idModulo    Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(200)
+  Activo      Boolean? @default(true)
+}
+
+model CatNivel {
+  idNivel     Int      @id @default(autoincrement())
+  Descripcion String?  @db.VarChar(45)
+  Activo      Boolean? @default(true)
+}
+
+model CatNivelesSalario {
+  IdNivelSalario Int      @default(autoincrement())
+  Descripcion    String?  @db.Text
+  Activo         Boolean? @default(true)
+  IdEmpresa      String   @db.VarChar(45)
+
+  @@id([IdNivelSalario, IdEmpresa])
+}
+
+model CatParentesco {
+  IdParentesco Int      @id @default(autoincrement())
+  Descripcion  String?  @db.VarChar(150)
+  Activo       Boolean? @default(true)
+}
+
+model CatPlataforma {
+  idPlaraforma Int      @id @default(autoincrement())
+  descripcion  String?  @db.VarChar(45)
+  activo       Boolean?
+}
+
+model CatPuestos {
+  idPuesto             Int                  @id @default(autoincrement())
+  NombrePuesto         String               @db.VarChar(200)
+  idTipoPuesto         Int?
+  idArea               Int?
+  idTipoContratacion   Int?
+  idModalidad          Int?
+  idSite               Int?
+  idNivelEstudios      Int?
+  DescripcionPuesto    String?              @db.Text
+  SalarioMinimo        String?              @db.Text
+  SalarioMaximo        String?              @db.Text
+  IdNivelSalario       Int?
+  Edad                 String?              @db.Text
+  Vacantes             Int?                 @default(0)
+  Posiciones           Int?
+  DisponibilidadViajar Boolean?             @default(false)
+  idJefeInmediato      Int?
+  UsuarioRegistro      String?              @db.VarChar(30)
+  FechaRegistro        DateTime?            @default(now()) @db.DateTime(0)
+  Activo               Boolean?             @default(true)
+  aprobada             Boolean?             @default(false)
+  pendiente            Boolean?             @default(false)
+  comentarios          String?              @db.Text
+  CompetenciasPuesto   CompetenciasPuesto[]
+  FuncionesPuesto      FuncionesPuesto[]
+  HabilidadesPuesto    HabilidadesPuesto[]
+  RequisitosPuesto     RequisitosPuesto[]
+}
+
+model CatSites {
+  idSite      Int      @id @default(autoincrement())
+  idEmpresa   Int?
+  Descripcion String?  @db.VarChar(200)
+  Activo      Boolean? @default(true)
+}
+
+model CatSolicitud {
+  CatSolicitud Int      @id
+  Descripcion  String?  @db.VarChar(45)
+  Activo       Boolean?
+}
+
+model CatTipo {
+  idTipo      Int      @id @default(autoincrement())
+  descripcion String?  @db.VarChar(45)
+  activo      Boolean?
+}
+
+model CatTipoContratacion {
+  idTipoContratacion Int      @id @default(autoincrement())
+  Descripcion        String?  @db.VarChar(100)
+  Activo             Boolean? @default(true)
+}
+
+model CatTipoCurso {
+  idTipoCurso Int      @id @default(autoincrement())
+  Descripcion String   @db.VarChar(60)
+  activo      Boolean? @default(true)
+}
+
+model CatTipoPuesto {
+  idTipoPuesto Int      @id @default(autoincrement())
+  Descripcion  String?  @db.VarChar(45)
+  Activo       Boolean? @default(true)
+}
+
+model CatTipoSanguineo {
+  idCatTipoSanguineo Int      @id @default(autoincrement())
+  Descripcion        String?  @db.VarChar(45)
+  Activo             Boolean? @default(true)
+}
+
+model CompetenciasPuesto {
+  idCompetenciaPuesto Int         @id @default(autoincrement())
+  idPuesto            Int?
+  Competencia         String?     @db.Text
+  CatPuestos          CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "CompetenciasPuesto_ibfk_1")
+
+  @@index([idPuesto], map: "idPuesto")
+}
+
+model CorreosNotificacionRH {
+  idCorreo Int      @id @default(autoincrement())
+  nombre   String?  @db.VarChar(100)
+  correo   String?  @db.VarChar(150)
+  activo   Boolean? @default(true)
+}
+
+model DatosBancarios {
+  idDatoBancario Int     @id @default(autoincrement())
+  idCandidato    Int?    @unique(map: "uk_idCandidato")
+  banco          String? @db.VarChar(100)
+  cuentaBancaria String? @db.VarChar(50)
+}
+
+model DocumentosCandidato {
+  idDocumentoCandidato Int       @id @default(autoincrement())
+  idCandidato          Int?
+  IdDocumento          Int?
+  idEstatusDocumento   Int?      @default(1)
+  rutaArchivo          String?   @db.Text
+  fechaCarga           DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model DocumentosEmpresa {
+  idDocumentoEmpresa Int       @id @default(autoincrement())
+  idCandidato        Int?
+  nombre             String?   @db.VarChar(255)
+  rutaOriginal       String?   @db.VarChar(500)
+  rutaFirmado        String?   @db.VarChar(500)
+  fechaEnvio         DateTime? @db.DateTime(0)
+  fechaFirmado       DateTime? @db.DateTime(0)
+  usuarioRegistro    String?   @db.VarChar(250)
+}
+
+model DocumentosEmpresaNOM151 {
+  idNOM151           Int       @id @default(autoincrement())
+  idDocumentoEmpresa Int?
+  codigoValidacion   String?   @db.VarChar(200)
+  hash               String?   @db.VarChar(500)
+  rutaConstancia     String?   @db.VarChar(500)
+  estatus            String?   @db.VarChar(50)
+  claveMensaje       String?   @db.VarChar(100)
+  respuestaCompleta  String?   @db.LongText
+  fechaObtencion     DateTime? @db.DateTime(0)
+}
+
+model DocumentosPuesto {
+  idDocPuesto   Int      @id @default(autoincrement())
+  idPuesto      Int
+  idDocumento   Int
+  esObligatorio Boolean? @default(true)
+}
+
+model DomicilioCandidato {
+  idDomicilio    Int     @id @default(autoincrement())
+  idCandidato    Int?    @unique(map: "uk_idCandidato")
+  codigoPostal   String? @db.VarChar(5)
+  calle          String? @db.VarChar(100)
+  numeroExterior String? @db.VarChar(20)
+  numeroInterior String? @db.VarChar(20)
+  idColonia      Int?
+  municipio      String? @db.VarChar(250)
+  estado         String? @db.VarChar(250)
+}
+
+model DomicilioEmpresas {
+  idDomicilioEmpresa Int         @id @default(autoincrement())
+  idEmpresa          Int
+  codigo_postal      String      @db.VarChar(10)
+  idColonia          Int
+  colonia            String      @db.VarChar(150)
+  municipio          String      @db.VarChar(150)
+  estado             String      @db.VarChar(150)
+  calle              String      @db.VarChar(200)
+  numero_exterior    String?     @db.VarChar(20)
+  numero_interior    String?     @db.VarChar(20)
+  fechaRegistro      DateTime?   @default(now()) @db.DateTime(0)
+  usuarioRegistro    String?     @db.VarChar(100)
+  CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "DomicilioEmpresas_ibfk_1")
+
+  @@index([idEmpresa], map: "idEmpresa")
+}
+
+model DomicilioSite {
+  idDomicilioSite Int      @id @default(autoincrement())
+  idSite          Int?
+  cp              String?  @db.VarChar(5)
+  idEstado        Int?
+  idMunicipio     Int?
+  calle           String?  @db.VarChar(100)
+  noInt           String?  @db.VarChar(30)
+  noExt           String?  @db.VarChar(30)
+  idColonia       Int?
+  activo          Boolean? @default(true)
+}
+
+model FuncionesPuesto {
+  idFuncionPuesto Int         @id @default(autoincrement())
+  idPuesto        Int?
+  Funcion         String?     @db.Text
+  CatPuestos      CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "FuncionesPuesto_ibfk_1")
+
+  @@index([idPuesto], map: "idPuesto")
+}
+
+model HabilidadesPuesto {
+  idHabilidadPuesto Int         @id @default(autoincrement())
+  idPuesto          Int?
+  Habilidad         String?     @db.Text
+  Nivel             String?     @db.Text
+  CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "HabilidadesPuesto_ibfk_1")
+
+  @@index([idPuesto], map: "idPuesto")
+}
+
+model HistorialDescargasExpediente {
+  idDescarga      Int      @id @default(autoincrement())
+  idCandidato     Int
+  usuarioRegistro String   @db.VarChar(250)
+  motivo          String   @db.Text
+  fechaDescarga   DateTime @default(now()) @db.DateTime(0)
+  activo          Boolean  @default(true)
+}
+
+model HistorialDocumentosCandidato {
+  idHistorial          Int       @id @default(autoincrement())
+  idDocumentoCandidato Int?
+  rutaArchivo          String?   @db.Text
+  fechaCarga           DateTime? @default(now()) @db.Timestamp(0)
+  usuario              String?   @db.VarChar(250)
+  comentario           String?   @db.Text
+  estatusAnterior      Int?
+  estatusActual        Int?
+}
+
+model HistorialExpediente {
+  idHistorialExpediente Int       @id @default(autoincrement())
+  idExpediente          Int?
+  idEstatusAnterior     Int?
+  idEstatusNuevo        Int?
+  fechaCambio           DateTime? @default(now()) @db.Timestamp(0)
+  usuario               String?   @db.VarChar(250)
+  comentario            String?   @db.Text
+}
+
+model HorariosPuesto {
+  idHorario   Int       @id @default(autoincrement())
+  idPuesto    Int
+  DiaSemana   String?   @db.VarChar(10)
+  HoraEntrada DateTime? @db.Time(0)
+  HoraSalida  DateTime? @db.Time(0)
+}
+
+model IdiomasPuesto {
+  idRelIdioma Int     @id @default(autoincrement())
+  idPuesto    Int
+  idIdioma    Int
+  Nivel       String? @db.VarChar(50)
+}
+
+model LugarNacimiento {
+  idLugarNacimiento Int     @id @default(autoincrement())
+  idCandidato       Int?    @unique(map: "uk_idCandidato")
+  lugar             String? @db.VarChar(100)
+  pais              String? @db.VarChar(100)
+  nacionalidad      String? @db.VarChar(100)
+  estado            String? @db.VarChar(100)
+}
+
+model NubariumValidaciones {
+  idValidacion      Int       @id @default(autoincrement())
+  idCandidato       Int?
+  idDocumento       Int?
+  nombre_archivo    String?   @db.VarChar(255)
+  ruta_archivo      String?   @db.VarChar(500)
+  endpoint_nubarium String?   @db.VarChar(200)
+  http_status       Int?      @db.SmallInt
+  validado          Boolean?
+  score             Decimal?  @db.Decimal(5, 2)
+  motivo_rechazo    String?   @db.VarChar(500)
+  respuesta_json    Json?
+  usuario           String?   @db.VarChar(150)
+  fecha_consulta    DateTime? @db.DateTime(0)
+}
+
+model PerfilPostulante {
+  idPerfilPostulante    Int       @id @default(autoincrement())
+  idPostulacion         Int
+  idPuesto              Int
+  estado_proceso        String?   @db.VarChar(50)
+  score_global          Float?    @db.Float
+  clasificacion         String?   @db.VarChar(50)
+  decision              String?   @db.VarChar(50)
+  indices               String?   @db.LongText
+  detalle_por_categoria String?   @db.LongText
+  requisitos_knockout   String?   @db.LongText
+  fortalezas_clave      String?   @db.LongText
+  brechas_criticas      String?   @db.LongText
+  resumen               String?   @db.LongText
+  created_at            DateTime? @db.DateTime(0)
+}
+
+model PesoCategoriaPuesto {
+  id         Int       @id @default(autoincrement())
+  idPuesto   Int
+  categoria  String    @db.VarChar(50)
+  peso       Decimal   @default(0.00) @db.Decimal(5, 2)
+  active     Boolean?  @default(true)
+  created_at DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model Postulaciones {
+  idPostulacion   Int       @id @default(autoincrement())
+  idCandidato     Int?
+  idEstatus       Int?      @default(1)
+  idPuesto        Int?
+  nombre          String    @db.VarChar(100)
+  primerApellido  String    @db.VarChar(100)
+  segundoApellido String?   @db.VarChar(100)
+  correo          String    @db.VarChar(250)
+  telefono        String    @db.VarChar(10)
+  rutaCV          String    @db.VarChar(500)
+  fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
+  curp            String?   @db.VarChar(45)
+  idCampa_a       Int?      @map("idCampaña")
+}
+
+model ProcesosSeleccion {
+  idProceso           Int       @id @default(autoincrement())
+  idPostulaciones     Int
+  idEstatusVacante    Int
+  idTipo              Int?
+  idPlataforma        Int?
+  liga                String?   @db.VarChar(300)
+  lugar               String?   @db.VarChar(300)
+  dia                 DateTime? @db.Date
+  horario             DateTime? @db.Time(0)
+  duracion            DateTime? @db.Time(0)
+  idEstatusEntrevista Int?
+  comentarios         String?   @db.Text
+  fechaRegistro       DateTime  @default(now()) @db.Timestamp(0)
+  UsuarioRegistro     String?   @db.VarChar(45)
+}
+
+model RelCurso {
+  idRelCurso  Int      @id @default(autoincrement())
+  idCurso     Int
+  idTipoCurso Int
+  activo      Boolean? @default(true)
+}
+
+model RelModuloUsuario {
+  idRelacion    Int       @id @default(autoincrement())
+  idUsuario     Int
+  idModulo      Int
+  FechaRegistro DateTime? @default(now()) @db.DateTime(0)
+  Activo        Boolean?  @default(true)
+}
+
+model RelPuestoCurso {
+  idRelPuestoCurso Int       @id @default(autoincrement())
+  idPuesto         Int
+  idCurso          Int
+  activo           Boolean?  @default(true)
+  fechaRegistro    DateTime? @default(now()) @db.DateTime(0)
+  idTipoCurso      Int?
+
+  @@unique([idPuesto, idCurso], map: "unique_puesto_curso")
+  @@unique([idPuesto, idCurso, idTipoCurso], map: "unique_puesto_curso_tipo")
+  @@index([idCurso], map: "idx_curso")
+  @@index([idPuesto], map: "idx_puesto")
+}
+
+model RelRequisicionHabilidades {
+  idRelReqHab   Int                              @id @default(autoincrement())
+  idRequisicion Int
+  idHabilidad   Int
+  nivel         RelRequisicionHabilidades_nivel? @default(MEDIO)
+  fechaRegistro DateTime?                        @default(now()) @db.DateTime(0)
+}
+
+model RelRequisicionRequerimientos {
+  idRelReqReq      Int       @id @default(autoincrement())
+  idRequisicion    Int
+  idEquipo         Int
+  especificaciones String?   @db.VarChar(500)
+  fechaRegistro    DateTime? @default(now()) @db.DateTime(0)
+}
+
+model RelUsuarioEmpresa {
+  idRelacion    Int         @id @default(autoincrement())
+  idEmpresa     Int
+  idUsuario     Int
+  activo        Boolean?    @default(true)
+  fechaRegistro DateTime?   @default(now()) @db.DateTime(0)
+  CatEmpresas   CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "RelUsuarioEmpresa_ibfk_1")
+  auth_user     auth_user   @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "RelUsuarioEmpresa_ibfk_2")
+
+  @@index([idEmpresa], map: "idEmpresa")
+  @@index([idUsuario], map: "idUsuario")
+}
+
+model RelUsuarioSite {
+  id        Int      @id @default(autoincrement())
+  idUsuario Int?
+  idSite    Int?
+  activo    Boolean? @default(true)
+}
+
+model RequisitosPuesto {
+  idRequisitoPuesto Int         @id @default(autoincrement())
+  idPuesto          Int?
+  Requisito         String?     @db.Text
+  CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "RequisitosPuesto_ibfk_1")
+
+  @@index([idPuesto], map: "idPuesto")
+}
+
+model auth_group {
+  id                     Int                      @id @default(autoincrement())
+  name                   String                   @unique(map: "name") @db.VarChar(150)
+  auth_group_permissions auth_group_permissions[]
+  auth_user_groups       auth_user_groups[]
+}
+
+model auth_group_permissions {
+  id              BigInt          @id @default(autoincrement())
+  group_id        Int
+  permission_id   Int
+  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm")
+  auth_group      auth_group      @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
+
+  @@unique([group_id, permission_id], map: "auth_group_permissions_group_id_permission_id_0cd325b0_uniq")
+  @@index([permission_id], map: "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm")
+}
+
+model auth_permission {
+  id                         Int                          @id @default(autoincrement())
+  name                       String                       @db.VarChar(255)
+  content_type_id            Int
+  codename                   String                       @db.VarChar(100)
+  auth_group_permissions     auth_group_permissions[]
+  django_content_type        django_content_type          @relation(fields: [content_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_permission_content_type_id_2f476e4b_fk_django_co")
+  auth_user_user_permissions auth_user_user_permissions[]
+
+  @@unique([content_type_id, codename], map: "auth_permission_content_type_id_codename_01ab375a_uniq")
+}
+
+model auth_user {
+  id                         Int                          @id @default(autoincrement())
+  password                   String                       @db.VarChar(128)
+  last_login                 DateTime?                    @db.DateTime(6)
+  is_superuser               Boolean
+  username                   String                       @unique(map: "username") @db.VarChar(150)
+  first_name                 String                       @db.VarChar(150)
+  last_name                  String                       @db.VarChar(150)
+  email                      String                       @db.VarChar(254)
+  is_staff                   Boolean
+  is_active                  Boolean
+  date_joined                DateTime                     @db.DateTime(6)
+  RelUsuarioEmpresa          RelUsuarioEmpresa[]
+  auth_user_groups           auth_user_groups[]
+  auth_user_user_permissions auth_user_user_permissions[]
+  django_admin_log           django_admin_log[]
+  tokenUsuario               tokenUsuario[]
+}
+
+model auth_user_groups {
+  id         BigInt     @id @default(autoincrement())
+  user_id    Int
+  group_id   Int
+  auth_group auth_group @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_groups_group_id_97559544_fk_auth_group_id")
+  auth_user  auth_user  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_groups_user_id_6a12ed8b_fk_auth_user_id")
+
+  @@unique([user_id, group_id], map: "auth_user_groups_user_id_group_id_94350c0c_uniq")
+  @@index([group_id], map: "auth_user_groups_group_id_97559544_fk_auth_group_id")
+}
+
+model auth_user_user_permissions {
+  id              BigInt          @id @default(autoincrement())
+  user_id         Int
+  permission_id   Int
+  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm")
+  auth_user       auth_user       @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_user_permissions_user_id_a95ead1b_fk_auth_user_id")
+
+  @@unique([user_id, permission_id], map: "auth_user_user_permissions_user_id_permission_id_14a6b632_uniq")
+  @@index([permission_id], map: "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm")
+}
+
+model catroles {
+  idRol       Int     @id @default(autoincrement())
+  descripcion String  @db.VarChar(100)
+  activo      Boolean @default(true)
+}
+
+model consumonubarium {
+  idConsumo      Int       @id @default(autoincrement())
+  endPoint       String?   @db.VarChar(100)
+  fechaConsumo   DateTime? @db.DateTime(0)
+  usuarioConsumo String?   @db.VarChar(250)
+  statusCode     String?   @db.VarChar(45)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model django_admin_log {
+  id                  Int                  @id @default(autoincrement())
+  action_time         DateTime             @db.DateTime(6)
+  object_id           String?              @db.LongText
+  object_repr         String               @db.VarChar(200)
+  action_flag         Int                  @db.UnsignedSmallInt
+  change_message      String               @db.LongText
+  content_type_id     Int?
+  user_id             Int
+  django_content_type django_content_type? @relation(fields: [content_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "django_admin_log_content_type_id_c4bce8eb_fk_django_co")
+  auth_user           auth_user            @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "django_admin_log_user_id_c564eba6_fk_auth_user_id")
+
+  @@index([content_type_id], map: "django_admin_log_content_type_id_c4bce8eb_fk_django_co")
+  @@index([user_id], map: "django_admin_log_user_id_c564eba6_fk_auth_user_id")
+}
+
+model django_content_type {
+  id               Int                @id @default(autoincrement())
+  app_label        String             @db.VarChar(100)
+  model            String             @db.VarChar(100)
+  auth_permission  auth_permission[]
+  django_admin_log django_admin_log[]
+
+  @@unique([app_label, model], map: "django_content_type_app_label_model_76bd3d3b_uniq")
+}
+
+model django_migrations {
+  id      BigInt   @id @default(autoincrement())
+  app     String   @db.VarChar(255)
+  name    String   @db.VarChar(255)
+  applied DateTime @db.DateTime(6)
+}
+
+model django_session {
+  session_key  String   @id @db.VarChar(40)
+  session_data String   @db.LongText
+  expire_date  DateTime @db.DateTime(6)
+
+  @@index([expire_date], map: "django_session_expire_date_a5c62663")
+}
+
+model expedientes {
+  idExpediente         Int       @id @default(autoincrement())
+  idCandidato          Int?
+  idPuesto             Int?
+  idEstatus            Int?
+  fechaRegistro        DateTime? @db.Timestamp(0)
+  usuarioRegistro      String?   @db.VarChar(250)
+  fechaActualizacion   DateTime? @default(now()) @db.Timestamp(0)
+  usuarioActualizacion String?   @db.VarChar(250)
+}
+
+model relUsuarioRol {
+  iRel      Int     @id @default(autoincrement())
+  idUsuario Int
+  idRol     Int
+  activo    Boolean @default(true)
+}
+
+model requisiciones {
+  idRequisicion          Int       @id @default(autoincrement())
+  idPuesto               Int?
+  fechaSolicitud         DateTime? @default(now()) @db.DateTime(0)
+  idNivelPC              Int?
+  traslado               String?   @db.VarChar(250)
+  manejoProgramas        String    @db.VarChar(250)
+  experiencia            String?   @db.VarChar(3)
+  tiempoExperiencia      String?   @db.VarChar(3)
+  disponibilidadHorarios String?   @db.VarChar(3)
+  IdUsuario              String?   @db.VarChar(45)
+  fechaRegistro          DateTime? @default(now()) @db.DateTime(0)
+  activo                 Boolean?  @default(true)
+  requisitosAdicionales  String?   @db.Text
+}
+
+model tokenUsuario {
+  id              Int        @id @default(autoincrement())
+  idUsuario       Int?
+  token           String?    @db.VarChar(6)
+  fechaGeneracion DateTime?  @default(now()) @db.Timestamp(0)
+  auth_user       auth_user? @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "tokenUsuario_ibfk_1")
+
+  @@index([idUsuario], map: "idUsuario")
+}
+
+model usuarios {
+  idUsuario     Int       @id @default(autoincrement())
+  idCandidato   Int?
+  claveUsuario  String?   @unique(map: "claveUsuario") @db.VarChar(50)
+  password      String?   @db.VarChar(255)
+  activo        Boolean?
+  fechaRegistro DateTime? @default(now()) @db.Timestamp(0)
+  token         String?   @db.VarChar(6)
+}
+
+model usuarioslogin {
+  idUsuariosLogin Int       @id @default(autoincrement())
+  ClaveUsuario    String?   @db.VarChar(25)
+  FechaLogin      DateTime? @db.DateTime(0)
+  browser         String?   @db.VarChar(500)
+  identificador   String?   @db.VarChar(200)
+}
+
+enum RelRequisicionHabilidades_nivel {
+  ALTO
+  MEDIO
+  BAJO
+}
