@@ -4,11 +4,11 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { LoginDto } from './dto/login.dto';
 import { VerifyTokenDto } from './dto/verify-token.dto';
-import { IMessageService } from './interfaces/message-service.interface';
-import { AuthDataService } from './auth.data.service';
+import { AuthDataService } from './queries/auth.queries';
 import { AuthSuccessResponse } from './interfaces/auth-response.interface';
 import { DjangoPasswordHasher } from '../common/utils/django-password.util';
 import { ResendTokenDto } from './dto/resend-token.dto';
+import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
 
 @Injectable()
 export class AuthService {
@@ -19,7 +19,7 @@ export class AuthService {
         private readonly configService: ConfigService,
         private readonly jwtService: JwtService,
         private readonly dataService: AuthDataService,
-        @Inject('INotificationService') private readonly notificationService: IMessageService,
+        private readonly notifications: NotificationDispatcher
     ) { }
 
     async login(loginDto: LoginDto) {
@@ -39,7 +39,17 @@ export class AuthService {
                 await this.prisma.tokenUsuario.create({
                     data: { idUsuario: userSystem.id, token: token2fa, fechaGeneracion: new Date() }
                 });
-                await this.notificationService.sendToken(userSystem.email, `${userSystem.first_name} ${userSystem.last_name}`, token2fa);
+                await this.notifications.notify({
+                    userUuid: userSystem.uuid,
+                    notificationTypeCode: '2FA',
+                    to: userSystem.email,
+                    phone: userSystem.phone,
+                    subject: 'Código de Verificación - FileOnline',
+                    context: {
+                        name: `${userSystem.first_name} ${userSystem.last_name}`,
+                        token: token2fa
+                    }
+                })
                 return { requires2FA: true, idUsuario: userSystem.id, userType: 'staff', message: `Código enviado a: ${this.ofuscarCorreo(userSystem.email)}` };
             }
             return this.generateAuthResponse(userSystem.id, 'staff');
@@ -66,7 +76,17 @@ export class AuthService {
                 const candidate = await this.prisma.candidatos.findFirst({ where: { idCandidato: userRec.idCandidato } });
                 if (!candidate?.correo) throw new BadRequestException('El candidato no tiene correo registrado');
 
-                await this.notificationService.sendToken(candidate.correo, `${candidate.nombre} ${candidate.primerApellido}`, token2fa);
+                await this.notifications.notify({
+                    userUuid: userRec.uuid,
+                    notificationTypeCode: '2FA',
+                    to: candidate.correo,
+                    phone: candidate.telefonoMovil || undefined,
+                    subject: 'Código de Verificación - FileOnline',
+                    context: {
+                        name: `${candidate.nombre} ${candidate.primerApellido}`,
+                        token: token2fa
+                    }
+                })
                 return { requires2FA: true, idUsuario: userRec.idUsuario, userType: 'candidato', message: `Código enviado a: ${this.ofuscarCorreo(candidate.correo)}` };
             }
             return this.generateAuthResponse(userRec.idUsuario, 'candidato', userRec.idCandidato);
@@ -139,7 +159,17 @@ export class AuthService {
                 },
             });
 
-            await this.notificationService.sendToken(userSystem.email, `${userSystem.first_name} ${userSystem.last_name}`, token2fa);
+            await this.notifications.notify({
+                userUuid: userSystem.uuid,
+                notificationTypeCode: '2FA',
+                to: userSystem.email,
+                phone: userSystem.phone || undefined,
+                subject: 'Código de Verificación - FileOnline',
+                context: {
+                    name: `${userSystem.first_name} ${userSystem.last_name}`,
+                    token: token2fa
+                }
+            })
 
             return {
                 requires2FA: true,
@@ -161,7 +191,17 @@ export class AuthService {
                 data: { token: token2fa },
             });
 
-            await this.notificationService.sendToken(candidate.correo, `${candidate.nombre} ${candidate.primerApellido}`, token2fa);
+            await this.notifications.notify({
+                userUuid: userRec.uuid,
+                notificationTypeCode: '2FA',
+                to: candidate.correo,
+                phone: candidate.telefonoMovil || undefined,
+                subject: 'Código de Verificación - FileOnline',
+                context: {
+                    name: `${candidate.nombre} ${candidate.primerApellido}`,
+                    token: token2fa
+                }
+            })
 
             return {
                 requires2FA: true,

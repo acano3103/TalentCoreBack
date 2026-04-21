@@ -659,22 +659,26 @@ model auth_permission {
 }
 
 model auth_user {
-  id                         Int                          @id @default(autoincrement())
-  password                   String                       @db.VarChar(128)
-  last_login                 DateTime?                    @db.DateTime(6)
-  is_superuser               Boolean
-  username                   String                       @unique(map: "username") @db.VarChar(150)
-  first_name                 String                       @db.VarChar(150)
-  last_name                  String                       @db.VarChar(150)
-  email                      String                       @db.VarChar(254)
-  is_staff                   Boolean
-  is_active                  Boolean
-  date_joined                DateTime                     @db.DateTime(6)
-  RelUsuarioEmpresa          RelUsuarioEmpresa[]
-  auth_user_groups           auth_user_groups[]
-  auth_user_user_permissions auth_user_user_permissions[]
-  django_admin_log           django_admin_log[]
-  tokenUsuario               tokenUsuario[]
+  id                                Int                                 @id @default(autoincrement())
+  uuid                              String                              @unique(map: "uuid") @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  password                          String                              @db.VarChar(128)
+  last_login                        DateTime?                           @db.DateTime(6)
+  is_superuser                      Boolean
+  username                          String                              @unique(map: "username") @db.VarChar(150)
+  first_name                        String                              @db.VarChar(150)
+  last_name                         String                              @db.VarChar(150)
+  email                             String                              @db.VarChar(254)
+  is_staff                          Boolean
+  is_active                         Boolean
+  date_joined                       DateTime                            @db.DateTime(6)
+  phone                             String                              @db.VarChar(10)
+  Notificaciones                    Notificaciones[]
+  PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
+  RelUsuarioEmpresa                 RelUsuarioEmpresa[]
+  auth_user_groups                  auth_user_groups[]
+  auth_user_user_permissions        auth_user_user_permissions[]
+  django_admin_log                  django_admin_log[]
+  tokenUsuario                      tokenUsuario[]
 }
 
 model auth_user_groups {
@@ -801,6 +805,7 @@ model tokenUsuario {
 
 model usuarios {
   idUsuario     Int       @id @default(autoincrement())
+  uuid          String    @default("uuid()") @db.VarChar(36)
   idCandidato   Int?
   claveUsuario  String?   @unique(map: "claveUsuario") @db.VarChar(50)
   password      String?   @db.VarChar(255)
@@ -815,6 +820,81 @@ model usuarioslogin {
   FechaLogin      DateTime? @db.DateTime(0)
   browser         String?   @db.VarChar(500)
   identificador   String?   @db.VarChar(200)
+}
+
+model CatCanalesNotificaciones {
+  id                                Int                                 @id @default(autoincrement())
+  code                              String?                             @unique(map: "code") @db.VarChar(20)
+  description                       String?                             @db.VarChar(100)
+  activo                            Boolean?                            @default(true)
+  NotificacionTipoCanales           NotificacionTipoCanales[]
+  NotificacionesEntregas            NotificacionesEntregas[]
+  PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
+}
+
+model CatTipoNotificacion {
+  id                      Int                       @id @default(autoincrement())
+  code                    String?                   @unique(map: "code") @db.VarChar(50)
+  description             String?                   @db.VarChar(150)
+  activo                  Boolean?                  @default(true)
+  NotificacionTipoCanales NotificacionTipoCanales[]
+  Notificaciones          Notificaciones[]
+}
+
+model Notificaciones {
+  id                     String                   @id @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  user_uuid              String                   @db.VarChar(36)
+  notification_type_id   Int?
+  title                  String?                  @db.VarChar(255)
+  message                String?                  @db.Text
+  created_at             DateTime?                @default(now()) @db.Timestamp(0)
+  read_at                DateTime?                @db.Timestamp(0)
+  auth_user              auth_user                @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "Notificaciones_ibfk_1")
+  CatTipoNotificacion    CatTipoNotificacion?     @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Notificaciones_ibfk_2")
+  NotificacionesEntregas NotificacionesEntregas[]
+
+  @@index([notification_type_id], map: "notification_type_id")
+  @@index([user_uuid], map: "user_uuid")
+}
+
+model NotificacionesEntregas {
+  id                       String                   @id @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  notification_id          String                   @db.VarChar(36)
+  channel_id               Int
+  status                   String?                  @db.VarChar(20)
+  sent_at                  DateTime?                @db.Timestamp(0)
+  error_message            String?                  @db.Text
+  Notificaciones           Notificaciones           @relation(fields: [notification_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_2")
+
+  @@index([channel_id], map: "channel_id")
+  @@index([notification_id], map: "notification_id")
+}
+
+model PreferenciasNotificacionesUsuario {
+  id                       Int                      @id @default(autoincrement())
+  user_uuid                String                   @db.VarChar(36)
+  channel_id               Int
+  enabled                  Boolean?                 @default(true)
+  created_at               DateTime?                @default(now()) @db.Timestamp(0)
+  updated_at               DateTime?                @db.Timestamp(0)
+  auth_user                auth_user                @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_2")
+
+  @@unique([user_uuid, channel_id], map: "user_uuid")
+  @@index([channel_id], map: "channel_id")
+}
+
+model NotificacionTipoCanales {
+  id                       Int                       @id @default(autoincrement())
+  notification_type_id     Int?
+  channel_id               Int?
+  enabled                  Boolean?                  @default(true)
+  CatTipoNotificacion      CatTipoNotificacion?      @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionTipoCanales_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones? @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionTipoCanales_ibfk_2")
+
+  @@unique([notification_type_id, channel_id], map: "notification_type_id")
+  @@index([channel_id], map: "channel_id")
 }
 
 enum RelRequisicionHabilidades_nivel {

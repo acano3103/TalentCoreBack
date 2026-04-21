@@ -6,7 +6,7 @@
     "deleteOutDir": true,
     "assets": [
       {
-        "include": "mail/templates/**/*"
+        "include": "notifications/providers/mail/templates/**/*"
       }
     ]
   }

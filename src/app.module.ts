@@ -3,7 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { envValidationSchema } from './config/env.validation';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { MailModule } from './mail/mail.module';
+import { PositionsModule } from './positions/positions.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
@@ -11,9 +13,13 @@ import { MailModule } from './mail/mail.module';
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+      serveRoot: '/public',
+    }),
     PrismaModule,
     AuthModule,
-    MailModule
+    PositionsModule,
   ],
   controllers: [],
   providers: [],
