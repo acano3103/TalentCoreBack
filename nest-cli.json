@@ -6,8 +6,14 @@
     "deleteOutDir": true,
     "assets": [
       {
-        "include": "notifications/providers/mail/templates/**/*"
+        "include": "notifications/providers/mail/templates/**/*",
+        "outDir": "dist"
+      },
+      {
+        "include": "public/**/*",
+        "outDir": "dist"
       }
-    ]
+    ],
+    "watchAssets": true
   }
 }
