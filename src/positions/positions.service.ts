@@ -26,7 +26,7 @@ export class PositionsService {
             const { positionName, email, phone, userUuid, name } = position;
             const comment = dto.comment || '';
             const action = dto.action;
-            const subject = action === 'aprobar' ? '✅ Puesto Aprobado - FileOnline' : '❌ Puesto Rechazado - FileOnline';
+            const subject = action === 'aprobar' ? '✅ Puesto Aprobado - TalentCore' : '❌ Puesto Rechazado - TalentCore';
 
             if (action === 'aprobar') {
                 await PositionQueries.approvePosition(this.prisma, positionId, comment);

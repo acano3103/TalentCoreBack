@@ -44,7 +44,7 @@ export class AuthService {
                     notificationTypeCode: '2FA',
                     to: userSystem.email,
                     phone: userSystem.phone,
-                    subject: 'Código de Verificación - FileOnline',
+                    subject: 'Código de Verificación - Talent Core',
                     context: {
                         name: `${userSystem.first_name} ${userSystem.last_name}`,
                         token: token2fa
@@ -81,7 +81,7 @@ export class AuthService {
                     notificationTypeCode: '2FA',
                     to: candidate.correo,
                     phone: candidate.telefonoMovil || undefined,
-                    subject: 'Código de Verificación - FileOnline',
+                    subject: 'Código de Verificación - Talent Core',
                     context: {
                         name: `${candidate.nombre} ${candidate.primerApellido}`,
                         token: token2fa
@@ -164,7 +164,7 @@ export class AuthService {
                 notificationTypeCode: '2FA',
                 to: userSystem.email,
                 phone: userSystem.phone || undefined,
-                subject: 'Código de Verificación - FileOnline',
+                subject: 'Código de Verificación - Talent Core',
                 context: {
                     name: `${userSystem.first_name} ${userSystem.last_name}`,
                     token: token2fa
@@ -196,7 +196,7 @@ export class AuthService {
                 notificationTypeCode: '2FA',
                 to: candidate.correo,
                 phone: candidate.telefonoMovil || undefined,
-                subject: 'Código de Verificación - FileOnline',
+                subject: 'Código de Verificación - Talent Core',
                 context: {
                     name: `${candidate.nombre} ${candidate.primerApellido}`,
                     token: token2fa
