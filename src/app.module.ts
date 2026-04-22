@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PositionsModule } from './positions/positions.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { join } from 'path';
     PrismaModule,
     AuthModule,
     PositionsModule,
+    UsersModule,
   ],
   controllers: [],
   providers: [],

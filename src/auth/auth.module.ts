@@ -6,11 +6,16 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthDataService } from './queries/auth.queries';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { PassportModule } from '@nestjs/passport';
+import { UsersModule } from 'src/users/users.module';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
     imports: [
+        UsersModule,
         PrismaModule,
         NotificationsModule,
+        PassportModule,
         JwtModule.registerAsync({
             useFactory: (config: ConfigService) => ({
                 secret: config.get('JWT_SECRET'),
@@ -21,8 +26,10 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
     ],
     providers: [
         AuthService,
-        AuthDataService
+        AuthDataService,
+        JwtStrategy
     ],
     controllers: [AuthController],
+    exports: [PassportModule]
 })
 export class AuthModule { }
