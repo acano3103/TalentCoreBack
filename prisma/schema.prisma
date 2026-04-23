@@ -119,6 +119,7 @@ model CatEmpresas {
   usuarioRegistro   String?             @db.VarChar(100)
   activo            Boolean?            @default(true)
   DomicilioEmpresas DomicilioEmpresas[]
+  Integraciones     Integraciones[]
   RelUsuarioEmpresa RelUsuarioEmpresa[]
 }
 
@@ -668,10 +669,10 @@ model auth_user {
   first_name                        String                              @db.VarChar(150)
   last_name                         String                              @db.VarChar(150)
   email                             String                              @db.VarChar(254)
+  phone                             String                              @db.VarChar(10)
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
-  phone                             String                              @db.VarChar(10)
   Notificaciones                    Notificaciones[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
@@ -895,6 +896,31 @@ model NotificacionTipoCanales {
 
   @@unique([notification_type_id, channel_id], map: "notification_type_id")
   @@index([channel_id], map: "channel_id")
+}
+
+model CatIntegracionesProvedores {
+  id            Int             @id @default(autoincrement())
+  code          String          @unique(map: "code") @db.VarChar(50)
+  name          String          @db.VarChar(100)
+  type          String          @db.VarChar(50)
+  isActive      Boolean?        @default(true)
+  isConnected   Boolean         @default(false)
+  Integraciones Integraciones[]
+}
+
+model Integraciones {
+  id                         Int                        @id @default(autoincrement())
+  idEmpresa                  Int
+  providerId                 Int
+  metadata                   Json?
+  isConnected                Boolean?                   @default(false)
+  createdAt                  DateTime?                  @default(now()) @db.DateTime(0)
+  updatedAt                  DateTime?                  @default(now()) @db.DateTime(0)
+  CatEmpresas                CatEmpresas                @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "fk_integrations_empresa")
+  CatIntegracionesProvedores CatIntegracionesProvedores @relation(fields: [providerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_integrations_provider")
+
+  @@unique([idEmpresa, providerId], map: "unique_empresa_provider")
+  @@index([providerId], map: "fk_integrations_provider")
 }
 
 enum RelRequisicionHabilidades_nivel {
