@@ -1,8 +1,8 @@
-import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query } from '@nestjs/common';
 import { InterviewsService } from './interviews.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Interviews')
 @ApiBearerAuth()
@@ -16,8 +16,17 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this company' })
-    findAll(@Param('companyId', ParseIntPipe) companyId: number) {
-        return this.interviewsService.findAll(companyId);
+    @ApiQuery({
+        name: 'positionId',
+        required: false,
+        type: Number,
+        description: 'Filter interviews by position ID'
+    })
+    findAll(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Query('positionId') positionId?: string
+    ) {
+        return this.interviewsService.findAll(companyId, positionId ? Number(positionId) : undefined);
     }
 
     @UseGuards(JwtAuthGuard)

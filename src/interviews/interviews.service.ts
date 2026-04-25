@@ -18,8 +18,8 @@ export class InterviewsService {
 
     private readonly logger = new Logger(InterviewsService.name);
 
-    async findAll(companyId: number) {
-        return await findAllInterviews(companyId, this.prisma);
+    async findAll(companyId: number, positionId?: number) {
+        return await findAllInterviews(companyId, positionId, this.prisma);
     }
 
     async findAllByMainInterview(mainInterviewId: string) {
