@@ -1,5 +1,5 @@
 export interface ZoomMeetingOptions {
-    topic: string;
+    title: string;
     startTime: string;
     duration: number;
     agenda?: string;

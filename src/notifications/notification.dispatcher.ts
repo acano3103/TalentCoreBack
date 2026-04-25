@@ -45,19 +45,32 @@ export class NotificationDispatcher {
             where: {
                 notification_type_id: notificationType.id,
                 enabled: true
+            },
+            include: {
+                CatCanalesNotificaciones: true
             }
         });
 
-        const validChannels = prefs.filter(pref =>
-            allowedChannels.some(c => c.channel_id === pref.channel_id)
-        );
+        let validChannels;
+
+        if (prefs.length === 0) {
+            const DEFAULT_CHANNELS = ['EMAIL', 'WHATSAPP'];
+            validChannels = allowedChannels.filter(c => {
+                const code = c.CatCanalesNotificaciones?.code;
+                return code && DEFAULT_CHANNELS.includes(code);
+            });
+        } else {
+            validChannels = prefs.filter(pref =>
+                allowedChannels.some(c => c.channel_id === pref.channel_id)
+            );
+        }
 
         const deliveries = await Promise.all(
-            validChannels.map(pref =>
+            validChannels.map(channel =>
                 this.prisma.notificacionesEntregas.create({
                     data: {
                         notification_id: notification.id,
-                        channel_id: pref.CatCanalesNotificaciones.id,
+                        channel_id: channel.channel_id || channel.id,
                         status: 'PENDING'
                     }
                 })
@@ -70,13 +83,17 @@ export class NotificationDispatcher {
         };
 
         await Promise.all(deliveries.map(async (delivery) => {
-            const channel = prefs.find(p => p.channel_id === delivery.channel_id)?.CatCanalesNotificaciones.code;
+            const channel = validChannels.find(c => (c.channel_id || c.id) === delivery.channel_id);
+
             if (!channel) return;
-            const provider = providers[channel];
+
+            const channelCode = channel.CatCanalesNotificaciones.code;
+            const provider = providers[channelCode];
+
             if (!provider) return;
 
-            const template = TEMPLATE_MAP[channel]?.[options.notificationTypeCode];
-            if (!template) throw new Error(`No template para ${channel} - ${options.notificationTypeCode}`);
+            const template = TEMPLATE_MAP[channelCode]?.[options.notificationTypeCode];
+            if (!template) throw new Error(`No template para ${channelCode} - ${options.notificationTypeCode}`);
 
             try {
                 await provider.send(options, template);

@@ -231,6 +231,7 @@ model CatPlataforma {
 
 model CatPuestos {
   idPuesto             Int                  @id @default(autoincrement())
+  idEmpresa            Int                  @default(1)
   NombrePuesto         String               @db.VarChar(200)
   idTipoPuesto         Int?
   idArea               Int?
@@ -524,6 +525,7 @@ model PesoCategoriaPuesto {
 
 model Postulaciones {
   idPostulacion   Int       @id @default(autoincrement())
+  uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
   idCandidato     Int?
   idEstatus       Int?      @default(1)
   idPuesto        Int?
@@ -673,7 +675,6 @@ model auth_user {
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
-  Notificaciones                    Notificaciones[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
   auth_user_groups                  auth_user_groups[]
@@ -825,9 +826,9 @@ model usuarioslogin {
 
 model CatCanalesNotificaciones {
   id                                Int                                 @id @default(autoincrement())
-  code                              String?                             @unique(map: "code") @db.VarChar(20)
+  code                              String                              @unique(map: "code") @db.VarChar(20)
   description                       String?                             @db.VarChar(100)
-  activo                            Boolean?                            @default(true)
+  activo                            Boolean                             @default(true)
   NotificacionTipoCanales           NotificacionTipoCanales[]
   NotificacionesEntregas            NotificacionesEntregas[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
@@ -850,7 +851,6 @@ model Notificaciones {
   message                String?                  @db.Text
   created_at             DateTime?                @default(now()) @db.Timestamp(0)
   read_at                DateTime?                @db.Timestamp(0)
-  auth_user              auth_user                @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "Notificaciones_ibfk_1")
   CatTipoNotificacion    CatTipoNotificacion?     @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Notificaciones_ibfk_2")
   NotificacionesEntregas NotificacionesEntregas[]
 
@@ -923,8 +923,118 @@ model Integraciones {
   @@index([providerId], map: "fk_integrations_provider")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model Entrevistas {
+  id                     String                     @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  company_id             Int
+  position_id            Int?
+  provider_id            Int
+  agent_id               String?                    @db.Char(36)
+  interview_type         Entrevistas_interview_type
+  modality               Entrevistas_modality
+  title                  String?                    @db.VarChar(255)
+  duration               Int?
+  interviewer_name       String?                    @db.VarChar(150)
+  location               String?                    @db.VarChar(255)
+  comment                String?                    @db.Text
+  Agentes                Agentes?                   @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_ibfk_1")
+  EntrevistasCriterios   EntrevistasCriterios[]
+  EntrevistasPostulantes EntrevistasPostulantes[]
+
+  @@index([agent_id], map: "agent_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model EntrevistasCriterios {
+  id                            String                          @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  interview_id                  String                          @db.Char(36)
+  name                          String?                         @db.VarChar(150)
+  description                   String?                         @db.Text
+  max_score                     Int?
+  weight                        Int?
+  order                         Int?
+  EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion[]
+  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasCriterios_ibfk_1")
+
+  @@index([interview_id], map: "interview_id")
+}
+
+model EntrevistasResultados {
+  id                     String                  @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  interview_postulant_id String?                 @unique(map: "interview_postulant_id") @db.Char(36)
+  final_score            Decimal?                @db.Decimal(5, 2)
+  general_report         String?                 @db.Text
+  strengths              String?                 @db.Text
+  improvement_areas      String?                 @db.Text
+  recommendations        String?                 @db.Text
+  EntrevistasPostulantes EntrevistasPostulantes? @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasResultados_ibfk_1")
+}
+
+model Agentes {
+  id              String        @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  name            String        @db.VarChar(150)
+  description     String?       @db.Text
+  context         String?       @db.Text
+  script          String?       @db.Text
+  min_score       Int?
+  voice           String?       @db.VarChar(100)
+  language        String?       @db.VarChar(50)
+  interrupt_limit Int?
+  Entrevistas     Entrevistas[]
+}
+
+model CatCriterios {
+  id          String  @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+  max_score   Int
+}
+
+model EntrevistaCriteriosEvaluacion {
+  id                   String               @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  criterio_id          String               @db.Char(36)
+  score                Decimal?             @db.Decimal(5, 2)
+  comment              String?              @db.Text
+  EntrevistasCriterios EntrevistasCriterios @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistaCriteriosEvaluacion_ibfk_1")
+
+  @@index([criterio_id], map: "criterio_id")
+}
+
+model EntrevistasPostulantes {
+  id                    String                         @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  candidate_uuid        String                         @db.Char(36)
+  interview_id          String                         @db.Char(36)
+  scheduled_at          DateTime?                      @db.DateTime(0)
+  duration              Int?
+  status                EntrevistasPostulantes_status? @default(PROGRAMADO)
+  meeting_id            String?                        @db.VarChar(100)
+  meeting_url           String?                        @db.Text
+  location              String?                        @db.Text
+  metadata              Json?
+  Entrevistas           Entrevistas                    @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasPostulantes_ibfk_1")
+  EntrevistasResultados EntrevistasResultados?
+
+  @@index([interview_id], map: "interview_id")
+}
+
 enum RelRequisicionHabilidades_nivel {
   ALTO
   MEDIO
   BAJO
+}
+
+enum Entrevistas_modality {
+  ONLINE
+  PRESENCIAL
+}
+
+enum Entrevistas_interview_type {
+  PERSONA
+  IA
+}
+
+enum EntrevistasPostulantes_status {
+  PROGRAMADO
+  TERMINADO
+  CANCELADO
 }

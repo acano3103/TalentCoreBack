@@ -2,12 +2,14 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ConnectIntegrationDto } from 'src/integrations/dto/connect-integration.dto';
-import { ZoomMeetingOptions } from './interfaces/zoom.interface';
-import { ICommunicationProvider } from './interfaces/communication.interface';
+import { CommunicationMeetingResponse, ICommunicationProvider } from './interfaces/communication.interface';
+import { EncryptionService } from 'src/common/utils/encryption.util';
+import { CreateInterviewDto, ProgramInterviewDto } from 'src/interviews/dto/create-interview.dto';
+import { format } from 'date-fns';
 
 @Injectable()
 export class ZoomProvider implements ICommunicationProvider {
-    constructor(private prisma: PrismaService) { }
+    constructor(private prisma: PrismaService, private encryptionService: EncryptionService) { }
 
     async connect(companyId: number, providerId: number, dto: ConnectIntegrationDto) {
         const { clientId, clientSecret, accountId } = dto;
@@ -44,9 +46,9 @@ export class ZoomProvider implements ICommunicationProvider {
                     providerId: providerId,
                     isConnected: true,
                     metadata: {
-                        clientId: dto.clientId,
-                        clientSecret: dto.clientSecret,
-                        accountId: dto.accountId
+                        clientId: this.encryptionService.encrypt(dto.clientId),
+                        clientSecret: this.encryptionService.encrypt(dto.clientSecret),
+                        accountId: this.encryptionService.encrypt(dto.accountId)
                     }
                 }
             });
@@ -84,18 +86,19 @@ export class ZoomProvider implements ICommunicationProvider {
         }
     }
 
-    async createMeeting(companyId: number, providerId: number, options: ZoomMeetingOptions) {
+    async createMeeting(companyId: number, providerId: number, options: ProgramInterviewDto): Promise<CommunicationMeetingResponse> {
         try {
             const token = await this.getFreshToken(companyId, providerId);
+            const localDate = format(new Date(options.scheduledAt), "yyyy-MM-dd'T'HH:mm:ss");
 
             const response = await axios.post(
                 `https://api.zoom.us/v2/users/me/meetings`,
                 {
-                    topic: options.topic,
+                    topic: options.title,
                     type: 2,
-                    start_time: options.startTime,
+                    start_time: localDate,
+                    timezone: 'America/Mexico_City',
                     duration: options.duration,
-                    agenda: options.agenda || 'Entrevista de trabajo - TalentCore',
                     settings: {
                         host_video: true,
                         participant_video: true,
@@ -113,12 +116,15 @@ export class ZoomProvider implements ICommunicationProvider {
             );
 
             return {
-                id: response.data.id,
-                joinUrl: response.data.join_url,
-                startUrl: response.data.start_url,
-                password: response.data.password,
-            };
-
+                id: response.data.id.toString(),
+                url: response.data.join_url,
+                metadata: {
+                    meetingId: response.data.id.toString(),
+                    joinUrl: response.data.join_url,
+                    startUrl: response.data.start_url,
+                    password: response.data.password,
+                },
+            }
         } catch (error) {
             const errorMsg = error.response?.data?.message || error.message;
             throw new BadRequestException(`Error al crear reunión en Zoom: ${errorMsg}`);
@@ -128,7 +134,28 @@ export class ZoomProvider implements ICommunicationProvider {
     async updateMeeting(data: any) {
     }
 
-    async deleteMeeting(data: any) {
+    async deleteMeeting(companyId: number, providerId: number, meetingId: string) {
+        try {
+            const token = await this.getFreshToken(companyId, providerId);
+
+            await axios.delete(
+                `https://api.zoom.us/v2/meetings/${meetingId}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                    params: {
+                        type: 2
+                    }
+                }
+            );
+
+            return { message: 'Meeting eliminada correctamente' };
+        } catch (error) {
+            const errorMsg = error.response?.data?.message || error.message;
+            if (error.response?.status === 404) return { message: 'La meeting ya no existe en Zoom' };
+            throw new BadRequestException(`Error al eliminar reunión en Zoom: ${errorMsg}`);
+        }
     }
 
     async getMeeting(meetingId: string) {
@@ -141,10 +168,13 @@ export class ZoomProvider implements ICommunicationProvider {
 
         if (!config?.metadata) throw new BadRequestException('No se encontró configuración de Zoom');
         const { clientId, clientSecret, accountId } = config.metadata as any;
+        const decryptedClientId = this.encryptionService.decrypt(clientId);
+        const decryptedClientSecret = this.encryptionService.decrypt(clientSecret);
+        const decryptedAccountId = this.encryptionService.decrypt(accountId);
 
-        const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        const authHeader = Buffer.from(`${decryptedClientId}:${decryptedClientSecret}`).toString('base64');
         const res = await axios.post(
-            `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`,
+            `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${decryptedAccountId}`,
             {},
             { headers: { Authorization: `Basic ${authHeader}` } }
         );

@@ -10,4 +10,5 @@ export const envValidationSchema = Joi.object({
     MAIL_PASS: Joi.string().required(),
     MAIL_FROM: Joi.string().required(),
     JWT_SECRET: Joi.string().required(),
+    ENCRYPTION_KEY: Joi.string().required(),
 });

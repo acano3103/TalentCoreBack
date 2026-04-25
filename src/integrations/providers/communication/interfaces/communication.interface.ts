@@ -4,5 +4,11 @@ export interface ICommunicationProvider {
     getMeeting(meetingId: string): Promise<any>;
     createMeeting(companyId: number, providerId: number, data: any): Promise<any>;
     updateMeeting(data: any): Promise<any>;
-    deleteMeeting(data: any): Promise<any>;
+    deleteMeeting(companyId: number, providerId: number, meetingId: string): Promise<any>;
+}
+
+export interface CommunicationMeetingResponse {
+    id: string;
+    url: string;
+    metadata: object;
 }
