@@ -4,8 +4,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { ConnectIntegrationDto } from 'src/integrations/dto/connect-integration.dto';
 import { CommunicationMeetingResponse, ICommunicationProvider } from './interfaces/communication.interface';
 import { EncryptionService } from 'src/common/utils/encryption.util';
-import { CreateInterviewDto, ProgramInterviewDto } from 'src/interviews/dto/create-interview.dto';
 import { format } from 'date-fns';
+import { ProgramInterviewDto } from 'src/interviews/dto/program-interview.dto';
 
 @Injectable()
 export class ZoomProvider implements ICommunicationProvider {

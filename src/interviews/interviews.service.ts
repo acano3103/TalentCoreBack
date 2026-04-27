@@ -7,6 +7,7 @@ import { quotePlus } from 'src/common/utils/address.utils';
 import { formatDate, formatHour } from 'src/common/utils/time.utils';
 import { findAllInterviews } from './queries/interviews.queries';
 import { Entrevistas_interview_type } from 'generated/prisma/enums';
+import { ProgramInterviewDto } from './dto/program-interview.dto';
 
 @Injectable()
 export class InterviewsService {
@@ -44,34 +45,52 @@ export class InterviewsService {
         return activePositions;
     }
 
-    async create(companyId: number, positionId: number, dto: CreateInterviewDto) {
-        await this.prisma.entrevistas.create({
-            data: {
-                company_id: companyId,
-                position_id: positionId,
-                provider_id: dto.providerId,
-                agent_id: dto.agentId || null,
-                interview_type: dto.interviewType,
-                modality: dto.modality,
-                title: dto.title,
-                duration: dto.duration,
-                interviewer_name: dto.interviewerName,
-                location: dto.locationAddress || null,
-                comment: dto.comment || null,
-                EntrevistasCriterios: {
-                    createMany: {
-                        data: dto.criteria.map(criterion => ({
-                            name: criterion.name,
-                            description: criterion.description || null,
-                            max_score: criterion.maxScore || 10,
-                            weight: criterion.weight || null,
-                            order: criterion.order || null,
-                        })),
+    async create(companyId: number, dto: CreateInterviewDto) {
+        const interviews = await Promise.all(
+            dto.positionIds.map(positionId =>
+                this.prisma.entrevistas.create({
+                    data: {
+                        company_id: companyId,
+                        area_id: dto.areaId,
+                        position_id: positionId,
+                        provider_id: dto.providerId,
+                        agent_id: dto.agentId || null,
+                        description: dto.description || null,
+                        interview_type: dto.interviewType,
+                        modality: dto.modality,
+                        title: dto.title,
+                        duration: dto.duration,
+                        interviewer_name: dto.interviewerName,
+                        location: dto.locationAddress || null,
+                        comment: dto.comment || null,
+                        EntrevistasCriterios: {
+                            create: dto.criteria.map(criterion => ({
+                                name: criterion.name,
+                                description: criterion.description || null,
+                                max_score: criterion.maxScore || 10,
+                                weight: criterion.weight || null,
+                                order: criterion.order || null,
+                                preguntas: criterion.questions?.length
+                                    ? {
+                                        create: criterion.questions.map(q => ({
+                                            question: q.question,
+                                            expected_answer: q.expectedAnswer || null,
+                                            order: q.order || null,
+                                        })),
+                                    }
+                                    : undefined,
+                            })),
+                        },
                     },
-                }
-            }
-        });
-        return { message: 'Entrevista creada exitosamente' };
+                })
+            )
+        );
+
+        return { message: 'Entrevistas creadas exitosamente', total: interviews.length };
+    }
+
+    async programInterview(companyId: number, positionId: number, dto: ProgramInterviewDto) {
+        return { message: 'Entrevista programada exitosamente' };
     }
 
     // async create(companyId: number, providerId: number, dto: CreateInterviewDto) {

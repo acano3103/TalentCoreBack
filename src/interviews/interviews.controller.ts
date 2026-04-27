@@ -3,6 +3,7 @@ import { InterviewsService } from './interviews.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ProgramInterviewDto } from './dto/program-interview.dto';
 
 @ApiTags('Interviews')
 @ApiBearerAuth()
@@ -50,18 +51,31 @@ export class InterviewsController {
     }
 
     @UseGuards(JwtAuthGuard)
-    @Post('/:positionId')
+    @Post()
     @ApiOperation({ summary: 'Create an interview', description: 'Create an interview' })
     @ApiResponse({ status: 201, description: 'Interview created successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
     create(
         @Param('companyId', ParseIntPipe) companyId: number,
-        @Param('positionId', ParseIntPipe) positionId: number,
         @Body() dto: CreateInterviewDto,
     ) {
-        return this.interviewsService.create(companyId, positionId, dto);
+        return this.interviewsService.create(companyId, dto);
     }
+
+    // @UseGuards(JwtAuthGuard)
+    // @Post('/:positionId/meeting')
+    // @ApiOperation({ summary: 'Program an interview', description: 'Program an interview' })
+    // @ApiResponse({ status: 201, description: 'Interview programed successfully' })
+    // @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    // @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    // programInterview(
+    //     @Param('companyId', ParseIntPipe) companyId: number,
+    //     @Param('positionId', ParseIntPipe) positionId: number,
+    //     @Body() dto: ProgramInterviewDto,
+    // ) {
+    //     return this.interviewsService.programInterview(companyId, positionId, dto);
+    // }
 
     // @UseGuards(JwtAuthGuard)
     // @Post('/:providerId')
