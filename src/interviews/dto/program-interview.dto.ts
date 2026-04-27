@@ -1,14 +1,15 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsISO8601, IsNumber, IsString } from "class-validator";
+import { IsISO8601, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class ProgramInterviewDto {
     @ApiProperty()
     @IsNumber()
-    interviewId: number;
+    postulantId: number;
 
     @ApiProperty()
     @IsString()
-    title: string;
+    @IsOptional()
+    title?: string;
 
     @ApiProperty()
     @IsISO8601()
@@ -16,5 +17,6 @@ export class ProgramInterviewDto {
 
     @ApiProperty()
     @IsNumber()
-    duration: number;
+    @IsOptional()
+    duration?: number;
 }

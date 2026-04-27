@@ -994,28 +994,32 @@ model CatCriterios {
 }
 
 model EntrevistaCriteriosEvaluacion {
-  id                   String               @id @default(dbgenerated("(uuid())")) @db.Char(36)
-  criterio_id          String               @db.Char(36)
-  score                Decimal?             @db.Decimal(5, 2)
-  comment              String?              @db.Text
-  EntrevistasCriterios EntrevistasCriterios @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistaCriteriosEvaluacion_ibfk_1")
+  id                     String                 @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  criterio_id            String                 @db.Char(36)
+  score                  Decimal?               @db.Decimal(5, 2)
+  comment                String?                @db.Text
+  interview_postulant_id String                 @db.Char(36)
+  EntrevistasCriterios   EntrevistasCriterios   @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistaCriteriosEvaluacion_ibfk_1")
+  EntrevistasPostulantes EntrevistasPostulantes @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_evaluacion_postulante")
 
   @@index([criterio_id], map: "criterio_id")
+  @@index([interview_postulant_id], map: "fk_evaluacion_postulante")
 }
 
 model EntrevistasPostulantes {
-  id                    String                         @id @default(dbgenerated("(uuid())")) @db.Char(36)
-  candidate_uuid        String                         @db.Char(36)
-  interview_id          String                         @db.Char(36)
-  scheduled_at          DateTime?                      @db.DateTime(0)
-  duration              Int?
-  status                EntrevistasPostulantes_status? @default(PROGRAMADO)
-  meeting_id            String?                        @db.VarChar(100)
-  meeting_url           String?                        @db.Text
-  location              String?                        @db.Text
-  metadata              Json?
-  Entrevistas           Entrevistas                    @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasPostulantes_ibfk_1")
-  EntrevistasResultados EntrevistasResultados?
+  id                            String                          @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  candidate_uuid                String                          @db.Char(36)
+  interview_id                  String                          @db.Char(36)
+  scheduled_at                  DateTime?                       @db.DateTime(0)
+  duration                      Int?
+  status                        EntrevistasPostulantes_status?  @default(PROGRAMADO)
+  meeting_id                    String?                         @db.VarChar(100)
+  meeting_url                   String?                         @db.Text
+  location                      String?                         @db.Text
+  metadata                      Json?
+  EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion[]
+  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasPostulantes_ibfk_1")
+  EntrevistasResultados         EntrevistasResultados?
 
   @@index([interview_id], map: "interview_id")
 }

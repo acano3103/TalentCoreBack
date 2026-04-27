@@ -63,41 +63,35 @@ export class InterviewsController {
         return this.interviewsService.create(companyId, dto);
     }
 
-    // @UseGuards(JwtAuthGuard)
-    // @Post('/:positionId/meeting')
-    // @ApiOperation({ summary: 'Program an interview', description: 'Program an interview' })
-    // @ApiResponse({ status: 201, description: 'Interview programed successfully' })
-    // @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    // @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
-    // programInterview(
-    //     @Param('companyId', ParseIntPipe) companyId: number,
-    //     @Param('positionId', ParseIntPipe) positionId: number,
-    //     @Body() dto: ProgramInterviewDto,
-    // ) {
-    //     return this.interviewsService.programInterview(companyId, positionId, dto);
-    // }
+    @UseGuards(JwtAuthGuard)
+    @Post('/:interviewId')
+    @ApiOperation({ summary: 'Program an interview', description: 'Program an interview' })
+    @ApiResponse({ status: 201, description: 'Interview programed successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    programInterview(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('interviewId') interviewId: string,
+        @Body() dto: ProgramInterviewDto,
+    ) {
+        return this.interviewsService.programInterview(companyId, interviewId, dto);
+    }
 
-    // @UseGuards(JwtAuthGuard)
-    // @Post('/:providerId')
-    // @ApiOperation({ summary: 'Create an interview', description: 'Create an interview' })
-    // @ApiResponse({ status: 201, description: 'Interview created successfully' })
-    // @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    // @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
-    // create(
-    //     @Param('companyId', ParseIntPipe) companyId: number,
-    //     @Param('providerId', ParseIntPipe) providerId: number,
-    //     @Body() dto: CreateInterviewDto,
-    // ) {
-    //     return this.interviewsService.create(companyId, providerId, dto);
-    // }
+    @Get('/postulant/:postulantId')
+    @ApiOperation({ summary: 'Get all interviews for a postulante', description: 'Get all interviews for a postulante' })
+    @ApiResponse({ status: 200, description: 'List of interviews for a postulante' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 404, description: 'No interviews found for this postulante' })
+    findAllByPostulant(@Param('postulantId', ParseIntPipe) postulantId: number) {
+        return this.interviewsService.findAllByPostulant(postulantId);
+    }
 
-    // @UseGuards(JwtAuthGuard)
-    // @Get('candidate/:candidateId')
-    // @ApiOperation({ summary: 'Get all interviews for a candidate', description: 'Get all interviews for a candidate' })
-    // @ApiResponse({ status: 200, description: 'List of interviews for a candidate' })
-    // @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    // @ApiResponse({ status: 404, description: 'No interviews found for this candidate' })
-    // findByCandidate(@Param('candidateId', ParseIntPipe) candidateId: number) {
-    //     return this.interviewsService.findAllByCandidate(candidateId);
-    // }
+    @Get('/meetings/:meetingId')
+    @ApiOperation({ summary: 'Get meeting detail', description: 'Get meeting detail' })
+    @ApiResponse({ status: 200, description: 'Meeting detail' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
+    getMeetingDetail(@Param('meetingId') meetingId: string) {
+        return this.interviewsService.getMeetingDetail(meetingId);
+    }
 }
