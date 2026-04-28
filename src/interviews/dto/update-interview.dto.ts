@@ -1,8 +1,9 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsArray, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
+import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
+import { EntrevistasPostulantes_status } from "generated/prisma/enums";
 
-class CriterionDto {
+class CriterionResultsDto {
     @ApiProperty()
     @IsNumber()
     @IsOptional()
@@ -20,7 +21,10 @@ class CriterionDto {
 }
 
 export class UpdateMeetingDto {
-    //status
+    @ApiProperty()
+    @IsEnum(EntrevistasPostulantes_status)
+    @IsOptional()
+    status?: EntrevistasPostulantes_status;
 
     @ApiProperty()
     @IsString()
@@ -43,11 +47,11 @@ export class UpdateMeetingDto {
     recomendations?: string;
 
     @ApiProperty({
-        type: [CriterionDto],
+        type: [CriterionResultsDto],
     })
     @IsArray()
     @ValidateNested({ each: true })
-    @Type(() => CriterionDto)
+    @Type(() => CriterionResultsDto)
     @IsOptional()
-    criteria?: CriterionDto[];
+    criteria?: CriterionResultsDto[];
 }

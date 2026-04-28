@@ -7,6 +7,7 @@ import { quotePlus } from 'src/common/utils/address.utils';
 import { formatDate, formatHour } from 'src/common/utils/time.utils';
 import { findAllInterviews, findAllInterviewsByPostulant, findInterviewDetail } from './queries/interviews.queries';
 import { ProgramInterviewDto } from './dto/program-interview.dto';
+import { calculateFinalScore } from './utils/calculate-final-score';
 
 @Injectable()
 export class InterviewsService {
@@ -189,6 +190,50 @@ export class InterviewsService {
     }
 
     async updateMeeting(companyId: number, meetingId: string, dto: any) {
-        return 'update meeting';
+        const interviewPostulant = await this.prisma.entrevistasPostulantes.findFirst({
+            where: { id: meetingId },
+            include: {
+                EntrevistasResultados: true,
+                EntrevistaCriteriosEvaluacion: {
+                    include: {
+                        EntrevistasCriterios: true
+                    }
+                },
+            }
+        })
+        if (!interviewPostulant) throw new BadRequestException('No se encontró la entrevista');
+
+        let finalScore: number | null = null;
+        if (dto.status === 'TERMINADO') {
+            finalScore = calculateFinalScore(
+                interviewPostulant.EntrevistaCriteriosEvaluacion
+            );
+        }
+
+        await this.prisma.entrevistasPostulantes.update({
+            where: { id: meetingId },
+            data: {
+                status: dto.status,
+                EntrevistasResultados: {
+                    update: {
+                        final_score: finalScore,
+                        general_report: dto.generalReport,
+                        strengths: dto.strengths,
+                        improvement_areas: dto.improvementAreas,
+                        recommendations: dto.recomendations,
+                    }
+                },
+                EntrevistaCriteriosEvaluacion: {
+                    update: dto.criteria?.map((criterio: any) => ({
+                        where: { id: criterio.criterionId },
+                        data: {
+                            score: criterio.score,
+                            comment: criterio.comments,
+                        }
+                    }))
+                }
+            }
+        })
+        return { message: 'Entrevista actualizada exitosamente' };
     }
 }

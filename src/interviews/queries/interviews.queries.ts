@@ -143,7 +143,7 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       (
         SELECT COALESCE(JSON_ARRAYAGG(
           JSON_OBJECT(
-            'criterio_id', ec.id,
+            'criterio_id', ece.id,
             'name', ec.name,
             'description', ec.description,
             'max_score', ec.max_score,

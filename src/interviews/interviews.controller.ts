@@ -4,6 +4,7 @@ import { CreateInterviewDto } from './dto/create-interview.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProgramInterviewDto } from './dto/program-interview.dto';
+import { UpdateMeetingDto } from './dto/update-interview.dto';
 
 @ApiTags('Interviews')
 @ApiBearerAuth()
@@ -112,7 +113,7 @@ export class InterviewsController {
     updateMeeting(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string,
-        @Body() dto: any
+        @Body() dto: UpdateMeetingDto
     ) {
         return this.interviewsService.updateMeeting(companyId, meetingId, dto);
     }
