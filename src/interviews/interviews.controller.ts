@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query, Patch } from '@nestjs/common';
 import { InterviewsService } from './interviews.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -46,8 +46,11 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this company' })
-    findAllByMainInterview(@Param('interviewId') interviewId: string) {
-        return this.interviewsService.findAllByMainInterview(interviewId);
+    findAllByMainInterview(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('interviewId') interviewId: string
+    ) {
+        return this.interviewsService.findAllByMainInterview(companyId, interviewId);
     }
 
     @UseGuards(JwtAuthGuard)
@@ -82,8 +85,11 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'List of interviews for a postulante' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this postulante' })
-    findAllByPostulant(@Param('postulantId', ParseIntPipe) postulantId: number) {
-        return this.interviewsService.findAllByPostulant(postulantId);
+    findAllByPostulant(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('postulantId', ParseIntPipe) postulantId: number
+    ) {
+        return this.interviewsService.findAllByPostulant(companyId, postulantId);
     }
 
     @Get('/meetings/:meetingId')
@@ -91,7 +97,23 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'Meeting detail' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
-    getMeetingDetail(@Param('meetingId') meetingId: string) {
-        return this.interviewsService.getMeetingDetail(meetingId);
+    getMeetingDetail(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('meetingId') meetingId: string
+    ) {
+        return this.interviewsService.getMeetingDetail(companyId, meetingId);
+    }
+
+    @Patch('/meetings/:meetingId')
+    @ApiOperation({ summary: 'Update meeting', description: 'Update meeting' })
+    @ApiResponse({ status: 200, description: 'Meeting updated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
+    updateMeeting(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('meetingId') meetingId: string,
+        @Body() dto: any
+    ) {
+        return this.interviewsService.updateMeeting(companyId, meetingId, dto);
     }
 }

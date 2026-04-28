@@ -1,46 +1,68 @@
 import { PrismaClient } from "generated/prisma/client";
 
 export async function findAllInterviews(companyId: number, positionId: number | undefined, prisma: PrismaClient) {
-    if (positionId !== undefined) {
-        return prisma.$queryRaw`
+  let result: any;
+  if (positionId !== undefined) {
+    result = prisma.$queryRaw`
             SELECT 
                 e.id,
                 e.title,
+                e.description,
                 e.modality,
                 e.duration,
                 e.interviewer_name,
+                CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
                 p.idPuesto AS position_id,
-                p.NombrePuesto AS position_name
+                p.NombrePuesto AS position_name,
+                a.Descripcion AS area_name
             FROM Entrevistas e
             INNER JOIN CatPuestos p 
                 ON e.position_id = p.idPuesto
+            INNER JOIN CatAreas a 
+                ON e.area_id = a.idArea
+            LEFT JOIN EntrevistasPostulantes ep
+                ON ep.interview_id = e.id
             WHERE p.aprobada = true
             AND e.active = true
             AND p.idEmpresa = ${companyId}
             AND e.position_id = ${positionId}
+            GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, p.idPuesto, p.NombrePuesto, a.Descripcion;
         `;
-    }
-
-    return prisma.$queryRaw`
+  } else {
+    result = prisma.$queryRaw`
         SELECT 
             e.id,
             e.title,
+            e.description,
             e.modality,
             e.duration,
             e.interviewer_name,
+            CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
             p.idPuesto AS position_id,
-            p.NombrePuesto AS position_name
+            p.NombrePuesto AS position_name,
+            a.Descripcion AS area_name
         FROM Entrevistas e
         INNER JOIN CatPuestos p 
             ON e.position_id = p.idPuesto
+        INNER JOIN CatAreas a 
+            ON e.area_id = a.idArea
+        LEFT JOIN EntrevistasPostulantes ep
+            ON ep.interview_id = e.id
         WHERE p.aprobada = true
         AND e.active = true
         AND p.idEmpresa = ${companyId}
+        GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, p.idPuesto, p.NombrePuesto, a.Descripcion;
     `;
+  }
+
+  return result.then((data: any[]) => data.map((item: any) => ({
+    ...item,
+    interviews_programed: Number(item.interviews_programed),
+  })));
 }
 
 export async function findAllInterviewsByPostulant(postulantUuid: string, prisma: PrismaClient) {
-    return prisma.$queryRaw`
+  return prisma.$queryRaw`
     SELECT 
       ep.id,
       ep.interview_id,
@@ -85,7 +107,7 @@ export async function findAllInterviewsByPostulant(postulantUuid: string, prisma
 }
 
 export async function findInterviewDetail(interviewPostulantId: string, prisma: PrismaClient) {
-    return prisma.$queryRaw`
+  return prisma.$queryRaw`
     SELECT 
       ep.id,
       ep.candidate_uuid,

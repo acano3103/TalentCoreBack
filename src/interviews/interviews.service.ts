@@ -22,7 +22,7 @@ export class InterviewsService {
         return await findAllInterviews(companyId, positionId, this.prisma);
     }
 
-    async findAllByMainInterview(mainInterviewId: string) {
+    async findAllByMainInterview(companyId: number, mainInterviewId: string) {
         const interviews = await this.prisma.entrevistas.findMany({
             where: { id: mainInterviewId },
             include: { EntrevistasPostulantes: true }
@@ -175,7 +175,7 @@ export class InterviewsService {
 
     }
 
-    async findAllByPostulant(postulantId: number) {
+    async findAllByPostulant(companyId: number, postulantId: number) {
         const postulant = await this.prisma.postulaciones.findFirst({
             where: { idPostulacion: postulantId }
         })
@@ -184,7 +184,11 @@ export class InterviewsService {
         return await findAllInterviewsByPostulant(postulant.uuid, this.prisma);
     }
 
-    async getMeetingDetail(interviewId: string) {
+    async getMeetingDetail(companyId: number, interviewId: string) {
         return await findInterviewDetail(interviewId, this.prisma);
+    }
+
+    async updateMeeting(companyId: number, meetingId: string, dto: any) {
+        return 'update meeting';
     }
 }
