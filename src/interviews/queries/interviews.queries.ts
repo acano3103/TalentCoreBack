@@ -68,7 +68,7 @@ export async function findAllInterviewsByPostulant(postulantUuid: string, prisma
       ep.interview_id,
       ep.scheduled_at,
       ep.duration,
-      ep.status,
+      ce.descripcion AS status,
 
       -- meeting básico
       ep.meeting_url,
@@ -100,6 +100,9 @@ export async function findAllInterviewsByPostulant(postulantUuid: string, prisma
     LEFT JOIN EntrevistasResultados er
       ON er.interview_postulant_id = ep.id
 
+    LEFT JOIN CatEstatusEntrevista ce
+      ON ce.idEstatusEntrevista = ep.status_id
+
     WHERE ep.candidate_uuid = ${postulantUuid}
 
     ORDER BY ep.scheduled_at DESC
@@ -114,7 +117,7 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       ep.interview_id,
       ep.scheduled_at,
       ep.duration,
-      ep.status,
+      ce.descripcion AS status,
       ep.meeting_id,
       ep.meeting_url,
       ep.location,
@@ -138,6 +141,14 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       er.strengths,
       er.improvement_areas,
       er.recommendations,
+
+      -- postulante
+      CONCAT(p.nombre, ' ', p.primerApellido, ' ', p.segundoApellido) AS postulant_name,
+      p.correo as email,
+      p.telefono as phone,
+      
+      -- puesto
+      cp.NombrePuesto AS position_name,
 
       -- criterios + preguntas
       (
@@ -186,6 +197,119 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
     LEFT JOIN EntrevistasResultados er
       ON er.interview_postulant_id = ep.id
 
+    LEFT JOIN CatEstatusEntrevista ce
+      ON ce.idEstatusEntrevista = ep.status_id
+
+    LEFT JOIN Postulaciones p
+      ON p.uuid = ep.candidate_uuid
+
+    LEFT JOIN CatPuestos cp
+      ON cp.idPuesto = e.position_id
+
     WHERE ep.id = ${interviewPostulantId}
   `;
+}
+
+export async function findProgrammedInterviews(companyId: number, mainInterviewId: string, prisma: PrismaClient) {
+  const rows: any[] = await prisma.$queryRaw`
+        SELECT 
+            e.id,
+            e.company_id,
+            e.area_id,
+            e.position_id,
+            e.provider_id,
+            e.agent_id,
+            e.description,
+            e.interview_type,
+            e.modality,
+            e.title,
+            e.duration,
+            e.interviewer_name,
+            e.comment,
+
+            -- Puesto y área
+            cp.NombrePuesto AS position_name,
+            a.Descripcion AS area_name,
+
+            -- EntrevistasPostulantes
+            ep.id AS ep_id,
+            ep.candidate_uuid,
+            ep.interview_id,
+            ep.scheduled_at,
+            ep.duration AS ep_duration,
+            ep.status_id,
+            ep.meeting_id,
+            ep.meeting_url,
+            ep.location AS ep_location,
+
+            -- Status
+            ce.descripcion AS status,
+
+            -- Candidato
+            CONCAT(p.nombre, ' ', p.primerApellido, ' ', p.segundoApellido) AS candidate_name,
+            p.correo AS candidate_email
+
+        FROM Entrevistas e
+
+        LEFT JOIN CatPuestos cp 
+            ON e.position_id = cp.idPuesto
+
+        LEFT JOIN CatAreas a 
+            ON e.area_id = a.idArea
+
+        LEFT JOIN EntrevistasPostulantes ep
+            ON ep.interview_id = e.id
+
+        LEFT JOIN CatEstatusEntrevista ce
+            ON ce.idEstatusEntrevista = ep.status_id
+
+        LEFT JOIN Postulaciones p
+            ON p.uuid = ep.candidate_uuid
+
+        WHERE 
+            e.company_id = ${companyId}
+            AND e.id = ${mainInterviewId}
+            AND e.active = true;
+    `;
+
+  // 🔥 Agrupar igual que tu lógica original
+  const interviewsMap = new Map();
+
+  for (const row of rows) {
+    if (!interviewsMap.has(row.id)) {
+      interviewsMap.set(row.id, {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        duration: row.duration,
+        interview_type: row.interview_type,
+        modality: row.modality,
+        interviewer_name: row.interviewer_name,
+        comment: row.comment,
+
+        position_name: row.position_name,
+        area_name: row.area_name,
+
+        EntrevistasPostulantes: []
+      });
+    }
+
+    // Si hay postulante
+    if (row.ep_id) {
+      interviewsMap.get(row.id).EntrevistasPostulantes.push({
+        id: row.ep_id,
+        scheduled_at: row.scheduled_at,
+        status: row.status,
+
+        meeting_id: row.meeting_id,
+        meeting_url: row.meeting_url,
+        location: row.ep_location,
+
+        candidate_name: row.candidate_name,
+        candidate_email: row.candidate_email
+      });
+    }
+  }
+
+  return Array.from(interviewsMap.values());
 }

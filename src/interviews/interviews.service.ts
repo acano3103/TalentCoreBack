@@ -5,9 +5,10 @@ import { CommunicationFactory } from '../integrations/providers/factory.service'
 import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
 import { quotePlus } from 'src/common/utils/address.utils';
 import { formatDate, formatHour } from 'src/common/utils/time.utils';
-import { findAllInterviews, findAllInterviewsByPostulant, findInterviewDetail } from './queries/interviews.queries';
+import { findAllInterviews, findAllInterviewsByPostulant, findInterviewDetail, findProgrammedInterviews } from './queries/interviews.queries';
 import { ProgramInterviewDto } from './dto/program-interview.dto';
 import { calculateFinalScore } from './utils/calculate-final-score';
+import { UpdateMeetingDto } from './dto/update-interview.dto';
 
 @Injectable()
 export class InterviewsService {
@@ -23,19 +24,16 @@ export class InterviewsService {
         return await findAllInterviews(companyId, positionId, this.prisma);
     }
 
-    async findAllByMainInterview(companyId: number, mainInterviewId: string) {
-        const interviews = await this.prisma.entrevistas.findMany({
-            where: { id: mainInterviewId },
-            include: { EntrevistasPostulantes: true }
-        });
-        return interviews;
+    async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
+        return await findProgrammedInterviews(companyId, mainInterviewId, this.prisma);
     }
 
     async findActivePositions(companyId: number) {
         const activePositions = await this.prisma.catPuestos.findMany({
             where: {
                 idEmpresa: companyId,
-                aprobada: true
+                aprobada: true,
+                Activo: true
             },
             select: {
                 idPuesto: true,
@@ -114,7 +112,6 @@ export class InterviewsService {
                     interview_id: mainInterview.id,
                     scheduled_at: new Date(dto.scheduledAt),
                     duration: dto.duration,
-                    status: 'PROGRAMADO',
                     meeting_id: meetingData?.id || null,
                     meeting_url: meetingData?.url || null,
                     location: mainInterview.location || null,
@@ -189,7 +186,7 @@ export class InterviewsService {
         return await findInterviewDetail(interviewId, this.prisma);
     }
 
-    async updateMeeting(companyId: number, meetingId: string, dto: any) {
+    async updateMeeting(companyId: number, meetingId: string, dto: UpdateMeetingDto) {
         const interviewPostulant = await this.prisma.entrevistasPostulantes.findFirst({
             where: { id: meetingId },
             include: {
@@ -204,7 +201,7 @@ export class InterviewsService {
         if (!interviewPostulant) throw new BadRequestException('No se encontró la entrevista');
 
         let finalScore: number | null = null;
-        if (dto.status === 'TERMINADO') {
+        if (dto.statusId === 2) {
             finalScore = calculateFinalScore(
                 interviewPostulant.EntrevistaCriteriosEvaluacion
             );
@@ -213,7 +210,7 @@ export class InterviewsService {
         await this.prisma.entrevistasPostulantes.update({
             where: { id: meetingId },
             data: {
-                status: dto.status,
+                status_id: dto.statusId,
                 EntrevistasResultados: {
                     update: {
                         final_score: finalScore,

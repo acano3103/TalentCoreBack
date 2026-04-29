@@ -1,7 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
-import { EntrevistasPostulantes_status } from "generated/prisma/enums";
 
 class CriterionResultsDto {
     @ApiProperty()
@@ -22,9 +21,9 @@ class CriterionResultsDto {
 
 export class UpdateMeetingDto {
     @ApiProperty()
-    @IsEnum(EntrevistasPostulantes_status)
+    @IsNumber()
     @IsOptional()
-    status?: EntrevistasPostulantes_status;
+    statusId?: number;
 
     @ApiProperty()
     @IsString()

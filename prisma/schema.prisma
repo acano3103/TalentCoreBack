@@ -939,6 +939,7 @@ model Entrevistas {
   interviewer_name       String?                    @db.VarChar(150)
   location               String?                    @db.VarChar(255)
   comment                String?                    @db.Text
+  active                 Boolean                    @default(true)
   Agentes                Agentes?                   @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_ibfk_1")
   EntrevistasCriterios   EntrevistasCriterios[]
   EntrevistasPostulantes EntrevistasPostulantes[]
@@ -1012,7 +1013,7 @@ model EntrevistasPostulantes {
   interview_id                  String                          @db.Char(36)
   scheduled_at                  DateTime?                       @db.DateTime(0)
   duration                      Int?
-  status                        EntrevistasPostulantes_status?  @default(PROGRAMADO)
+  status_id                     Int                             @default(1)
   meeting_id                    String?                         @db.VarChar(100)
   meeting_url                   String?                         @db.Text
   location                      String?                         @db.Text
@@ -1049,10 +1050,4 @@ enum Entrevistas_modality {
 enum Entrevistas_interview_type {
   PERSONA
   IA
-}
-
-enum EntrevistasPostulantes_status {
-  PROGRAMADO
-  TERMINADO
-  CANCELADO
 }

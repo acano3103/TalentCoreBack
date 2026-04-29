@@ -47,11 +47,11 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this company' })
-    findAllByMainInterview(
+    findProgrammedInterviews(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string
     ) {
-        return this.interviewsService.findAllByMainInterview(companyId, interviewId);
+        return this.interviewsService.findProgrammedInterviews(companyId, interviewId);
     }
 
     @UseGuards(JwtAuthGuard)
