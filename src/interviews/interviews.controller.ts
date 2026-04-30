@@ -42,6 +42,15 @@ export class InterviewsController {
     }
 
     @UseGuards(JwtAuthGuard)
+    @Get('/status')
+    @ApiOperation({ summary: 'Get catalog of status for interviews', description: 'Get catalog of status for interviews' })
+    @ApiResponse({ status: 200, description: 'Status obtained successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    getInterviewStatus(@Param('companyId', ParseIntPipe) companyId: number) {
+        return this.interviewsService.getStatus(companyId);
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Get(':interviewId')
     @ApiOperation({ summary: 'Get all programed interviews', description: 'Get all interviews that are programed, main interview and all its secondary interviews' })
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })

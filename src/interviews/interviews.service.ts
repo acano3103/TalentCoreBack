@@ -106,27 +106,34 @@ export class InterviewsService {
                 meetingData = await zoomProvider.createMeeting(companyId, mainInterview.provider_id, dto);
             }
 
-            const interview = await this.prisma.entrevistasPostulantes.create({
-                data: {
-                    candidate_uuid: postulant.uuid,
-                    interview_id: mainInterview.id,
-                    scheduled_at: new Date(dto.scheduledAt),
-                    duration: dto.duration,
-                    meeting_id: meetingData?.id || null,
-                    meeting_url: meetingData?.url || null,
-                    location: mainInterview.location || null,
-                    metadata: meetingData?.metadata || null,
-                    EntrevistaCriteriosEvaluacion: {
-                        create: mainInterview.EntrevistasCriterios.map((criterio) => ({
-                            criterio_id: criterio.id
-                        }))
-                    },
-                    EntrevistasResultados: {
-                        create: {}
+            await this.prisma.$transaction(async (tx) => {
+                const interview = await tx.entrevistasPostulantes.create({
+                    data: {
+                        candidate_uuid: postulant.uuid,
+                        interview_id: mainInterview.id,
+                        scheduled_at: new Date(dto.scheduledAt),
+                        duration: dto.duration,
+                        meeting_id: meetingData?.id || null,
+                        meeting_url: meetingData?.url || null,
+                        location: mainInterview.location || null,
+                        metadata: meetingData?.metadata || null,
+                        EntrevistaCriteriosEvaluacion: {
+                            create: mainInterview.EntrevistasCriterios.map((criterio) => ({
+                                criterio_id: criterio.id
+                            }))
+                        },
+                        EntrevistasResultados: {
+                            create: {}
+                        }
                     }
-                }
+                });
+                meetingData.interviewId = interview.id;
+
+                await tx.postulaciones.update({
+                    where: { idPostulacion: dto.postulantId },
+                    data: { idEstatus: 2 }
+                })
             });
-            meetingData.interviewId = interview.id;
 
             const date = new Date(dto.scheduledAt);
             const day = formatDate(date);
@@ -163,7 +170,6 @@ export class InterviewsService {
 
             return { message: 'Entrevista creada exitosamente' };
         } catch (error) {
-            await this.prisma.entrevistasPostulantes.deleteMany({ where: { id: meetingData.interviewId } });
             const provider = await this.communicationFactory.getProvider(mainInterview.provider_id);
             if (provider) await provider.deleteMeeting(companyId, mainInterview.provider_id, meetingData?.id);
 
@@ -233,4 +239,20 @@ export class InterviewsService {
         })
         return { message: 'Entrevista actualizada exitosamente' };
     }
+
+    async getStatus(companyId: number) {
+        const status = await this.prisma.catEstatusEntrevista.findMany({
+            where: { activo: true },
+            select: {
+                idEstatusEntrevista: true,
+                descripcion: true
+            }
+        });
+
+        return status.map(s => ({
+            id: s.idEstatusEntrevista,
+            description: s.descripcion
+        }));
+    }
+
 }

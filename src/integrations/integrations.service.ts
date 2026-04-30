@@ -11,11 +11,32 @@ export class IntegrationsService {
     ) { }
 
     async getIntegrations(companyId: number) {
-        const integrations = await this.prisma.catIntegracionesProvedores.findMany({
-            where: { isActive: true },
+        const providers = await this.prisma.catIntegracionesProvedores.findMany({
+            where: {
+                isActive: true
+            },
+            include: {
+                Integraciones: {
+                    where: {
+                        idEmpresa: companyId
+                    }
+                }
+            }
         });
 
-        return integrations;
+        const formattedData = providers.map(provider => {
+            const connection = provider.Integraciones[0];
+
+            return {
+                id: provider.id,
+                code: provider.code,
+                name: provider.name,
+                type: provider.type,
+                isConnected: !!connection?.isConnected
+            };
+        });
+
+        return formattedData;
     }
 
     async connect(companyId: number, providerId: number, dto: ConnectIntegrationDto) {
