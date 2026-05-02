@@ -17,10 +17,16 @@ import { PostulationsModule } from './postulations/postulations.module';
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public'),
-      serveRoot: '/public',
-    }),
+    ServeStaticModule.forRoot(
+      {
+        rootPath: join(__dirname, '..', 'public'),
+        serveRoot: '/public',
+      },
+      {
+        rootPath: join(__dirname, '..', 'media'),
+        serveRoot: '/media',
+      }
+    ),
     PrismaModule,
     AuthModule,
     PositionsModule,

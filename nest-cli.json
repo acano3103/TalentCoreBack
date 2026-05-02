@@ -12,6 +12,10 @@
       {
         "include": "public/**/*",
         "outDir": "dist"
+      },
+      {
+        "include": "media/**/*",
+        "outDir": "dist"
       }
     ],
     "watchAssets": true

@@ -23,10 +23,15 @@ export class MailProvider {
                     ...payload.context,
                     logoUrl,
                 },
+                attachments: payload.attachments?.map(file => ({
+                    filename: file.filename,
+                    content: file.content
+                })) || []
             });
             this.logger.log(`Mail enviado a: ${payload.to}`);
         } catch (error) {
             this.logger.error(`Falla en Mail: ${error.message}`);
+            throw error;
         }
     }
 }

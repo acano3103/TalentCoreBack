@@ -1,0 +1,105 @@
+<div style="background-color: #f4f6f9; padding: 40px 15px; font-family: 'Segoe UI', Arial, sans-serif; color: #333;">
+    <table width="100%" cellpadding="0" cellspacing="0"
+        style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.06);">
+
+        <tr>
+            <td style="background-color: #ffffff; text-align: center; padding: 40px 30px 20px;">
+                <img src="{{logoUrl}}" alt="DataVoice" style="max-width: 200px; display: block; margin: auto;">
+            </td>
+        </tr>
+
+        <tr>
+            <td style="padding: 0 30px 10px;">
+                <h2 style="margin: 0 0 10px; color: #005578; font-size: 22px; font-weight: 600; text-align: center;">
+                    📑 Documentación Requerida
+                </h2>
+
+                <p style="font-size: 15px; color: #444; text-align: center;">
+                    Proceso de Reclutamiento - DataVoice
+                </p>
+
+                <p style="font-size: 15px; margin-top: 20px;">
+                    Estimado(a) <strong style="color: #005578;">{{nombre}}</strong>,
+                </p>
+
+                <p style="font-size: 15px; color: #555; line-height: 1.6;">
+                    Para continuar con tu proceso, ingresa al sistema y carga los siguientes documentos:
+                </p>
+            </td>
+        </tr>
+
+        <!-- DOCUMENTOS -->
+        <tr>
+            <td style="padding: 0 30px;">
+                <ul
+                    style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 12px; padding: 20px; list-style: none;">
+                    {{#each documentos}}
+                    <li style="padding: 8px 0;">
+                        {{#if obligatorio}}✅{{else}}⚪{{/if}} {{nombre}}
+                    </li>
+                    {{/each}}
+                </ul>
+            </td>
+        </tr>
+
+        <!-- DOCUMENTOS EMPRESA -->
+        {{#if docs_empresa.length}}
+        <tr>
+            <td style="padding: 0 30px 10px;">
+                <div
+                    style="background-color: #fff8e1; border: 1px solid #ffe082; border-radius: 12px; padding: 15px 20px;">
+
+                    <p style="margin: 0 0 8px; color: #e65100;">
+                        <strong>📎 Documentos adjuntos:</strong>
+                    </p>
+
+                    <ul style="margin: 0; padding-left: 18px;">
+                        {{#each docs_empresa}}
+                        <li>{{this}}</li>
+                        {{/each}}
+                    </ul>
+
+                    <p style="margin-top: 10px; font-size: 13px;">
+                        Descarga, firma y súbelos en el portal.
+                    </p>
+
+                </div>
+            </td>
+        </tr>
+        {{/if}}
+
+        <!-- CREDENCIALES -->
+        <tr>
+            <td style="padding: 30px;">
+                <div style="background-color: #f4f6f9; border-radius: 10px; padding: 15px 20px;">
+
+                    <p><strong>🔐 Credenciales:</strong></p>
+
+                    <p><strong>Usuario:</strong> {{claveusuario}}</p>
+                    <p><strong>Contraseña:</strong> {{password}}</p>
+
+                </div>
+            </td>
+        </tr>
+
+        <!-- BOTÓN -->
+        <tr>
+            <td style="text-align: center; padding: 10px 30px 20px;">
+                <a href="https://fileonline.datavoice.com.mx/talentcore/login" target="_blank"
+                    style="background-color: #005578; color: white; padding: 12px 28px; border-radius: 10px; text-decoration: none;">
+                    📎 Ingresar al Portal
+                </a>
+            </td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+            <td style="background-color: #005578; text-align: center; padding: 20px;">
+                <p style="color: white; font-size: 13px;">
+                    © 2026 DataVoice — Talent Core
+                </p>
+            </td>
+        </tr>
+
+    </table>
+</div>

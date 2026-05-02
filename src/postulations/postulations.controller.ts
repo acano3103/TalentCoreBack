@@ -1,9 +1,10 @@
-import { Controller, Patch, Param, Body, ParseIntPipe, UseGuards, Req, Get } from '@nestjs/common';
+import { Controller, Patch, Param, Body, ParseIntPipe, UseGuards, Req, Get, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { PostulationsService } from './postulations.service';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Postulations')
 @ApiBearerAuth()
@@ -22,6 +23,7 @@ export class PostulationsController {
 
     @UseGuards(JwtAuthGuard)
     @Patch(':postulationId/status')
+    @UseInterceptors(FilesInterceptor('company_docs'))
     @ApiOperation({ summary: 'Update the status of a postulation', description: 'Update the status of a postulation' })
     @ApiResponse({ status: 200, description: 'Postulation status updated successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
@@ -30,8 +32,9 @@ export class PostulationsController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('postulationId', ParseIntPipe) postulationId: number,
         @Body() dto: UpdatePostulationStatusDto,
+        @UploadedFiles() files: Express.Multer.File[] = [],
         @CurrentUser() user: any
     ) {
-        return this.service.updateStatus(companyId, postulationId, dto, user);
+        return this.service.updateStatus(companyId, postulationId, dto, user, files);
     }
 }

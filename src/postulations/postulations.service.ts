@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
-import { generateCredentials } from './utils/generate-credentials';
+import { generateCredentials } from './services/credentials.service';
 import { ALLOWED_STATUS_TRANSITIONS } from './utils/allowed-transitions';
 import { userFullInfo } from 'src/common/interfaces/user.interface';
+import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
 
 @Injectable()
 export class PostulationsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private readonly notifications: NotificationDispatcher
+    ) { }
 
     async getStatus() {
         const statuses = await this.prisma.catEstatusVacante.findMany({ where: { activo: true } });
@@ -17,7 +21,7 @@ export class PostulationsService {
         }));
     }
 
-    async updateStatus(companyId: number, postulationId: number, dto: UpdatePostulationStatusDto, user: userFullInfo) {
+    async updateStatus(companyId: number, postulationId: number, dto: UpdatePostulationStatusDto, user: userFullInfo, files: Express.Multer.File[]) {
         try {
             const postulation = await this.prisma.postulaciones.findFirst({
                 where: { idPostulacion: postulationId }
@@ -29,7 +33,7 @@ export class PostulationsService {
             const statusMap = new Map(statuses.map(s => [s.idEstatusVacante, s.decripcion]));
 
             const currentStatus = postulation.idEstatus || 1;
-            const nextStatus = dto.status_id;
+            const nextStatus = dto.statusId;
             const allowedTransitions = ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
             if (!allowedTransitions.includes(nextStatus)) {
                 const currentStatusName = statusMap.get(currentStatus) || 'DESCONOCIDO';
@@ -38,22 +42,27 @@ export class PostulationsService {
                 throw new BadRequestException(`No se puede cambiar de ${currentStatusName} a ${nextStatusName}. Estado actual: ${currentStatusName}, Estados permitidos: ${allowedNames.join(', ')}`);
             }
 
-            if (dto.status_id === 6) {
+            if (dto.statusId === 6) {
                 await generateCredentials(
-                    postulation.curp,
-                    postulation.nombre,
-                    postulation.primerApellido,
-                    postulation.segundoApellido || '',
-                    postulation.correo,
-                    postulation.idPuesto ?? 0,
-                    user.username || 'sistema',
-                    dto.campaign_id || null,
-                    this.prisma
+                    {
+                        curp: postulation.curp,
+                        nombre: postulation.nombre,
+                        apellido1: postulation.primerApellido,
+                        apellido2: postulation.segundoApellido || '',
+                        correo: postulation.correo,
+                        idPuesto: postulation.idPuesto ?? 0,
+                        usuario: user.username || 'sistema',
+                        idCampania: dto.campaignId || null,
+                    },
+                    files ?? [],
+                    this.prisma,
+                    this.notifications.notify.bind(this.notifications)
                 );
             }
+
             return await this.prisma.postulaciones.update({
                 where: { idPostulacion: postulationId },
-                data: { idEstatus: dto.status_id }
+                data: { idEstatus: dto.statusId }
             });
         }
         catch (error) { throw error; }

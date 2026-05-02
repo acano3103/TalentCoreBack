@@ -6,6 +6,10 @@ export interface NotificationOptions {
     phone?: string;
     subject?: string;
     context?: any;
+    attachments?: {
+        filename: string;
+        content: Buffer;
+    }[];
 }
 
 export interface INotificationProvider {
