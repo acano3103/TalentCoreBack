@@ -66,7 +66,7 @@ export class InterviewsService {
                             create: dto.criteria.map(criterion => ({
                                 name: criterion.name,
                                 description: criterion.description || null,
-                                max_score: criterion.maxScore || 0,
+                                max_score: criterion.weight || 0,
                                 weight: criterion.weight || null,
                                 order: criterion.order || null,
                                 CriterioPreguntas: criterion.questions?.length
