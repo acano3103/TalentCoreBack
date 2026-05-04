@@ -44,6 +44,7 @@ export class InterviewsService {
     }
 
     async create(companyId: number, dto: CreateInterviewDto) {
+        console.log(dto)
         const interviews = await Promise.all(
             dto.positionIds.map(positionId =>
                 this.prisma.entrevistas.create({
@@ -65,10 +66,10 @@ export class InterviewsService {
                             create: dto.criteria.map(criterion => ({
                                 name: criterion.name,
                                 description: criterion.description || null,
-                                max_score: criterion.maxScore || 10,
+                                max_score: criterion.maxScore || 0,
                                 weight: criterion.weight || null,
                                 order: criterion.order || null,
-                                preguntas: criterion.questions?.length
+                                CriterioPreguntas: criterion.questions?.length
                                     ? {
                                         create: criterion.questions.map(q => ({
                                             question: q.question,
