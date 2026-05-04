@@ -211,6 +211,8 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
 }
 
 export async function findProgrammedInterviews(companyId: number, mainInterviewId: string, prisma: PrismaClient) {
+  // La consulta SQL con LEFT JOIN garantiza que si existe la fila en 'Entrevistas', 
+  // se traerá aunque las tablas de la derecha (postulantes) sean nulas.
   const rows: any[] = await prisma.$queryRaw`
         SELECT 
             e.id,
@@ -231,7 +233,7 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             cp.NombrePuesto AS position_name,
             a.Descripcion AS area_name,
 
-            -- EntrevistasPostulantes
+            -- EntrevistasPostulantes (usamos ep_id para validar existencia)
             ep.id AS ep_id,
             ep.candidate_uuid,
             ep.interview_id,
@@ -242,10 +244,10 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             ep.meeting_url,
             ep.location AS ep_location,
 
-            -- Status
+            -- Status del postulante
             ce.descripcion AS status,
 
-            -- Candidato
+            -- Datos del Candidato
             CONCAT(p.nombre, ' ', p.primerApellido, ' ', p.segundoApellido) AS candidate_name,
             p.correo AS candidate_email
 
@@ -272,10 +274,12 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             AND e.active = true;
     `;
 
-  // 🔥 Agrupar igual que tu lógica original
+  if (rows.length === 0) return [];
+
   const interviewsMap = new Map();
 
   for (const row of rows) {
+    // Si la entrevista principal aún no está en el mapa, la agregamos
     if (!interviewsMap.has(row.id)) {
       interviewsMap.set(row.id, {
         id: row.id,
@@ -286,25 +290,23 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
         modality: row.modality,
         interviewer_name: row.interviewer_name,
         comment: row.comment,
-
         position_name: row.position_name,
         area_name: row.area_name,
-
+        // Se inicializa siempre como un array vacío
         EntrevistasPostulantes: []
       });
     }
 
-    // Si hay postulante
+    // Solo si existe un ID de postulante (ep_id), lo agregamos al array
+    // Si no hay postulantes, 'ep_id' será null por el LEFT JOIN y no entrará aquí
     if (row.ep_id) {
       interviewsMap.get(row.id).EntrevistasPostulantes.push({
         id: row.ep_id,
         scheduled_at: row.scheduled_at,
         status: row.status,
-
         meeting_id: row.meeting_id,
         meeting_url: row.meeting_url,
         location: row.ep_location,
-
         candidate_name: row.candidate_name,
         candidate_email: row.candidate_email
       });

@@ -4,9 +4,9 @@ import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from 
 
 class CriterionResultsDto {
     @ApiProperty()
-    @IsNumber()
+    @IsString()
     @IsOptional()
-    criterionId?: number;
+    criterionId?: string;
 
     @ApiProperty()
     @IsNumber()
