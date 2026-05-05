@@ -949,16 +949,16 @@ model Entrevistas {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model EntrevistasCriterios {
-  id                            String                          @id @default(dbgenerated("(uuid())")) @db.Char(36)
-  interview_id                  String                          @db.Char(36)
-  name                          String?                         @db.VarChar(150)
-  description                   String?                         @db.Text
-  max_score                     Int?
-  weight                        Int?
-  order                         Int?
+  id                            String                         @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  interview_id                  String                         @db.Char(36)
+  name                          String                         @db.VarChar(150)
+  description                   String                         @db.Text
+  max_score                     Int
+  weight                        Int
+  order                         Int
   CriterioPreguntas             CriterioPreguntas[]
-  EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion[]
-  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasCriterios_ibfk_1")
+  EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion?
+  Entrevistas                   Entrevistas                    @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasCriterios_ibfk_1")
 
   @@index([interview_id], map: "interview_id")
 }
@@ -971,20 +971,29 @@ model EntrevistasResultados {
   strengths              String?                 @db.Text
   improvement_areas      String?                 @db.Text
   recommendations        String?                 @db.Text
+  metadata               Json?
   EntrevistasPostulantes EntrevistasPostulantes? @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasResultados_ibfk_1")
 }
 
 model Agentes {
-  id              String        @id @default(dbgenerated("(uuid())")) @db.Char(36)
-  name            String        @db.VarChar(150)
-  description     String?       @db.Text
-  context         String?       @db.Text
-  script          String?       @db.Text
-  min_score       Int?
-  voice           String?       @db.VarChar(100)
-  language        String?       @db.VarChar(50)
-  interrupt_limit Int?
-  Entrevistas     Entrevistas[]
+  id               String             @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  name             String             @db.VarChar(150)
+  description      String?            @db.Text
+  context          String?            @db.Text
+  script           String?            @db.Text
+  min_score        Int?
+  voice            String?            @db.VarChar(100)
+  language         String?            @db.VarChar(50)
+  interrupt_limit  Int?
+  interviewEngine  String?            @default("legacy") @db.VarChar(255)
+  humeConfigId     String?            @db.VarChar(255)
+  emotionAnalysis  Boolean?           @default(false)
+  status           String?            @default("ABIERTA") @db.VarChar(50)
+  createdById      String?            @db.VarChar(255)
+  createdAt        DateTime?          @default(now()) @db.DateTime(0)
+  updatedAt        DateTime?          @default(now()) @db.DateTime(0)
+  AgentesCriterios AgentesCriterios[]
+  Entrevistas      Entrevistas[]
 }
 
 model CatCriterios {
@@ -996,14 +1005,13 @@ model CatCriterios {
 
 model EntrevistaCriteriosEvaluacion {
   id                     String                 @id @default(dbgenerated("(uuid())")) @db.Char(36)
-  criterio_id            String                 @db.Char(36)
+  criterio_id            String                 @unique(map: "unique_criterio_id") @db.Char(36)
   score                  Decimal?               @db.Decimal(5, 2)
   comment                String?                @db.Text
   interview_postulant_id String                 @db.Char(36)
   EntrevistasCriterios   EntrevistasCriterios   @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistaCriteriosEvaluacion_ibfk_1")
   EntrevistasPostulantes EntrevistasPostulantes @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_evaluacion_postulante")
 
-  @@index([criterio_id], map: "criterio_id")
   @@index([interview_postulant_id], map: "fk_evaluacion_postulante")
 }
 
@@ -1034,6 +1042,19 @@ model CriterioPreguntas {
   EntrevistasCriterios EntrevistasCriterios @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "CriterioPreguntas_ibfk_1")
 
   @@index([criterio_id], map: "criterio_id")
+}
+
+model AgentesCriterios {
+  id          String  @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  agent_id    String  @db.Char(36)
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+  max_score   Int?    @default(10)
+  weight      Int?
+  order       Int?
+  Agentes     Agentes @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "AgentesCriterios_ibfk_1")
+
+  @@index([agent_id], map: "agent_id")
 }
 
 enum RelRequisicionHabilidades_nivel {

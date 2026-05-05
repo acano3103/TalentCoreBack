@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.3.4",
+    "@nestjs/axios": "^4.0.1",
     "@nestjs/bull": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
@@ -43,6 +44,7 @@
     "joi": "^18.1.2",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.5",
+    "openai": "^6.36.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pbkdf2": "^3.1.5",

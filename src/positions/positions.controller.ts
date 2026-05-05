@@ -1,4 +1,4 @@
-import { Controller, Patch, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Patch, Get, Param, Body, UseGuards } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -11,6 +11,14 @@ import { Modules } from 'src/auth/decorators/modules.decorator';
 @Controller('companies/:companyId/positions')
 export class PositionsController {
     constructor(private readonly service: PositionsService) { }
+
+    @Get(':positionId')
+    @ApiOperation({ summary: 'Get position', description: 'Returns a position.' })
+    @ApiResponse({ status: 200, description: 'Position successfully retrieved.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    async getPosition(@Param('companyId') companyId: number, @Param('positionId') positionId: number) {
+        return this.service.findPositionById(companyId, positionId);
+    }
 
     @UseGuards(JwtAuthGuard)//@UseGuards(JwtAuthGuard, ModulesGuard)
     //@Modules('Administrador')

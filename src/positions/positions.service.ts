@@ -18,6 +18,15 @@ export class PositionsService {
 
     private readonly logger = new Logger(PositionsService.name);
 
+    async findPositionById(companyId: number, positionId: number) {
+        return this.prisma.catPuestos.findFirst({
+            where: {
+                idPuesto: positionId,
+                Activo: true
+            }
+        })
+    }
+
     async approveOrReject(companyId: number, positionId: number, dto: ValidatePositionDto) {
         try {
             const position = await PositionQueries.getPositionInfo(this.prisma, positionId);

@@ -11,4 +11,9 @@ export const envValidationSchema = Joi.object({
     MAIL_FROM: Joi.string().required(),
     JWT_SECRET: Joi.string().required(),
     ENCRYPTION_KEY: Joi.string().required(),
+    FRONT_URL: Joi.string().required(),
+    HUME_API_KEY: Joi.string().required(),
+    HUME_SECRET_KEY: Joi.string().required(),
+    HUME_CONFIG_ID_INTERVIEW: Joi.string().required(),
+    OPENAI_API_KEY: Joi.string().required(),
 });

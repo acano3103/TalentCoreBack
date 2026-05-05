@@ -9,10 +9,12 @@ import { findAllInterviews, findAllInterviewsByPostulant, findInterviewDetail, f
 import { ProgramInterviewDto } from './dto/program-interview.dto';
 import { calculateFinalScore } from './utils/calculate-final-score';
 import { UpdateMeetingDto } from './dto/update-interview.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class InterviewsService {
     constructor(
+        private readonly configService: ConfigService,
         private prisma: PrismaService,
         private communicationFactory: CommunicationFactory,
         private readonly notifications: NotificationDispatcher
@@ -44,7 +46,6 @@ export class InterviewsService {
     }
 
     async create(companyId: number, dto: CreateInterviewDto) {
-        console.log(dto)
         const interviews = await Promise.all(
             dto.positionIds.map(positionId =>
                 this.prisma.entrevistas.create({
@@ -63,12 +64,12 @@ export class InterviewsService {
                         location: dto.locationAddress || null,
                         comment: dto.comment || null,
                         EntrevistasCriterios: {
-                            create: dto.criteria.map(criterion => ({
+                            create: dto.criteria.map((criterion, index) => ({
                                 name: criterion.name,
-                                description: criterion.description || null,
+                                description: criterion.description || '',
                                 max_score: criterion.weight || 0,
-                                weight: criterion.weight || null,
-                                order: criterion.order || null,
+                                weight: criterion.weight || 1,
+                                order: criterion.order || index + 1,
                                 CriterioPreguntas: criterion.questions?.length
                                     ? {
                                         create: criterion.questions.map(q => ({
@@ -134,6 +135,14 @@ export class InterviewsService {
                     where: { idPostulacion: dto.postulantId },
                     data: { idEstatus: 2 }
                 })
+
+                if (mainInterview.interview_type == 'IA') {
+                    meetingData.url = `${this.configService.get<string>('FRONT_URL')}/entrevista/${interview.id}`;
+                    await tx.entrevistasPostulantes.update({
+                        where: { id: interview.id },
+                        data: { meeting_url: meetingData.url, meeting_id: interview.id }
+                    })
+                }
             });
 
             const date = new Date(dto.scheduledAt);
