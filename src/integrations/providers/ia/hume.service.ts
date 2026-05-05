@@ -203,7 +203,11 @@ export class HumeService {
             // ACtualizamos los criterios de la entrevista
             for (const criterion of evaluation.criterionScores) {
                 await tx.entrevistaCriteriosEvaluacion.update({
-                    where: { criterio_id: criterion.criterionId },
+                    where: { criterio_id_interview_postulant_id: {
+                                criterio_id: criterion.criterionId,
+                                interview_postulant_id: interview.id
+                            } 
+                    },
                     data: {
                         score: criterion.points,
                         comment: criterion.feedback

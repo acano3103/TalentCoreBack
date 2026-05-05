@@ -180,10 +180,10 @@ export class InterviewsService {
 
             return { message: 'Entrevista creada exitosamente' };
         } catch (error) {
+            this.logger.error('Error creating interview', error);
             const provider = await this.communicationFactory.getProvider(mainInterview.provider_id);
             if (provider) await provider.deleteMeeting(companyId, mainInterview.provider_id, meetingData?.id);
 
-            this.logger.error('Error creating interview', error);
             throw new BadRequestException('Error al crear entrevista');
         }
 
