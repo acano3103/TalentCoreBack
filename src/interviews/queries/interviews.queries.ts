@@ -150,8 +150,11 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       p.telefono as phone,
       
       -- puesto
-      cp.idPuesto as position_id,
       cp.NombrePuesto AS position_name,
+
+      -- Metadata 
+      ep.metadata as interview_metadata,
+      er.metadata as results_metadata,
 
       -- criterios + preguntas
       (
