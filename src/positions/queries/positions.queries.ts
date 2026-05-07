@@ -36,4 +36,34 @@ export class PositionQueries {
             WHERE idPuesto = ${positionId}
         `;
   }
+
+  static async getPostulantsSummary(prisma: PrismaService, idPuesto: number) {
+    return await prisma.$queryRaw`
+      SELECT 
+        p.idPostulacion,
+        p.nombre,
+        p.primerApellido,
+        p.segundoApellido,
+        pp.estado_proceso,
+        pp.score_global,
+        pp.indices,
+        pp.detalle_por_categoria,
+        p.correo,
+        p.telefono,
+        p.rutaCV,
+        p.fechaRegistro,
+        c.NombrePuesto,
+        c.SalarioMinimo,
+        c.SalarioMaximo,
+        c.Vacantes,
+        m.Descripcion AS Modalidad
+      FROM Postulaciones p
+      INNER JOIN CatPuestos c ON p.idPuesto = c.idPuesto
+      LEFT JOIN CatModalidad m ON c.idModalidad = m.idModalidad
+      LEFT JOIN PerfilPostulante pp ON p.idPostulacion = pp.idPostulacion
+      WHERE p.idPuesto = ${idPuesto}
+      AND pp.score_global IS NOT NULL
+      ORDER BY pp.score_global DESC;
+    `;
+  }
 }

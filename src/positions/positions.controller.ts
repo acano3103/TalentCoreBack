@@ -3,8 +3,6 @@ import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { ModulesGuard } from 'src/auth/guards/modules.guard';
-import { Modules } from 'src/auth/decorators/modules.decorator';
 
 @ApiTags('Positions')
 @ApiBearerAuth()
@@ -18,6 +16,15 @@ export class PositionsController {
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     async getPosition(@Param('companyId') companyId: number, @Param('positionId') positionId: number) {
         return this.service.findPositionById(companyId, positionId);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Get(':positionId/summary')
+    @ApiOperation({ summary: 'Get summary of postulants for a specific position' })
+    @ApiResponse({ status: 200, description: 'Position summary obtained successfully.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    async getSummary(@Param('positionId') positionId: string) {
+        return await this.service.getPostulantsSummary(parseInt(positionId));
     }
 
     @UseGuards(JwtAuthGuard)//@UseGuards(JwtAuthGuard, ModulesGuard)

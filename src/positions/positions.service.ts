@@ -8,6 +8,9 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { PositionQueries } from './queries/positions.queries';
+import * as fs from 'fs';
+import * as path from 'path';
+import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.util';
 
 @Injectable()
 export class PositionsService {
@@ -25,6 +28,62 @@ export class PositionsService {
                 Activo: true
             }
         })
+    }
+
+    async getPostulantsSummary(idPuesto: number) {
+        const CV_DEFAULT = "https://fileonline.datavoice.com.mx/RR-HH/media/GRUS990820HDFVRC07/documento_1_GRUS990820HDFVRC07.pdf";
+        const FILE_API = "https://wmarketingqa.likenuuk.com"; 
+        const MEDIA_URL = "/media/";
+    
+        try {
+          const rows = await PositionQueries.getPostulantsSummary(this.prisma, Number(idPuesto)) as any[];
+    
+          const postulantes = rows.map((p) => {
+            let indices = p.indices ? (typeof p.indices === 'string' ? JSON.parse(p.indices) : p.indices) : {};
+            if (indices && Object.keys(indices).length > 0) {
+              indices['indice_ajuste_tecnico'] = calculatePercentage(indices['indice_ajuste_tecnico']);
+              indices['indice_ajuste_competencial'] = calculatePercentage(indices['indice_ajuste_competencial']);
+            }
+    
+            let categorias = p.detalle_por_categoria 
+              ? (typeof p.detalle_por_categoria === 'string' ? JSON.parse(p.detalle_por_categoria) : p.detalle_por_categoria)
+              : [];
+            
+            if (Array.isArray(categorias)) {
+                categorias = categorias.map((c: any) => {
+                    const { peso, justificacion, score_ponderado, ...rest } = c;
+                    return {
+                        ...rest,
+                        porcentaje_cumplimiento: calculatePercentage(c.porcentaje_cumplimiento),
+                    };
+                });
+            }
+    
+            let finalRutaCV = CV_DEFAULT;
+            if (p.rutaCV) {
+              const rootPath = path.join(process.cwd(), 'src', 'media');
+              const rutaFisica = path.join(rootPath, p.rutaCV);
+              if (fs.existsSync(rutaFisica)) {
+                finalRutaCV = p.rutaCV.startsWith('http') ? p.rutaCV : `${FILE_API}${MEDIA_URL}${p.rutaCV}`;
+              }
+            }
+    
+            return {
+              ...p,
+              idPostulacion: typeof p.idPostulacion === 'bigint' ? Number(p.idPostulacion) : p.idPostulacion,
+              indices,
+              detalle_por_categoria: categorias,
+              rutaCV: finalRutaCV,
+              semaforo_global: getScoreTrafficLight(Number(p.score_global)),
+            };
+          });
+    
+          return { postulantes };
+    
+        } catch (error) {
+          console.error('Error en servicio:', error);
+          throw new InternalServerErrorException('Error al procesar postulantes');
+        }
     }
 
     async approveOrReject(companyId: number, positionId: number, dto: ValidatePositionDto) {

@@ -1,16 +1,30 @@
-import { Controller, Patch, Param, Body, ParseIntPipe, UseGuards, Req, Get, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Patch, Param, Body, ParseIntPipe, UseGuards, Req, Get, UseInterceptors, UploadedFiles, Post, UploadedFile, UsePipes, ValidationPipe } from '@nestjs/common';
 import { PostulationsService } from './postulations.service';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { CreatePostulationDto } from './dto/create-postulation.dto';
 
 @ApiTags('Postulations')
 @ApiBearerAuth()
 @Controller('companies/:companyId/postulations')
 export class PostulationsController {
     constructor(private readonly service: PostulationsService) { }
+
+    @Post()
+    @UseInterceptors(FileInterceptor('cv'))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Register a postulant', description: 'Register a postulant and save the cv in teh server' })
+    @ApiResponse({ status: 200, description: 'Postulation registed successfully.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    async registerCandidate(
+        @Body() body: CreatePostulationDto,
+        @UploadedFile() file: Express.Multer.File
+    ) {
+        return await this.service.createPostulation(body, file);
+    }
 
     @UseGuards(JwtAuthGuard)
     @Get('/status')
