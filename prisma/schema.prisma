@@ -119,6 +119,7 @@ model CatEmpresas {
   usuarioRegistro   String?             @db.VarChar(100)
   activo            Boolean?            @default(true)
   DomicilioEmpresas DomicilioEmpresas[]
+  Integraciones     Integraciones[]
   RelUsuarioEmpresa RelUsuarioEmpresa[]
 }
 
@@ -230,6 +231,7 @@ model CatPlataforma {
 
 model CatPuestos {
   idPuesto             Int                  @id @default(autoincrement())
+  idEmpresa            Int                  @default(1)
   NombrePuesto         String               @db.VarChar(200)
   idTipoPuesto         Int?
   idArea               Int?
@@ -523,6 +525,7 @@ model PesoCategoriaPuesto {
 
 model Postulaciones {
   idPostulacion   Int       @id @default(autoincrement())
+  uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
   idCandidato     Int?
   idEstatus       Int?      @default(1)
   idPuesto        Int?
@@ -659,22 +662,25 @@ model auth_permission {
 }
 
 model auth_user {
-  id                         Int                          @id @default(autoincrement())
-  password                   String                       @db.VarChar(128)
-  last_login                 DateTime?                    @db.DateTime(6)
-  is_superuser               Boolean
-  username                   String                       @unique(map: "username") @db.VarChar(150)
-  first_name                 String                       @db.VarChar(150)
-  last_name                  String                       @db.VarChar(150)
-  email                      String                       @db.VarChar(254)
-  is_staff                   Boolean
-  is_active                  Boolean
-  date_joined                DateTime                     @db.DateTime(6)
-  RelUsuarioEmpresa          RelUsuarioEmpresa[]
-  auth_user_groups           auth_user_groups[]
-  auth_user_user_permissions auth_user_user_permissions[]
-  django_admin_log           django_admin_log[]
-  tokenUsuario               tokenUsuario[]
+  id                                Int                                 @id @default(autoincrement())
+  uuid                              String                              @unique(map: "uuid") @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  password                          String                              @db.VarChar(128)
+  last_login                        DateTime?                           @db.DateTime(6)
+  is_superuser                      Boolean
+  username                          String                              @unique(map: "username") @db.VarChar(150)
+  first_name                        String                              @db.VarChar(150)
+  last_name                         String                              @db.VarChar(150)
+  email                             String                              @db.VarChar(254)
+  phone                             String                              @db.VarChar(10)
+  is_staff                          Boolean
+  is_active                         Boolean
+  date_joined                       DateTime                            @db.DateTime(6)
+  PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
+  RelUsuarioEmpresa                 RelUsuarioEmpresa[]
+  auth_user_groups                  auth_user_groups[]
+  auth_user_user_permissions        auth_user_user_permissions[]
+  django_admin_log                  django_admin_log[]
+  tokenUsuario                      tokenUsuario[]
 }
 
 model auth_user_groups {
@@ -801,6 +807,7 @@ model tokenUsuario {
 
 model usuarios {
   idUsuario     Int       @id @default(autoincrement())
+  uuid          String    @default("uuid()") @db.VarChar(36)
   idCandidato   Int?
   claveUsuario  String?   @unique(map: "claveUsuario") @db.VarChar(50)
   password      String?   @db.VarChar(255)
@@ -817,8 +824,250 @@ model usuarioslogin {
   identificador   String?   @db.VarChar(200)
 }
 
+model Agentes {
+  id               String             @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  name             String             @db.VarChar(150)
+  description      String?            @db.Text
+  context          String?            @db.Text
+  script           String?            @db.Text
+  min_score        Int?
+  voice            String?            @db.VarChar(100)
+  language         String?            @db.VarChar(50)
+  interrupt_limit  Int?
+  interviewEngine  String?            @default("legacy") @db.VarChar(255)
+  humeConfigId     String?            @db.VarChar(255)
+  emotionAnalysis  Boolean?           @default(false)
+  status           String?            @default("ABIERTA") @db.VarChar(50)
+  createdById      String?            @db.VarChar(255)
+  createdAt        DateTime?          @default(now()) @db.DateTime(0)
+  updatedAt        DateTime?          @default(now()) @db.DateTime(0)
+  AgentesCriterios AgentesCriterios[]
+  Entrevistas      Entrevistas[]
+}
+
+model AgentesCriterios {
+  id          String  @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  agent_id    String  @db.Char(36)
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+  max_score   Int?    @default(10)
+  weight      Int?
+  order       Int?
+  Agentes     Agentes @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "AgentesCriterios_ibfk_1")
+
+  @@index([agent_id], map: "agent_id")
+}
+
+model CatCanalesNotificaciones {
+  id                                Int                                 @id @default(autoincrement())
+  code                              String                              @unique(map: "code") @db.VarChar(20)
+  description                       String?                             @db.VarChar(100)
+  activo                            Boolean                             @default(true)
+  NotificacionTipoCanales           NotificacionTipoCanales[]
+  NotificacionesEntregas            NotificacionesEntregas[]
+  PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
+}
+
+model CatCriterios {
+  id          String  @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+  max_score   Int
+}
+
+model CatIntegracionesProvedores {
+  id            Int             @id @default(autoincrement())
+  code          String          @unique(map: "code") @db.VarChar(50)
+  name          String          @db.VarChar(100)
+  type          String          @db.VarChar(50)
+  isActive      Boolean?        @default(true)
+  isConnected   Boolean         @default(false)
+  Integraciones Integraciones[]
+}
+
+model CatTipoNotificacion {
+  id                      Int                       @id @default(autoincrement())
+  code                    String?                   @unique(map: "code") @db.VarChar(50)
+  description             String?                   @db.VarChar(150)
+  activo                  Boolean?                  @default(true)
+  NotificacionTipoCanales NotificacionTipoCanales[]
+  Notificaciones          Notificaciones[]
+}
+
+model CriterioPreguntas {
+  id                   String               @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  criterio_id          String               @db.Char(36)
+  question             String               @db.Text
+  expected_answer      String?              @db.Text
+  order                Int?
+  EntrevistasCriterios EntrevistasCriterios @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "CriterioPreguntas_ibfk_1")
+
+  @@index([criterio_id], map: "criterio_id")
+}
+
+model EntrevistaCriteriosEvaluacion {
+  id                     String                 @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  criterio_id            String                 @db.Char(36)
+  score                  Decimal?               @db.Decimal(5, 2)
+  comment                String?                @db.Text
+  interview_postulant_id String                 @db.Char(36)
+  EntrevistasCriterios   EntrevistasCriterios   @relation(fields: [criterio_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "EntrevistaCriteriosEvaluacion_ibfk_1")
+  EntrevistasPostulantes EntrevistasPostulantes @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_evaluacion_postulante")
+
+  @@unique([criterio_id, interview_postulant_id], map: "unique_criterio_postulante")
+  @@index([interview_postulant_id], map: "fk_evaluacion_postulante")
+}
+
+model Entrevistas {
+  id                     String                     @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  company_id             Int
+  area_id                Int
+  position_id            Int?
+  provider_id            Int
+  agent_id               String?                    @db.Char(36)
+  description            String?                    @db.VarChar(500)
+  interview_type         Entrevistas_interview_type
+  modality               Entrevistas_modality
+  title                  String?                    @db.VarChar(255)
+  duration               Int?
+  interviewer_name       String?                    @db.VarChar(150)
+  location               String?                    @db.VarChar(255)
+  comment                String?                    @db.Text
+  active                 Boolean                    @default(true)
+  Agentes                Agentes?                   @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_ibfk_1")
+  EntrevistasCriterios   EntrevistasCriterios[]
+  EntrevistasPostulantes EntrevistasPostulantes[]
+
+  @@index([agent_id], map: "agent_id")
+}
+
+model EntrevistasCriterios {
+  id                            String                          @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  interview_id                  String                          @db.Char(36)
+  name                          String                          @db.VarChar(150)
+  description                   String                          @db.Text
+  max_score                     Int
+  weight                        Int
+  order                         Int
+  CriterioPreguntas             CriterioPreguntas[]
+  EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion[]
+  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasCriterios_ibfk_1")
+
+  @@index([interview_id], map: "interview_id")
+}
+
+model EntrevistasPostulantes {
+  id                            String                          @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  candidate_uuid                String                          @db.Char(36)
+  interview_id                  String                          @db.Char(36)
+  scheduled_at                  DateTime?                       @db.DateTime(0)
+  duration                      Int?
+  status_id                     Int                             @default(1)
+  meeting_id                    String?                         @db.VarChar(100)
+  meeting_url                   String?                         @db.Text
+  location                      String?                         @db.Text
+  metadata                      Json?
+  EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion[]
+  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasPostulantes_ibfk_1")
+  EntrevistasResultados         EntrevistasResultados?
+
+  @@index([interview_id], map: "interview_id")
+}
+
+model EntrevistasResultados {
+  id                     String                  @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  interview_postulant_id String?                 @unique(map: "interview_postulant_id") @db.Char(36)
+  final_score            Decimal?                @db.Decimal(5, 2)
+  general_report         String?                 @db.Text
+  strengths              String?                 @db.Text
+  improvement_areas      String?                 @db.Text
+  recommendations        String?                 @db.Text
+  metadata               Json?
+  EntrevistasPostulantes EntrevistasPostulantes? @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasResultados_ibfk_1")
+}
+
+model Integraciones {
+  id                         Int                        @id @default(autoincrement())
+  idEmpresa                  Int
+  providerId                 Int
+  metadata                   Json?
+  isConnected                Boolean?                   @default(false)
+  createdAt                  DateTime?                  @default(now()) @db.DateTime(0)
+  updatedAt                  DateTime?                  @default(now()) @db.DateTime(0)
+  CatEmpresas                CatEmpresas                @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "fk_integrations_empresa")
+  CatIntegracionesProvedores CatIntegracionesProvedores @relation(fields: [providerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_integrations_provider")
+
+  @@unique([idEmpresa, providerId], map: "unique_empresa_provider")
+  @@index([providerId], map: "fk_integrations_provider")
+}
+
+model NotificacionTipoCanales {
+  id                       Int                       @id @default(autoincrement())
+  notification_type_id     Int?
+  channel_id               Int?
+  enabled                  Boolean?                  @default(true)
+  CatTipoNotificacion      CatTipoNotificacion?      @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionTipoCanales_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones? @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionTipoCanales_ibfk_2")
+
+  @@unique([notification_type_id, channel_id], map: "notification_type_id")
+  @@index([channel_id], map: "channel_id")
+}
+
+model Notificaciones {
+  id                     String                   @id @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  user_uuid              String                   @db.VarChar(36)
+  notification_type_id   Int?
+  title                  String?                  @db.VarChar(255)
+  message                String?                  @db.Text
+  created_at             DateTime?                @default(now()) @db.Timestamp(0)
+  read_at                DateTime?                @db.Timestamp(0)
+  CatTipoNotificacion    CatTipoNotificacion?     @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Notificaciones_ibfk_2")
+  NotificacionesEntregas NotificacionesEntregas[]
+
+  @@index([notification_type_id], map: "notification_type_id")
+  @@index([user_uuid], map: "user_uuid")
+}
+
+model NotificacionesEntregas {
+  id                       String                   @id @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  notification_id          String                   @db.VarChar(36)
+  channel_id               Int
+  status                   String?                  @db.VarChar(20)
+  sent_at                  DateTime?                @db.Timestamp(0)
+  error_message            String?                  @db.Text
+  Notificaciones           Notificaciones           @relation(fields: [notification_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_2")
+
+  @@index([channel_id], map: "channel_id")
+  @@index([notification_id], map: "notification_id")
+}
+
+model PreferenciasNotificacionesUsuario {
+  id                       Int                      @id @default(autoincrement())
+  user_uuid                String                   @db.VarChar(36)
+  channel_id               Int
+  enabled                  Boolean?                 @default(true)
+  created_at               DateTime?                @default(now()) @db.Timestamp(0)
+  updated_at               DateTime?                @db.Timestamp(0)
+  auth_user                auth_user                @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_2")
+
+  @@unique([user_uuid, channel_id], map: "user_uuid")
+  @@index([channel_id], map: "channel_id")
+}
+
 enum RelRequisicionHabilidades_nivel {
   ALTO
   MEDIO
   BAJO
+}
+
+enum Entrevistas_interview_type {
+  PERSONA
+  IA
+}
+
+enum Entrevistas_modality {
+  ONLINE
+  PRESENCIAL
 }
