@@ -7,6 +7,13 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { MailModule } from './mail/mail.module';
 import { ProfileModule } from './profile/profile.module';
+import { PositionsModule } from './positions/positions.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+import { UsersModule } from './users/users.module';
+import { IntegrationsModule } from './integrations/integrations.module';
+import { InterviewsModule } from './interviews/interviews.module';
+import { PostulationsModule } from './postulations/postulations.module';
 
 @Module({
   imports: [
@@ -24,6 +31,23 @@ import { ProfileModule } from './profile/profile.module';
     AuthModule,
     MailModule,
     ProfileModule
+    ServeStaticModule.forRoot(
+      {
+        rootPath: join(__dirname, '..', 'public'),
+        serveRoot: '/public',
+      },
+      {
+        rootPath: join(__dirname, '..', 'media'),
+        serveRoot: '/media',
+      }
+    ),
+    PrismaModule,
+    AuthModule,
+    PositionsModule,
+    UsersModule,
+    IntegrationsModule,
+    InterviewsModule,
+    PostulationsModule
   ],
   controllers: [],
   providers: [],

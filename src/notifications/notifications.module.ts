@@ -1,14 +1,18 @@
-// src/mail/mail.module.ts
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigService } from '@nestjs/config';
 import { join } from 'path';
 import * as fs from 'fs';
 import * as handlebars from 'handlebars';
-import { MailNotificationService } from 'src/auth/providers/mail-notification.service';
+import { MailProvider } from './providers/mail/mail.provider';
+import { WhatsappProvider } from './providers/whatsapp/whatsapp.provider';
+import { NotificationDispatcher } from './notification.dispatcher';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
+@Global()
 @Module({
     imports: [
+        PrismaModule,
         MailerModule.forRootAsync({
             useFactory: (config: ConfigService) => ({
                 transport: {
@@ -20,25 +24,19 @@ import { MailNotificationService } from 'src/auth/providers/mail-notification.se
                         pass: config.get('MAIL_PASS'),
                     },
                 },
-                defaults: {
-                    from: config.get('MAIL_FROM'),
-                },
+                defaults: { from: config.get('MAIL_FROM') },
                 template: {
-                    dir: join(process.cwd(), 'dist/mail/templates'),
+                    dir: join(process.cwd(), 'dist/notifications/providers/mail/templates'),
                     adapter: {
                         compile: (mail: any, callback: any, mailerOptions: any) => {
                             const templateDir = mailerOptions?.template?.dir || join(__dirname, 'templates');
-                            const templateName = mail.data.template || '';
-                            const templatePath = join(templateDir, `${templateName}.hbs`);
-
+                            const templatePath = join(templateDir, `${mail.data.template}.hbs`);
                             try {
                                 const template = fs.readFileSync(templatePath, 'utf-8');
                                 const compiled = handlebars.compile(template);
                                 mail.data.html = compiled(mail.data.context);
                                 return callback();
-                            } catch (error) {
-                                return callback(error);
-                            }
+                            } catch (error) { return callback(error); }
                         }
                     },
                     options: { strict: true },
@@ -47,12 +45,7 @@ import { MailNotificationService } from 'src/auth/providers/mail-notification.se
             inject: [ConfigService],
         }),
     ],
-    providers: [
-        {
-            provide: 'INotificationService',
-            useClass: MailNotificationService,
-        },
-    ],
-    exports: ['INotificationService'],
+    providers: [MailProvider, WhatsappProvider, NotificationDispatcher],
+    exports: [NotificationDispatcher],
 })
-export class MailModule { }
+export class NotificationsModule { }

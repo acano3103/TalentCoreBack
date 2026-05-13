@@ -2,15 +2,20 @@ import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller'
 import { PrismaModule } from '../prisma/prisma.module';
-import { MailModule } from 'src/mail/mail.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { AuthDataService } from './auth.data.service';
+import { AuthDataService } from './queries/auth.queries';
+import { NotificationsModule } from 'src/notifications/notifications.module';
+import { PassportModule } from '@nestjs/passport';
+import { UsersModule } from 'src/users/users.module';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
     imports: [
+        UsersModule,
         PrismaModule,
-        MailModule,
+        NotificationsModule,
+        PassportModule,
         JwtModule.registerAsync({
             useFactory: (config: ConfigService) => ({
                 secret: config.get('JWT_SECRET'),
@@ -21,8 +26,10 @@ import { AuthDataService } from './auth.data.service';
     ],
     providers: [
         AuthService,
-        AuthDataService
+        AuthDataService,
+        JwtStrategy
     ],
     controllers: [AuthController],
+    exports: [PassportModule]
 })
 export class AuthModule { }
