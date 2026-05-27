@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe, NotFoundException, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, NotFoundException, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { UsuariosService, AuthUserRow } from './usuarios.service';
+import { UsuariosService } from './usuarios.service';
+import { AuthUserRow } from './interfaces/auth-user.interface';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 
 @ApiTags('Usuarios')
 @Controller('usuarios')
@@ -13,7 +15,7 @@ export class UsuariosController {
         summary: 'Obtener todos los usuarios',
         description: 'Retorna la lista de usuarios del sistema (tabla auth_user). No incluye contraseñas.',
     })
-    @ApiResponse({ status: 200, description: 'Lista de usuarios obtenida correctamente.' })
+    @ApiResponse({ status: 200, description: 'Lista de usuarios obtenida correctamente. Incluye idRol y rol_descripcion vía relUsuarioRol.' })
     findAll(): Promise<AuthUserRow[]> {
         return this.usuariosService.findAll();
     }
@@ -24,7 +26,7 @@ export class UsuariosController {
         summary: 'Obtener usuario por ID',
         description: 'Retorna un usuario específico por su ID. No incluye contraseña.',
     })
-    @ApiResponse({ status: 200, description: 'Usuario encontrado.' })
+    @ApiResponse({ status: 200, description: 'Usuario encontrado. Incluye idRol y rol_descripcion vía relUsuarioRol.' })
     @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
     async findOne(@Param('id', ParseIntPipe) id: number): Promise<AuthUserRow> {
         const user = await this.usuariosService.findOne(id);
@@ -43,5 +45,34 @@ export class UsuariosController {
     @ApiResponse({ status: 400, description: 'Datos inválidos.' })
     create(@Body() dto: CreateUsuarioDto): Promise<AuthUserRow> {
         return this.usuariosService.create(dto);
+    }
+
+    @Patch(':id')
+    @ApiParam({ name: 'id', type: Number, description: 'ID del usuario a editar' })
+    @ApiOperation({
+        summary: 'Editar usuario',
+        description: 'Actualiza los datos del usuario (first_name, last_name, email, is_active) y/o su rol. Solo se modifican los campos enviados en el body.',
+    })
+    @ApiResponse({ status: 200, description: 'Usuario actualizado correctamente.' })
+    @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
+    @ApiResponse({ status: 400, description: 'Datos inválidos.' })
+    update(
+        @Param('id', ParseIntPipe) id: number,
+        @Body() dto: UpdateUsuarioDto,
+    ): Promise<AuthUserRow> {
+        return this.usuariosService.update(id, dto);
+    }
+
+    @Patch(':id/desactivar')
+    @HttpCode(HttpStatus.OK)
+    @ApiParam({ name: 'id', type: Number, description: 'ID del usuario a desactivar' })
+    @ApiOperation({
+        summary: 'Desactivar usuario',
+        description: 'Soft-delete: establece is_active = false en auth_user. El usuario no se elimina de la base de datos.',
+    })
+    @ApiResponse({ status: 200, description: 'Usuario desactivado correctamente.' })
+    @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
+    deactivate(@Param('id', ParseIntPipe) id: number): Promise<AuthUserRow> {
+        return this.usuariosService.deactivate(id);
     }
 }
