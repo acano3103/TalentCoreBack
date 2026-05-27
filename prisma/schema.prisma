@@ -254,6 +254,7 @@ model CatPuestos {
   aprobada             Boolean?             @default(false)
   pendiente            Boolean?             @default(false)
   comentarios          String?              @db.Text
+  Salario              String?              @db.VarChar(100)
   CompetenciasPuesto   CompetenciasPuesto[]
   FuncionesPuesto      FuncionesPuesto[]
   HabilidadesPuesto    HabilidadesPuesto[]
@@ -525,7 +526,7 @@ model PesoCategoriaPuesto {
 
 model Postulaciones {
   idPostulacion   Int       @id @default(autoincrement())
-  uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  uuid            String    @db.VarChar(36)
   idCandidato     Int?
   idEstatus       Int?      @default(1)
   idPuesto        Int?
@@ -663,15 +664,15 @@ model auth_permission {
 
 model auth_user {
   id                                Int                                 @id @default(autoincrement())
-  uuid                              String                              @unique(map: "uuid") @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  uuid                              String                              @unique(map: "uuid") @db.VarChar(36)
   password                          String                              @db.VarChar(128)
   last_login                        DateTime?                           @db.DateTime(6)
   is_superuser                      Boolean
   username                          String                              @unique(map: "username") @db.VarChar(150)
   first_name                        String                              @db.VarChar(150)
   last_name                         String                              @db.VarChar(150)
-  email                             String                              @db.VarChar(254)
   phone                             String                              @db.VarChar(10)
+  email                             String                              @db.VarChar(254)
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
@@ -807,7 +808,7 @@ model tokenUsuario {
 
 model usuarios {
   idUsuario     Int       @id @default(autoincrement())
-  uuid          String    @default("uuid()") @db.VarChar(36)
+  uuid          String    @db.VarChar(36)
   idCandidato   Int?
   claveUsuario  String?   @unique(map: "claveUsuario") @db.VarChar(50)
   password      String?   @db.VarChar(255)
@@ -904,7 +905,6 @@ model CatIntegracionesProvedores {
   name          String          @db.VarChar(100)
   type          String          @db.VarChar(50)
   isActive      Boolean?        @default(true)
-  isConnected   Boolean         @default(false)
   Integraciones Integraciones[]
 }
 

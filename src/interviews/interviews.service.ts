@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
-import { CommunicationFactory } from '../integrations/providers/factory.service';
+import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
 import { quotePlus } from 'src/common/utils/address.utils';
 import { formatDate, formatHour } from 'src/common/utils/time.utils';
@@ -16,7 +16,7 @@ export class InterviewsService {
     constructor(
         private readonly configService: ConfigService,
         private prisma: PrismaService,
-        private communicationFactory: CommunicationFactory,
+        private integrationsFactory: IntegrationsFactory,
         private readonly notifications: NotificationDispatcher
     ) { }
 
@@ -104,7 +104,7 @@ export class InterviewsService {
             dto.duration = mainInterview.duration || 60;
             dto.title = mainInterview.title || 'Entrevista'
             if (mainInterview.interview_type === 'PERSONA' && mainInterview.modality === 'ONLINE') {
-                const zoomProvider = await this.communicationFactory.getProvider(mainInterview.provider_id);
+                const zoomProvider = await this.integrationsFactory.getProvider(mainInterview.provider_id);
                 meetingData = await zoomProvider.createMeeting(companyId, mainInterview.provider_id, dto);
             }
 
@@ -181,7 +181,7 @@ export class InterviewsService {
             return { message: 'Entrevista creada exitosamente' };
         } catch (error) {
             this.logger.error('Error creating interview', error);
-            const provider = await this.communicationFactory.getProvider(mainInterview.provider_id);
+            const provider = await this.integrationsFactory.getProvider(mainInterview.provider_id);
             if (provider) await provider.deleteMeeting(companyId, mainInterview.provider_id, meetingData?.id);
 
             throw new BadRequestException('Error al crear entrevista');
