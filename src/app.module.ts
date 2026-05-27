@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { InterviewsModule } from './interviews/interviews.module';
 import { PostulationsModule } from './postulations/postulations.module';
+import { CatalogsModule } from './catalogs/catalogs.module';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { PostulationsModule } from './postulations/postulations.module';
     UsersModule,
     IntegrationsModule,
     InterviewsModule,
-    PostulationsModule
+    PostulationsModule,
+    CatalogsModule
   ],
   controllers: [],
   providers: [],
