@@ -2,23 +2,25 @@ import { Module } from '@nestjs/common';
 import { IntegrationsService } from './integrations.service';
 import { IntegrationsController } from './integrations.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
-import { CommunicationFactory } from './providers/factory.service';
+import { IntegrationsFactory } from './providers/factory.service';
 import { ZoomProvider } from './providers/communication/zoom.provider';
 import { EncryptionService } from 'src/common/utils/encryption.util';
 import { HumeController } from './providers/ia/hume.controller';
 import { HumeService } from './providers/ia/hume.service';
 import { HttpModule } from '@nestjs/axios';
+import { OpenAiProvider } from './providers/ia/openai.provider';
 
 @Module({
     imports: [PrismaModule, HttpModule],
     controllers: [IntegrationsController, HumeController],
     providers: [
         IntegrationsService,
-        CommunicationFactory,
+        IntegrationsFactory,
         ZoomProvider,
+        OpenAiProvider,
         EncryptionService,
         HumeService
     ],
-    exports: [IntegrationsService, HumeService, CommunicationFactory],
+    exports: [IntegrationsService, HumeService, IntegrationsFactory],
 })
 export class IntegrationsModule { }

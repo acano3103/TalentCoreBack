@@ -34,16 +34,18 @@ export class CatalogsSeedService implements OnModuleInit {
     // Seeds initial communication providers into the database.
     private async seedIntegrationsProviders() {
         const medios = [
-            { id: 1, code: 'ZOOM', name: 'Zoom', type: 'communication', isActive: true, isConnected: false },
-            { id: 2, code: 'MEET', name: 'Meet', type: 'communication', isActive: true, isConnected: false },
-            { id: 3, code: 'TEAMS', name: 'Teams', type: 'communication', isActive: true, isConnected: false },
+            { id: 1, code: 'ZOOM', name: 'Zoom', type: 'communication', isActive: true },
+            { id: 2, code: 'MEET', name: 'Meet', type: 'communication', isActive: true },
+            { id: 3, code: 'TEAMS', name: 'Teams', type: 'communication', isActive: true },
+            { id: 4, code: 'OPENAI', name: 'OpenAI', type: 'ai', isActive: true },
+            { id: 5, code: 'GEMINI', name: 'Gemini', type: 'ai', isActive: true },
         ];
 
         for (const medio of medios) {
             await this.prisma.$queryRaw`
-                INSERT INTO CatIntegracionesProvedores (id, code, name, type, isActive, isConnected)
-                VALUES (${medio.id}, ${medio.code}, ${medio.name}, ${medio.type}, ${medio.isActive}, ${medio.isConnected})
-                ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), isActive = VALUES(isActive), isConnected = VALUES(isConnected);
+                INSERT INTO CatIntegracionesProvedores (id, code, name, type, isActive)
+                VALUES (${medio.id}, ${medio.code}, ${medio.name}, ${medio.type}, ${medio.isActive})
+                ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), isActive = VALUES(isActive);
             `;
         }
     }

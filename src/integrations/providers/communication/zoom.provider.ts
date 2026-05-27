@@ -39,6 +39,10 @@ export class ZoomProvider implements ICommunicationProvider {
         });
         if (isConnected) throw new BadRequestException('Zoom ya está conectado');
 
+        if (!clientId || !clientSecret || !accountId) {
+            throw new BadRequestException('clientId, clientSecret y accountId son requeridos para conectar Zoom');
+        }
+
         await this.prisma.$transaction(async (tx) => {
             await tx.integraciones.create({
                 data: {
@@ -46,16 +50,11 @@ export class ZoomProvider implements ICommunicationProvider {
                     providerId: providerId,
                     isConnected: true,
                     metadata: {
-                        clientId: this.encryptionService.encrypt(dto.clientId),
-                        clientSecret: this.encryptionService.encrypt(dto.clientSecret),
-                        accountId: this.encryptionService.encrypt(dto.accountId)
+                        clientId: this.encryptionService.encrypt(clientId),
+                        clientSecret: this.encryptionService.encrypt(clientSecret),
+                        accountId: this.encryptionService.encrypt(accountId)
                     }
                 }
-            });
-
-            await tx.catIntegracionesProvedores.update({
-                where: { id: providerId },
-                data: { isConnected: true }
             });
         });
 
@@ -72,11 +71,6 @@ export class ZoomProvider implements ICommunicationProvider {
                             providerId: providerId
                         }
                     }
-                });
-
-                await tx.catIntegracionesProvedores.update({
-                    where: { id: providerId },
-                    data: { isConnected: false }
                 });
             });
 

@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ConnectIntegrationDto } from './dto/connect-integration.dto';
-import { CommunicationFactory } from './providers/factory.service';
+import { IntegrationsFactory } from './providers/factory.service';
 
 @Injectable()
 export class IntegrationsService {
     constructor(
         private prisma: PrismaService,
-        private communicationFactory: CommunicationFactory,
+        private communicationFactory: IntegrationsFactory,
     ) { }
 
     async getIntegrations(companyId: number) {
@@ -18,7 +18,8 @@ export class IntegrationsService {
             include: {
                 Integraciones: {
                     where: {
-                        idEmpresa: companyId
+                        idEmpresa: companyId,
+                        isConnected: true
                     }
                 }
             }
@@ -32,7 +33,7 @@ export class IntegrationsService {
                 code: provider.code,
                 name: provider.name,
                 type: provider.type,
-                isConnected: !!connection?.isConnected
+                isConnected: connection ? connection.isConnected : false
             };
         });
 
