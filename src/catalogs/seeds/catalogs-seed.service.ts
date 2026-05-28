@@ -137,10 +137,9 @@ export class CatalogsSeedService implements OnModuleInit {
     // Seeds initial interview status into the database.
     private async seedInterviewStatus() {
         const interviewsStatus = [
-            { idEstatusEntrevista: 1, descripcion: 'PENDIENTE', activo: true },
-            { idEstatusEntrevista: 2, descripcion: 'CONFIRMADA', activo: true },
-            { idEstatusEntrevista: 3, descripcion: 'REPROGRAMADA', activo: true },
-            { idEstatusEntrevista: 4, descripcion: 'CANCELADA', activo: true },
+            { idEstatusEntrevista: 1, descripcion: 'PROGRAMADA', activo: true },
+            { idEstatusEntrevista: 2, descripcion: 'TERMINADA', activo: true },
+            { idEstatusEntrevista: 3, descripcion: 'CANCELADA', activo: true },
         ]
 
         for (const interviewStatus of interviewsStatus) {
