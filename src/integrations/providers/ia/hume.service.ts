@@ -129,93 +129,93 @@ export class HumeService {
     }
 
     async processHumeAnalysis(interviewId: string, video?: Express.Multer.File, historyRaw?: string, emotionsRaw?: string) {
+        try{
+            const interview = await this.prisma.entrevistasPostulantes.findUnique({ where: { id: interviewId } });
+            if (!interview) throw new NotFoundException('Entrevista no encontrada');
+            if (interview.status_id !== 1) throw new BadRequestException('La entrevista ya se ha realizado o cancelado');
 
-        const interview = await this.prisma.entrevistasPostulantes.findUnique({ where: { id: interviewId } });
-        if (!interview) throw new NotFoundException('Entrevista no encontrada');
-        if (interview.status_id !== 1) throw new BadRequestException('La entrevista ya se ha realizado o cancelado');
+            let videoUrl = '';
+            if (video) videoUrl = await saveFileLocal(video, 'recordings', `${interviewId}-video.webm`);
 
-        let videoUrl = '';
-        if (video) videoUrl = await saveFileLocal(video, 'recordings', `${interviewId}-video.webm`);
+            const parsedHistory = historyRaw ? JSON.parse(historyRaw) : [];
+            const parsedEmotions = emotionsRaw ? JSON.parse(emotionsRaw) : [];
 
-        const parsedHistory = historyRaw ? JSON.parse(historyRaw) : [];
-        const parsedEmotions = emotionsRaw ? JSON.parse(emotionsRaw) : [];
+            const transcription = parsedHistory
+                .map(msg => `${msg.role === 'user' ? 'Candidato' : 'Entrevistador'}: ${msg.content}`)
+                .join('\n');
 
-        const transcription = parsedHistory
-            .map(msg => `${msg.role === 'user' ? 'Candidato' : 'Entrevistador'}: ${msg.content}`)
-            .join('\n');
+            const mainInterview = await this.prisma.entrevistas.findFirst({
+                where: { id: interview.interview_id },
+                include: { EntrevistasCriterios: true }
+            })
+            if (!mainInterview || !mainInterview.agent_id || !mainInterview.position_id) throw new NotFoundException('Entrevista de catalogo no encontrada');
+            const agent = await this.prisma.agentes.findFirst({ where: { id: mainInterview.agent_id } })
+            if (!agent || !agent.script) throw new NotFoundException('Agente no encontrado');
+            const position = await this.prisma.catPuestos.findFirst({ where: { idPuesto: mainInterview.position_id } })
+            if (!position) throw new NotFoundException('Puesto no encontrado');
+            const requirements = await this.prisma.competenciasPuesto.findMany({ where: { idPuesto: mainInterview.position_id } })
 
-        const mainInterview = await this.prisma.entrevistas.findFirst({
-            where: { id: interview.interview_id },
-            include: { EntrevistasCriterios: true }
-        })
-        if (!mainInterview || !mainInterview.agent_id || !mainInterview.position_id) throw new NotFoundException('Entrevista de catalogo no encontrada');
-        const agent = await this.prisma.agentes.findFirst({ where: { id: mainInterview.agent_id } })
-        if (!agent || !agent.script) throw new NotFoundException('Agente no encontrado');
-        const position = await this.prisma.catPuestos.findFirst({ where: { idPuesto: mainInterview.position_id } })
-        if (!position) throw new NotFoundException('Puesto no encontrado');
-        const requirements = await this.prisma.competenciasPuesto.findMany({ where: { idPuesto: mainInterview.position_id } })
+            const evaluation = await analyzeInterviewWithOpenAI(
+                this.configService.get<string>('OPENAI_API_KEY')!,
+                position.NombrePuesto,
+                position.DescripcionPuesto || "",
+                requirements.map(r => r.Competencia).join(", "),
+                agent.script,
+                agent.min_score || 70,
+                0,
+                mainInterview.EntrevistasCriterios,
+                transcription,
+                parsedHistory
+            );
 
-        const evaluation = await analyzeInterviewWithOpenAI(
-            this.configService.get<string>('OPENAI_API_KEY')!,
-            position.NombrePuesto,
-            position.DescripcionPuesto || "",
-            requirements.map(r => r.Competencia).join(", "),
-            agent.script,
-            agent.min_score || 70,
-            0, // Puedes calcular duración restando fechas si las tienes en BD
-            mainInterview.EntrevistasCriterios,
-            transcription,
-            parsedHistory
-        );
+            return await this.prisma.$transaction(async (tx) => {
+                await tx.entrevistasPostulantes.update({
+                    where: { id: interviewId },
+                    data: {
+                        status_id: 2,
+                        metadata: {
+                            videoUrl: videoUrl || null,
+                            transcription: transcription || null,
+                        },
+                    }
+                });
 
-        // 6. Guardar todo en Prisma (Entrevista + Evaluación)
-        return await this.prisma.$transaction(async (tx) => {
-            // Actualizar estado de la entrevista
-            await tx.entrevistasPostulantes.update({
-                where: { id: interviewId },
-                data: {
-                    status_id: 2,
-                    metadata: {
-                        videoUrl: videoUrl || null,
-                        transcription: transcription || null,
-                    },
-                }
-            });
+                await tx.entrevistasResultados.update({
+                    where: { interview_postulant_id: interviewId },
+                    data: {
+                        final_score: evaluation.overallScore,
+                        general_report: evaluation.recruiterReport,
+                        strengths: evaluation.strengths,
+                        improvement_areas: evaluation.areasForImprovement,
+                        recommendations: evaluation.recommendations,
+                        metadata: {
+                            conversationHistory: parsedHistory || null,
+                            emotionData: parsedEmotions || null,
+                            isApt: evaluation.isApt,
+                            candidateSummary: evaluation.candidateSummary,
+                        },
+                    }
+                });
 
-            // Actualizamos la evaluación detallada
-            await tx.entrevistasResultados.update({
-                where: { interview_postulant_id: interviewId },
-                data: {
-                    final_score: evaluation.overallScore,
-                    general_report: evaluation.recruiterReport,
-                    strengths: evaluation.strengths,
-                    improvement_areas: evaluation.areasForImprovement,
-                    recommendations: evaluation.recommendations,
-                    metadata: {
-                        conversationHistory: parsedHistory || null,
-                        emotionData: parsedEmotions || null,
-                        isApt: evaluation.isApt,
-                        candidateSummary: evaluation.candidateSummary,
-                    },
-                }
-            });
-
-            // ACtualizamos los criterios de la entrevista
-            for (const criterion of evaluation.criterionScores) {
-                await tx.entrevistaCriteriosEvaluacion.update({
-                    where: { criterio_id_interview_postulant_id: {
+                for (const criterion of evaluation.criterionScores) {
+                    await tx.entrevistaCriteriosEvaluacion.update({
+                        where: { criterio_id_interview_postulant_id: {
                                 criterio_id: criterion.criterionId,
                                 interview_postulant_id: interview.id
                             } 
-                    },
-                    data: {
-                        score: criterion.points,
-                        comment: criterion.feedback
-                    }
-                });
-            }
+                        },
+                        data: {
+                            score: criterion.points,
+                            comment: criterion.feedback
+                        }
+                    });
+                }
 
-            return 'Entrevista guardada exitosamente';
-        });
+                return 'Entrevista guardada exitosamente';
+            });
+        } catch (error) {
+            console.error('Error al analizar la entrevista de IA:', error.response?.data || error.message);
+            throw new InternalServerErrorException('No se pudo guardar la entrevista con IA, por favor, contacte a soporte.');
+        }
     }
 }
