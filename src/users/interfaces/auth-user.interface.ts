@@ -1,4 +1,4 @@
-/** Shape returned by the usuarios endpoints — password is never included */
+/** Shape returned by the users endpoints — password is never included */
 export interface AuthUserRow {
     id: number;
     uuid: string;
