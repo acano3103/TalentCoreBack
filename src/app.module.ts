@@ -41,3 +41,4 @@ import { CatalogsModule } from './catalogs/catalogs.module';
   providers: [],
 })
 export class AppModule { }
+
