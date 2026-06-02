@@ -1,26 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { UpdateCatalogDto } from './dto/update-catalog.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class CatalogsService {
-  create(createCatalogDto: CreateCatalogDto) {
-    return 'This action adds a new catalog';
-  }
+  constructor(private readonly prisma: PrismaService) { }
 
-  findAll() {
-    return `This action returns all catalogs`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} catalog`;
-  }
-
-  update(id: number, updateCatalogDto: UpdateCatalogDto) {
-    return `This action updates a #${id} catalog`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} catalog`;
+  /** Returns all active roles from catroles table */
+  async findAllRoles() {
+    return this.prisma.catroles.findMany({
+      where: { activo: true },
+      orderBy: { idRol: 'asc' },
+      select: {
+        idRol: true,
+        descripcion: true,
+        activo: true,
+      },
+    });
   }
 }

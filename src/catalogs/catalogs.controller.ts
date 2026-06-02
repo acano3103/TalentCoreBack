@@ -1,34 +1,22 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { CatalogsService } from './catalogs.service';
-import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { UpdateCatalogDto } from './dto/update-catalog.dto';
+import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
+@Controller('catalogs')
+@ApiBearerAuth()
 @Controller('catalogs')
 export class CatalogsController {
   constructor(private readonly catalogsService: CatalogsService) {}
 
-  @Post()
-  create(@Body() createCatalogDto: CreateCatalogDto) {
-    return this.catalogsService.create(createCatalogDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.catalogsService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.catalogsService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCatalogDto: UpdateCatalogDto) {
-    return this.catalogsService.update(+id, updateCatalogDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.catalogsService.remove(+id);
+  @UseGuards(JwtAuthGuard)
+  @Get('roles')
+  @ApiOperation({
+    summary: 'Get roles catalog',
+    description: 'Returns all active system roles (catroles table).',
+  })
+  @ApiResponse({ status: 200, description: 'List of roles successfully retrieved.' })
+  findAllRoles() {
+    return this.catalogsService.findAllRoles();
   }
 }

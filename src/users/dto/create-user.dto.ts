@@ -27,10 +27,9 @@ export class CreateUserDto {
     email: string;
 
     @ApiProperty({ example: '5551234567', required: false })
-    @IsOptional()
     @IsString()
     @MaxLength(10)
-    phone?: string;
+    phone: string;
 
     @ApiProperty({ example: 'MiContraseña123', minLength: 8 })
     @IsString()
