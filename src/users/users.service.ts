@@ -124,6 +124,7 @@ export class UsersService {
     if (dto.first_name !== undefined) userData.first_name = dto.first_name;
     if (dto.last_name  !== undefined) userData.last_name  = dto.last_name;
     if (dto.email      !== undefined) userData.email      = dto.email;
+    if (dto.phone      !== undefined) userData.phone      = dto.phone;
     if (dto.is_active  !== undefined) userData.is_active  = dto.is_active;
 
     await this.prisma.$transaction(async (tx) => {
