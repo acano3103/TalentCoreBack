@@ -1,26 +1,76 @@
-import { Injectable } from '@nestjs/common';
-import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { UpdateCatalogDto } from './dto/update-catalog.dto';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+
+/** Catálogos disponibles vía el endpoint genérico */
+export type CatalogKey =
+  | 'roles'
+  | 'empresas'
+  | 'sites'
+  | 'modulos'
+  | 'areas'
+  | 'tipos-contratacion'
+  | 'modalidades';
 
 @Injectable()
 export class CatalogsService {
-  create(createCatalogDto: CreateCatalogDto) {
-    return 'This action adds a new catalog';
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return `This action returns all catalogs`;
-  }
+  async getCatalog(nombre: CatalogKey) {
+    switch (nombre) {
 
-  findOne(id: number) {
-    return `This action returns a #${id} catalog`;
-  }
+      case 'roles':
+        return this.prisma.catroles.findMany({
+          where:   { activo: true },
+          select:  { idRol: true, descripcion: true },
+          orderBy: { descripcion: 'asc' },
+        });
 
-  update(id: number, updateCatalogDto: UpdateCatalogDto) {
-    return `This action updates a #${id} catalog`;
-  }
+      case 'empresas':
+        return this.prisma.catEmpresas.findMany({
+          where:   { activo: true },
+          select:  { idEmpresa: true, nombre_comercial: true },
+          orderBy: { nombre_comercial: 'asc' },
+        });
 
-  remove(id: number) {
-    return `This action removes a #${id} catalog`;
+      case 'sites':
+        return this.prisma.catSites.findMany({
+          where:   { Activo: true },
+          select:  { idSite: true, Descripcion: true },
+          orderBy: { Descripcion: 'asc' },
+        });
+
+      case 'modulos':
+        return this.prisma.catModulos.findMany({
+          where:   { Activo: true },
+          select:  { idModulo: true, Descripcion: true },
+          orderBy: { Descripcion: 'asc' },
+        });
+
+      case 'areas':
+        return this.prisma.catAreas.findMany({
+          where:   { Activo: true },
+          select:  { idArea: true, Descripcion: true },
+          orderBy: { Descripcion: 'asc' },
+        });
+
+      case 'tipos-contratacion':
+        return this.prisma.catTipoContratacion.findMany({
+          where:   { Activo: true },
+          select:  { idTipoContratacion: true, Descripcion: true },
+          orderBy: { Descripcion: 'asc' },
+        });
+
+      case 'modalidades':
+        return this.prisma.catModalidad.findMany({
+          where:   { Activo: true },
+          select:  { idModalidad: true, Descripcion: true },
+          orderBy: { Descripcion: 'asc' },
+        });
+
+      default:
+        throw new BadRequestException(
+          `Catálogo "${nombre}" no reconocido. Valores válidos: roles, empresas, sites, modulos, areas, tipos-contratacion, modalidades`,
+        );
+    }
   }
 }

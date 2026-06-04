@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsBoolean, IsInt, IsOptional, MinLength, MaxLength, IsNotEmpty } from 'class-validator';
+import { IsString, IsEmail, IsBoolean, IsInt, IsOptional, MinLength, MaxLength, IsNotEmpty, IsArray, ArrayMinSize, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUserDto {
@@ -45,4 +45,25 @@ export class CreateUserDto {
     @ApiProperty({ example: 2, description: 'ID del rol desde catroles' })
     @IsInt()
     idRol: number;
+
+    /**
+     * IDs de empresas a las que tendrá acceso el usuario,
+     * o el string 'all' para otorgar acceso a todas.
+     */
+    @ApiProperty({
+        example: [1, 2],
+        description: "Array de IDs de empresas (CatEmpresas) o el string 'all' para todas",
+        oneOf: [
+            { type: 'array', items: { type: 'number' } },
+            { type: 'string', enum: ['all'] },
+        ],
+    })
+    @IsNotEmpty()
+    empresaIds: number[] | 'all';
+
+    @ApiProperty({ example: [1, 3], description: 'Array de IDs de sites (CatSites) a los que tendrá acceso el usuario' })
+    @IsArray()
+    @ArrayMinSize(0)
+    @IsInt({ each: true })
+    siteIds: number[];
 }

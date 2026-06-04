@@ -1,34 +1,39 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { CatalogsService } from './catalogs.service';
-import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { UpdateCatalogDto } from './dto/update-catalog.dto';
+import { Controller, Get, Param } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { CatalogsService, CatalogKey } from './catalogs.service';
 
+@ApiTags('Catalogs')
 @Controller('catalogs')
 export class CatalogsController {
   constructor(private readonly catalogsService: CatalogsService) {}
 
-  @Post()
-  create(@Body() createCatalogDto: CreateCatalogDto) {
-    return this.catalogsService.create(createCatalogDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.catalogsService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.catalogsService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCatalogDto: UpdateCatalogDto) {
-    return this.catalogsService.update(+id, updateCatalogDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.catalogsService.remove(+id);
+  /**
+   * GET /catalogs/:nombre
+   *
+   * Endpoint genérico para obtener cualquier catálogo del sistema.
+   * Valores válidos para :nombre:
+   *   roles | empresas | sites | modulos | areas | tipos-contratacion | modalidades
+   *
+   * Ejemplos:
+   *   GET /catalogs/roles
+   *   GET /catalogs/empresas
+   *   GET /catalogs/sites
+   */
+  @Get(':nombre')
+  @ApiParam({
+    name: 'nombre',
+    description: 'Nombre del catálogo a consultar',
+    enum: ['roles', 'empresas', 'sites', 'modulos', 'areas', 'tipos-contratacion', 'modalidades'],
+  })
+  @ApiOperation({
+    summary: 'Obtener catálogo genérico',
+    description:
+      'Retorna los registros activos del catálogo indicado en el path param. ' +
+      'Valores aceptados: roles, empresas, sites, modulos, areas, tipos-contratacion, modalidades.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de registros del catálogo.' })
+  @ApiResponse({ status: 400, description: 'Catálogo no reconocido.' })
+  getCatalog(@Param('nombre') nombre: string) {
+    return this.catalogsService.getCatalog(nombre as CatalogKey);
   }
 }
