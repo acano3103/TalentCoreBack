@@ -105,6 +105,42 @@ export class UsersService {
         },
       });
 
+      // ── Empresas ──────────────────────────────────────────────────
+      let empresaIdList: number[];
+      if (dto.empresaIds === 'all') {
+        // Fetch all active empresa IDs inside the transaction
+        const allEmpresas = await tx.catEmpresas.findMany({
+          where:  { activo: true },
+          select: { idEmpresa: true },
+        });
+        empresaIdList = allEmpresas.map(e => e.idEmpresa);
+      } else {
+        empresaIdList = dto.empresaIds;
+      }
+
+      if (empresaIdList.length > 0) {
+        await tx.relUsuarioEmpresa.createMany({
+          data: empresaIdList.map(idEmpresa => ({
+            idUsuario: newUser.id,
+            idEmpresa,
+            activo:    true,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      // ── Sites ─────────────────────────────────────────────────────
+      if (dto.siteIds.length > 0) {
+        await tx.relUsuarioSite.createMany({
+          data: dto.siteIds.map(idSite => ({
+            idUsuario: newUser.id,
+            idSite,
+            activo:    true,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       return newUser.id;
     });
 
