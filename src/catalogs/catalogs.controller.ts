@@ -4,6 +4,8 @@ import { CatalogsService, CatalogKey } from './catalogs.service';
 
 @ApiTags('Catalogs')
 @Controller('catalogs')
+@ApiBearerAuth()
+@Controller('catalogs')
 export class CatalogsController {
   constructor(private readonly catalogsService: CatalogsService) {}
 

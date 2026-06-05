@@ -5,12 +5,11 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthUserRow } from './interfaces/auth-user.interface';
 import { UsersQueries } from './queries/users.queries';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
-
-  // ─── Existing ──────────────────────────────────────────────────────────────
 
   async getUserFullInfo(userId: number) {
     const [username, roles, enterprises, modules, sites] = await Promise.all([
@@ -37,12 +36,8 @@ export class UsersService {
     };
   }
 
-  // ─── CRUD ──────────────────────────────────────────────────────────────────
-
   /** GET all users — password never returned, includes role via relUsuarioRol JOIN */
   async findAll(): Promise<AuthUserRow[]> {
-    // $queryRaw justified: multi-table JOIN (auth_user ↔ relUsuarioRol ↔ catroles)
-    // not expressible via single Prisma ORM call without defined relations
     return this.prisma.$queryRaw<AuthUserRow[]>`
       SELECT
         u.id, u.uuid, u.username, u.first_name, u.last_name,
@@ -58,7 +53,6 @@ export class UsersService {
 
   /** GET single user by id — password never returned, includes role via relUsuarioRol JOIN */
   async findOne(id: number): Promise<AuthUserRow | null> {
-    // $queryRaw justified: same multi-table JOIN as findAll
     const rows = await this.prisma.$queryRaw<AuthUserRow[]>`
       SELECT
         u.id, u.uuid, u.username, u.first_name, u.last_name,
@@ -76,21 +70,18 @@ export class UsersService {
 
   /** POST — create user + assign role atomically via $transaction */
   async create(dto: CreateUserDto): Promise<AuthUserRow> {
-    // Uniqueness check — simple lookup, Prisma ORM sufficient
     const existing = await this.prisma.auth_user.findUnique({
       where: { username: dto.username },
       select: { id: true },
     });
-    if (existing) {
-      throw new ConflictException(`El nombre de usuario "${dto.username}" ya está en uso.`);
-    }
+    if (existing) throw new ConflictException(`El nombre de usuario "${dto.username}" ya está en uso.`);
 
     const hashedPassword = DjangoPasswordHasher.hash(dto.password);
 
-    // Atomic: if relUsuarioRol insert fails, auth_user insert is rolled back
     const newUserId = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.auth_user.create({
         data: {
+          uuid: randomUUID(),
           password:     hashedPassword,
           last_login:   null,
           is_superuser: false,
@@ -98,6 +89,7 @@ export class UsersService {
           first_name:   dto.first_name,
           last_name:    dto.last_name,
           email:        dto.email,
+          phone:        dto.phone,
           is_staff:     false,
           is_active:    dto.is_active,
           date_joined:  new Date(),
@@ -168,6 +160,7 @@ export class UsersService {
     if (dto.first_name !== undefined) userData.first_name = dto.first_name;
     if (dto.last_name  !== undefined) userData.last_name  = dto.last_name;
     if (dto.email      !== undefined) userData.email      = dto.email;
+    if (dto.phone      !== undefined) userData.phone      = dto.phone;
     if (dto.is_active  !== undefined) userData.is_active  = dto.is_active;
 
     await this.prisma.$transaction(async (tx) => {
