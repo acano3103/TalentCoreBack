@@ -526,7 +526,7 @@ model PesoCategoriaPuesto {
 
 model Postulaciones {
   idPostulacion   Int       @id @default(autoincrement())
-  uuid            String    @db.VarChar(36)
+  uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
   idCandidato     Int?
   idEstatus       Int?      @default(1)
   idPuesto        Int?
@@ -808,7 +808,7 @@ model tokenUsuario {
 
 model usuarios {
   idUsuario     Int       @id @default(autoincrement())
-  uuid          String    @db.VarChar(36)
+  uuid          String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
   idCandidato   Int?
   claveUsuario  String?   @unique(map: "claveUsuario") @db.VarChar(50)
   password      String?   @db.VarChar(255)

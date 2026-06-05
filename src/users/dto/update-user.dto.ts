@@ -29,4 +29,10 @@ export class UpdateUserDto {
     @IsOptional()
     @IsInt()
     idRol?: number;
+
+    @ApiPropertyOptional({ example: '+1234567890', description: 'Teléfono del usuario' })
+    @IsOptional()
+    @IsString()
+    @MaxLength(20)
+    phone?: string;
 }

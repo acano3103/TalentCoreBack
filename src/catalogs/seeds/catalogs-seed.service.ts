@@ -25,6 +25,8 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedLevels(); /** CatNivel */
             await this.seedHiringTypes(); /** CatTipoContratacion */
             await this.seedJobTypes(); /** CatTipoPuesto */
+            await this.seedCourseTypes(); /** CatTipoCurso */
+            await this.seedSalaryLevels(); /** CatNivelSalario */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -327,6 +329,40 @@ export class CatalogsSeedService implements OnModuleInit {
                 INSERT INTO CatTipoPuesto (idTipoPuesto, Descripcion, Activo)
                 VALUES (${jobType.idTipoPuesto}, ${jobType.Descripcion}, ${jobType.Activo})
                 ON DUPLICATE KEY UPDATE Descripcion = VALUES(Descripcion), Activo = VALUES(Activo);
+            `;
+        }
+    }
+
+    // Seeds initial course types into the database.
+    private async seedCourseTypes() {
+        const courseTypes = [
+            { idTipoCurso: 1, Descripcion: 'CURSOS REQUERIDOS', activo: true },
+            { idTipoCurso: 2, Descripcion: 'CURSOS ASOCIADOS AL PUESTO', activo: true },
+            { idTipoCurso: 3, Descripcion: 'CURSOS DE DESARROLLO', activo: true },
+        ];
+
+        for (const courseType of courseTypes) {
+            await this.prisma.$queryRaw`
+                INSERT INTO CatTipoCurso (idTipoCurso, Descripcion, activo)
+                VALUES (${courseType.idTipoCurso}, ${courseType.Descripcion}, ${courseType.activo})
+                ON DUPLICATE KEY UPDATE Descripcion = VALUES(Descripcion), activo = VALUES(activo);
+            `;
+        }
+    }
+
+    // Seeds initial salary levels into the database.
+    private async seedSalaryLevels() {
+        const salaryLevels = [
+            { IdNivelSalario: 1, Descripcion: 'NIVEL UNO', Activo: true, IdEmpresa: 1 },
+            { IdNivelSalario: 2, Descripcion: 'NIVEL DOS', Activo: true, IdEmpresa: 1 },
+            { IdNivelSalario: 3, Descripcion: 'NIVEL TRES', Activo: true, IdEmpresa: 1 },
+        ];
+
+        for (const salaryLevel of salaryLevels) {
+            await this.prisma.$queryRaw`
+                INSERT INTO CatNivelesSalario (IdNivelSalario, Descripcion, Activo, IdEmpresa)
+                VALUES (${salaryLevel.IdNivelSalario}, ${salaryLevel.Descripcion}, ${salaryLevel.Activo}, ${salaryLevel.IdEmpresa})
+                ON DUPLICATE KEY UPDATE Descripcion = VALUES(Descripcion), Activo = VALUES(Activo), IdEmpresa = VALUES(IdEmpresa);
             `;
         }
     }
