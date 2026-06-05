@@ -1,10 +1,8 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Param } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { CatalogsService, CatalogKey } from './catalogs.service';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @ApiTags('Catalogs')
-@UseGuards(JwtAuthGuard)
 @Controller('catalogs')
 @ApiBearerAuth()
 @Controller('catalogs')
