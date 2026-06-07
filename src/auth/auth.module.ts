@@ -9,6 +9,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
 import { PassportModule } from '@nestjs/passport';
 import { UsersModule } from 'src/users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { CaptchaService } from './providers/captcha.service';
 
 @Module({
     imports: [
@@ -27,7 +28,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     providers: [
         AuthService,
         AuthDataService,
-        JwtStrategy
+        JwtStrategy,
+        CaptchaService
     ],
     controllers: [AuthController],
     exports: [PassportModule]

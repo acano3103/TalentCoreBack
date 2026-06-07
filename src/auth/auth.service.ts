@@ -9,6 +9,7 @@ import { AuthSuccessResponse } from './interfaces/auth-response.interface';
 import { DjangoPasswordHasher } from '../common/utils/django-password.util';
 import { ResendTokenDto } from './dto/resend-token.dto';
 import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
+import { CaptchaService } from './providers/captcha.service';
 
 @Injectable()
 export class AuthService {
@@ -19,16 +20,27 @@ export class AuthService {
         private readonly configService: ConfigService,
         private readonly jwtService: JwtService,
         private readonly dataService: AuthDataService,
-        private readonly notifications: NotificationDispatcher
+        private readonly notifications: NotificationDispatcher,
+        private readonly captchaService: CaptchaService
     ) { }
 
     async login(loginDto: LoginDto) {
-        const { user, password } = loginDto;
+        const { username, password, captchaToken } = loginDto;
+
+        // Validate Captcha if enabled
+        const useCaptcha = this.configService.get<boolean>('USE_CAPTCHA', false);
+        if (useCaptcha) {
+            const isHuman = await this.captchaService.validateToken(captchaToken || '');
+            if (!isHuman) {
+                throw new UnauthorizedException('Validación de seguridad fallida. Intente nuevamente.');
+            }
+        }
+
         const token2fa = Math.floor(100000 + Math.random() * 900000).toString();
         const useToken2FA = this.configService.get<boolean>('USE_TOKEN_2FA', true);
 
         // 1. System users (Staff)
-        const userSystem = await this.dataService.getUserSystem(user);
+        const userSystem = await this.dataService.getUserSystem(username);
         if (userSystem) {
             if (!userSystem.is_active) throw new UnauthorizedException('El usuario no está activo');
 
@@ -56,7 +68,7 @@ export class AuthService {
         }
 
         // 2. Recruitment users (Candidates)
-        const userRec = await this.prisma.usuarios.findFirst({ where: { claveUsuario: user } });
+        const userRec = await this.prisma.usuarios.findFirst({ where: { claveUsuario: username } });
         if (userRec) {
             if (!userRec.activo) throw new UnauthorizedException('El usuario no está activo');
             if (!userRec.password) throw new UnauthorizedException('El usuario no tiene contraseña');

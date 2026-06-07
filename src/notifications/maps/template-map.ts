@@ -7,6 +7,7 @@ export const TEMPLATE_MAP = {
         'CREDENTIALS_CREATED': 'documentacion_requerida'
     },
     WHATSAPP: {
+        '2FA': 'token_whatsapp',
         'POSITION_STATUS_UPDATE': 'puesto_estado',
         'INTERVIEW_SCHEDULED': 'whatsapp_entrevista',
         'CREDENTIALS_CREATED': 'documentos_requeridos'
