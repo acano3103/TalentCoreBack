@@ -294,7 +294,6 @@ export class AuthService {
         throw new BadRequestException('Tipo de usuario inválido');
     }
 
-    // FIRMA DE METODO ORIGINAL RESTAURADA AL 100% PARA NO ROMPER PROPIEDADES INDEFINIDAS
     private async generateAuthResponse(userId: number, type: 'staff' | 'candidato', idCandidato?: number): Promise<AuthSuccessResponse> {
         let userData;
         let userUuid = '';
@@ -310,15 +309,15 @@ export class AuthService {
             userData = await this.dataService.getCandidatoData(userId, idCandidato!);
         }
 
-        // Recuperamos de forma reactiva el identificador asimilado en la sesión activa en DB
         const currentSession = await this.prisma.usuarioslogin.findFirst({
-            where: { UuidUsuario: userUuid }
+            where: { UuidUsuario: userUuid },
+            orderBy: { FechaLogin: 'desc' }
         });
 
         const payload = {
             user_id: userId,
             roles: userData.roles,
-            session_id: currentSession?.identificador || null // <--- Agregado directo en el payload sin romper parámetros
+            session_id: currentSession?.identificador || null 
         };
 
         return {
@@ -350,16 +349,21 @@ export class AuthService {
     }
 
     private async registerSessionInDb(uuidUsuario: string, browserString: string): Promise<void> {
-        await this.prisma.usuarioslogin.deleteMany({
-            where: { UuidUsuario: uuidUsuario }
-        });
+        const allowConcurrentEnv = this.configService.get('ALLOW_CONCURRENT_SESSIONS', 'true');
+        const allowConcurrent = allowConcurrentEnv === true || allowConcurrentEnv === 'true';
+
+        if (!allowConcurrent) {
+            await this.prisma.usuarioslogin.deleteMany({
+                where: { UuidUsuario: uuidUsuario }
+            });
+        }
 
         await this.prisma.usuarioslogin.create({
             data: {
                 UuidUsuario: uuidUsuario,
                 FechaLogin: new Date(),
                 browser: browserString,
-                identificador: uuidv4() // Genera de manera nativa e independiente el identificador único de sesión
+                identificador: uuidv4() 
             }
         });
     }
