@@ -1,4 +1,4 @@
-import { IsString, MinLength, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, MinLength, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
@@ -16,4 +16,12 @@ export class LoginDto {
     @IsString()
     @IsOptional()
     captchaToken?: string;
+
+    @IsString()
+    @IsOptional()
+    browser?: string;
+
+    @IsBoolean()
+    @IsOptional()
+    forceLogin?: boolean;
 }

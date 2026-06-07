@@ -818,8 +818,8 @@ model usuarios {
 }
 
 model usuarioslogin {
-  idUsuariosLogin Int       @id @default(autoincrement())
-  ClaveUsuario    String?   @db.VarChar(25)
+  idUsuariosLogin String    @id @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  UuidUsuario     String?   @db.VarChar(50)
   FechaLogin      DateTime? @db.DateTime(0)
   browser         String?   @db.VarChar(500)
   identificador   String?   @db.VarChar(200)

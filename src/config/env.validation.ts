@@ -10,6 +10,7 @@ export const envValidationSchema = Joi.object({
         then: Joi.required(),
         otherwise: Joi.optional(),
     }),
+    ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
     MAIL_HOST: Joi.string().required(),
     MAIL_PORT: Joi.number().required(),
     MAIL_USER: Joi.string().required(),
