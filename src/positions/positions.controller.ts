@@ -1,7 +1,7 @@
-import { Controller, Patch, Get, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Patch, Get, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @ApiTags('Positions')
@@ -10,6 +10,25 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 export class PositionsController {
     constructor(private readonly service: PositionsService) { }
 
+    @UseGuards(JwtAuthGuard)
+    @Get()
+    @ApiOperation({
+        summary: 'Get all positions',
+        description: 'Returns all positions for a company, optionally filtered by status (e.g., active, inactive).'
+    })
+    @ApiQuery({
+        name: 'status',
+        required: false,
+        type: String,
+        description: 'Filter positions by status (active, inactive). If omitted, returns all positions.'
+    })
+    @ApiResponse({ status: 200, description: 'Positions successfully retrieved.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    async getPositions(@Param('companyId') companyId: number, @Query('status') status?: string) {
+        return this.service.findAllPositions(Number(companyId), status);
+    }
+
+    @UseGuards(JwtAuthGuard)
     @Get(':positionId')
     @ApiOperation({ summary: 'Get position', description: 'Returns a position.' })
     @ApiResponse({ status: 200, description: 'Position successfully retrieved.' })
