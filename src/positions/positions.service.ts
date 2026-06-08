@@ -45,7 +45,7 @@ export class PositionsService {
                     TotalRechazados: p.TotalRechazados ? Number(p.TotalRechazados) : 0,
                 };
             });
-            console.log("puestos", puestos);
+
             return puestos;
 
         } catch (error) {
