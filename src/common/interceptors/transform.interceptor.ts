@@ -12,6 +12,13 @@ export interface Response<T> {
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> {
   intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
+    const ctx = context.switchToHttp();
+    const request = ctx.getRequest();
+
+    if (request.url.includes('/api/v2/media') || request.url.includes('/media')) {
+      return next.handle();
+    }
+
     return next.handle().pipe(
       map(data => ({
         success: true,

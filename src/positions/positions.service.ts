@@ -11,12 +11,14 @@ import { PositionQueries } from './queries/positions.queries';
 import * as fs from 'fs';
 import * as path from 'path';
 import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.util';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class PositionsService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly notifications: NotificationDispatcher
+        private readonly notifications: NotificationDispatcher,
+        private readonly configService: ConfigService,
     ) { }
 
     private readonly logger = new Logger(PositionsService.name);
@@ -65,8 +67,8 @@ export class PositionsService {
 
     async getPostulantsSummary(idPuesto: number) {
         const CV_DEFAULT = "https://fileonline.datavoice.com.mx/RR-HH/media/GRUS990820HDFVRC07/documento_1_GRUS990820HDFVRC07.pdf";
-        const FILE_API = "https://wmarketingqa.likenuuk.com";
-        const MEDIA_URL = "/media/";
+        const mediaPrefixRaw = this.configService.get<string>('MEDIA_PATH_PREFIX') || 'media';
+        const mediaPrefix = mediaPrefixRaw.replace(/^\/+|\/+$/g, '');
 
         try {
             const rows = await PositionQueries.getPostulantsSummary(this.prisma, Number(idPuesto)) as any[];
@@ -94,10 +96,10 @@ export class PositionsService {
 
                 let finalRutaCV = CV_DEFAULT;
                 if (p.rutaCV) {
-                    const rootPath = path.join(process.cwd(), 'src', 'media');
+                    const rootPath = path.join(process.cwd(), 'media');
                     const rutaFisica = path.join(rootPath, p.rutaCV);
                     if (fs.existsSync(rutaFisica)) {
-                        finalRutaCV = p.rutaCV.startsWith('http') ? p.rutaCV : `${FILE_API}${MEDIA_URL}${p.rutaCV}`;
+                        finalRutaCV = p.rutaCV.startsWith('http') ? p.rutaCV : `/${mediaPrefix}/${p.rutaCV}`;
                     }
                 }
 

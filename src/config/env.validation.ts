@@ -23,4 +23,5 @@ export const envValidationSchema = Joi.object({
     HUME_SECRET_KEY: Joi.string().required(),
     HUME_CONFIG_ID_INTERVIEW: Joi.string().required(),
     OPENAI_API_KEY: Joi.string().required(),
+    MEDIA_PATH_PREFIX: Joi.string().default('media'),
 });

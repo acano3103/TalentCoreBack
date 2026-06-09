@@ -11,6 +11,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { InterviewsModule } from './interviews/interviews.module';
 import { PostulationsModule } from './postulations/postulations.module';
 import { CatalogsModule } from './catalogs/catalogs.module';
+import { MediaModule } from './media/media.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { CatalogsModule } from './catalogs/catalogs.module';
     IntegrationsModule,
     InterviewsModule,
     PostulationsModule,
-    CatalogsModule
+    CatalogsModule,
+    MediaModule
   ],
   controllers: [],
   providers: [],
