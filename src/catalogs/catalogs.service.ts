@@ -28,42 +28,42 @@ export class CatalogsService {
       case 'empresas':
         return this.prisma.catEmpresas.findMany({
           where:   { activo: true },
-          select:  { idEmpresa: true, nombre_comercial: true },
+          select:  { idEmpresa: true, nombre_comercial: true, activo: true },
           orderBy: { nombre_comercial: 'asc' },
         });
 
       case 'sites':
         return this.prisma.catSites.findMany({
           where:   { Activo: true },
-          select:  { idSite: true, Descripcion: true },
+          select:  { idSite: true, Descripcion: true, Activo: true },
           orderBy: { Descripcion: 'asc' },
         });
 
       case 'modulos':
         return this.prisma.catModulos.findMany({
           where:   { Activo: true },
-          select:  { idModulo: true, Descripcion: true },
+          select:  { idModulo: true, Descripcion: true, Activo: true },
           orderBy: { Descripcion: 'asc' },
         });
 
       case 'areas':
         return this.prisma.catAreas.findMany({
           where:   { Activo: true },
-          select:  { idArea: true, Descripcion: true },
+          select:  { idArea: true, Descripcion: true, Activo: true },
           orderBy: { Descripcion: 'asc' },
         });
 
       case 'tipos-contratacion':
         return this.prisma.catTipoContratacion.findMany({
           where:   { Activo: true },
-          select:  { idTipoContratacion: true, Descripcion: true },
+          select:  { idTipoContratacion: true, Descripcion: true, Activo: true },
           orderBy: { Descripcion: 'asc' },
         });
 
       case 'modalidades':
         return this.prisma.catModalidad.findMany({
           where:   { Activo: true },
-          select:  { idModalidad: true, Descripcion: true },
+          select:  { idModalidad: true, Descripcion: true, Activo: true },
           orderBy: { Descripcion: 'asc' },
         });
 
