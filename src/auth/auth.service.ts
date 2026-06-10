@@ -170,7 +170,6 @@ export class AuthService {
             await this.prisma.usuarioslogin.deleteMany({
                 where: { UuidUsuario: userUuid }
             });
-            this.logger.log(`Sesión purgada voluntariamente en DB para el usuario con UUID: ${userUuid}`);
         }
 
         return { success: true, message: 'Sesión eliminada de la base de datos.' };
