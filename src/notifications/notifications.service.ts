@@ -1,25 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-
-export interface NotificationPreferenceResponse {
-  id: number;
-  user_uuid: string;
-  channel_id: number;
-  enabled: boolean | null;
-  created_at: Date | null;
-  updated_at: Date | null;
-}
-
-export interface UpdateNotificationPreferenceDto {
-  enabled: boolean;
-}
+import { NotificationPreferenceResponse } from './interfaces/notification-preference.interface';
+import { UpdateNotificationPreferenceDto } from './dto/update-notification-preference.dto';
 
 @Injectable()
-export class NotificationPreferencesService {
+export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * GET all notification preferences for a specific user
+   * Get all notification preferences for a specific user
    */
   async getPreferences(
     userUuid: string,
@@ -30,7 +19,7 @@ export class NotificationPreferencesService {
   }
 
   /**
-   * PATCH — Upsert notification preference (update if exists, create if doesn't)
+   * Upsert notification preference (update if exists, create if doesn't)
    */
   async upsertPreference(
     userUuid: string,

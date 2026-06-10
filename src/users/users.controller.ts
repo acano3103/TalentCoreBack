@@ -1,7 +1,6 @@
 import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, NotFoundException, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { NotificationPreferencesService } from './notification-preferences.service';
 import { AuthUserRow } from './interfaces/auth-user.interface';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -13,7 +12,6 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
-    private readonly notificationPreferencesService: NotificationPreferencesService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -25,35 +23,6 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'List of users successfully retrieved.' })
   findAll(): Promise<AuthUserRow[]> {
     return this.usersService.findAll();
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':uuid/notification-preferences')
-  @ApiParam({ name: 'uuid', type: String, description: 'User UUID' })
-  @ApiOperation({
-    summary: 'Get notification preferences for a user',
-    description: 'Returns all notification preferences for a specific user from PreferenciasNotificacionesUsuario table.',
-  })
-  @ApiResponse({ status: 200, description: 'Notification preferences retrieved successfully.' })
-  getNotificationPreferences(@Param('uuid') uuid: string) {
-    return this.notificationPreferencesService.getPreferences(uuid);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Patch(':uuid/notification-preferences/:channelId')
-  @ApiParam({ name: 'uuid', type: String, description: 'User UUID' })
-  @ApiParam({ name: 'channelId', type: Number, description: 'Channel ID' })
-  @ApiOperation({
-    summary: 'Update or create notification preference',
-    description: 'Updates an existing notification preference or creates a new one if it does not exist (upsert operation).',
-  })
-  @ApiResponse({ status: 200, description: 'Preference updated or created successfully.' })
-  updateNotificationPreference(
-    @Param('uuid') uuid: string,
-    @Param('channelId', ParseIntPipe) channelId: number,
-    @Body() data: { enabled: boolean },
-  ) {
-    return this.notificationPreferencesService.upsertPreference(uuid, channelId, data);
   }
 
   @UseGuards(JwtAuthGuard)

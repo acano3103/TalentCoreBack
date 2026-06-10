@@ -8,6 +8,8 @@ import { MailProvider } from './providers/mail/mail.provider';
 import { WhatsappProvider } from './providers/whatsapp/whatsapp.provider';
 import { NotificationDispatcher } from './notification.dispatcher';
 import { PrismaModule } from 'src/prisma/prisma.module';
+import { NotificationsService } from './notifications.service';
+import { NotificationsController } from './notifications.controller';
 
 @Global()
 @Module({
@@ -45,7 +47,8 @@ import { PrismaModule } from 'src/prisma/prisma.module';
             inject: [ConfigService],
         }),
     ],
-    providers: [MailProvider, WhatsappProvider, NotificationDispatcher],
+    controllers: [NotificationsController],
+    providers: [MailProvider, WhatsappProvider, NotificationDispatcher, NotificationsService],
     exports: [NotificationDispatcher],
 })
 export class NotificationsModule { }
