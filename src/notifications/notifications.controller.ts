@@ -6,11 +6,11 @@ import { UpdateNotificationPreferenceDto } from './dto/update-notification-prefe
 
 @ApiTags('Notifications')
 @UseGuards(JwtAuthGuard)
-@Controller('notifications/preferences')
+@Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  @Get(':uuid')
+  @Get('preferences/:uuid')
   @ApiParam({ name: 'uuid', type: String, description: 'User UUID' })
   @ApiOperation({
     summary: 'Get notification preferences for a user',
@@ -21,7 +21,7 @@ export class NotificationsController {
     return this.notificationsService.getPreferences(uuid);
   }
 
-  @Patch(':uuid/:channelId')
+  @Patch('preferences/:uuid/:channelId')
   @ApiParam({ name: 'uuid', type: String, description: 'User UUID' })
   @ApiParam({ name: 'channelId', type: Number, description: 'Channel ID' })
   @ApiOperation({
