@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Res, UseGuards, StreamableFile } from '@nestjs/common';
 import { MediaService } from './media.service';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 

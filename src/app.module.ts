@@ -1,17 +1,23 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { envValidationSchema } from './config/env.validation';
-import { AuthModule } from './auth/auth.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { PositionsModule } from './positions/positions.module';
+import { PositionsModule } from './modules/positions/positions.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { UsersModule } from './users/users.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { InterviewsModule } from './interviews/interviews.module';
-import { PostulationsModule } from './postulations/postulations.module';
-import { CatalogsModule } from './catalogs/catalogs.module';
+import { CatalogsModule } from './modules/catalogs/catalogs.module';
 import { MediaModule } from './media/media.module';
+import { CompaniesModule } from './modules/companies/companies.module';
+import { PostulationsModule } from './modules/postulations/postulations.module';
+import { LocationsModule } from './modules/locations/locations.module';
+import { AreasService } from './modules/areas/areas.service';
+import { AreasModule } from './modules/areas/areas.module';
+import { CostCenterModule } from './modules/cost-center/cost-center.module';
+import { EventsModule } from './modules/events/events.module';
 
 @Module({
   imports: [
@@ -37,10 +43,15 @@ import { MediaModule } from './media/media.module';
     InterviewsModule,
     PostulationsModule,
     CatalogsModule,
-    MediaModule
+    MediaModule,
+    CompaniesModule,
+    LocationsModule,
+    AreasModule,
+    CostCenterModule,
+    EventsModule
   ],
   controllers: [],
-  providers: [],
+  providers: [AreasService],
 })
 export class AppModule { }
 

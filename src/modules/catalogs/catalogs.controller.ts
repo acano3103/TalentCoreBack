@@ -1,0 +1,122 @@
+import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { CatalogsService, CatalogKey } from './catalogs.service';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { CatalogDto } from './dto/catalog.dto';
+import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
+import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog.service';
+import { UpdateSalaryLevelsCatalogDto } from './dto/update-salary-levels-catalog.dto';
+import { CreateSalaryLevelsCatalogDto } from './dto/create-salary-levels-catalog.dto';
+
+@UseGuards(JwtAuthGuard)
+@ApiTags('Catalogs')
+@Controller('companies/:companyId/')
+export class CatalogsController {
+  constructor(
+    private readonly catalogsService: CatalogsService,
+    private readonly salaryLevelsCatalogService: SalaryLevelsCatalogService,
+  ) { }
+
+  @Get('catalogs/:nombre')
+  @ApiParam({
+    name: 'nombre',
+    description: 'Nombre del catálogo a consultar',
+    enum: ['roles', 'empresas', 'sites', 'modulos', 'areas', 'tipos-contratacion', 'modalidades'],
+  })
+  @ApiOperation({
+    summary: 'Obtener catálogo genérico',
+    description:
+      'Retorna los registros activos del catálogo indicado en el path param. ' +
+      'Valores aceptados: roles, empresas, sites, modulos, areas, tipos-contratacion, modalidades.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de registros del catálogo.' })
+  @ApiResponse({ status: 400, description: 'Catálogo no reconocido.' })
+  getCatalog(
+    @Query() catalogDto: CatalogDto,
+    @Param('nombre') nombre: string
+  ) {
+    return this.catalogsService.getCatalog(catalogDto, nombre as CatalogKey);
+  }
+
+  //Salary levels subservice
+  @Get('salary-levels')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all salary levels', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Salary levels obtained successfully' })
+  @ApiResponse({ status: 404, description: 'Salary levels not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async findAllSalaryLevels(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+  ) {
+    const querySearch = search || '';
+    return this.salaryLevelsCatalogService.findAll(companyId, page, limit, querySearch);
+  }
+
+  @Get('salary-levels/:salaryLevelId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get one salary level', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Salary level obtained successfully' })
+  @ApiResponse({ status: 404, description: 'Salary level not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async findOne(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
+  ) {
+    return await this.salaryLevelsCatalogService.findOne(companyId, salaryLevelId);
+  }
+
+  @Post('salary-levels')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create salary level', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Salary level created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async create(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() createSalaryLevelsCatalogDto: CreateSalaryLevelsCatalogDto,
+  ) {
+    return await this.salaryLevelsCatalogService.create(companyId, createSalaryLevelsCatalogDto);
+  }
+
+  @Put('salary-levels/:salaryLevelId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update salary level', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Salary level updated successfully' })
+  @ApiResponse({ status: 404, description: 'Salary level not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async update(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
+    @Body() updateSalaryLevelsCatalogDto: UpdateSalaryLevelsCatalogDto,
+  ) {
+    return await this.salaryLevelsCatalogService.update(companyId, salaryLevelId, updateSalaryLevelsCatalogDto);
+  }
+
+  @Delete('salary-levels/:salaryLevelId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disable salary level', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Salary level disabled successfully' })
+  @ApiResponse({ status: 404, description: 'Salary level not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async disable(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
+  ) {
+    return this.salaryLevelsCatalogService.changeStatus(companyId, salaryLevelId, false);
+  }
+
+  @Patch('salary-levels/:salaryLevelId/reactivate')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reactivate salary level', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Salary level reactivated successfully' })
+  @ApiResponse({ status: 404, description: 'Salary level not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async reactivate(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
+  ) {
+    return this.salaryLevelsCatalogService.changeStatus(companyId, salaryLevelId, true);
+  }
+}

@@ -2,7 +2,7 @@ import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/c
 import { IntegrationsService } from './integrations.service';
 import { ConnectIntegrationDto } from './dto/connect-integration.dto';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 
 @ApiTags('Integrations')
 @ApiBearerAuth()

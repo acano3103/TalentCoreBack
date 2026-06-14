@@ -4,7 +4,7 @@ import { UsersService } from './users.service';
 import { AuthUserRow } from './interfaces/auth-user.interface';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard)

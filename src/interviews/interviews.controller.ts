@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query, Patch } from '@nestjs/common';
 import { InterviewsService } from './interviews.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProgramInterviewDto } from './dto/program-interview.dto';
 import { UpdateMeetingDto } from './dto/update-interview.dto';
