@@ -1,11 +1,15 @@
-import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe, Post, Delete } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
+import { CreatePositionDto } from './dto/create-position.dto';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @ApiTags('Positions')
+@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @Controller('companies/:companyId/positions')
 export class PositionsController {
@@ -27,12 +31,61 @@ export class PositionsController {
         return this.service.findAll(companyId, page, querySearch, limit);
     }
 
+    @Get('/catalogs')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get all position catalogs', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position catalogs obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Position catalogs not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getCatalogs(
+        @Param('companyId', ParseIntPipe) companyId: number,
+    ) {
+        return this.service.getCatalogs(companyId);
+    }
+
+    @Post()
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Create a new position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position created successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async create(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Body() data: CreatePositionDto,
+    ) {
+        return this.service.create(companyId, activeUser, data);
+    }
+
+    @Delete(':positionId')
+    @ApiOperation({ summary: 'Disable position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position disabled successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async disable(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('positionId', ParseIntPipe) positionId: number,
+    ) {
+        return this.service.changeStatus(companyId, positionId, false);
+    }
+
+    @Patch(':positionId/reactivate')
+    @ApiOperation({ summary: 'Reactivate position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position reactivated successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async reactivate(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('positionId', ParseIntPipe) positionId: number,
+    ) {
+        return this.service.changeStatus(companyId, positionId, true);
+    }
+
 
 
 
     // Endpoint de la version vieja, elimar cuando el modulo de reclutamiento este completo y ya no se usen
 
-    @UseGuards(JwtAuthGuard)
     @Get('/vacancies')
     @ApiOperation({
         summary: 'Get all positions',

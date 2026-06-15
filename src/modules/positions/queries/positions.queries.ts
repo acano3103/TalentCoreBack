@@ -20,7 +20,8 @@ export class PositionQueries {
           p.DisponibilidadViajar,
           ns.NombreNivel AS NivelSalario,
           ns.SalarioMinimo,
-          ns.SalarioMaximo
+          ns.SalarioMaximo,
+          p.Activo
         FROM CatPuestos p
         LEFT JOIN CatAreas a ON a.idArea = p.idArea
         LEFT JOIN CatSites s ON s.idSite = a.idSite
@@ -31,7 +32,6 @@ export class PositionQueries {
         LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
         LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
         WHERE ce.idEmpresa = ${companyId}
-          AND p.Activo = 1
           AND p.aprobada = 1
           -- Filtro de búsqueda inteligente por nombre o descripción del puesto
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
@@ -46,7 +46,6 @@ export class PositionQueries {
         LEFT JOIN CatSites s ON s.idSite = a.idSite
         LEFT JOIN CatEmpresas ce ON ce.idEmpresa = s.idEmpresa
         WHERE ce.idEmpresa = ${companyId}
-          AND p.Activo = 1
           AND p.aprobada = 1
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery});
       ` as Promise<[{ total: bigint | number }]>

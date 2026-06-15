@@ -11,7 +11,7 @@ import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog
   controllers: [CatalogsController],
   providers: [
     CatalogsService,
-    // CatalogsSeedService,
+    //CatalogsSeedService,
     SalaryLevelsCatalogService,
     PrismaService
   ],

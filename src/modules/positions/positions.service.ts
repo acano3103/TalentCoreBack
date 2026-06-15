@@ -2,7 +2,8 @@ import {
     Injectable,
     NotFoundException,
     InternalServerErrorException,
-    Logger
+    Logger,
+    BadRequestException
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
@@ -12,6 +13,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.util';
 import { ConfigService } from '@nestjs/config';
+import { CreatePositionDto } from './dto/create-position.dto';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @Injectable()
 export class PositionsService {
@@ -41,6 +44,204 @@ export class PositionsService {
             currentPage: page,
             totalPages: Math.ceil(total / limit) || 1,
         };
+    }
+
+    async create(companyId: number, activeUser: ActiveUserDto, dto: CreatePositionDto) {
+        const user = await this.prisma.auth_user.findFirst({ where: { id: activeUser.id } });
+        if (!user) throw new BadRequestException('Tu usuario actual no existe');
+
+        return await this.prisma.$transaction(async (tx) => {
+
+            const { generalInfo, languages } = dto;
+
+            const nuevoPuesto = await tx.catPuestos.create({
+                data: {
+                    idEmpresa: companyId,
+                    NombrePuesto: generalInfo.nombrePuesto.trim(),
+                    idTipoPuesto: Number(generalInfo.idTipoPuesto),
+                    idArea: Number(generalInfo.idArea),
+                    idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,
+                    idModalidad: Number(generalInfo.idModalidad),
+                    idNivelEstudios: generalInfo.idNivelEstudios ? Number(generalInfo.idNivelEstudios) : null,
+                    DescripcionPuesto: languages.description || null,
+                    IdNivelSalario: generalInfo.idNivelSalario ? Number(generalInfo.idNivelSalario) : null,
+                    DisponibilidadViajar: languages?.disponibilidadViajar ? true : false,
+                    idJefeInmediato: languages?.idJefeInmediato ? Number(languages.idJefeInmediato) : null,
+                    idUsuarioRegistro: user.uuid,
+                    FechaRegistro: new Date(),
+                    Activo: false,
+                    aprobada: false,
+                    pendiente: true
+                },
+            });
+
+            const newPositionId = nuevoPuesto.idPuesto;
+
+            // =========================================================================
+            // 2. INSERCIONES DE RELACIONES HIJAS (OPCIONALES CON VALIDACIÓN SECUENCIAL)
+            // =========================================================================
+
+            // === RELACIÓN: IDIOMAS REQUERIDOS ===
+            if (languages?.idiomas && languages.idiomas.length > 0) {
+                await tx.idiomasPuesto.createMany({
+                    data: languages.idiomas.map((idIdioma) => ({
+                        idPuesto: newPositionId,
+                        idIdioma: Number(idIdioma),
+                    })),
+                });
+            }
+
+            // === RELACIÓN: HORARIOS DEL PUESTO ===
+            if (dto.schedules?.turnos && dto.schedules.turnos.length > 0) {
+                const turnosData = dto.schedules.turnos.flatMap((turno) => {
+                    const fechaBase = '1970-01-01';
+                    return turno.days.map((dia) => ({
+                        idPuesto: newPositionId,
+                        DiaSemana: dia,
+                        HoraEntrada: new Date(`${fechaBase}T${turno.start}:00Z`),
+                        HoraSalida: new Date(`${fechaBase}T${turno.end}:00Z`),
+                    }))
+                });
+
+                await tx.horariosPuesto.createMany({ data: turnosData });
+            }
+
+            // === RELACIÓN: DOCUMENTOS SELECCIONADOS ===
+            if (dto.documents?.documentosSeleccionados && dto.documents.documentosSeleccionados.length > 0) {
+                await tx.documentosPuesto.createMany({
+                    data: dto.documents.documentosSeleccionados.map((doc) => ({
+                        idPuesto: newPositionId,
+                        idDocumento: doc.idDocumento,
+                        esObligatorio: doc.Obligatorio === 1,
+                    })),
+                });
+            }
+
+            // === RELACIÓN: FUNCIONES / ACTIVIDADES CLAVE ===
+            if (dto.functions?.actividades && dto.functions.actividades.length > 0) {
+                await tx.funcionesPuesto.createMany({
+                    data: dto.functions.actividades.map((actividad) => ({
+                        idPuesto: newPositionId,
+                        Funcion: actividad.trim(),
+                    })),
+                });
+            }
+
+            // === RELACIÓN: COMPETENCIAS CONDUCTUALES ===
+            if (dto.competencies?.competencias && dto.competencies.competencias.length > 0) {
+                await tx.competenciasPuesto.createMany({
+                    data: dto.competencies.competencias.map((competencia) => ({
+                        idPuesto: newPositionId,
+                        Competencia: competencia.trim(),
+                    })),
+                });
+            }
+
+            // === RELACIÓN: HABILIDADES (DURAS Y BLANDAS UNIFICADAS) ===
+            const duras = dto.skills?.duras || [];
+            const blandas = dto.skills?.blandas || [];
+            const todasLasHabilidades = [
+                ...duras.map(h => ({ name: h.name, level: h.level, tipo: "DURA" })),
+                ...blandas.map(h => ({ name: h.name, level: h.level, tipo: "BLANDA" }))
+            ];
+
+            if (todasLasHabilidades.length > 0) {
+                await tx.habilidadesPuesto.createMany({
+                    data: todasLasHabilidades.map((hab) => ({
+                        idPuesto: newPositionId,
+                        Habilidad: hab.name.trim(),
+                        Nivel: hab.level,
+                        Tipo: hab.tipo,
+                    })),
+                });
+            }
+
+            // === RELACIÓN: PLANES DE CAPACITACIÓN / CURSOS ===
+            if (dto.courses?.cursosSeleccionados && dto.courses.cursosSeleccionados.length > 0) {
+                await tx.relPuestoCurso.createMany({
+                    data: dto.courses.cursosSeleccionados.map((curso) => ({
+                        idPuesto: newPositionId,
+                        idCurso: curso.idCurso,
+                        idTipoCurso: curso.idTipoCourse,
+                        activo: true,
+                        fechaRegistro: new Date()
+                    })),
+                });
+            }
+
+            return { message: "Puesto creado exitosamente", id: newPositionId };
+        });
+    }
+
+    async changeStatus(companyId: number, id: number, active: boolean) {
+        const positionExists = await this.prisma.catPuestos.findFirst({
+            where: {
+                idPuesto: id,
+                idEmpresa: companyId,
+            },
+        });
+
+        if (!positionExists) throw new NotFoundException(`No se encontró el puesto con ID ${id} para la empresa.`);
+
+        await this.prisma.catPuestos.update({
+            where: { idPuesto: id, idEmpresa: companyId },
+            data: {
+                Activo: active
+            },
+        });
+
+        return {
+            message: active ? 'Puesto activado correctamente' : 'Puesto desactivado correctamente'
+        };
+    }
+
+    async getCatalogs(companyId: number) {
+        const areas = await this.prisma.catAreas.findMany({
+            where: { Activo: true },
+        });
+
+        const positionTypes = await this.prisma.catTipoPuesto.findMany({
+            where: { Activo: true },
+        });
+
+        const modalities = await this.prisma.catModalidad.findMany({
+            where: { Activo: true },
+        });
+
+        const educationLevels = await this.prisma.catEscolaridad.findMany({
+            where: { Activo: true },
+        });
+
+        const hiringTypes = await this.prisma.catTipoContratacion.findMany({
+            where: { Activo: true },
+        });
+
+        const salaryLevels = await this.prisma.catNivelesSalario.findMany({
+            where: { Activo: true },
+        });
+
+        const languages = await this.prisma.catIdiomas.findMany({
+            where: { Activo: true },
+        });
+
+        const positions = await this.prisma.catPuestos.findMany({
+            where: { Activo: true, aprobada: true },
+            select: { idPuesto: true, NombrePuesto: true, DescripcionPuesto: true }
+        });
+
+        const documents = await this.prisma.catDocumentos.findMany({
+            where: { Activo: true },
+        });
+
+        const courseTypes = await this.prisma.catTipoCurso.findMany({
+            where: { activo: true },
+        });
+
+        const courses = await this.prisma.catCursos.findMany({
+            where: { activo: true },
+        });
+
+        return { areas, positionTypes, modalities, educationLevels, hiringTypes, salaryLevels, languages, positions, documents, courseTypes, courses };
     }
 
 

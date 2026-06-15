@@ -151,11 +151,15 @@ model CatCriterios {
 }
 
 model CatCursos {
-  idCursos    Int      @id @default(autoincrement())
-  idEmpresa   Int
-  Descripcion String?  @db.VarChar(45)
-  activo      Boolean? @default(true)
-  idArea      Int?
+  idCursos     Int          @id @default(autoincrement())
+  idEmpresa    Int
+  idTipoCurso  Int          @default(1)
+  Descripcion  String?      @db.VarChar(300)
+  activo       Boolean?     @default(true)
+  idArea       Int?
+  CatTipoCurso CatTipoCurso @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
+
+  @@index([idTipoCurso], map: "FK_Cursos_TipoCurso")
 }
 
 model CatDescripcionesPuesto {
@@ -169,6 +173,7 @@ model CatDocumentos {
   IdDocumento     Int       @id @default(autoincrement())
   idEmpresa       Int?
   Descripcion     String?   @db.VarChar(100)
+  EsRequeridoBase Boolean   @default(false)
   FechaRegistro   DateTime? @db.DateTime(0)
   UsuarioRegistro String?   @db.VarChar(45)
   Activo          Boolean?  @default(true)
@@ -365,9 +370,10 @@ model CatTipoContratacion {
 }
 
 model CatTipoCurso {
-  idTipoCurso Int      @id @default(autoincrement())
-  Descripcion String   @db.VarChar(60)
-  activo      Boolean? @default(true)
+  idTipoCurso Int         @id @default(autoincrement())
+  Descripcion String      @db.VarChar(200)
+  activo      Boolean?    @default(true)
+  CatCursos   CatCursos[]
 }
 
 model CatTipoNotificacion {
@@ -604,6 +610,7 @@ model HabilidadesPuesto {
   idPuesto          Int?
   Habilidad         String?     @db.Text
   Nivel             String?     @db.Text
+  Tipo              String?     @db.VarChar(100)
   CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "HabilidadesPuesto_ibfk_1")
 
   @@index([idPuesto], map: "idPuesto")
@@ -807,13 +814,6 @@ model ProcesosSeleccion {
   comentarios         String?   @db.Text
   fechaRegistro       DateTime  @default(now()) @db.Timestamp(0)
   UsuarioRegistro     String?   @db.VarChar(45)
-}
-
-model RelCurso {
-  idRelCurso  Int      @id @default(autoincrement())
-  idCurso     Int
-  idTipoCurso Int
-  activo      Boolean? @default(true)
 }
 
 model RelModuloUsuario {

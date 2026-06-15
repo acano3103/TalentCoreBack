@@ -27,6 +27,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedCourseTypes(); /** CatTipoCurso */
             await this.seedPositionTypes(); /** CatTipoPuesto */
             await this.seedEducationLevels(); /** CatEscolaridad */
+            await this.seedSalaryLevels(); /** CatNivelesSalario */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -322,9 +323,10 @@ export class CatalogsSeedService implements OnModuleInit {
     // Seeds initial course types into the database.
     private async seedCourseTypes() {
         const courseTypes = [
-            { idTipoCurso: 1, Descripcion: 'CURSOS REQUERIDOS', activo: true },
-            { idTipoCurso: 2, Descripcion: 'CURSOS ASOCIADOS AL PUESTO', activo: true },
-            { idTipoCurso: 3, Descripcion: 'CURSOS DE DESARROLLO', activo: true },
+            { idTipoCurso: 1, Descripcion: 'CAPACITACIÓN DE INDUCCIÓN Y ONBOARDING', activo: true },
+            { idTipoCurso: 2, Descripcion: 'CAPACITACIÓN ESPECÍFICA (HARD / SOFT SKILLS)', activo: true },
+            { idTipoCurso: 3, Descripcion: 'PLAN DE CARRERA Y LIDERAZGO (UPSKILLING)', activo: true },
+            { idTipoCurso: 4, Descripcion: 'CAPACITACIÓN NORMATIVA Y DE CUMPLIMIENTO REGULATORIO (COMPLIANCE)', activo: true },
         ];
 
         for (const courseType of courseTypes) {
@@ -384,6 +386,30 @@ export class CatalogsSeedService implements OnModuleInit {
                 Descripcion = VALUES(Descripcion),
                 Activo = VALUES(Activo);
         `;
+        }
+    }
+
+    private async seedSalaryLevels() {
+        const nivelesSalario = [
+            { id: 1, nombre: 'Nivel 1', descripcion: 'Estructura Operativa / Entry Level (Junior & Semi-Senior)', activo: 1, idEmpresa: 1, minimo: 10000.00, maximo: 25000.00 },
+            { id: 2, nombre: 'Nivel 2', descripcion: 'Estructura Profesional Avanzada (Seniors & Especialistas)', activo: 1, idEmpresa: 1, minimo: 25000.00, maximo: 45000.00 },
+            { id: 3, nombre: 'Nivel 3', descripcion: 'Liderazgo Táctico / Mandos Medios Iniciales (Team Leaders & Coordinadores)', activo: 1, idEmpresa: 1, minimo: 45000.00, maximo: 70000.00 },
+            { id: 4, nombre: 'Nivel 4', descripcion: 'Estructura Estratégica / Mandos Medios Altos (Gerentes & Heads Of)', activo: 1, idEmpresa: 1, minimo: 70000.00, maximo: 95000.00 },
+            { id: 5, nombre: 'Nivel 5', descripcion: 'Estructura Ejecutiva / Alta Dirección (Directores, VP & C-Level)', activo: 1, idEmpresa: 1, minimo: 95000.00, maximo: 150000.00 }
+        ];
+
+        for (const nivel of nivelesSalario) {
+            await this.prisma.$queryRaw`
+                INSERT INTO CatNivelesSalario (IdNivelSalario, NombreNivel, Descripcion, Activo, IdEmpresa, SalarioMinimo, SalarioMaximo)
+                VALUES (${nivel.id}, ${nivel.nombre}, ${nivel.descripcion}, ${nivel.activo}, ${nivel.idEmpresa}, ${nivel.minimo}, ${nivel.maximo})
+                ON DUPLICATE KEY UPDATE 
+                    NombreNivel = VALUES(NombreNivel),
+                    Descripcion = VALUES(Descripcion),
+                    Activo = VALUES(Activo),
+                    IdEmpresa = VALUES(IdEmpresa),
+                    SalarioMinimo = VALUES(SalarioMinimo),
+                    SalarioMaximo = VALUES(SalarioMaximo);
+            `;
         }
     }
 
