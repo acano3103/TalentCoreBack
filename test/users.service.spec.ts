@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { UsersService } from '../src/users/users.service';
+import { UsersService } from '../src/modules/users/users.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { DjangoPasswordHasher } from 'src/common/utils/django-password.util';
 
 // ─── Module mocks (hoisted by Jest — prevent loading real implementations) ───
 
 jest.mock('src/prisma/prisma.service', () => ({
-  PrismaService: class MockPrismaService {},
+  PrismaService: class MockPrismaService { },
 }));
 
 jest.mock('src/common/utils/django-password.util', () => ({
@@ -19,11 +19,11 @@ jest.mock('src/common/utils/django-password.util', () => ({
 
 jest.mock('./queries/users.queries', () => ({
   UsersQueries: {
-    getUsername:   jest.fn().mockResolvedValue([{ username: 'test_user' }]),
-    getRoles:      jest.fn().mockResolvedValue([]),
+    getUsername: jest.fn().mockResolvedValue([{ username: 'test_user' }]),
+    getRoles: jest.fn().mockResolvedValue([]),
     getEnterprises: jest.fn().mockResolvedValue([]),
-    getModules:    jest.fn().mockResolvedValue([]),
-    getSites:      jest.fn().mockResolvedValue([]),
+    getModules: jest.fn().mockResolvedValue([]),
+    getSites: jest.fn().mockResolvedValue([]),
   },
 }));
 
@@ -59,15 +59,15 @@ const createDto = {
 // ─── Mock PrismaService ───────────────────────────────────────────────────────
 
 const mockPrisma = {
-  $queryRaw:    jest.fn(),
+  $queryRaw: jest.fn(),
   $transaction: jest.fn(),
   auth_user: {
     findUnique: jest.fn(),
-    create:     jest.fn(),
-    update:     jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
   },
   relUsuarioRol: {
-    create:     jest.fn(),
+    create: jest.fn(),
     updateMany: jest.fn(),
   },
 };
@@ -138,7 +138,7 @@ describe('UsersService', () => {
       mockPrisma.auth_user.findUnique.mockResolvedValue(null);
       mockPrisma.$transaction.mockImplementation(async (fn: any) => {
         const tx = {
-          auth_user:     { create: jest.fn().mockResolvedValue({ id: 1 }) },
+          auth_user: { create: jest.fn().mockResolvedValue({ id: 1 }) },
           relUsuarioRol: { create: jest.fn().mockResolvedValue({}) },
         };
         return fn(tx);
@@ -176,10 +176,10 @@ describe('UsersService', () => {
       mockPrisma.auth_user.findUnique.mockResolvedValue({ id: 1 });
       mockPrisma.$transaction.mockImplementation(async (fn: any) => {
         const tx = {
-          auth_user:     { update: jest.fn().mockResolvedValue({}) },
+          auth_user: { update: jest.fn().mockResolvedValue({}) },
           relUsuarioRol: {
             updateMany: jest.fn().mockResolvedValue({}),
-            create:     jest.fn().mockResolvedValue({}),
+            create: jest.fn().mockResolvedValue({}),
           },
         };
         return fn(tx);
@@ -215,7 +215,7 @@ describe('UsersService', () => {
       expect(result.is_active).toBe(false);
       expect(mockPrisma.auth_user.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data:  { is_active: false },
+        data: { is_active: false },
       });
     });
 

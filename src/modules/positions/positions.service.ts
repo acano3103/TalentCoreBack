@@ -26,8 +26,8 @@ export class PositionsService {
 
     private readonly logger = new Logger(PositionsService.name);
 
-    async findAll(companyId: number, page: number, search: string, limit: number) {
-        const { positions, total } = await PositionQueries.findAll(this.prisma, companyId, search, page, limit);
+    async findAll(companyId: number, page: number, search: string, limit: number, aprobada: number) {
+        const { positions, total } = await PositionQueries.findAll(this.prisma, companyId, search, page, limit, aprobada);
 
         if ((!positions || positions.length === 0) && page === 1 && !search) {
             return {
@@ -44,6 +44,42 @@ export class PositionsService {
             currentPage: page,
             totalPages: Math.ceil(total / limit) || 1,
         };
+    }
+
+    async findOne(companyId: number, positionId: number, specific: number) {
+        if (specific === 1) {
+            const validationData = await PositionQueries.findValidationDetails(this.prisma, positionId);
+            return { validationData };
+        } else {
+            const position = await this.prisma.catPuestos.findFirst({
+                where: { idEmpresa: companyId, idPuesto: positionId },
+            });
+            if (!position) throw new NotFoundException('Puesto no encontrado');
+
+            const languages = await this.prisma.idiomasPuesto.findMany({
+                where: { idPuesto: positionId },
+            });
+            const schedules = await this.prisma.horariosPuesto.findMany({
+                where: { idPuesto: positionId },
+            });
+            const documents = await this.prisma.documentosPuesto.findMany({
+                where: { idPuesto: positionId },
+            });
+            const functions = await this.prisma.funcionesPuesto.findMany({
+                where: { idPuesto: positionId },
+            });
+            const competencies = await this.prisma.competenciasPuesto.findMany({
+                where: { idPuesto: positionId },
+            });
+            const skills = await this.prisma.habilidadesPuesto.findMany({
+                where: { idPuesto: positionId },
+            });
+            const courses = await this.prisma.relPuestoCurso.findMany({
+                where: { idPuesto: positionId },
+            });
+
+            return { position, languages, schedules, documents, functions, competencies, skills, courses };
+        }
     }
 
     async create(companyId: number, activeUser: ActiveUserDto, dto: CreatePositionDto) {
@@ -69,7 +105,7 @@ export class PositionsService {
                     idJefeInmediato: languages?.idJefeInmediato ? Number(languages.idJefeInmediato) : null,
                     idUsuarioRegistro: user.uuid,
                     FechaRegistro: new Date(),
-                    Activo: false,
+                    Activo: true,
                     aprobada: false,
                     pendiente: true
                 },
@@ -173,6 +209,134 @@ export class PositionsService {
         });
     }
 
+    async update(companyId: number, positionId: number, activeUser: ActiveUserDto, data: CreatePositionDto) {
+        const user = await this.prisma.auth_user.findFirst({ where: { id: activeUser.id } });
+        if (!user) throw new BadRequestException('Tu usuario actual no existe');
+
+        return await this.prisma.$transaction(async (tx) => {
+            const { generalInfo, languages } = data;
+
+            const puestoExistente = await tx.catPuestos.findFirst({ where: { idPuesto: positionId, idEmpresa: companyId } });
+            if (!puestoExistente) throw new NotFoundException('El puesto solicitado no existe en esta empresa');
+
+            await tx.catPuestos.update({
+                where: { idPuesto: positionId },
+                data: {
+                    NombrePuesto: generalInfo.nombrePuesto.trim(),
+                    idTipoPuesto: Number(generalInfo.idTipoPuesto),
+                    idArea: Number(generalInfo.idArea),
+                    idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,
+                    idModalidad: Number(generalInfo.idModalidad),
+                    idNivelEstudios: generalInfo.idNivelEstudios ? Number(generalInfo.idNivelEstudios) : null,
+                    DescripcionPuesto: languages.description || null,
+                    IdNivelSalario: generalInfo.idNivelSalario ? Number(generalInfo.idNivelSalario) : null,
+                    DisponibilidadViajar: languages?.disponibilidadViajar ? true : false,
+                    idJefeInmediato: languages?.idJefeInmediato ? Number(languages.idJefeInmediato) : null,
+                    idUsuarioRegistro: user.uuid,
+                }
+            });
+
+            // =========================================================================
+            // APLICACIÓN DE LA ESTRATEGIA A: BORRADO Y REINSERCIÓN DE RELACIONES HIJAS
+            // =========================================================================
+
+            // === RELACIÓN: IDIOMAS REQUERIDOS ===
+            await tx.idiomasPuesto.deleteMany({ where: { idPuesto: positionId } });
+            if (languages?.idiomas && languages.idiomas.length > 0) {
+                await tx.idiomasPuesto.createMany({
+                    data: languages.idiomas.map((idIdioma) => ({
+                        idPuesto: positionId,
+                        idIdioma: Number(idIdioma),
+                    })),
+                });
+            }
+
+            // === RELACIÓN: HORARIOS DEL PUESTO ===
+            await tx.horariosPuesto.deleteMany({ where: { idPuesto: positionId } });
+            if (data.schedules?.turnos && data.schedules.turnos.length > 0) {
+                const turnosData = data.schedules.turnos.flatMap((turno) => {
+                    const fechaBase = '1970-01-01';
+                    return turno.days.map((dia) => ({
+                        idPuesto: positionId,
+                        DiaSemana: dia,
+                        HoraEntrada: new Date(`${fechaBase}T${turno.start}:00Z`),
+                        HoraSalida: new Date(`${fechaBase}T${turno.end}:00Z`),
+                    }));
+                });
+                await tx.horariosPuesto.createMany({ data: turnosData });
+            }
+
+            // === RELACIÓN: DOCUMENTOS SELECCIONADOS ===
+            await tx.documentosPuesto.deleteMany({ where: { idPuesto: positionId } });
+            if (data.documents?.documentosSeleccionados && data.documents.documentosSeleccionados.length > 0) {
+                await tx.documentosPuesto.createMany({
+                    data: data.documents.documentosSeleccionados.map((doc) => ({
+                        idPuesto: positionId,
+                        idDocumento: doc.idDocumento,
+                        esObligatorio: doc.Obligatorio === 1,
+                    })),
+                });
+            }
+
+            // === RELACIÓN: FUNCIONES / ACTIVIDADES CLAVE ===
+            await tx.funcionesPuesto.deleteMany({ where: { idPuesto: positionId } });
+            if (data.functions?.actividades && data.functions.actividades.length > 0) {
+                await tx.funcionesPuesto.createMany({
+                    data: data.functions.actividades.map((actividad) => ({
+                        idPuesto: positionId,
+                        Funcion: actividad.trim(),
+                    })),
+                });
+            }
+
+            // === RELACIÓN: COMPETENCIAS CONDUCTUALES ===
+            await tx.competenciasPuesto.deleteMany({ where: { idPuesto: positionId } });
+            if (data.competencies?.competencias && data.competencies.competencias.length > 0) {
+                await tx.competenciasPuesto.createMany({
+                    data: data.competencies.competencias.map((competencia) => ({
+                        idPuesto: positionId,
+                        Competencia: competencia.trim(),
+                    })),
+                });
+            }
+
+            // === RELACIÓN: HABILIDADES (DURAS Y BLANDAS UNIFICADAS) ===
+            await tx.habilidadesPuesto.deleteMany({ where: { idPuesto: positionId } });
+            const duras = data.skills?.duras || [];
+            const blandas = data.skills?.blandas || [];
+            const todasLasHabilidades = [
+                ...duras.map(h => ({ name: h.name, level: h.level, tipo: "DURA" })),
+                ...blandas.map(h => ({ name: h.name, level: h.level, tipo: "BLANDA" }))
+            ];
+            if (todasLasHabilidades.length > 0) {
+                await tx.habilidadesPuesto.createMany({
+                    data: todasLasHabilidades.map((hab) => ({
+                        idPuesto: positionId,
+                        Habilidad: hab.name.trim(),
+                        Nivel: hab.level,
+                        Tipo: hab.tipo,
+                    })),
+                });
+            }
+
+            // === RELACIÓN: PLANES DE CAPACITACIÓN / CURSOS ===
+            await tx.relPuestoCurso.deleteMany({ where: { idPuesto: positionId } });
+            if (data.courses?.cursosSeleccionados && data.courses.cursosSeleccionados.length > 0) {
+                await tx.relPuestoCurso.createMany({
+                    data: data.courses.cursosSeleccionados.map((curso) => ({
+                        idPuesto: positionId,
+                        idCurso: curso.idCurso,
+                        idTipoCurso: curso.idTipoCourse,
+                        activo: true,
+                        fechaRegistro: new Date()
+                    })),
+                });
+            }
+
+            return { message: "Puesto actualizado exitosamente" };
+        });
+    }
+
     async changeStatus(companyId: number, id: number, active: boolean) {
         const positionExists = await this.prisma.catPuestos.findFirst({
             where: {
@@ -242,6 +406,45 @@ export class PositionsService {
         });
 
         return { areas, positionTypes, modalities, educationLevels, hiringTypes, salaryLevels, languages, positions, documents, courseTypes, courses };
+    }
+
+    async approveOrReject(companyId: number, positionId: number, dto: ValidatePositionDto) {
+        try {
+            const position = await PositionQueries.getPositionInfo(this.prisma, positionId);
+            if (!position) throw new NotFoundException('No se encontró el puesto');
+
+            const { positionName, email, phone, userUuid, name } = position;
+            const comment = dto.comment || '';
+            const action = dto.action;
+            const subject = action === 'aprobar' ? '✅ Puesto Aprobado - TalentCore' : '❌ Puesto Rechazado - TalentCore';
+
+            if (action === 'aprobar') {
+                await PositionQueries.approvePosition(this.prisma, positionId, comment);
+            } else {
+                await PositionQueries.rejectPosition(this.prisma, positionId, comment);
+            }
+
+            await this.notifications.notify({
+                userUuid: userUuid,
+                notificationTypeCode: 'POSITION_STATUS_UPDATE',
+                to: email,
+                phone: phone,
+                subject: subject,
+                context: {
+                    name,
+                    positionName,
+                    comment,
+                    action,
+                    isApproved: action === 'aprobar'
+                }
+            });
+
+            return { message: `Requisición ${action == 'aprobar' ? 'aprobada' : 'rechazada'} correctamente` };
+
+        } catch (error) {
+            this.logger.error('Error en aprobar/rechazar puesto:', error);
+            throw new InternalServerErrorException(error.message);
+        }
     }
 
 
@@ -348,45 +551,6 @@ export class PositionsService {
         } catch (error) {
             console.error('Error en servicio:', error);
             throw new InternalServerErrorException('Error al procesar postulantes');
-        }
-    }
-
-    async approveOrReject(companyId: number, positionId: number, dto: ValidatePositionDto) {
-        try {
-            const position = await PositionQueries.getPositionInfo(this.prisma, positionId);
-            if (!position) throw new NotFoundException('No se encontró el puesto');
-
-            const { positionName, email, phone, userUuid, name } = position;
-            const comment = dto.comment || '';
-            const action = dto.action;
-            const subject = action === 'aprobar' ? '✅ Puesto Aprobado - TalentCore' : '❌ Puesto Rechazado - TalentCore';
-
-            if (action === 'aprobar') {
-                await PositionQueries.approvePosition(this.prisma, positionId, comment);
-            } else {
-                await PositionQueries.rejectPosition(this.prisma, positionId, comment);
-            }
-
-            await this.notifications.notify({
-                userUuid: userUuid,
-                notificationTypeCode: 'POSITION_STATUS_UPDATE',
-                to: email,
-                phone: phone,
-                subject: subject,
-                context: {
-                    name,
-                    positionName,
-                    comment,
-                    action,
-                    isApproved: action === 'aprobar'
-                }
-            });
-
-            return { message: `Requisición ${action == 'aprobar' ? 'aprobada' : 'rechazada'} correctamente` };
-
-        } catch (error) {
-            this.logger.error('Error en aprobar/rechazar puesto:', error);
-            throw new InternalServerErrorException(error.message);
         }
     }
 }

@@ -59,6 +59,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 1, code: 'EMAIL', description: 'Notificaciones por correo electrónico', activo: true },
             { id: 2, code: 'WHATSAPP', description: 'Notificaciones por WhatsApp', activo: true },
             { id: 3, code: 'SMS', description: 'Notificaciones por mensaje de texto', activo: true },
+            { id: 4, code: 'SOCKETS', description: 'Notificaciones en tiempo real dentro de la plataforma', activo: true },
         ]
 
         for (const channel of channels) {

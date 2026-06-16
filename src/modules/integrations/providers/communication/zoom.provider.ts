@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ConnectIntegrationDto } from 'src/integrations/dto/connect-integration.dto';
+import { ConnectIntegrationDto } from 'src/modules/integrations/dto/connect-integration.dto';
 import { CommunicationMeetingResponse, ICommunicationProvider } from './interfaces/communication.interface';
 import { EncryptionService } from 'src/common/utils/encryption.util';
 import { format } from 'date-fns';
-import { ProgramInterviewDto } from 'src/interviews/dto/program-interview.dto';
+import { ProgramInterviewDto } from 'src/modules/interviews/dto/program-interview.dto';
 
 @Injectable()
 export class ZoomProvider implements ICommunicationProvider {

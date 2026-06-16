@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthDataService } from './queries/auth.queries';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { PassportModule } from '@nestjs/passport';
-import { UsersModule } from 'src/users/users.module';
+import { UsersModule } from 'src/modules/users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { CaptchaService } from './providers/captcha.service';
 

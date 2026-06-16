@@ -1,7 +1,7 @@
 import { PrismaService } from 'src/prisma/prisma.service';
 
 export class PositionQueries {
-  static async findAll(prisma: PrismaService, companyId: number, search: string, page: number, limit: number) {
+  static async findAll(prisma: PrismaService, companyId: number, search: string, page: number, limit: number, aprobada: number) {
     const skip = (page - 1) * limit;
 
     const searchQuery = search ? `%${search}%` : '%';
@@ -21,7 +21,9 @@ export class PositionQueries {
           ns.NombreNivel AS NivelSalario,
           ns.SalarioMinimo,
           ns.SalarioMaximo,
-          p.Activo
+          p.Activo,
+          p.aprobada as Aprovada,
+          p.pendiente as Pendiente
         FROM CatPuestos p
         LEFT JOIN CatAreas a ON a.idArea = p.idArea
         LEFT JOIN CatSites s ON s.idSite = a.idSite
@@ -32,8 +34,7 @@ export class PositionQueries {
         LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
         LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
         WHERE ce.idEmpresa = ${companyId}
-          AND p.aprobada = 1
-          -- Filtro de búsqueda inteligente por nombre o descripción del puesto
+          AND p.aprobada = ${aprobada}
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
         ORDER BY p.idPuesto DESC
         LIMIT ${limit} OFFSET ${skip};
@@ -46,7 +47,7 @@ export class PositionQueries {
         LEFT JOIN CatSites s ON s.idSite = a.idSite
         LEFT JOIN CatEmpresas ce ON ce.idEmpresa = s.idEmpresa
         WHERE ce.idEmpresa = ${companyId}
-          AND p.aprobada = 1
+          AND p.aprobada = ${aprobada}
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery});
       ` as Promise<[{ total: bigint | number }]>
     ]);
@@ -55,6 +56,87 @@ export class PositionQueries {
       positions: data,
       total: Number(total || 0)
     };
+  }
+
+  static async findValidationDetails(prisma: PrismaService, positionId: number) {
+    const [idiomas, documentos, cursos, funciones, competencias, habilidades, horarios, [maestro]] = await Promise.all([
+      prisma.$queryRaw`
+      SELECT i.idRelIdioma, i.idIdioma, c.Descripcion AS nombreIdioma, i.Nivel
+      FROM IdiomasPuesto i
+      INNER JOIN CatIdiomas c ON c.idIdioma = i.idIdioma
+      WHERE i.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT d.idDocPuesto, d.idDocumento, c.Descripcion AS nombreDocumento, d.esObligatorio
+      FROM DocumentosPuesto d
+      INNER JOIN CatDocumentos c ON c.IdDocumento = d.idDocumento
+      WHERE d.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT r.idRelPuestoCurso, r.idCurso, c.Descripcion AS nombreCurso, r.idTipoCurso, t.Descripcion AS nombreTipoCurso
+      FROM RelPuestoCurso r
+      INNER JOIN CatCursos c ON c.idCursos = r.idCurso
+      INNER JOIN CatTipoCurso t ON t.idTipoCurso = r.idTipoCurso
+      WHERE r.idPuesto = ${positionId} AND r.activo = 1;
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT f.idFuncionPuesto, f.Funcion 
+      FROM FuncionesPuesto f 
+      WHERE f.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT c.idCompetenciaPuesto, c.Competencia 
+      FROM CompetenciasPuesto c 
+      WHERE c.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT h.idHabilidadPuesto, h.Habilidad, h.Nivel, h.Tipo 
+      FROM HabilidadesPuesto h 
+      WHERE h.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT ho.idHorario, ho.DiaSemana, ho.HoraEntrada, ho.HoraSalida 
+      FROM HorariosPuesto ho 
+      WHERE ho.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT 
+        p.idPuesto,
+        p.NombrePuesto,
+        p.DescripcionPuesto,
+        p.aprobada AS Aprobada,
+        p.pendiente AS Pendiente,
+        p.DisponibilidadViajar,
+        p.idJefeInmediato,
+        a.Descripcion AS nombreArea,
+        tp.Descripcion AS nombreTipoPuesto,
+        tc.Descripcion AS nombreTipoContratacion,
+        m.Descripcion AS nombreModalidad,
+        e.Descripcion AS nombreEscolaridad,
+        ns.NombreNivel AS nombreNivelSalario,
+        ns.SalarioMinimo,               -- 🚀 Agregado al SELECT
+        ns.SalarioMaximo,               -- 🚀 Agregado al SELECT
+        j.NombrePuesto AS nombreJefeInmediato
+      FROM CatPuestos p
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+      LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
+      LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
+      LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
+      LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+      LEFT JOIN CatPuestos j ON j.idPuesto = p.idJefeInmediato
+      WHERE p.idPuesto = ${positionId};
+    ` as Promise<any[]>
+    ]);
+
+    return { maestro: maestro || null, idiomas, documentos, cursos, funciones, competencias, habilidades, horarios };
   }
 
   static async getPositionInfo(prisma: PrismaService, positionId: number) {
@@ -66,7 +148,7 @@ export class PositionQueries {
                 u.uuid AS userUuid, 
                 CONCAT(u.first_name, ' ', u.last_name) AS name
             FROM CatPuestos p
-            JOIN auth_user u ON u.username = p.UsuarioRegistro
+            JOIN auth_user u ON u.uuid = p.idUsuarioRegistro COLLATE utf8mb4_unicode_ci
             WHERE p.idPuesto = ${positionId}
             LIMIT 1
         `;
@@ -78,6 +160,7 @@ export class PositionQueries {
             UPDATE CatPuestos
             SET aprobada = 1,
                 Activo = 1,
+                pendiente = 0,
                 comentarios = ${comment}
             WHERE idPuesto = ${positionId}
         `;

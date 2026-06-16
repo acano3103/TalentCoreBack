@@ -11,5 +11,8 @@ export const TEMPLATE_MAP = {
         'POSITION_STATUS_UPDATE': 'puesto_estado',
         'INTERVIEW_SCHEDULED': 'whatsapp_entrevista',
         'CREDENTIALS_CREATED': 'documentos_requeridos'
+    },
+    SOCKETS: {
+        'POSITION_STATUS_UPDATE': 'puesto_estado_stream',
     }
 };

@@ -1,4 +1,4 @@
-import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe, Post, Delete } from '@nestjs/common';
+import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe, Post, Delete, Put } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -25,10 +25,11 @@ export class PositionsController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+        @Query('aprobada', new DefaultValuePipe(1), ParseIntPipe) aprobada: number,
         @Query('search') search?: string,
     ) {
         const querySearch = search || '';
-        return this.service.findAll(companyId, page, querySearch, limit);
+        return this.service.findAll(companyId, page, querySearch, limit, aprobada);
     }
 
     @Get('/catalogs')
@@ -41,6 +42,35 @@ export class PositionsController {
         @Param('companyId', ParseIntPipe) companyId: number,
     ) {
         return this.service.getCatalogs(companyId);
+    }
+
+    @Get(':positionId')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get a position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async findOne(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('positionId', ParseIntPipe) positionId: number,
+        @Query('specific', new DefaultValuePipe(1), ParseIntPipe) specific: number,
+    ) {
+        return this.service.findOne(companyId, positionId, specific);
+    }
+
+    @Put(':positionId')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Update a position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position updated successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async update(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('positionId', ParseIntPipe) positionId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Body() data: CreatePositionDto,
+    ) {
+        return this.service.update(companyId, positionId, activeUser, data);
     }
 
     @Post()
@@ -67,6 +97,21 @@ export class PositionsController {
         @Param('positionId', ParseIntPipe) positionId: number,
     ) {
         return this.service.changeStatus(companyId, positionId, false);
+    }
+
+    @UseGuards(JwtAuthGuard)//@UseGuards(JwtAuthGuard, ModulesGuard)
+    //@Modules('Administrador')
+    @Patch(':positionId')
+    @ApiOperation({ summary: 'Validate a position', description: 'Validates a position and public it.' })
+    @ApiResponse({ status: 201, description: 'Position successfully validated.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    async approveOrReject(
+        @Param('companyId') companyId: number,
+        @Param('positionId') positionId: number,
+        @Body() dto: ValidatePositionDto
+    ) {
+        return this.service.approveOrReject(companyId, positionId, dto);
     }
 
     @Patch(':positionId/reactivate')
@@ -119,20 +164,5 @@ export class PositionsController {
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     async getSummary(@Param('positionId') positionId: string) {
         return await this.service.getPostulantsSummary(parseInt(positionId));
-    }
-
-    @UseGuards(JwtAuthGuard)//@UseGuards(JwtAuthGuard, ModulesGuard)
-    //@Modules('Administrador')
-    @Patch(':positionId')
-    @ApiOperation({ summary: 'Validate a position', description: 'Validates a position and public it.' })
-    @ApiResponse({ status: 201, description: 'Position successfully validated.' })
-    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
-    async approveOrReject(
-        @Param('companyId') companyId: number,
-        @Param('positionId') positionId: number,
-        @Body() dto: ValidatePositionDto
-    ) {
-        return this.service.approveOrReject(companyId, positionId, dto);
     }
 }

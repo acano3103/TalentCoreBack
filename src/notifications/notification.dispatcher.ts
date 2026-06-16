@@ -4,13 +4,15 @@ import { MailProvider } from "./providers/mail/mail.provider";
 import { WhatsappProvider } from "./providers/whatsapp/whatsapp.provider";
 import { NotificationOptions } from "./interfaces/message.interface";
 import { TEMPLATE_MAP } from './maps/template-map';
+import { WebsocketProvider } from "./providers/websocket/websocket.provider";
 
 @Injectable()
 export class NotificationDispatcher {
     constructor(
         private readonly prisma: PrismaService,
         private readonly mail: MailProvider,
-        private readonly whatsapp: WhatsappProvider
+        private readonly whatsapp: WhatsappProvider,
+        private readonly websocket: WebsocketProvider
     ) { }
 
     async notify(options: NotificationOptions) {
@@ -54,7 +56,7 @@ export class NotificationDispatcher {
         let validChannels;
 
         if (prefs.length === 0) {
-            const DEFAULT_CHANNELS = ['EMAIL', 'WHATSAPP'];
+            const DEFAULT_CHANNELS = ['EMAIL', 'WHATSAPP', 'SOCKETS'];
             validChannels = allowedChannels.filter(c => {
                 const code = c.CatCanalesNotificaciones?.code;
                 return code && DEFAULT_CHANNELS.includes(code);
@@ -80,6 +82,7 @@ export class NotificationDispatcher {
         const providers = {
             EMAIL: this.mail,
             WHATSAPP: this.whatsapp,
+            SOCKETS: this.websocket,
         };
 
         await Promise.all(deliveries.map(async (delivery) => {
