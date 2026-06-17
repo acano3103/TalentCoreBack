@@ -22,7 +22,6 @@ export class PatronalRecordsService {
         FROM CatRegistrosPatronales rp
         LEFT JOIN CatSites s ON rp.idRegistroPatronal = s.idRegistroPatronal AND s.Activo = 1
         WHERE rp.idEmpresa = ${idEmpresa} 
-          AND rp.Activo = 1
           AND (${query} = '' OR rp.RegistroPatronal LIKE ${searchPattern} OR rp.RazonSocial LIKE ${searchPattern})
         GROUP BY rp.idRegistroPatronal
         ORDER BY rp.idRegistroPatronal DESC
@@ -33,7 +32,6 @@ export class PatronalRecordsService {
         SELECT COUNT(*) AS total
         FROM CatRegistrosPatronales rp
         WHERE rp.idEmpresa = ${idEmpresa} 
-          AND rp.Activo = 1
           AND (${query} = '' OR rp.RegistroPatronal LIKE ${searchPattern} OR rp.RazonSocial LIKE ${searchPattern});
     `;
         const total = countResult[0]?.total ? Number(countResult[0].total) : 0;
@@ -62,7 +60,6 @@ export class PatronalRecordsService {
         };
     }
 
-    // Crear un nuevo registro patronal
     async create(idEmpresa: number, data: {
         registroPatronal: string;
         razonSocial: string;
@@ -81,7 +78,6 @@ export class PatronalRecordsService {
         });
     }
 
-    // Actualizar un registro patronal existente
     async update(idRegistroPatronal: number, data: {
         registroPatronal?: string;
         razonSocial?: string;
@@ -99,11 +95,17 @@ export class PatronalRecordsService {
         });
     }
 
-    // Borrado lógico (Desactivar)
-    async remove(idRegistroPatronal: number) {
-        return this.prisma.catRegistrosPatronales.update({
-            where: { idRegistroPatronal },
-            data: { Activo: false },
+    async changeStatus(companyId: number, id: number, active: boolean) {
+
+        await this.prisma.catRegistrosPatronales.update({
+            where: { idRegistroPatronal: id, idEmpresa: companyId },
+            data: {
+                Activo: active
+            },
         });
+
+        return {
+            message: active ? 'Registro patronal activado correctamente' : 'Registro patronal desactivado correctamente'
+        };
     }
 }

@@ -6,7 +6,7 @@
     "deleteOutDir": true,
     "assets": [
       {
-        "include": "notifications/providers/mail/templates/**/*",
+        "include": "modules/notifications/providers/mail/templates/**/*",
         "outDir": "dist"
       },
       {

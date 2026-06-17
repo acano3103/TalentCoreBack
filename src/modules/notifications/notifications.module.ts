@@ -30,7 +30,7 @@ import { NotificationsController } from './notifications.controller';
                 },
                 defaults: { from: config.get('MAIL_FROM') },
                 template: {
-                    dir: join(process.cwd(), 'dist/notifications/providers/mail/templates'),
+                    dir: join(process.cwd(), 'dist/modules/notifications/providers/mail/templates'),
                     adapter: {
                         compile: (mail: any, callback: any, mailerOptions: any) => {
                             const templateDir = mailerOptions?.template?.dir || join(__dirname, 'templates');

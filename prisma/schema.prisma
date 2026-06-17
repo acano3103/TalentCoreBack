@@ -361,9 +361,9 @@ model CatSites {
   idRegistroPatronal  Int?
   ZonaFronteriza      Boolean?          @default(false)
   Activo              Boolean?          @default(true)
+  FechaRegistro       DateTime?         @db.DateTime(0)
   CatAreas            CatAreas[]
   CatTiposUbicacion   CatTiposUbicacion @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
-  DomicilioSite       DomicilioSite?
 
   @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
 }
@@ -515,21 +515,6 @@ model DomicilioEmpresas {
   CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "DomicilioEmpresas_ibfk_1")
 
   @@index([idEmpresa], map: "idEmpresa")
-}
-
-model DomicilioSite {
-  idDomicilioSite Int       @id @default(autoincrement())
-  idSite          Int?      @unique(map: "UQ_DomicilioSite_idSite")
-  codigo_postal   String?   @db.VarChar(10)
-  colonia         String?   @db.VarChar(150)
-  municipio       String?   @db.VarChar(150)
-  estado          String?   @db.VarChar(150)
-  calle           String?   @db.VarChar(200)
-  numero_exterior String?   @db.VarChar(20)
-  numero_interior String?   @db.VarChar(20)
-  activo          Boolean?  @default(true)
-  fecha_registro  DateTime? @db.DateTime(0)
-  CatSites        CatSites? @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_DomicilioSite_CatSites")
 }
 
 model EntrevistaCriteriosEvaluacion {

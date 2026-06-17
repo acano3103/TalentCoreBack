@@ -19,26 +19,17 @@ export class LocationsService {
         if (query) {
             whereCondition.OR = [
                 { Descripcion: { contains: query } },
-                {
-                    DomicilioSite: {
-                        OR: [
-                            { estado: { contains: query } },
-                            { municipio: { contains: query } },
-                            { colonia: { contains: query } },
-                            { calle: { contains: query } },
-                            { codigo_postal: { contains: query } }
-                        ]
-                    }
-                }
+                { estado: { contains: query } },
+                { municipio: { contains: query } },
+                { colonia: { contains: query } },
+                { calle: { contains: query } },
+                { codigo_postal: { contains: query } }
             ];
         }
 
         const [sites, total] = await Promise.all([
             this.prismaService.catSites.findMany({
                 where: whereCondition,
-                include: {
-                    DomicilioSite: true
-                },
                 skip: skip,
                 take: limit,
                 orderBy: { idSite: 'desc' },
@@ -55,23 +46,8 @@ export class LocationsService {
             };
         }
 
-        const flattenedLocations = sites.map((site) => {
-            const { DomicilioSite, ...siteData } = site;
-            return {
-                ...siteData,
-                idDomicilioSite: DomicilioSite?.idDomicilioSite || null,
-                codigo_postal: DomicilioSite?.codigo_postal || '—',
-                colonia: DomicilioSite?.colonia || '—',
-                municipio: DomicilioSite?.municipio || '—',
-                estado: DomicilioSite?.estado || '—',
-                calle: DomicilioSite?.calle || '—',
-                numero_exterior: DomicilioSite?.numero_exterior || '—',
-                numero_interior: DomicilioSite?.numero_interior || '—',
-            };
-        });
-
         return {
-            locations: flattenedLocations,
+            locations: sites,
             total,
             currentPage: page,
             totalPages: Math.ceil(total / limit) || 1,
@@ -85,43 +61,34 @@ export class LocationsService {
         if (!companyExists) throw new NotFoundException('La empresa especificada no existe.');
 
         try {
-            const result = await this.prismaService.$transaction(async (tx) => {
-                const nuevoSite = await tx.catSites.create({
-                    data: {
-                        idEmpresa: companyId,
-                        Descripcion: dto.descripcion,
-                        Activo: true,
-                    },
-                });
-
-                const nuevoDomicilio = await tx.domicilioSite.create({
-                    data: {
-                        idSite: nuevoSite.idSite,
-                        codigo_postal: dto.codigoPostal,
-                        colonia: dto.colonia,
-                        municipio: dto.municipio,
-                        estado: dto.estado,
-                        calle: dto.calle,
-                        numero_exterior: dto.noExt,
-                        numero_interior: dto.noInt,
-                        activo: true,
-                        fecha_registro: new Date(),
-                    },
-                });
-
-                return { nuevoSite, nuevoDomicilio };
-            });
-            return {
-                success: true,
-                message: 'Ubicación creada correctamente desde el ORM',
+            await this.prismaService.catSites.create({
                 data: {
-                    idSite: result.nuevoSite.idSite
-                }
-            };
-        }
-        catch (error) {
-            this.logger.error(`Error al crear la ubicación en Prisma: ${error.message}`);
-            throw new InternalServerErrorException('Error interno al registrar la ubicación y su domicilio.');
+                    idEmpresa: companyId,
+                    Descripcion: dto.descripcion,
+                    idTipoUbicacion: dto.idTipoUbicacion,
+                    EsPrincipal: dto.esPrincipal === 1,
+                    CodigoPostal: dto.codigoPostal,
+                    Colonia: dto.colonia,
+                    MunicipioDelegacion: dto.municipio,
+                    Estado: dto.estado,
+                    Calle: dto.calle,
+                    NoExterior: dto.noExt,
+                    NoInterior: dto.noInt || null,
+                    Pais: dto.pais,
+                    Latitud: dto.latitud,
+                    Longitud: dto.longitud,
+                    idRegistroPatronal: dto.idRegistroPatronal || null,
+                    ZonaFronteriza: dto.zonaFronteriza === 1,
+                    Activo: true,
+                    FechaRegistro: new Date(),
+                },
+            });
+
+            return { message: 'Ubicación creada correctamente' };
+
+        } catch (error) {
+            this.logger.error(`Error al crear la ubicación: ${error}`);
+            throw new InternalServerErrorException('Error interno al registrar la ubicación.');
         }
     }
 
@@ -131,25 +98,11 @@ export class LocationsService {
                 idSite: locationId,
                 idEmpresa: companyId,
             },
-            include: {
-                DomicilioSite: true,
-            },
         });
 
         if (!location) throw new NotFoundException('La ubicación especificada no existe.');
 
-        const { DomicilioSite, ...locationData } = location;
-        return {
-            ...locationData,
-            idDomicilioSite: DomicilioSite?.idDomicilioSite || null,
-            codigo_postal: DomicilioSite?.codigo_postal || '—',
-            colonia: DomicilioSite?.colonia || null,
-            municipio: DomicilioSite?.municipio || null,
-            estado: DomicilioSite?.estado || null,
-            calle: DomicilioSite?.calle || '—',
-            numero_exterior: DomicilioSite?.numero_exterior || '',
-            numero_interior: DomicilioSite?.numero_interior || '',
-        };
+        return location;
     }
 
     async update(companyId: number, locationId: number, dto: UpdateLocationDto) {
@@ -159,42 +112,33 @@ export class LocationsService {
                 idEmpresa: companyId,
             },
         });
+
         if (!locationExists) throw new NotFoundException('La ubicación especificada no existe para esta empresa.');
 
         try {
-            await this.prismaService.$transaction(async (tx) => {
-                await tx.catSites.update({
-                    where: { idSite: locationId },
-                    data: {
-                        Descripcion: dto.descripcion,
-                        DomicilioSite: {
-                            upsert: {
-                                create: {
-                                    codigo_postal: dto.codigo_postal,
-                                    estado: dto.estado,
-                                    municipio: dto.municipio,
-                                    colonia: dto.colonia,
-                                    calle: dto.calle,
-                                    numero_exterior: dto.numero_exterior,
-                                    numero_interior: dto.numero_interior,
-                                    activo: true,
-                                },
-                                update: {
-                                    codigo_postal: dto.codigo_postal,
-                                    estado: dto.estado,
-                                    municipio: dto.municipio,
-                                    colonia: dto.colonia,
-                                    calle: dto.calle,
-                                    numero_exterior: dto.numero_exterior,
-                                    numero_interior: dto.numero_interior,
-                                },
-                            },
-                        },
-                    },
-                });
+            await this.prismaService.catSites.update({
+                where: { idSite: locationId },
+                data: {
+                    Descripcion: dto.descripcion,
+                    idTipoUbicacion: dto.idTipoUbicacion,
+                    EsPrincipal: dto.esPrincipal === 1,
+                    CodigoPostal: dto.codigoPostal,
+                    Estado: dto.estado,
+                    MunicipioDelegacion: dto.municipio,
+                    Colonia: dto.colonia,
+                    Calle: dto.calle,
+                    NoExterior: dto.noExt,
+                    NoInterior: dto.noInt || null,
+                    Pais: dto.pais,
+                    Latitud: dto.latitud,
+                    Longitud: dto.longitud,
+                    idRegistroPatronal: dto.idRegistroPatronal || null,
+                    ZonaFronteriza: dto.zonaFronteriza === 1,
+                },
             });
 
-            return { message: 'Ubicación y domicilio actualizados correctamente' };
+            return { success: true, message: 'Ubicación actualizada correctamente' };
+
         } catch (error) {
             this.logger.error(`Error al actualizar la ubicación ${locationId}: ${error.message}`);
             throw new InternalServerErrorException('Error interno al intentar guardar los cambios de la ubicación.');

@@ -1,6 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CatalogDto } from './dto/catalog.dto';
 
 /** Catálogos disponibles vía el endpoint genérico */
 export type CatalogKey =
@@ -11,13 +10,15 @@ export type CatalogKey =
   | 'areas'
   | 'tipos-contratacion'
   | 'modalidades'
-  | 'centro-costos';
+  | 'centro-costos'
+  | 'registros-patronales'
+  | 'tipos-ubicaciones';
 
 @Injectable()
 export class CatalogsService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async getCatalog(catalogDto: CatalogDto, nombre: CatalogKey) {
+  async getCatalog(companyId: number, nombre: CatalogKey) {
     switch (nombre) {
 
       case 'roles':
@@ -35,16 +36,14 @@ export class CatalogsService {
         });
 
       case 'sites':
-        if (catalogDto.companyId) {
+        if (companyId) {
           return this.prisma.catSites.findMany({
-            where: { Activo: true, idEmpresa: catalogDto.companyId },
-            select: { idSite: true, Descripcion: true, Activo: true },
+            where: { Activo: true, idEmpresa: companyId },
             orderBy: { Descripcion: 'asc' },
           });
         } else {
           return this.prisma.catSites.findMany({
             where: { Activo: true },
-            select: { idSite: true, Descripcion: true, Activo: true },
             orderBy: { Descripcion: 'asc' },
           });
         }
@@ -78,9 +77,9 @@ export class CatalogsService {
         });
 
       case 'centro-costos':
-        if (catalogDto.companyId) {
+        if (companyId) {
           return this.prisma.catCentroCostos.findMany({
-            where: { Activo: true, idEmpresa: catalogDto.companyId },
+            where: { Activo: true, idEmpresa: companyId },
             select: { idCentroCostos: true, Codigo: true, Descripcion: true, PresupuestoAnual: true, PresupuestoEjecutado: true, Activo: true },
             orderBy: { Descripcion: 'asc' },
           });
@@ -92,9 +91,21 @@ export class CatalogsService {
           });
         }
 
+      case 'registros-patronales':
+        return this.prisma.catRegistrosPatronales.findMany({
+          where: { idEmpresa: companyId, Activo: true },
+          orderBy: { idRegistroPatronal: 'asc' },
+        });
+
+      case 'tipos-ubicaciones':
+        return this.prisma.catTiposUbicacion.findMany({
+          where: { Activo: true },
+          orderBy: { idTipoUbicacion: 'asc' },
+        });
+
       default:
         throw new BadRequestException(
-          `Catálogo "${nombre}" no reconocido. Valores válidos: roles, empresas, sites, modulos, areas, tipos-contratacion, modalidades`,
+          `Catálogo "${nombre}" no reconocido. Valores válidos: roles, empresas, sites, modulos, areas, tipos-contratacion, modalidades, centro-costos, registros-patronales`,
         );
     }
   }

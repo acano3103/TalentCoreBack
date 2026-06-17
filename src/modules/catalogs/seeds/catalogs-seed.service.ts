@@ -94,21 +94,25 @@ export class CatalogsSeedService implements OnModuleInit {
     private async seedNotificationTypeChannels() {
         const typeChannels = [
             // --- 1. 2FA (Verificación de dos pasos) ---
-            { id: 1, notification_type_id: 1, channel_id: 1, enabled: false },
-            { id: 2, notification_type_id: 1, channel_id: 2, enabled: true },
-            { id: 3, notification_type_id: 1, channel_id: 3, enabled: true },
+            { id: 1, notification_type_id: 1, channel_id: 1, enabled: true }, // Email
+            { id: 2, notification_type_id: 1, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 3, notification_type_id: 1, channel_id: 3, enabled: true }, // SMS
+            { id: 4, notification_type_id: 1, channel_id: 4, enabled: false }, // Sockets
             // --- 2. POSITION_STATUS_UPDATE (Actualización de vacante) ---
-            { id: 4, notification_type_id: 2, channel_id: 1, enabled: true },
-            { id: 5, notification_type_id: 2, channel_id: 2, enabled: true },
-            { id: 6, notification_type_id: 2, channel_id: 3, enabled: true },
+            { id: 5, notification_type_id: 2, channel_id: 1, enabled: true }, // Email
+            { id: 6, notification_type_id: 2, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 7, notification_type_id: 2, channel_id: 3, enabled: false }, // SMS
+            { id: 8, notification_type_id: 2, channel_id: 4, enabled: true }, // Sockets
             // --- 3. INTERVIEW_SCHEDULED (Programación de entrevista) ---
-            { id: 7, notification_type_id: 3, channel_id: 1, enabled: true },
-            { id: 8, notification_type_id: 3, channel_id: 2, enabled: true },
-            { id: 9, notification_type_id: 3, channel_id: 3, enabled: true },
+            { id: 9, notification_type_id: 3, channel_id: 1, enabled: true }, // Email
+            { id: 10, notification_type_id: 3, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 11, notification_type_id: 3, channel_id: 3, enabled: false }, // SMS
+            { id: 12, notification_type_id: 3, channel_id: 4, enabled: true }, // Sockets
             // --- 4. CREDENTIALS_CREATED (Creación de cuenta/credenciales) ---
-            { id: 10, notification_type_id: 4, channel_id: 1, enabled: true },
-            { id: 11, notification_type_id: 4, channel_id: 2, enabled: true },
-            { id: 12, notification_type_id: 4, channel_id: 3, enabled: false }
+            { id: 13, notification_type_id: 4, channel_id: 1, enabled: true }, // Email
+            { id: 14, notification_type_id: 4, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 15, notification_type_id: 4, channel_id: 3, enabled: false }, // SMS
+            { id: 16, notification_type_id: 4, channel_id: 4, enabled: false } // Sockets
         ];
 
         for (const tc of typeChannels) {

@@ -2,7 +2,6 @@ import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, P
 import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CatalogsService, CatalogKey } from './catalogs.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
-import { CatalogDto } from './dto/catalog.dto';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog.service';
 import { UpdateSalaryLevelsCatalogDto } from './dto/update-salary-levels-catalog.dto';
@@ -34,10 +33,10 @@ export class CatalogsController {
   @ApiResponse({ status: 200, description: 'Lista de registros del catálogo.' })
   @ApiResponse({ status: 400, description: 'Catálogo no reconocido.' })
   getCatalog(
-    @Query() catalogDto: CatalogDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
     @Param('nombre') nombre: string
   ) {
-    return this.catalogsService.getCatalog(catalogDto, nombre as CatalogKey);
+    return this.catalogsService.getCatalog(companyId, nombre as CatalogKey);
   }
 
   // ==========================================
@@ -168,5 +167,31 @@ export class CatalogsController {
     @Body() body: { registroPatronal?: string; razonSocial?: string; claseRiesgo?: string; primaRiesgo?: number }
   ) {
     return this.patronalRecordsService.update(id, body);
+  }
+
+  @Delete('patronal-records/:id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disable patronal record', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Patronal record disabled successfully' })
+  @ApiResponse({ status: 404, description: 'Patronal record not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async disablePatronalRecord(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.patronalRecordsService.changeStatus(companyId, id, false);
+  }
+
+  @Patch('patronal-records/:id/reactivate')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reactivate patronal record', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Patronal record reactivated successfully' })
+  @ApiResponse({ status: 404, description: 'Patronal record not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async reactivatePatronalRecord(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.patronalRecordsService.changeStatus(companyId, id, true);
   }
 }
