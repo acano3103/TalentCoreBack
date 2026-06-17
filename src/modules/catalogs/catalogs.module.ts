@@ -5,6 +5,7 @@ import { CatalogsSeedService } from './seeds/catalogs-seed.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog.service';
+import { PatronalRecordsService } from './sub-services/patronal-records.service';
 
 @Module({
   imports: [PrismaModule],
@@ -13,6 +14,7 @@ import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog
     CatalogsService,
     //CatalogsSeedService,
     SalaryLevelsCatalogService,
+    PatronalRecordsService,
     PrismaService
   ],
   exports: [CatalogsService],

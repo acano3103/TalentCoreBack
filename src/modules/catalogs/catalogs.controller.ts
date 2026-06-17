@@ -7,6 +7,7 @@ import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog.service';
 import { UpdateSalaryLevelsCatalogDto } from './dto/update-salary-levels-catalog.dto';
 import { CreateSalaryLevelsCatalogDto } from './dto/create-salary-levels-catalog.dto';
+import { PatronalRecordsService } from './sub-services/patronal-records.service';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Catalogs')
@@ -15,6 +16,7 @@ export class CatalogsController {
   constructor(
     private readonly catalogsService: CatalogsService,
     private readonly salaryLevelsCatalogService: SalaryLevelsCatalogService,
+    private readonly patronalRecordsService: PatronalRecordsService,
   ) { }
 
   @Get('catalogs/:nombre')
@@ -38,7 +40,10 @@ export class CatalogsController {
     return this.catalogsService.getCatalog(catalogDto, nombre as CatalogKey);
   }
 
-  //Salary levels subservice
+  // ==========================================
+  // ENDPOINTS: Salary levels subservice
+  // ==========================================
+
   @Get('salary-levels')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all salary levels', description: SWAGGER_AUTH_DESCRIPTION })
@@ -118,5 +123,50 @@ export class CatalogsController {
     @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
   ) {
     return this.salaryLevelsCatalogService.changeStatus(companyId, salaryLevelId, true);
+  }
+
+  // ==========================================
+  // ENDPOINTS: Patronal records subservice
+  // ==========================================
+
+  @Get('patronal-records')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all patronal records', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Patronal records obtained successfully' })
+  @ApiResponse({ status: 404, description: 'Patronal records not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async getPatronalRecords(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+  ) {
+    const querySearch = search || '';
+    return this.patronalRecordsService.findAll(companyId, page, limit, querySearch);
+  }
+
+  @Post('patronal-records')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create patronal record', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Patronal record created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async createPatronalRecord(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() body: { registroPatronal: string; razonSocial: string; claseRiesgo: string; primaRiesgo: number }
+  ) {
+    return this.patronalRecordsService.create(companyId, body);
+  }
+
+  @Put('patronal-records/:id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update patronal record', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Patronal record updated successfully' })
+  @ApiResponse({ status: 404, description: 'Patronal record not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async updatePatronalRecord(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { registroPatronal?: string; razonSocial?: string; claseRiesgo?: string; primaRiesgo?: number }
+  ) {
+    return this.patronalRecordsService.update(id, body);
   }
 }

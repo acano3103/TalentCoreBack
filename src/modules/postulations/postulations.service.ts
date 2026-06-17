@@ -3,7 +3,7 @@ import { UpdatePostulationStatusDto } from './dto/update-status.dto';
 import { generateCredentials } from './services/credentials.service';
 import { ALLOWED_STATUS_TRANSITIONS } from './utils/allowed-transitions';
 import { userFullInfo } from 'src/common/interfaces/user.interface';
-import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
+import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { HttpService } from '@nestjs/axios';
 import * as fs from 'fs';
 import * as path from 'path';

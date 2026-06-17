@@ -6,7 +6,7 @@ import {
     BadRequestException
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
+import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { PositionQueries } from './queries/positions.queries';
 import * as fs from 'fs';

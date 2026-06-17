@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
-import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
+import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { quotePlus } from 'src/common/utils/address.utils';
 import { formatDate, formatHour } from 'src/common/utils/time.utils';
 import { findAllInterviews, findAllInterviewsByPostulant, findInterviewDetail, findProgrammedInterviews } from './queries/interviews.queries';

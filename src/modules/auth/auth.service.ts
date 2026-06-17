@@ -8,7 +8,7 @@ import { AuthDataService } from './queries/auth.queries';
 import { AuthSuccessResponse } from './interfaces/auth-response.interface';
 import { DjangoPasswordHasher } from '../../common/utils/django-password.util';
 import { ResendTokenDto } from './dto/resend-token.dto';
-import { NotificationDispatcher } from 'src/notifications/notification.dispatcher';
+import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { CaptchaService } from './providers/captcha.service';
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveUserDto } from './dto/active-user.dto';

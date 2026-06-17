@@ -28,6 +28,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedPositionTypes(); /** CatTipoPuesto */
             await this.seedEducationLevels(); /** CatEscolaridad */
             await this.seedSalaryLevels(); /** CatNivelesSalario */
+            await this.seedTiposUbicacion(); /** CatTiposUbicacion */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -390,6 +391,7 @@ export class CatalogsSeedService implements OnModuleInit {
         }
     }
 
+    // Seeds initial salary levels into the database.
     private async seedSalaryLevels() {
         const nivelesSalario = [
             { id: 1, nombre: 'Nivel 1', descripcion: 'Estructura Operativa / Entry Level (Junior & Semi-Senior)', activo: 1, idEmpresa: 1, minimo: 10000.00, maximo: 25000.00 },
@@ -411,6 +413,28 @@ export class CatalogsSeedService implements OnModuleInit {
                     SalarioMinimo = VALUES(SalarioMinimo),
                     SalarioMaximo = VALUES(SalarioMaximo);
             `;
+        }
+    }
+
+    // Seeds initial location types into the database.
+    private async seedTiposUbicacion() {
+        const types = [
+            { id: 1, codigo: 'CORP', descripcion: 'Corporativo / Oficina Principal', activo: true },
+            { id: 2, codigo: 'SUCR', descripcion: 'Sucursal estándar', activo: true },
+            { id: 3, codigo: 'PLANTA', descripcion: 'Planta de Producción / Fábrica', activo: true },
+            { id: 4, codigo: 'TIENDA', descripcion: 'Tienda / Punto de Venta', activo: true },
+            { id: 5, codigo: 'CEDI', descripcion: 'Centro de Distribución / Almacén', activo: true },
+        ];
+
+        for (const type of types) {
+            await this.prisma.$queryRaw`
+            INSERT INTO CatTiposUbicacion (idTipoUbicacion, Codigo, Descripcion, Activo)
+            VALUES (${type.id}, ${type.codigo}, ${type.descripcion}, ${type.activo})
+            ON DUPLICATE KEY UPDATE 
+                Codigo = VALUES(Codigo),
+                Descripcion = VALUES(Descripcion), 
+                Activo = VALUES(Activo);
+        `;
         }
     }
 

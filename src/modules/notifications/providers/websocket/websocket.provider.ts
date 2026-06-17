@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NotificationOptions } from '../../interfaces/message.interface';
-import { WebsocketGateway } from 'src/notifications/gateways/websockets.gateway';
-import { formatNotificationPayload } from 'src/notifications/maps/websocket-map';
+import { WebsocketGateway } from 'src/modules/notifications/gateways/websockets.gateway';
+import { formatNotificationPayload } from 'src/modules/notifications/maps/websocket-map';
 
 @Injectable()
 export class WebsocketProvider {

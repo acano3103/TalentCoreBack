@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { PositionsController } from './positions.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { NotificationsModule } from 'src/notifications/notifications.module';
+import { NotificationsModule } from 'src/modules/notifications/notifications.module';
 
 @Module({
   providers: [PositionsService, PrismaService],

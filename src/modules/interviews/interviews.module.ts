@@ -3,7 +3,7 @@ import { InterviewsService } from './interviews.service';
 import { InterviewsController } from './interviews.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
-import { NotificationsModule } from 'src/notifications/notifications.module';
+import { NotificationsModule } from 'src/modules/notifications/notifications.module';
 
 @Module({
   imports: [PrismaModule, IntegrationsModule, NotificationsModule],

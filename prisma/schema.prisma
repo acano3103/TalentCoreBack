@@ -180,20 +180,21 @@ model CatDocumentos {
 }
 
 model CatEmpresas {
-  idEmpresa         Int                 @id @default(autoincrement())
-  razon_social      String              @db.VarChar(200)
-  nombre_comercial  String              @db.VarChar(200)
-  correo            String?             @db.VarChar(200)
-  telefono          String?             @db.VarChar(20)
-  rfc               String?             @db.VarChar(13)
-  logo_empresa      String?             @db.VarChar(300)
-  fechaRegistro     DateTime?           @default(now()) @db.DateTime(0)
-  usuarioRegistro   String?             @db.VarChar(100)
-  activo            Boolean?            @default(true)
-  CatCentroCostos   CatCentroCostos[]
-  DomicilioEmpresas DomicilioEmpresas[]
-  Integraciones     Integraciones[]
-  RelUsuarioEmpresa RelUsuarioEmpresa[]
+  idEmpresa              Int                      @id @default(autoincrement())
+  razon_social           String                   @db.VarChar(200)
+  nombre_comercial       String                   @db.VarChar(200)
+  correo                 String?                  @db.VarChar(200)
+  telefono               String?                  @db.VarChar(20)
+  rfc                    String?                  @db.VarChar(13)
+  logo_empresa           String?                  @db.VarChar(300)
+  fechaRegistro          DateTime?                @default(now()) @db.DateTime(0)
+  usuarioRegistro        String?                  @db.VarChar(100)
+  activo                 Boolean?                 @default(true)
+  CatCentroCostos        CatCentroCostos[]
+  CatRegistrosPatronales CatRegistrosPatronales[]
+  DomicilioEmpresas      DomicilioEmpresas[]
+  Integraciones          Integraciones[]
+  RelUsuarioEmpresa      RelUsuarioEmpresa[]
 }
 
 model CatEquipo {
@@ -337,18 +338,34 @@ model CatPuestos {
   CompetenciasPuesto   CompetenciasPuesto[]
   FuncionesPuesto      FuncionesPuesto[]
   HabilidadesPuesto    HabilidadesPuesto[]
-  RequisitosPuesto     RequisitosPuesto[]
 
   @@index([IdNivelSalario], map: "FK_Puestos_NivelSalario")
 }
 
 model CatSites {
-  idSite        Int            @id @default(autoincrement())
-  idEmpresa     Int?
-  Descripcion   String?        @db.VarChar(200)
-  Activo        Boolean?       @default(true)
-  CatAreas      CatAreas[]
-  DomicilioSite DomicilioSite?
+  idSite              Int               @id @default(autoincrement())
+  idEmpresa           Int?
+  idTipoUbicacion     Int               @default(1)
+  Descripcion         String?           @db.VarChar(200)
+  EsPrincipal         Boolean?          @default(false)
+  Calle               String?           @db.VarChar(250)
+  NoExterior          String?           @db.VarChar(50)
+  NoInterior          String?           @db.VarChar(50)
+  Colonia             String?           @db.VarChar(150)
+  MunicipioDelegacion String?           @db.VarChar(150)
+  Estado              String?           @db.VarChar(150)
+  CodigoPostal        String?           @db.VarChar(10)
+  Pais                String?           @default("México") @db.VarChar(100)
+  Latitud             Decimal?          @db.Decimal(10, 8)
+  Longitud            Decimal?          @db.Decimal(11, 8)
+  idRegistroPatronal  Int?
+  ZonaFronteriza      Boolean?          @default(false)
+  Activo              Boolean?          @default(true)
+  CatAreas            CatAreas[]
+  CatTiposUbicacion   CatTiposUbicacion @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
+  DomicilioSite       DomicilioSite?
+
+  @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
 }
 
 model CatSolicitud {
@@ -874,15 +891,6 @@ model RelUsuarioSite {
   activo    Boolean? @default(true)
 }
 
-model RequisitosPuesto {
-  idRequisitoPuesto Int         @id @default(autoincrement())
-  idPuesto          Int?
-  Requisito         String?     @db.Text
-  CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "RequisitosPuesto_ibfk_1")
-
-  @@index([idPuesto], map: "idPuesto")
-}
-
 model UserEvents {
   id             String    @id @default(dbgenerated("(uuid())")) @db.VarChar(36)
   company_id     Int
@@ -1090,6 +1098,29 @@ model usuarioslogin {
   FechaLogin      DateTime? @db.DateTime(0)
   browser         String?   @db.VarChar(500)
   identificador   String?   @db.VarChar(200)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatRegistrosPatronales {
+  idRegistroPatronal Int         @id @default(autoincrement())
+  idEmpresa          Int
+  RegistroPatronal   String      @unique(map: "UK_Registro_Patronal") @db.VarChar(11)
+  RazonSocial        String      @db.VarChar(250)
+  ClaseRiesgo        String      @db.VarChar(10)
+  PrimaRiesgo        Decimal     @default(0.50000) @db.Decimal(7, 5)
+  Activo             Boolean?    @default(true)
+  CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, onUpdate: NoAction, map: "FK_RegPatronal_Empresa")
+
+  @@index([idEmpresa], map: "FK_RegPatronal_Empresa")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatTiposUbicacion {
+  idTipoUbicacion Int        @id @default(autoincrement())
+  Codigo          String     @unique(map: "UK_Codigo_Tipo") @db.VarChar(50)
+  Descripcion     String     @db.VarChar(150)
+  Activo          Boolean?   @default(true)
+  CatSites        CatSites[]
 }
 
 enum RelRequisicionHabilidades_nivel {
