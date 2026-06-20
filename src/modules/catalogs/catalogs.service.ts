@@ -77,19 +77,51 @@ export class CatalogsService {
         });
 
       case 'centro-costos':
-        if (companyId) {
-          return this.prisma.catCentroCostos.findMany({
-            where: { Activo: true, idEmpresa: companyId },
-            select: { idCentroCostos: true, Codigo: true, Descripcion: true, PresupuestoAnual: true, PresupuestoEjecutado: true, Activo: true },
-            orderBy: { Descripcion: 'asc' },
-          });
-        } else {
-          return this.prisma.catCentroCostos.findMany({
-            where: { Activo: true },
-            select: { idCentroCostos: true, Codigo: true, Descripcion: true, PresupuestoAnual: true, PresupuestoEjecutado: true, Activo: true },
-            orderBy: { Descripcion: 'asc' },
-          });
-        }
+        const whereClause = companyId ? { Activo: true, idEmpresa: companyId } : { Activo: true };
+
+        // Consultamos los centros de costos incluyendo sus asignaciones actuales
+        const centrosCostos = await this.prisma.catCentroCostos.findMany({
+          where: whereClause,
+          select: {
+            idCentroCostos: true,
+            Codigo: true,
+            Descripcion: true,
+            PresupuestoAnual: true,
+            PresupuestoEjecutado: true,
+            Activo: true,
+            // Incluimos solo el campo PresupuestoAsignado de las relaciones existentes
+            RelAreasUbicaciones: {
+              select: {
+                PresupuestoAsignado: true,
+              },
+            },
+          },
+          orderBy: { Descripcion: 'asc' },
+        });
+
+        // Mapeamos el resultado para calcular el presupuesto disponible real en el servidor
+        return centrosCostos.map((centro) => {
+          // Sumamos todo lo que ya se asignó a las áreas/sedes en este centro de costos
+          const totalAsignado = centro.RelAreasUbicaciones.reduce(
+            (sum, rel) => sum + Number(rel.PresupuestoAsignado || 0),
+            0
+          );
+
+          const presupuestoAnual = Number(centro.PresupuestoAnual || 0);
+          // Disponible = Anual - Lo ya repartido entre las áreas
+          const presupuestoDisponible = presupuestoAnual - totalAsignado;
+
+          return {
+            idCentroCostos: centro.idCentroCostos,
+            Codigo: centro.Codigo,
+            Descripcion: centro.Descripcion,
+            PresupuestoAnual: presupuestoAnual,
+            PresupuestoEjecutado: Number(centro.PresupuestoEjecutado || 0),
+            PresupuestoAsignadoTot: totalAsignado,
+            PresupuestoDisponible: presupuestoDisponible >= 0 ? presupuestoDisponible : 0,
+            Activo: centro.Activo,
+          };
+        });
 
       case 'registros-patronales':
         return this.prisma.catRegistrosPatronales.findMany({

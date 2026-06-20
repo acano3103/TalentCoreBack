@@ -1,20 +1,23 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEmail, Min, MaxLength } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, IsEmail, Min, MaxLength, IsArray, ValidateNested } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
-export class CreateAreaDto {
+export class AreaAsignacionDto {
+    @IsOptional()
+    @IsNumber({}, { message: 'El idRelAreaUbicacion debe ser un número válido.' })
+    idRelAreaUbicacion: number;
+
     @IsNotEmpty({ message: 'La ubicación (Site) es obligatoria.' })
     @IsNumber({}, { message: 'El idSite debe ser un número válido.' })
     readonly idSite: number;
 
-    @IsNotEmpty({ message: 'El centro de costos es obligatorio.' })
+    @IsOptional()
     @IsNumber({}, { message: 'El idCentroCostos debe ser un número válido.' })
-    readonly idCentroCostos: number;
+    readonly idCentroCostos: number | null;
 
-    @IsNotEmpty({ message: 'El nombre del área es obligatorio.' })
-    @IsString({ message: 'El nombre debe ser una cadena de texto.' })
-    @MaxLength(150, { message: 'El nombre del área no puede exceder los 150 caracteres.' })
-    @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
-    readonly descripcion: string;
+    @IsOptional()
+    @IsNumber({}, { message: 'El presupuesto asignado debe ser un número válido.' })
+    @Min(0, { message: 'El presupuesto asignado no puede ser menor a 0.' })
+    readonly presupuestoAsignado: number;
 
     @IsOptional()
     @IsString({ message: 'El encargado debe ser una cadena de texto.' })
@@ -35,9 +38,18 @@ export class CreateAreaDto {
     @IsString({ message: 'La extensión debe ser una cadena de texto.' })
     @MaxLength(10, { message: 'La extensión no puede exceder los 10 caracteres.' })
     readonly extension?: string | null;
+}
 
-    @IsNotEmpty({ message: 'El presupuesto asignado es obligatorio.' })
-    @IsNumber({}, { message: 'El presupuesto asignado debe ser un número válido.' })
-    @Min(0, { message: 'El presupuesto asignado no puede ser menor a 0.' })
-    readonly presupuestoAsignado: number;
+export class CreateAreaDto {
+    @IsNotEmpty({ message: 'El nombre del área es obligatorio.' })
+    @IsString({ message: 'El nombre debe ser una cadena de texto.' })
+    @MaxLength(150, { message: 'El nombre del área no puede exceder los 150 caracteres.' })
+    @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
+    readonly descripcion: string;
+
+    @IsNotEmpty({ message: 'Las asignaciones de sedes son obligatorias.' })
+    @IsArray({ message: 'Las asignaciones deben enviarse en formato de lista (Arreglo).' })
+    @ValidateNested({ each: true })
+    @Type(() => AreaAsignacionDto)
+    readonly asignaciones: AreaAsignacionDto[];
 }

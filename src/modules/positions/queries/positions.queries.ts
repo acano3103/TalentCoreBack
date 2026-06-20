@@ -3,7 +3,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class PositionQueries {
   static async findAll(prisma: PrismaService, companyId: number, search: string, page: number, limit: number, aprobada: number) {
     const skip = (page - 1) * limit;
-
     const searchQuery = search ? `%${search}%` : '%';
 
     const [data, [{ total }]] = await Promise.all([
@@ -26,14 +25,12 @@ export class PositionQueries {
           p.pendiente as Pendiente
         FROM CatPuestos p
         LEFT JOIN CatAreas a ON a.idArea = p.idArea
-        LEFT JOIN CatSites s ON s.idSite = a.idSite
-        LEFT JOIN CatEmpresas ce ON ce.idEmpresa = s.idEmpresa
         LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
         LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
         LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
         LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
         LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
-        WHERE ce.idEmpresa = ${companyId}
+        WHERE a.idEmpresa = ${companyId}
           AND p.aprobada = ${aprobada}
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
         ORDER BY p.idPuesto DESC
@@ -44,9 +41,7 @@ export class PositionQueries {
         SELECT COUNT(*) AS total
         FROM CatPuestos p
         LEFT JOIN CatAreas a ON a.idArea = p.idArea
-        LEFT JOIN CatSites s ON s.idSite = a.idSite
-        LEFT JOIN CatEmpresas ce ON ce.idEmpresa = s.idEmpresa
-        WHERE ce.idEmpresa = ${companyId}
+        WHERE a.idEmpresa = ${companyId}
           AND p.aprobada = ${aprobada}
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery});
       ` as Promise<[{ total: bigint | number }]>

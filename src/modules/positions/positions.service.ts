@@ -206,6 +206,9 @@ export class PositionsService {
             }
 
             return { message: "Puesto creado exitosamente", id: newPositionId };
+        }, {
+            maxWait: 5000,
+            timeout: 20000
         });
     }
 
@@ -334,6 +337,9 @@ export class PositionsService {
             }
 
             return { message: "Puesto actualizado exitosamente" };
+        }, {
+            maxWait: 5000,
+            timeout: 20000
         });
     }
 

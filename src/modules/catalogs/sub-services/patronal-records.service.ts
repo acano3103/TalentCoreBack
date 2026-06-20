@@ -1,9 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreatePatronalRecordDto } from '../dto/create-patronal-record.dto';
+import { UpdatePatronalRecordDto } from '../dto/update-patronal-record.dto';
 
 @Injectable()
 export class PatronalRecordsService {
     constructor(private readonly prisma: PrismaService) { }
+
+    private readonly logger = new Logger(PatronalRecordsService.name);
 
     async findAll(idEmpresa: number, page: number, limit: number, query: string) {
         const offset = (page - 1) * limit;
@@ -60,39 +64,88 @@ export class PatronalRecordsService {
         };
     }
 
-    async create(idEmpresa: number, data: {
-        registroPatronal: string;
-        razonSocial: string;
-        claseRiesgo: string;
-        primaRiesgo: number;
-    }) {
-        return this.prisma.catRegistrosPatronales.create({
-            data: {
-                idEmpresa,
-                RegistroPatronal: data.registroPatronal.toUpperCase(),
-                RazonSocial: data.razonSocial.toUpperCase(),
-                ClaseRiesgo: data.claseRiesgo,
-                PrimaRiesgo: data.primaRiesgo,
-                Activo: true
-            },
+    async findOne(idEmpresa: number, idRegistroPatronal: number) {
+        const patronalRecord = await this.prisma.catRegistrosPatronales.findUnique({
+            where: { idRegistroPatronal, idEmpresa },
         });
+        if (!patronalRecord) {
+            throw new NotFoundException('El registro patronal no existe.');
+        }
+        return patronalRecord;
     }
 
-    async update(idRegistroPatronal: number, data: {
-        registroPatronal?: string;
-        razonSocial?: string;
-        claseRiesgo?: string;
-        primaRiesgo?: number;
-    }) {
-        return this.prisma.catRegistrosPatronales.update({
-            where: { idRegistroPatronal },
-            data: {
-                ...(data.registroPatronal && { RegistroPatronal: data.registroPatronal.toUpperCase() }),
-                ...(data.razonSocial && { RazonSocial: data.razonSocial.toUpperCase() }),
-                ...(data.claseRiesgo && { ClaseRiesgo: data.claseRiesgo }),
-                ...(data.primaRiesgo !== undefined && { PrimaRiesgo: data.primaRiesgo }),
-            },
+    async create(idEmpresa: number, dto: CreatePatronalRecordDto) {
+        const companyExists = await this.prisma.catEmpresas.findUnique({
+            where: { idEmpresa },
         });
+        if (!companyExists) throw new NotFoundException('La empresa especificada no existe.');
+
+        const registroPatronalUnico = dto.registroPatronal.toUpperCase().trim();
+        const recordExists = await this.prisma.catRegistrosPatronales.findFirst({
+            where: { RegistroPatronal: registroPatronalUnico }
+        });
+        if (recordExists) {
+            throw new ConflictException(`El registro patronal ${registroPatronalUnico} ya se encuentra registrado.`);
+        }
+
+        try {
+            const nuevoRegistro = await this.prisma.catRegistrosPatronales.create({
+                data: {
+                    idEmpresa,
+                    RegistroPatronal: registroPatronalUnico,
+                    RazonSocial: dto.razonSocial.toUpperCase().trim(),
+                    ClaseRiesgo: dto.claseRiesgo,
+                    PrimaRiesgo: dto.primaRiesgo,
+                    Activo: (dto.activo === true || (dto.activo as any) === 1) ?? true
+                },
+            });
+
+            return { message: 'Registro Patronal creado correctamente' };
+
+        } catch (error) {
+            this.logger.error(`Error al insertar Registro Patronal en Prisma: ${error.message}`);
+            throw new InternalServerErrorException('Error interno al intentar dar de alta el registro patronal.');
+        }
+    }
+
+    async update(companyId: number, idRegistroPatronal: number, dto: UpdatePatronalRecordDto) {
+        const recordExists = await this.prisma.catRegistrosPatronales.findUnique({
+            where: { idRegistroPatronal },
+        });
+        if (!recordExists) throw new NotFoundException('El registro patronal especificado no existe.');
+
+        if (dto.registroPatronal) {
+            const registroPatronalUnico = dto.registroPatronal.toUpperCase().trim();
+            const duplicateCheck = await this.prisma.catRegistrosPatronales.findFirst({
+                where: {
+                    RegistroPatronal: registroPatronalUnico,
+                    NOT: { idRegistroPatronal }
+                }
+            });
+            if (duplicateCheck) {
+                throw new ConflictException(`El registro patronal ${registroPatronalUnico} ya está asignado a otra razón social.`);
+            }
+        }
+
+        try {
+            const updatedRecord = await this.prisma.catRegistrosPatronales.update({
+                where: { idRegistroPatronal },
+                data: {
+                    ...(dto.registroPatronal && { RegistroPatronal: dto.registroPatronal.toUpperCase().trim() }),
+                    ...(dto.razonSocial && { RazonSocial: dto.razonSocial.toUpperCase().trim() }),
+                    ...(dto.claseRiesgo && { ClaseRiesgo: dto.claseRiesgo }),
+                    ...(dto.primaRiesgo !== undefined && { PrimaRiesgo: dto.primaRiesgo }),
+                    ...(dto.activo !== undefined && {
+                        Activo: dto.activo === true || (dto.activo as any) === 1
+                    }),
+                },
+            });
+
+            return { message: 'Registro Patronal actualizado correctamente' };
+        } catch (error) {
+            this.logger.error(`Error al actualizar Registro Patronal ${idRegistroPatronal}: ${error.message}`);
+            throw new InternalServerErrorException('Error interno al intentar guardar los cambios del registro patronal.');
+        }
     }
 
     async changeStatus(companyId: number, id: number, active: boolean) {

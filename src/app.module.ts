@@ -18,6 +18,8 @@ import { AreasService } from './modules/areas/areas.service';
 import { AreasModule } from './modules/areas/areas.module';
 import { CostCenterModule } from './modules/cost-center/cost-center.module';
 import { EventsModule } from './modules/events/events.module';
+import { OrganizationChartModule } from './modules/positions/organization-chart/organization-chart.module';
+import { HeadcountModule } from './modules/headcount/headcount.module';
 
 @Module({
   imports: [
@@ -38,6 +40,7 @@ import { EventsModule } from './modules/events/events.module';
     PrismaModule,
     AuthModule,
     PositionsModule,
+    OrganizationChartModule,
     UsersModule,
     IntegrationsModule,
     InterviewsModule,
@@ -48,7 +51,8 @@ import { EventsModule } from './modules/events/events.module';
     LocationsModule,
     AreasModule,
     CostCenterModule,
-    EventsModule
+    EventsModule,
+    HeadcountModule
   ],
   controllers: [],
   providers: [AreasService],

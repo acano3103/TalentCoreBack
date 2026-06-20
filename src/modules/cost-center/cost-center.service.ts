@@ -28,7 +28,7 @@ export class CostCenterService {
                 where: whereCondition,
                 include: {
                     _count: {
-                        select: { CatAreas: true },
+                        select: { RelAreasUbicaciones: true },
                     },
                 },
                 skip: skip,
@@ -63,7 +63,7 @@ export class CostCenterService {
             const { _count, ...ccData } = cc;
             return {
                 ...ccData,
-                totalAreas: _count?.CatAreas || 0,
+                totalAreas: _count?.RelAreasUbicaciones || 0,
             };
         });
 
@@ -87,28 +87,53 @@ export class CostCenterService {
         const costCenter = await this.prismaService.catCentroCostos.findFirst({
             where: { idCentroCostos: id, idEmpresa: companyId },
             include: {
-                CatAreas: {
+                RelAreasUbicaciones: {
                     select: {
-                        idArea: true,
-                        Descripcion: true,
-                        Encargado: true,
                         PresupuestoAsignado: true,
                         PresupuestoEjecutado: true,
+                        Encargado: true,
                         Activo: true,
-                    },
+                        // Traemos el catálogo maestro del área
+                        CatAreas: {
+                            select: {
+                                idArea: true,
+                                Descripcion: true,
+                            }
+                        },
+                        // Traemos la sucursal (Site) vinculada
+                        CatSites: {
+                            select: {
+                                idSite: true,
+                                Descripcion: true,
+                            }
+                        }
+                    }
                 },
                 _count: {
-                    select: { CatAreas: true },
+                    select: { RelAreasUbicaciones: true },
                 },
             },
         });
 
         if (!costCenter) throw new NotFoundException(`Centro de costo no encontrado`);
 
-        const { _count, ...ccData } = costCenter;
+        const { _count, RelAreasUbicaciones, ...ccData } = costCenter;
+
+        const mappedAreas = (RelAreasUbicaciones || []).map((rel) => ({
+            idArea: rel.CatAreas?.idArea,
+            Descripcion: rel.CatAreas?.Descripcion || '—',
+            idSite: rel.CatSites?.idSite,
+            siteDescripcion: rel.CatSites?.Descripcion || '—',
+            Encargado: rel.Encargado,
+            PresupuestoAsignado: rel.PresupuestoAsignado,
+            PresupuestoEjecutado: rel.PresupuestoEjecutado,
+            Activo: rel.Activo,
+        }));
+
         return {
             ...ccData,
-            totalAreas: _count?.CatAreas || 0,
+            totalAreas: _count?.RelAreasUbicaciones || 0,
+            CatAreas: mappedAreas
         };
     }
 
@@ -148,12 +173,13 @@ export class CostCenterService {
                 idEmpresa: companyId,
             },
             include: {
-                CatAreas: true,
+                RelAreasUbicaciones: true,
             },
         });
 
         if (!currentCC) throw new NotFoundException('El centro de costos solicitado no existe en esta empresa.');
 
+        // Validación de duplicado de código
         if (currentCC.Codigo !== updateCostCenterDto.Codigo) {
             const codeDuplicate = await this.prismaService.catCentroCostos.findFirst({
                 where: {
@@ -170,10 +196,12 @@ export class CostCenterService {
             );
         }
 
-        const totalDistribuidoAreas = currentCC.CatAreas.reduce(
-            (acc, area) => acc + Number(area.PresupuestoAsignado), 0
+        // Calculamos el dinero total distribuido sumando los registros de la tabla intermedia
+        const totalDistribuidoAreas = (currentCC.RelAreasUbicaciones || []).reduce(
+            (acc, rel) => acc + Number(rel.PresupuestoAsignado || 0), 0
         );
 
+        // Validamos que el nuevo techo financiero anual no sea menor a lo ya repartido
         if (updateCostCenterDto.PresupuestoAnual < totalDistribuidoAreas) {
             throw new BadRequestException(
                 `No es posible reducir el presupuesto anual a $${updateCostCenterDto.PresupuestoAnual}. ` +
@@ -181,7 +209,8 @@ export class CostCenterService {
             );
         }
 
-        const updatedCostCenter = await this.prismaService.catCentroCostos.update({
+        // Ejecutamos la actualización normal en la base de datos
+        await this.prismaService.catCentroCostos.update({
             where: {
                 idCentroCostos: costCenterId,
             },

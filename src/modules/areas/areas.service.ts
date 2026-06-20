@@ -10,46 +10,61 @@ export class AreasService {
     async findAll(companyId: number, page: number, query: string, limit: number) {
         const skip = (page - 1) * limit;
 
+        // Filtramos las áreas que tengan presencia operativa en la empresa actual a través de relAreasUbicaciones
         const whereCondition: any = {
-            CatCentroCostos: {
-                idEmpresa: companyId,
+            RelAreasUbicaciones: {
+                some: {
+                    OR: [
+                        { CatCentroCostos: { idEmpresa: companyId } },
+                        { CatSites: { idEmpresa: companyId } }
+                    ]
+                }
             }
         };
 
+        // Búsqueda por texto (Query) adaptada a los campos del catálogo y las relaciones
         if (query) {
             whereCondition.OR = [
                 { Descripcion: { contains: query } },
-                { Encargado: { contains: query } },
                 {
-                    CatCentroCostos: {
-                        OR: [
-                            { Descripcion: { contains: query } },
-                            { Codigo: { contains: query } }
-                        ]
+                    relAreasUbicaciones: {
+                        some: {
+                            OR: [
+                                { Encargado: { contains: query } },
+                                { Correo: { contains: query } },
+                                { CatCentroCostos: { Descripcion: { contains: query } } },
+                                { CatCentroCostos: { Codigo: { contains: query } } },
+                                { CatSites: { Descripcion: { contains: query } } }
+                            ]
+                        }
                     }
                 }
             ];
         }
 
-        const [areas, total, metrics, totalActivas] = await Promise.all([
+        // Consultas en paralelo optimizadas
+        const [areas, total, totalActivas] = await Promise.all([
             this.prismaService.catAreas.findMany({
                 where: whereCondition,
                 include: {
-                    CatCentroCostos: true,
-                    CatSites: true,
+                    RelAreasUbicaciones: {
+                        where: {
+                            OR: [
+                                { CatSites: { idEmpresa: companyId } },
+                                { CatCentroCostos: { idEmpresa: companyId } }
+                            ]
+                        },
+                        include: {
+                            CatCentroCostos: true,
+                            CatSites: true,
+                        }
+                    }
                 },
                 skip: skip,
                 take: limit,
                 orderBy: { idArea: 'desc' },
             }),
             this.prismaService.catAreas.count({ where: whereCondition }),
-            this.prismaService.catAreas.aggregate({
-                where: whereCondition,
-                _sum: {
-                    PresupuestoAsignado: true,
-                    PresupuestoEjecutado: true,
-                }
-            }),
             this.prismaService.catAreas.count({
                 where: {
                     ...whereCondition,
@@ -58,6 +73,7 @@ export class AreasService {
             })
         ]);
 
+        // Si no hay datos, retornamos la estructura limpia por defecto
         if ((!areas || areas.length === 0) && page === 1 && !query) {
             return {
                 areas: [],
@@ -72,13 +88,34 @@ export class AreasService {
             };
         }
 
+        // Mapeo, consolidación de presupuestos y conteo de presencia geográfica
+        let globalAsignado = 0;
+        let globalEjecutado = 0;
+
         const flattenedAreas = areas.map((area) => {
-            const { CatCentroCostos, CatSites, ...areaData } = area;
+            const asignaciones = area.RelAreasUbicaciones || [];
+
+            // Sumamos los presupuestos específicos de esta área a lo largo de todas sus sedes vinculadas
+            const presupuestoAsignadoArea = asignaciones.reduce((acc, curr) => acc + Number(curr.PresupuestoAsignado || 0), 0);
+            const presupuestoEjecutadoArea = asignaciones.reduce((acc, curr) => acc + Number(curr.PresupuestoEjecutado || 0), 0);
+
+            // Acumulamos para las métricas globales del summary del pie de página de la tabla
+            globalAsignado += presupuestoAsignadoArea;
+            globalEjecutado += presupuestoEjecutadoArea;
+
+            // Extraemos valores únicos de centros de costos y sedes involucradas en esta área para la vista general
+            const codigosCC = Array.from(new Set(asignaciones.map(a => a.CatCentroCostos?.Codigo).filter(Boolean)));
+            const nombresSites = Array.from(new Set(asignaciones.map(a => a.CatSites?.Descripcion).filter(Boolean)));
+
             return {
-                ...areaData,
-                codigoCentroCostos: CatCentroCostos?.Codigo || '—',
-                centroCostosDescripcion: CatCentroCostos?.Descripcion || '—',
-                siteDescripcion: CatSites?.Descripcion || '—',
+                idArea: area.idArea,
+                descripcion: area.Descripcion,
+                activo: area.Activo,
+                totalSitesVinculados: nombresSites.length,
+                presupuestoAsignado: presupuestoAsignadoArea,
+                presupuestoEjecutado: presupuestoEjecutadoArea,
+                codigoCentroCostos: codigosCC.length > 0 ? codigosCC.join(', ') : '—',
+                siteDescripcion: nombresSites.length > 0 ? nombresSites.join(', ') : 'Sin Sedes',
             };
         });
 
@@ -89,46 +126,57 @@ export class AreasService {
             totalPages: Math.ceil(total / limit) || 1,
             summary: {
                 totalActivas: totalActivas || 0,
-                totalAsignado: Number(metrics._sum.PresupuestoAsignado || 0),
-                totalEjecutado: Number(metrics._sum.PresupuestoEjecutado || 0)
+                totalAsignado: globalAsignado,
+                totalEjecutado: globalEjecutado
             }
         };
     }
 
     async findOne(companyId: number, id: number) {
+        // 1. Buscamos el área y traemos TODAS sus sedes y centros de costos vinculados de esta empresa
         const area = await this.prismaService.catAreas.findFirst({
             where: {
                 idArea: id,
-                CatCentroCostos: {
-                    idEmpresa: companyId,
-                },
-                CatSites: {
-                    idEmpresa: companyId,
+                RelAreasUbicaciones: {
+                    some: {
+                        OR: [
+                            { CatSites: { idEmpresa: companyId } },
+                            { CatCentroCostos: { idEmpresa: companyId } }
+                        ]
+                    }
                 }
             },
             include: {
-                CatCentroCostos: {
-                    select: {
-                        idEmpresa: true,
-                        idCentroCostos: true,
-                        Codigo: true,
-                        Descripcion: true,
-                        PresupuestoAnual: true,
-                        PresupuestoEjecutado: true,
+                RelAreasUbicaciones: {
+                    where: {
+                        OR: [
+                            { CatSites: { idEmpresa: companyId } },
+                            { CatCentroCostos: { idEmpresa: companyId } }
+                        ]
                     },
-                },
-                CatSites: {
-                    select: {
-                        idSite: true,
-                        idEmpresa: true,
-                        Descripcion: true,
-                    },
-                },
-            },
+                    include: {
+                        CatSites: {
+                            select: {
+                                idSite: true,
+                                Descripcion: true,
+                                Activo: true
+                            }
+                        },
+                        CatCentroCostos: {
+                            select: {
+                                idCentroCostos: true,
+                                Codigo: true,
+                                Descripcion: true
+                            }
+                        }
+                    }
+                }
+            }
         });
 
-        if (!area) throw new NotFoundException(`Área no encontrada.`);
+        if (!area) throw new NotFoundException(`Área no encontrada o no pertenece a la empresa actual.`);
 
+        // Traemos los puestos que pertenecen a esta área en esta empresa
         const dbPositions = await this.prismaService.catPuestos.findMany({
             where: {
                 idArea: id,
@@ -138,6 +186,12 @@ export class AreasService {
                 idPuesto: true,
                 NombrePuesto: true,
                 DescripcionPuesto: true,
+                idSite: true,
+                CatSites: {
+                    select: {
+                        Descripcion: true
+                    }
+                },
                 CatNivelesSalario: {
                     select: {
                         SalarioMinimo: true,
@@ -147,142 +201,287 @@ export class AreasService {
             },
         });
 
-        const positions = dbPositions.map(position => ({
-            idPuesto: position.idPuesto,
-            NombrePuesto: position.NombrePuesto,
-            DescripcionPuesto: position.DescripcionPuesto,
-            SalarioMinimo: position.CatNivelesSalario?.SalarioMinimo ?? 0.00,
-            SalarioMaximo: position.CatNivelesSalario?.SalarioMaximo ?? 0.00,
-        }));
+        // Mapeamos los puestos de forma limpia para que el Front los pinte en una linda tabla de detalles
+        const positions = dbPositions.map(position => {
+            const nivelSalario = (position as any).CatNivelesSalario || (position as any).catNivelesSalario;
+            const site = (position as any).CatSites || (position as any).catSites;
 
-        return { area, positions };
+            return {
+                idPuesto: position.idPuesto,
+                NombrePuesto: position.NombrePuesto,
+                DescripcionPuesto: position.DescripcionPuesto,
+                idSite: position.idSite,
+                siteDescripcion: site?.Descripcion ?? 'Sin Sede Asignada',
+                SalarioMinimo: nivelSalario?.SalarioMinimo ?? 0.00,
+                SalarioMaximo: nivelSalario?.SalarioMaximo ?? 0.00,
+            };
+        });
+
+        // Aplanamos la información del área y sus ubicaciones en una estructura cómoda para tus formularios del Front
+        const formattedArea = {
+            idArea: area.idArea,
+            descripcion: area.Descripcion,
+            activo: area.Activo,
+            ubicacionesVinculadas: area.RelAreasUbicaciones.map(rel => {
+                const s = (rel as any).CatSites || (rel as any).catSites;
+                const cc = (rel as any).CatCentroCostos || (rel as any).catCentroCostos;
+
+                return {
+                    idRelAreaUbicacion: (rel as any).idRelAreaUbicacion || (rel as any).idAreaUbicacion || 0,
+                    idSite: rel.idSite,
+                    siteDescripcion: s?.Descripcion ?? '—',
+                    siteActivo: s?.Activo ?? false,
+                    idCentroCostos: rel.idCentroCostos,
+                    centroCostosCodigo: cc?.Codigo ?? '',
+                    centroCostosDescripcion: cc?.Descripcion ?? '',
+                    encargado: rel.Encargado ?? '',
+                    correo: rel.Correo ?? '',
+                    presupuestoAsignado: rel.PresupuestoAsignado ?? 0,
+                    presupuestoEjecutado: rel.PresupuestoEjecutado ?? 0,
+                };
+            })
+        };
+
+        return {
+            area: formattedArea,
+            positions
+        };
     }
 
     async create(companyId: number, createAreaDto: CreateAreaDto) {
-        const costCenter = await this.prismaService.catCentroCostos.findFirst({
-            where: {
-                idCentroCostos: createAreaDto.idCentroCostos,
-                idEmpresa: companyId,
-            },
-            include: {
-                CatAreas: true,
-            },
+        return await this.prismaService.$transaction(async (tx) => {
+            // Buscar si el área ya existe como concepto global en la empresa
+            let area = await tx.catAreas.findFirst({
+                where: {
+                    Descripcion: createAreaDto.descripcion.toUpperCase(),
+                    idEmpresa: companyId
+                },
+            });
+
+            // Si no existe el registro maestro, lo creamos
+            if (!area) {
+                area = await tx.catAreas.create({
+                    data: {
+                        Descripcion: createAreaDto.descripcion.toUpperCase(),
+                        idEmpresa: companyId,
+                        Activo: true,
+                    },
+                });
+            }
+
+            // Procesar las asignaciones masivas en lote si es que vienen en el payload
+            if (createAreaDto.asignaciones && createAreaDto.asignaciones.length > 0) {
+                for (const asignation of createAreaDto.asignaciones) {
+
+                    // Si el usuario seleccionó un centro de costos, validamos presupuestos
+                    if (asignation.idCentroCostos) {
+                        const costCenter = await tx.catCentroCostos.findFirst({
+                            where: {
+                                idCentroCostos: asignation.idCentroCostos,
+                                idEmpresa: companyId,
+                            },
+                            include: {
+                                RelAreasUbicaciones: true,
+                            },
+                        });
+
+                        if (!costCenter) {
+                            throw new NotFoundException(
+                                `El centro de costos ID ${asignation.idCentroCostos} no pertenece a esta empresa o no existe.`
+                            );
+                        }
+
+                        // Verificar si el área ya está registrada ESPECÍFICAMENTE en este Site dentro de la tabla intermedia
+                        const isAreaDuplicateInSite = costCenter.RelAreasUbicaciones.some(
+                            (au) => au.idArea === area.idArea && au.idSite === asignation.idSite
+                        );
+
+                        if (isAreaDuplicateInSite) {
+                            throw new ConflictException(
+                                `El área ya se encuentra vinculada a esta sucursal (Site) con ese Centro de Costos.`
+                            );
+                        }
+
+                        // Calcular el presupuesto total asignado a otras áreas en este Centro de Costos
+                        const totalAsignadoOtrasAreas = costCenter.RelAreasUbicaciones.reduce(
+                            (acc, au) => acc + Number(au.PresupuestoAsignado || 0), 0
+                        );
+
+                        const presupuestoAnualCentro = Number(costCenter.PresupuestoAnual || 0);
+                        const presupuestoDisponibleCentro = presupuestoAnualCentro - totalAsignadoOtrasAreas;
+
+                        // Si el presupuesto solicitado excede el disponible del centro de costos, disparamos el error
+                        if (asignation.presupuestoAsignado > presupuestoDisponibleCentro) {
+                            throw new BadRequestException(
+                                `Excedente Presupuestal. El centro de costos (${costCenter.Codigo}) solo cuenta con un saldo disponible de $${presupuestoDisponibleCentro} MXN ` +
+                                `y se intentó asignar $${asignation.presupuestoAsignado} MXN para la sede.`
+                            );
+                        }
+                    }
+
+                    // Registrar la relación en la nueva tabla intermedia transaccional
+                    await tx.relAreasUbicaciones.create({
+                        data: {
+                            idArea: area.idArea,
+                            idSite: asignation.idSite,
+                            idCentroCostos: asignation.idCentroCostos ? Number(asignation.idCentroCostos) : null,
+                            PresupuestoAsignado: asignation.presupuestoAsignado || 0.00,
+                            PresupuestoEjecutado: 0.00,
+                            Encargado: asignation.encargado || null,
+                            Correo: asignation.correo || null,
+                            Telefono: asignation.telefono || null,
+                            Extension: asignation.extension || null,
+                            Activo: true,
+                        },
+                    });
+                }
+            }
+
+            return { message: 'Catálogo de área y asignaciones geográficas procesadas con éxito.' };
         });
-
-        if (!costCenter) throw new NotFoundException('El centro de costos seleccionado no pertenece a esta empresa o no existe.');
-
-        const areaDuplicate = costCenter.CatAreas.find(
-            (area) => area.Descripcion.toUpperCase() === createAreaDto.descripcion.toUpperCase()
-        );
-
-        if (areaDuplicate) throw new ConflictException(`El área "${createAreaDto.descripcion}" ya se encuentra registrada en este centro de costos.`);
-
-        const totalAsignadoOtrasAreas = costCenter.CatAreas.reduce(
-            (acc, area) => acc + Number(area.PresupuestoAsignado || 0), 0
-        );
-
-        const presupuestoAnualCentro = Number(costCenter.PresupuestoAnual || 0);
-        const presupuestoDisponibleCentro = presupuestoAnualCentro - totalAsignadoOtrasAreas;
-
-        if (createAreaDto.presupuestoAsignado > presupuestoDisponibleCentro) {
-            throw new BadRequestException(
-                `Excedente Presupuestal. El centro de costos solo cuenta con un saldo disponible de $${presupuestoDisponibleCentro} MXN ` +
-                `para asignar, y se intentó fondear el área con $${createAreaDto.presupuestoAsignado} MXN.`,
-            );
-        }
-
-        const newArea = await this.prismaService.catAreas.create({
-            data: {
-                idSite: createAreaDto.idSite,
-                idCentroCostos: createAreaDto.idCentroCostos,
-                Descripcion: createAreaDto.descripcion,
-                Encargado: createAreaDto.encargado || null,
-                Correo: createAreaDto.correo || null,
-                Telefono: createAreaDto.telefono || null,
-                Extension: createAreaDto.extension || null,
-                PresupuestoAsignado: createAreaDto.presupuestoAsignado,
-                PresupuestoEjecutado: 0.00,
-                Activo: true,
-            },
-        });
-
-        return { message: 'Área operativa registrada con éxito.' };
     }
 
     async update(companyId: number, areaId: number, updateAreaDto: UpdateAreaDto) {
-        const currentArea = await this.prismaService.catAreas.findUnique({
-            where: { idArea: areaId },
+        return await this.prismaService.$transaction(async (tx) => {
+            const currentArea = await tx.catAreas.findFirst({
+                where: { idArea: areaId, idEmpresa: companyId },
+            });
+
+            if (!currentArea) {
+                throw new NotFoundException('El área operativa que intentas modificar no existe o no pertenece a esta empresa.');
+            }
+
+            // Si se envió una nueva descripción, validar duplicados globales (exceptuando la misma área)
+            if (updateAreaDto.descripcion) {
+                const descriptionUpper = updateAreaDto.descripcion.toUpperCase();
+
+                const duplicateArea = await tx.catAreas.findFirst({
+                    where: {
+                        Descripcion: descriptionUpper,
+                        idEmpresa: companyId,
+                        NOT: { idArea: areaId }
+                    }
+                });
+
+                if (duplicateArea) {
+                    throw new ConflictException(`El área "${updateAreaDto.descripcion}" ya se encuentra registrada en la empresa.`);
+                }
+
+                await tx.catAreas.update({
+                    where: { idArea: areaId },
+                    data: { Descripcion: descriptionUpper }
+                });
+            }
+
+            if (updateAreaDto.asignaciones) {
+
+                // Paso A: Limpiar las asignaciones anteriores para esta área 
+                await tx.relAreasUbicaciones.deleteMany({
+                    where: { idArea: areaId }
+                });
+
+                // Paso B: Validar e insertar las nuevas asignaciones
+                for (const asignation of updateAreaDto.asignaciones) {
+
+                    if (asignation.idCentroCostos) {
+                        const costCenter = await tx.catCentroCostos.findFirst({
+                            where: {
+                                idCentroCostos: asignation.idCentroCostos,
+                                idEmpresa: companyId,
+                            },
+                            include: {
+                                RelAreasUbicaciones: {
+                                    where: {
+                                        NOT: { idArea: areaId }
+                                    }
+                                }
+                            },
+                        });
+
+                        if (!costCenter) {
+                            throw new NotFoundException(
+                                `El centro de costos ID ${asignation.idCentroCostos} no pertenece a esta empresa o no existe.`
+                            );
+                        }
+
+                        // Calcular el presupuesto acumulado por OTRAS áreas en este centro de costos
+                        const totalAsignadoOtrasAreas = costCenter.RelAreasUbicaciones.reduce(
+                            (acc, au) => acc + Number(au.PresupuestoAsignado || 0), 0
+                        );
+
+                        const presupuestoAnualCentro = Number(costCenter.PresupuestoAnual || 0);
+                        const presupuestoDisponibleCentro = presupuestoAnualCentro - totalAsignadoOtrasAreas;
+
+                        // Validar excedente
+                        if (asignation.presupuestoAsignado > presupuestoDisponibleCentro) {
+                            throw new BadRequestException(
+                                `Excedente Presupuestal. El centro de costos (${costCenter.Codigo}) solo cuenta con un saldo disponible de $${presupuestoDisponibleCentro} MXN ` +
+                                `y se intentó asignar $${asignation.presupuestoAsignado} MXN para la sede.`
+                            );
+                        }
+                    }
+
+                    // Insertar el registro en la intermedia
+                    await tx.relAreasUbicaciones.create({
+                        data: {
+                            idArea: areaId,
+                            idSite: asignation.idSite,
+                            idCentroCostos: asignation.idCentroCostos ? Number(asignation.idCentroCostos) : null,
+                            PresupuestoAsignado: asignation.presupuestoAsignado || 0.00,
+                            PresupuestoEjecutado: 0.00,
+                            Encargado: asignation.encargado || null,
+                            Correo: asignation.correo || null,
+                            Telefono: asignation.telefono || null,
+                            Extension: asignation.extension || null,
+                            Activo: true,
+                        },
+                    });
+                }
+            }
+
+            return { message: 'Área operativa y sus asignaciones actualizadas con éxito.' };
         });
-
-        if (!currentArea) throw new NotFoundException('El área operativa que intentas modificar no existe.');
-
-        const costCenter = await this.prismaService.catCentroCostos.findFirst({
-            where: {
-                idCentroCostos: updateAreaDto.idCentroCostos,
-                idEmpresa: companyId,
-            },
-            include: {
-                CatAreas: true,
-            },
-        });
-
-        if (!costCenter) throw new NotFoundException('El centro de costos seleccionado no pertenece a esta empresa o no existe.');
-
-        const isNameDuplicate = costCenter.CatAreas.some(
-            (area) =>
-                area.Descripcion.toUpperCase() === updateAreaDto.descripcion.toUpperCase() &&
-                area.idArea !== areaId
-        );
-
-        if (isNameDuplicate) {
-            throw new ConflictException(
-                `El área "${updateAreaDto.descripcion}" ya se encuentra registrada en ese centro de costos.`,
-            );
-        }
-
-        const totalAsignadoOtrasAreas = costCenter.CatAreas.reduce((acc, area) => {
-            return area.idArea === areaId ? acc : acc + Number(area.PresupuestoAsignado || 0);
-        }, 0);
-
-        const presupuestoAnualCentro = Number(costCenter.PresupuestoAnual || 0);
-        const presupuestoDisponibleCentro = presupuestoAnualCentro - totalAsignadoOtrasAreas;
-
-        if (updateAreaDto.presupuestoAsignado > presupuestoDisponibleCentro) {
-            throw new BadRequestException(
-                `Excedente Presupuestal. El centro de costos destino solo cuenta con un saldo disponible de $${presupuestoDisponibleCentro} MXN ` +
-                `para asignar, y se intentó fondear el área con $${updateAreaDto.presupuestoAsignado} MXN.`,
-            );
-        }
-
-        const updatedArea = await this.prismaService.catAreas.update({
-            where: { idArea: areaId },
-            data: {
-                idSite: updateAreaDto.idSite,
-                idCentroCostos: updateAreaDto.idCentroCostos,
-                Descripcion: updateAreaDto.descripcion,
-                Encargado: updateAreaDto.encargado || null,
-                Correo: updateAreaDto.correo || null,
-                Telefono: updateAreaDto.telefono || null,
-                Extension: updateAreaDto.extension || null,
-                PresupuestoAsignado: updateAreaDto.presupuestoAsignado,
-            },
-        });
-
-        return { message: 'Área operativa actualizada con éxito.' };
     }
 
     async changeStatus(companyId: number, id: number, active: boolean) {
+        // Verificamos si el área existe y si tiene presencia en la empresa actual
         const area = await this.prismaService.catAreas.findFirst({
-            where: { idArea: id },
+            where: {
+                idArea: id,
+                RelAreasUbicaciones: {
+                    some: {
+                        OR: [
+                            { CatSites: { idEmpresa: companyId } },
+                            { CatCentroCostos: { idEmpresa: companyId } }
+                        ]
+                    }
+                }
+            },
+            include: {
+                RelAreasUbicaciones: {
+                    include: {
+                        CatSites: true
+                    }
+                }
+            }
         });
-        if (!area || !area.idSite) throw new Error('Área no encontrada');
 
-        const site = await this.prismaService.catSites.findFirst({
-            where: { idSite: area.idSite, idEmpresa: companyId, Activo: true },
-        });
+        if (!area) {
+            throw new Error('Área no encontrada o no pertenece a la empresa actual');
+        }
 
-        if (!site) throw new Error('No se puede desactivar el área porque no tiene sitios activos');
+        // Si el usuario quiere ACTIVAR el área, validamos que al menos una de sus sedes asociadas esté activa
+        if (active) {
+            const tieneSitioActivo = area.RelAreasUbicaciones.some(
+                (rel) => rel.CatSites && rel.CatSites.idEmpresa === companyId && rel.CatSites.Activo === true
+            );
 
+            if (!tieneSitioActivo) {
+                throw new Error('No se puede activar el área porque no tiene sedes operativas o activas asociadas en esta empresa.');
+            }
+        }
+
+        // Si pasa las validaciones (o si es una desactivación directa), actualizamos el estatus
         await this.prismaService.catAreas.update({
             where: { idArea: id },
             data: {
