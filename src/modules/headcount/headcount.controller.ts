@@ -1,8 +1,9 @@
-import { Controller, DefaultValuePipe, Get, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { HeadcountService } from './headcount.service';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
+import { UpdateHeadcountDto } from './dto/update-headcount.dto';
 
 @ApiTags('Headcount')
 @UseGuards(JwtAuthGuard)
@@ -25,5 +26,16 @@ export class HeadcountController {
     ) {
         const querySearch = search || '';
         return this.headcountService.findAll(companyId, page, querySearch, limit, locationId);
+    }
+
+    @Patch()
+    @ApiOperation({ summary: 'Update authorized headcount plazas for specific roles', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Plazas updated successfully' })
+    @ApiResponse({ status: 400, description: 'Bad request / Invalid data verification' })
+    async updatePlazas(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Body() updateDto: UpdateHeadcountDto,
+    ) {
+        return this.headcountService.update(companyId, updateDto);
     }
 }

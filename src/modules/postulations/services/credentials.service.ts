@@ -22,7 +22,7 @@ export async function generateCredentials(
 
     const { curp, idPuesto } = data;
 
-    const exists = await prisma.candidatos.findFirst({ where: { rfc: curp } });
+    const exists = await prisma.empleados.findFirst({ where: { rfc: curp } });
     if (exists) throw new BadRequestException(`El CURP ${curp} ya existe`);
 
     const result = await createCandidateWithCredentials(data, prisma);
@@ -77,7 +77,7 @@ export async function generateCredentials(
     const usuarioDB = await prisma.usuarios.findFirst({ where: { idCandidato: idCandidatoNumber } });
     if (!usuarioDB) throw new BadRequestException('No se encontró el usuario');
 
-    const candidato = await prisma.candidatos.findFirst({ where: { idCandidato: idCandidatoNumber } });
+    const candidato = await prisma.empleados.findFirst({ where: { idEmpleado: idCandidatoNumber } });
     if (!candidato) throw new BadRequestException('No se encontró el candidato');
 
     await notify({

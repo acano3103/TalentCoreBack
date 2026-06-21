@@ -42,7 +42,7 @@ export class AuthDataService {
     }
 
     public async getCandidatoData(userId: number, candidateId: number): Promise<UserData> {
-        const candidate = await this.prisma.candidatos.findUnique({ where: { idCandidato: candidateId } });
+        const candidate = await this.prisma.empleados.findUnique({ where: { idEmpleado: candidateId } });
 
         return {
             id: userId,

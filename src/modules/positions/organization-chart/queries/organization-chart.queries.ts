@@ -10,43 +10,114 @@ export class OrganizationChartQueries {
         return result[0]?.nombre_comercial || 'Empresa';
     }
 
-    static async getChartData(prisma: PrismaService, companyId: number): Promise<any[]> {
-        return prisma.$queryRaw<any[]>`
+    static async getAuthorizedChartData(
+        prisma: PrismaService,
+        companyId: number,
+        siteId?: number,
+        areaId?: number
+    ): Promise<any[]> {
+        // Construimos condiciones dinámicas seguras para inyección de datos
+        const condSite = siteId ? `AND s.idSite = ${siteId}` : '';
+        const condArea = areaId ? `AND a.idArea = ${areaId}` : '';
+
+        return prisma.$queryRawUnsafe<any[]>(`
+          WITH RECURSIVE seq_generator AS (
+              SELECT 1 AS seq
+              UNION ALL
+              SELECT seq + 1 FROM seq_generator WHERE seq < 50
+          ),
+          PlazasOcupadas AS (
+              SELECT 
+                  idEmpleado,
+                  idPuesto,
+                  idSite,
+                  ROW_NUMBER() OVER (PARTITION BY idPuesto, idSite ORDER BY idEmpleado) AS rn
+              FROM Empleados
+              WHERE activo = 1
+          )
           SELECT 
-              CONCAT(p.idPuesto, '_', seq.seq) AS uid,       
+              CONCAT(p.idPuesto, '_', rpu.idSite, '_', sg.seq) AS uid,       
               p.idPuesto,
               p.NombrePuesto,
-              p.idJefeInmediato,
+              p.idJefeInmediato, 
               a.idArea,
               a.Descripcion AS Area,
               s.idSite,
               s.Descripcion AS Site,
-              e.idEmpresa,
-              e.nombre_comercial AS Empresa,
               CASE 
-                  WHEN exp.idExpediente IS NOT NULL THEN 'OCUPADO'
+                  WHEN emp.idEmpleado IS NOT NULL THEN 'OCUPADO'
                   ELSE 'VACANTE'
-              END AS estatus,
-              exp.idCandidato,
-              exp.idExpediente
+              END AS estatus
           FROM CatEmpresas e
-          JOIN CatSites s ON s.idEmpresa = e.idEmpresa
+          JOIN CatSites s ON s.idEmpresa = e.idEmpresa ${condSite}
           JOIN RelAreasUbicaciones rau ON rau.idSite = s.idSite AND rau.Activo = 1
-          JOIN CatAreas a ON a.idArea = rau.idArea AND a.Activo = 1
+          JOIN CatAreas a ON a.idArea = rau.idArea AND a.Activo = 1 ${condArea}
           JOIN CatPuestos p ON p.idArea = a.idArea AND p.Activo = 1
-          LEFT JOIN (
-              SELECT 1 AS seq
-          ) seq ON 1 = 1
-          LEFT JOIN (
-              SELECT 
-                  idPuesto, 
-                  idExpediente,
-                  idCandidato,
-                  ROW_NUMBER() OVER (PARTITION BY idPuesto ORDER BY idExpediente) AS rn
-              FROM expedientes
-              WHERE idEstatus >= 25
-          ) exp ON exp.idPuesto = p.idPuesto AND exp.rn = seq.seq
-          WHERE e.idEmpresa = ${companyId};
+          JOIN RelPuestosUbicaciones rpu ON rpu.idPuesto = p.idPuesto AND rpu.idSite = s.idSite
+          JOIN seq_generator sg ON sg.seq <= GREATEST(1, rpu.PlazasAutorizadas)
+          LEFT JOIN PlazasOcupadas emp ON emp.idPuesto = p.idPuesto AND emp.idSite = rpu.idSite AND emp.rn = sg.seq
+          WHERE e.idEmpresa = ${companyId} AND p.Activo = 1;
+        `);
+    }
+
+    static async getRealEmployeesData(
+        prisma: PrismaService,
+        companyId: number,
+        siteId: number | null,
+        areaId: number | null
+    ): Promise<any[]> {
+        return prisma.$queryRaw<any[]>`
+            SELECT 
+                CONCAT('EMP_', e.idEmpleado) AS uid,
+                e.idEmpleado,
+                CONCAT(e.nombre, ' ', e.primerApellido, ' ', COALESCE(e.segundoApellido, '')) AS nombreCompleto,
+                e.idJefeInmediato,
+                CASE 
+                    WHEN e.idJefeInmediato IS NOT NULL THEN CONCAT('EMP_', e.idJefeInmediato)
+                    ELSE NULL 
+                END AS parentUid,
+                p.idPuesto,
+                p.NombrePuesto,
+                a.idArea,
+                a.Descripcion AS Area,
+                s.idSite,
+                s.Descripcion AS Site
+            FROM Empleados e
+            JOIN CatPuestos p ON p.idPuesto = e.idPuesto AND p.Activo = 1
+            JOIN CatAreas a ON a.idArea = p.idArea AND a.Activo = 1
+            JOIN CatSites s ON s.idSite = e.idSite AND s.idEmpresa = ${companyId}
+            WHERE e.activo = 1
+              AND (${siteId} IS NULL OR s.idSite = ${siteId})
+              AND (${areaId} IS NULL OR p.idArea = ${areaId});
         `;
     }
+
+    static async getRealVacanciesData(
+        prisma: PrismaService,
+        companyId: number,
+        siteId: number | null,
+        areaId: number | null
+    ): Promise<any[]> {
+        return prisma.$queryRaw<any[]>`
+            SELECT 
+                CONCAT('VAC_', v.idVacante) AS uid,
+                v.idVacante,
+                CONCAT('EMP_', v.idJefeInmediato) AS parentUid,
+                p.idPuesto,
+                p.NombrePuesto,
+                a.idArea,
+                a.Descripcion AS Area,
+                s.idSite,
+                s.Descripcion AS Site,
+                v.estatus
+            FROM Vacantes v
+            JOIN CatPuestos p ON p.idPuesto = v.idPuesto AND p.Activo = 1
+            JOIN CatAreas a ON a.idArea = p.idArea AND a.Activo = 1
+            JOIN CatSites s ON s.idSite = v.idSite AND s.idEmpresa = ${companyId}
+            WHERE v.estatus = 'RECLUTAMIENTO_ACTIVO'
+              AND (${siteId} IS NULL OR s.idSite = ${siteId})
+              AND (${areaId} IS NULL OR p.idArea = ${areaId});
+        `;
+    }
+
 }

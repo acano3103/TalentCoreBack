@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { HeadcountQueries } from './queries/headcount.queries';
+import { UpdateHeadcountDto } from './dto/update-headcount.dto';
 
 @Injectable()
 export class HeadcountService {
@@ -68,5 +69,53 @@ export class HeadcountService {
                 totalDisponible: globalSummary.totalAutorizado // Al ser los demás 0, el disponible es igual al autorizado
             }
         };
+    }
+
+    async update(companyId: number, dto: UpdateHeadcountDto) {
+        const { idSite, plazas } = dto;
+
+        // Verificación de seguridad: Confirmar que el site exista y pertenezca a la empresa actual
+        const siteExists = await this.prisma.catSites.findFirst({
+            where: {
+                idSite: idSite,
+                idEmpresa: companyId,
+            },
+        });
+
+        if (!siteExists) {
+            throw new BadRequestException('El Site especificado no pertenece a la compañía provista.');
+        }
+
+        await this.prisma.$transaction(async (tx) => {
+            for (const [idPuestoStr, nuevasPlazas] of Object.entries(plazas)) {
+                const clockPuestoId = Number(idPuestoStr);
+                const totalPlazasAsignar = Number(nuevasPlazas);
+
+                if (totalPlazasAsignar < 0) {
+                    throw new BadRequestException(`Las plazas para el puesto ID ${clockPuestoId} no pueden ser valores negativos.`);
+                }
+
+                await tx.relPuestosUbicaciones.upsert({
+                    where: {
+                        idPuesto_idSite: {
+                            idPuesto: clockPuestoId,
+                            idSite: idSite,
+                        },
+                    },
+                    // Si ya existe el registro en la tabla intermedia, lo actualizamos
+                    update: {
+                        PlazasAutorizadas: totalPlazasAsignar,
+                    },
+                    // Si no existe (asumido en 0 por el Front), creamos la fila por primera vez
+                    create: {
+                        idPuesto: clockPuestoId,
+                        idSite: idSite,
+                        PlazasAutorizadas: totalPlazasAsignar,
+                    },
+                });
+            }
+        });
+
+        return { message: 'Estructura de plazas y headcount configurada exitosamente.' };
     }
 }

@@ -119,7 +119,7 @@ export class AuthService {
                     where: { idUsuario: userRec.idUsuario },
                     data: { token: token2fa }
                 });
-                const candidate = await this.prisma.candidatos.findFirst({ where: { idCandidato: userRec.idCandidato } });
+                const candidate = await this.prisma.empleados.findFirst({ where: { idEmpleado: userRec.idCandidato } });
                 if (!candidate?.correo) throw new BadRequestException('El candidato no tiene correo registrado');
 
                 await this.notifications.notify({
@@ -262,7 +262,7 @@ export class AuthService {
             const userRec = await this.prisma.usuarios.findFirst({ where: { idUsuario, activo: true } });
             if (!userRec?.idCandidato) throw new BadRequestException('Usuario no válido');
 
-            const candidate = await this.prisma.candidatos.findFirst({ where: { idCandidato: userRec.idCandidato } });
+            const candidate = await this.prisma.empleados.findFirst({ where: { idEmpleado: userRec.idCandidato } });
             if (!candidate?.correo) throw new BadRequestException('El candidato no tiene correo');
 
             await this.prisma.usuarios.update({
