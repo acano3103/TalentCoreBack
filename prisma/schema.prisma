@@ -244,9 +244,12 @@ model CatModalidad {
 }
 
 model CatModulos {
-  idModulo    Int      @id @default(autoincrement())
-  Descripcion String?  @db.VarChar(200)
-  Activo      Boolean? @default(true)
+  idModulo       Int              @id @default(autoincrement())
+  Descripcion    String?          @db.VarChar(200)
+  Codigo         String?          @db.VarChar(100)
+  idPadre        Int?
+  Activo         Boolean?         @default(true)
+  RelRolPermisos RelRolPermisos[]
 }
 
 model CatNivel {
@@ -304,6 +307,7 @@ model CatPuestos {
   FuncionesPuesto       FuncionesPuesto[]
   HabilidadesPuesto     HabilidadesPuesto[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
+  Vacantes              Vacantes[]
 
   @@index([IdNivelSalario], map: "FK_Puestos_NivelSalario")
   @@index([idSite], map: "FK_Puestos_Sites_idx")
@@ -333,6 +337,7 @@ model CatSites {
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   RelAreasUbicaciones   RelAreasUbicaciones[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
+  Vacantes              Vacantes[]
 
   @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
 }
@@ -936,9 +941,10 @@ model auth_user_user_permissions {
 }
 
 model catroles {
-  idRol       Int     @id @default(autoincrement())
-  descripcion String  @db.VarChar(100)
-  activo      Boolean @default(true)
+  idRol          Int              @id @default(autoincrement())
+  descripcion    String           @db.VarChar(100)
+  activo         Boolean          @default(true)
+  RelRolPermisos RelRolPermisos[]
 }
 
 model consumonubarium {
@@ -1089,31 +1095,37 @@ model RelAreasUbicaciones {
 }
 
 model Empleados {
-  idEmpleado           Int       @id @default(autoincrement())
+  idEmpleado           Int         @id @default(autoincrement())
   idPuesto             Int?
+  idJefeInmediato      Int?
   idSite               Int?
-  nombre               String?   @db.VarChar(100)
-  primerApellido       String?   @db.VarChar(100)
-  segundoApellido      String?   @db.VarChar(100)
+  nombre               String?     @db.VarChar(100)
+  primerApellido       String?     @db.VarChar(100)
+  segundoApellido      String?     @db.VarChar(100)
   idCampania           Int?
   idTipoSanguineo      Int?
-  numeroSeguroSocial   String?   @db.VarChar(15)
+  numeroSeguroSocial   String?     @db.VarChar(15)
   idEstadoCivil        Int?
-  fechaNacimiento      DateTime? @db.Date
-  rfc                  String?   @db.VarChar(18)
-  correo               String?   @db.VarChar(250)
-  telefonoMovil        String?   @db.VarChar(15)
-  telefonoLocal        String?   @db.VarChar(15)
+  fechaNacimiento      DateTime?   @db.Date
+  rfc                  String?     @db.VarChar(18)
+  correo               String?     @db.VarChar(250)
+  telefonoMovil        String?     @db.VarChar(15)
+  telefonoLocal        String?     @db.VarChar(15)
   idNivelEstudios      Int?
   tieneInfonavit       Boolean?
   tieneHijos           Boolean?
-  FechaRegistro        DateTime? @default(now()) @db.Timestamp(0)
-  usuarioRegistro      String?   @db.VarChar(250)
+  FechaRegistro        DateTime?   @default(now()) @db.Timestamp(0)
+  usuarioRegistro      String?     @db.VarChar(250)
   idGenero             Int?
-  numeroInfonavit      String?   @db.VarChar(30)
+  numeroInfonavit      String?     @db.VarChar(30)
   numeroHijos          Int?
-  imagenFirmaAutografa String?   @db.VarChar(500)
-  activo               Boolean   @default(true)
+  imagenFirmaAutografa String?     @db.VarChar(500)
+  activo               Boolean     @default(true)
+  Empleados            Empleados?  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
+  other_Empleados      Empleados[] @relation("EmpleadosToEmpleados")
+  Vacantes             Vacantes[]
+
+  @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
 }
 
 model Expedientes {
@@ -1137,6 +1149,38 @@ model RelPuestosUbicaciones {
 
   @@unique([idPuesto, idSite], map: "UK_Puesto_Site")
   @@index([idSite], map: "FK_PuestosUbicaciones_Sites")
+}
+
+model RelRolPermisos {
+  id              Int        @id @default(autoincrement())
+  idRol           Int
+  idModulo        Int
+  puedeVer        Boolean    @default(false)
+  puedeCrear      Boolean    @default(false)
+  puedeActualizar Boolean    @default(false)
+  puedeEliminar   Boolean    @default(false)
+  activo          Boolean    @default(true)
+  CatModulos      CatModulos @relation(fields: [idModulo], references: [idModulo], onDelete: Cascade, onUpdate: NoAction, map: "fk_permiso_modulo")
+  catroles        catroles   @relation(fields: [idRol], references: [idRol], onDelete: Cascade, map: "fk_permisos_roles")
+
+  @@unique([idRol, idModulo], map: "idx_rol_modulo_v2")
+  @@index([idModulo], map: "fk_permisos_modulos")
+}
+
+model Vacantes {
+  idVacante       Int        @id @default(autoincrement())
+  idPuesto        Int
+  idSite          Int
+  idJefeInmediato Int
+  estatus         String?    @default("COMPARTIDA_INTERNA") @db.VarChar(50)
+  fechaCreacion   DateTime?  @default(now()) @db.Timestamp(0)
+  Empleados       Empleados  @relation(fields: [idJefeInmediato], references: [idEmpleado], map: "fk_vacante_jefe")
+  CatPuestos      CatPuestos @relation(fields: [idPuesto], references: [idPuesto], map: "fk_vacante_puesto")
+  CatSites        CatSites   @relation(fields: [idSite], references: [idSite], map: "fk_vacante_site")
+
+  @@index([idJefeInmediato], map: "fk_vacante_jefe")
+  @@index([idPuesto], map: "fk_vacante_puesto")
+  @@index([idSite], map: "fk_vacante_site")
 }
 
 enum RelRequisicionHabilidades_nivel {

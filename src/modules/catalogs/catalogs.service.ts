@@ -51,7 +51,7 @@ export class CatalogsService {
       case 'modulos':
         return this.prisma.catModulos.findMany({
           where: { Activo: true },
-          select: { idModulo: true, Descripcion: true, Activo: true },
+          select: { idModulo: true, Descripcion: true, Codigo: true, idPadre: true, Activo: true },
           orderBy: { Descripcion: 'asc' },
         });
 

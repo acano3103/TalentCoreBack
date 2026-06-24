@@ -18,6 +18,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedInterviewStatus(); /** CatEstatusEntrevista */
             await this.seedRecordStatus(); /** CatEstatusExpedientes */
             await this.seedVacantStatus(); /** CatEstatusVacante */
+            await this.seedPostulationStatus(); /** CatEstatusPostulacion */
             await this.seedGender(); /** CatGenero */
             await this.seedLanguages(); /** CatIdiomas */
             await this.seedModalities(); /** CatModalidad */
@@ -26,9 +27,12 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedHiringTypes(); /** CatTipoContratacion */
             await this.seedCourseTypes(); /** CatTipoCurso */
             await this.seedPositionTypes(); /** CatTipoPuesto */
+            await this.seedPublicationTypes(); /** CatTiposPublicacion */
             await this.seedEducationLevels(); /** CatEscolaridad */
             await this.seedSalaryLevels(); /** CatNivelesSalario */
             await this.seedTiposUbicacion(); /** CatTiposUbicacion */
+            await this.seedRoles(); /** catroles */
+            await this.seedRolesPermisos(); /** RelRolPermisos */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -182,12 +186,12 @@ export class CatalogsSeedService implements OnModuleInit {
     // Seeds initial vacants status into the database.
     private async seedVacantStatus() {
         const vacantsStatus = [
-            { idEstatusvacante: 1, decripcion: 'POSTULADO', activo: true },
-            { idEstatusvacante: 2, decripcion: 'EN ENTREVISTAS', activo: true },
-            { idEstatusvacante: 3, decripcion: 'EN NEGOCIACION', activo: true },
-            { idEstatusvacante: 4, decripcion: 'DECLINO LA OFERTA', activo: true },
-            { idEstatusvacante: 5, decripcion: 'RECHAZADO', activo: true },
-            { idEstatusvacante: 6, decripcion: 'RECLUTADO', activo: true },
+            { idEstatusvacante: 1, decripcion: 'PENDIENTE MANAGER', activo: true },
+            { idEstatusvacante: 2, decripcion: 'APROBADO MANAGER', activo: true },
+            { idEstatusvacante: 3, decripcion: 'RECHAZADO MANAGER', activo: true },
+            { idEstatusvacante: 4, decripcion: 'PENDIENTE RH', activo: true },
+            { idEstatusvacante: 5, decripcion: 'APROBADO RH', activo: true },
+            { idEstatusvacante: 6, decripcion: 'RECHAZADO RH', activo: true },
         ]
 
         for (const vacantStatus of vacantsStatus) {
@@ -195,6 +199,26 @@ export class CatalogsSeedService implements OnModuleInit {
                 INSERT INTO CatEstatusVacante (idEstatusvacante, decripcion, activo)
                 VALUES (${vacantStatus.idEstatusvacante}, ${vacantStatus.decripcion}, ${vacantStatus.activo})
                 ON DUPLICATE KEY UPDATE decripcion = VALUES(decripcion), activo = VALUES(activo);
+            `;
+        }
+    }
+
+    // Seeds initial postulation status into the database.
+    private async seedPostulationStatus() {
+        const postulationsStatus = [
+            { idEstatusPostulacion: 1, descripcion: 'POSTULADO', activo: true },
+            { idEstatusPostulacion: 2, descripcion: 'EN ENTREVISTAS', activo: true },
+            { idEstatusPostulacion: 3, descripcion: 'EN NEGOCIACION', activo: true },
+            { idEstatusPostulacion: 4, descripcion: 'DECLINO LA OFERTA', activo: true },
+            { idEstatusPostulacion: 5, descripcion: 'RECHAZADO', activo: true },
+            { idEstatusPostulacion: 6, descripcion: 'RECLUTADO', activo: true },
+        ]
+
+        for (const postulationStatus of postulationsStatus) {
+            await this.prisma.$queryRaw`
+                INSERT INTO CatEstatusPostulacion (idEstatusPostulacion, descripcion, activo)
+                VALUES (${postulationStatus.idEstatusPostulacion}, ${postulationStatus.descripcion}, ${postulationStatus.activo})
+                ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion), activo = VALUES(activo);
             `;
         }
     }
@@ -260,25 +284,25 @@ export class CatalogsSeedService implements OnModuleInit {
     // Seeds initial modules into the database.
     private async seedModules() {
         const modules = [
-            { idModulo: 1, Descripcion: 'Administrador', Activo: true },
-            { idModulo: 2, Descripcion: 'Expedientes', Activo: true },
-            { idModulo: 3, Descripcion: 'Subir Documentos', Activo: true },
-            { idModulo: 4, Descripcion: 'Organigrama', Activo: true },
-            { idModulo: 5, Descripcion: 'Reportes y estadisticas', Activo: true },
-            { idModulo: 6, Descripcion: 'Bolsa de Trabajo', Activo: true },
-            { idModulo: 7, Descripcion: 'Validar Requisiciones', Activo: true },
-            { idModulo: 8, Descripcion: 'Perfilador de Candidatos', Activo: true },
-            { idModulo: 9, Descripcion: 'Requisiciones', Activo: true },
-            { idModulo: 10, Descripcion: 'Simupro', Activo: true },
-            { idModulo: 11, Descripcion: 'Entrevista IA', Activo: true },
-            { idModulo: 12, Descripcion: 'Integraciones', Activo: true },
+            { idModulo: 1, Descripcion: 'Estructura Organizacional', Codigo: 'organizational-structure', idPadre: null, Activo: true },
+            { idModulo: 2, Descripcion: 'Empresas', Codigo: 'companies', idPadre: 1, Activo: true },
+            { idModulo: 3, Descripcion: 'Ubicaciones', Codigo: 'locations', idPadre: 1, Activo: true },
+            { idModulo: 4, Descripcion: 'Registros Patronales', Codigo: 'patronal-records', idPadre: 1, Activo: true },
+            { idModulo: 5, Descripcion: 'Areas Operativas', Codigo: 'areas', idPadre: 1, Activo: true },
+            { idModulo: 6, Descripcion: 'Centro de Costos', Codigo: 'cost-center', idPadre: 1, Activo: true },
+            { idModulo: 7, Descripcion: 'Puestos', Codigo: 'positions', idPadre: 1, Activo: true },
+            { idModulo: 8, Descripcion: 'Niveles de Salario', Codigo: 'salary-levels', idPadre: 1, Activo: true },
+            { idModulo: 9, Descripcion: 'Validación de Puestos', Codigo: 'validate-positions', idPadre: 1, Activo: true },
+            { idModulo: 10, Descripcion: 'Plazas Operativas', Codigo: 'headcount-ppto', idPadre: 1, Activo: true },
+            { idModulo: 11, Descripcion: 'Organigrama Autorizado', Codigo: 'authorized-organizational-chart', idPadre: 1, Activo: true },
+            { idModulo: 12, Descripcion: 'Organigrama Nominal', Codigo: 'nominal-organization-chart', idPadre: 1, Activo: true },
         ]
 
         for (const module of modules) {
             await this.prisma.$queryRaw`
-                INSERT INTO CatModulos (idModulo, Descripcion, Activo)
-                VALUES (${module.idModulo}, ${module.Descripcion}, ${module.Activo})
-                ON DUPLICATE KEY UPDATE Descripcion = VALUES(Descripcion), Activo = VALUES(Activo);
+                INSERT INTO CatModulos (idModulo, Descripcion, Codigo, idPadre, Activo)
+                VALUES (${module.idModulo}, ${module.Descripcion}, ${module.Codigo}, ${module.idPadre}, ${module.Activo})
+                ON DUPLICATE KEY UPDATE Descripcion = VALUES(Descripcion), Codigo = VALUES(Codigo), idPadre = VALUES(idPadre), Activo = VALUES(Activo);
             `;
         }
     }
@@ -369,6 +393,25 @@ export class CatalogsSeedService implements OnModuleInit {
         }
     }
 
+    // Seeds initial publication types into the database.
+    private async seedPublicationTypes() {
+        const publicationTypes = [
+            { id: 1, descripcion: 'INTERNA', activo: 1 },
+            { id: 2, descripcion: 'EXTERNA', activo: 1 },
+            { id: 3, descripcion: 'MIXTA', activo: 1 },
+        ];
+
+        for (const tipo of publicationTypes) {
+            await this.prisma.$queryRaw`
+            INSERT INTO CatTiposPublicacion (idTipoPublicacion, descripcion, activo)
+            VALUES (${tipo.id}, ${tipo.descripcion}, ${tipo.activo})
+            ON DUPLICATE KEY UPDATE
+                descripcion = VALUES(descripcion),
+                activo = VALUES(activo);
+        `;
+        }
+    }
+
     // Seeds initial education levels into the database.
     private async seedEducationLevels() {
         const nivelesEstudio = [
@@ -438,6 +481,85 @@ export class CatalogsSeedService implements OnModuleInit {
                 Codigo = VALUES(Codigo),
                 Descripcion = VALUES(Descripcion), 
                 Activo = VALUES(Activo);
+        `;
+        }
+    }
+
+    // Seeds initial location types into the database.
+    private async seedRolesPermisos() {
+        const types = [
+            // ROL: ADMIN / RH (idRol: 1)
+            { id: 1, idRol: 1, idModulo: 1, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Estructura Organizacional (Padre)
+            { id: 2, idRol: 1, idModulo: 2, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Empresas
+            { id: 3, idRol: 1, idModulo: 3, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Ubicaciones
+            { id: 4, idRol: 1, idModulo: 4, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Registros Patronales
+            { id: 5, idRol: 1, idModulo: 5, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Areas Operativas
+            { id: 6, idRol: 1, idModulo: 6, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Centro de Costos
+            { id: 7, idRol: 1, idModulo: 7, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Puestos
+            { id: 8, idRol: 1, idModulo: 8, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Niveles de Salario
+            { id: 9, idRol: 1, idModulo: 9, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Validación de Puestos
+            { id: 10, idRol: 1, idModulo: 10, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plazas Operativas
+            { id: 11, idRol: 1, idModulo: 11, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Organigrama Autorizado
+            { id: 12, idRol: 1, idModulo: 12, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Organigrama Nominal
+            // ROL: MANAGER (idRol: 2)
+            { id: 13, idRol: 2, idModulo: 1, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Estructura Organizacional (Padre)
+            { id: 14, idRol: 2, idModulo: 2, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empresas
+            { id: 15, idRol: 2, idModulo: 3, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Ubicaciones
+            { id: 16, idRol: 2, idModulo: 4, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
+            { id: 17, idRol: 2, idModulo: 5, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas
+            { id: 18, idRol: 2, idModulo: 6, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos
+            { id: 19, idRol: 2, idModulo: 7, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Puestos (Ver y Editar)
+            { id: 20, idRol: 2, idModulo: 8, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario (Oculto)
+            { id: 21, idRol: 2, idModulo: 9, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Validación de Puestos (Ver y Editar)
+            { id: 22, idRol: 2, idModulo: 10, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
+            { id: 23, idRol: 2, idModulo: 11, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
+            { id: 24, idRol: 2, idModulo: 12, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
+            // ROL: EMPLEADO (idRol: 3)
+            { id: 25, idRol: 3, idModulo: 1, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Estructura Organizacional (Padre)
+            { id: 26, idRol: 3, idModulo: 2, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empresas (Sin Acceso)
+            { id: 27, idRol: 3, idModulo: 3, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Ubicaciones (Sin Acceso)
+            { id: 28, idRol: 3, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales (Sin Acceso)
+            { id: 29, idRol: 3, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas (Sin Acceso)
+            { id: 30, idRol: 3, idModulo: 6, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos (Sin Acceso)
+            { id: 31, idRol: 3, idModulo: 7, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Puestos (Sin Acceso)
+            { id: 32, idRol: 3, idModulo: 8, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario (Sin Acceso)
+            { id: 33, idRol: 3, idModulo: 9, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Validación de Puestos (Sin Acceso)
+            { id: 34, idRol: 3, idModulo: 10, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas (Sin Acceso)
+            { id: 35, idRol: 3, idModulo: 11, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado (Sin Acceso)
+            { id: 36, idRol: 3, idModulo: 12, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal (Sin Acceso)
+        ];
+
+        for (const type of types) {
+            await this.prisma.$queryRaw`
+            INSERT INTO RelRolPermisos (id, idRol, idModulo, PuedeVer, PuedeCrear, PuedeActualizar, PuedeEliminar, Activo)
+            VALUES (${type.id}, ${type.idRol}, ${type.idModulo}, ${type.puedeVer}, ${type.puedeCrear}, ${type.puedeActualizar}, ${type.puedeEliminar}, ${type.activo})
+            ON DUPLICATE KEY UPDATE 
+                idRol = VALUES(idRol),
+                idModulo = VALUES(idModulo),
+                PuedeVer = VALUES(PuedeVer),
+                PuedeCrear = VALUES(PuedeCrear),
+                PuedeActualizar = VALUES(PuedeActualizar),
+                PuedeEliminar = VALUES(PuedeEliminar),
+                Activo = VALUES(Activo);
+        `;
+        }
+    }
+
+    // Seed initial roles
+    private async seedRoles() {
+        const roles = [
+            { idRol: 1, descripcion: 'Admin / RH', activo: true },
+            { idRol: 2, descripcion: 'Manager', activo: true },
+            { idRol: 3, descripcion: 'Empleado', activo: true }
+        ];
+
+        for (const rol of roles) {
+            await this.prisma.$queryRaw`
+            INSERT INTO catroles (idRol, descripcion, activo)
+            VALUES (${rol.idRol}, ${rol.descripcion}, ${rol.activo})
+            ON DUPLICATE KEY UPDATE 
+                descripcion = VALUES(descripcion),
+                activo = VALUES(activo);
         `;
         }
     }
