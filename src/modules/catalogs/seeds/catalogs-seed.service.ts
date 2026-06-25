@@ -548,9 +548,12 @@ export class CatalogsSeedService implements OnModuleInit {
     // Seed initial roles
     private async seedRoles() {
         const roles = [
-            { idRol: 1, descripcion: 'Admin / RH', activo: true },
-            { idRol: 2, descripcion: 'Manager', activo: true },
-            { idRol: 3, descripcion: 'Empleado', activo: true }
+            { idRol: 1, descripcion: 'Admin', activo: true },
+            { idRol: 2, descripcion: 'RH', activo: true },
+            { idRol: 3, descripcion: 'Finanzas', activo: true },
+            { idRol: 4, descripcion: 'Reclutador', activo: true },
+            { idRol: 5, descripcion: 'Manager', activo: true },
+            { idRol: 6, descripcion: 'Empleado', activo: true }
         ];
 
         for (const rol of roles) {

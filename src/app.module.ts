@@ -21,6 +21,8 @@ import { EventsModule } from './modules/events/events.module';
 import { OrganizationChartModule } from './modules/positions/organization-chart/organization-chart.module';
 import { HeadcountModule } from './modules/headcount/headcount.module';
 import { RolesModule } from './modules/roles/roles.module';
+import { VacanciesController } from './modules/vacancies/vacancies.controller';
+import { VacanciesModule } from './modules/vacancies/vacancies.module';
 
 @Module({
   imports: [
@@ -54,7 +56,8 @@ import { RolesModule } from './modules/roles/roles.module';
     CostCenterModule,
     EventsModule,
     HeadcountModule,
-    RolesModule
+    RolesModule,
+    VacanciesModule
   ],
   controllers: [],
   providers: [AreasService],
