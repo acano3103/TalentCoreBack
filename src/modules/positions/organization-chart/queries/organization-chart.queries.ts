@@ -16,48 +16,52 @@ export class OrganizationChartQueries {
         siteId?: number,
         areaId?: number
     ): Promise<any[]> {
-        // Construimos condiciones dinámicas seguras para inyección de datos
-        const condSite = siteId ? `AND s.idSite = ${siteId}` : '';
-        const condArea = areaId ? `AND a.idArea = ${areaId}` : '';
+        const filterSiteId = siteId ?? null;
+        const filterAreaId = areaId ?? null;
 
-        return prisma.$queryRawUnsafe<any[]>(`
-          WITH RECURSIVE seq_generator AS (
-              SELECT 1 AS seq
-              UNION ALL
-              SELECT seq + 1 FROM seq_generator WHERE seq < 50
-          ),
-          PlazasOcupadas AS (
-              SELECT 
-                  idEmpleado,
-                  idPuesto,
-                  idSite,
-                  ROW_NUMBER() OVER (PARTITION BY idPuesto, idSite ORDER BY idEmpleado) AS rn
-              FROM Empleados
-              WHERE activo = 1
-          )
-          SELECT 
-              CONCAT(p.idPuesto, '_', rpu.idSite, '_', sg.seq) AS uid,       
-              p.idPuesto,
-              p.NombrePuesto,
-              p.idJefeInmediato, 
-              a.idArea,
-              a.Descripcion AS Area,
-              s.idSite,
-              s.Descripcion AS Site,
-              CASE 
-                  WHEN emp.idEmpleado IS NOT NULL THEN 'OCUPADO'
-                  ELSE 'VACANTE'
-              END AS estatus
-          FROM CatEmpresas e
-          JOIN CatSites s ON s.idEmpresa = e.idEmpresa ${condSite}
-          JOIN RelAreasUbicaciones rau ON rau.idSite = s.idSite AND rau.Activo = 1
-          JOIN CatAreas a ON a.idArea = rau.idArea AND a.Activo = 1 ${condArea}
-          JOIN CatPuestos p ON p.idArea = a.idArea AND p.Activo = 1
-          JOIN RelPuestosUbicaciones rpu ON rpu.idPuesto = p.idPuesto AND rpu.idSite = s.idSite
-          JOIN seq_generator sg ON sg.seq <= GREATEST(1, rpu.PlazasAutorizadas)
-          LEFT JOIN PlazasOcupadas emp ON emp.idPuesto = p.idPuesto AND emp.idSite = rpu.idSite AND emp.rn = sg.seq
-          WHERE e.idEmpresa = ${companyId} AND p.Activo = 1;
-        `);
+        return prisma.$queryRaw<any[]>`
+        WITH RECURSIVE seq_generator AS (
+            SELECT 1 AS seq
+            UNION ALL
+            SELECT seq + 1 FROM seq_generator WHERE seq < 50
+        ),
+        PlazasOcupadas AS (
+            SELECT 
+                idEmpleado,
+                idPuesto,
+                idSite,
+                ROW_NUMBER() OVER (PARTITION BY idPuesto, idSite ORDER BY idEmpleado) AS rn
+            FROM Empleados
+            WHERE activo = 1
+        )
+        SELECT 
+            CONCAT(p.idPuesto, '_', rpu.idSite, '_', sg.seq) AS uid,       
+            p.idPuesto,
+            p.NombrePuesto,
+            p.idJefeInmediato, 
+            a.idArea,
+            a.Descripcion AS Area,
+            s.idSite,
+            s.Descripcion AS Site,
+            CASE 
+                WHEN emp.idEmpleado IS NOT NULL THEN 'OCUPADO'
+                ELSE 'VACANTE'
+            END AS estatus
+        FROM CatEmpresas e
+        -- Mantenemos las uniones limpias y fijas para evitar errores de sintaxis
+        JOIN CatSites s ON s.idEmpresa = e.idEmpresa
+        JOIN RelAreasUbicaciones rau ON rau.idSite = s.idSite AND rau.Activo = 1
+        JOIN CatAreas a ON a.idArea = rau.idArea AND a.Activo = 1
+        JOIN CatPuestos p ON p.idArea = a.idArea AND p.Activo = 1
+        JOIN RelPuestosUbicaciones rpu ON rpu.idPuesto = p.idPuesto AND rpu.idSite = s.idSite
+        JOIN seq_generator sg ON sg.seq <= GREATEST(1, rpu.PlazasAutorizadas)
+        LEFT JOIN PlazasOcupadas emp ON emp.idPuesto = p.idPuesto AND emp.idSite = rpu.idSite AND emp.rn = sg.seq
+        -- Evaluamos de forma segura los filtros opcionales en el WHERE
+        WHERE e.idEmpresa = ${companyId} 
+          AND p.Activo = 1
+          AND (${filterSiteId} IS NULL OR s.idSite = ${filterSiteId})
+          AND (${filterAreaId} IS NULL OR a.idArea = ${filterAreaId});
+    `;
     }
 
     static async getRealEmployeesData(
@@ -109,12 +113,13 @@ export class OrganizationChartQueries {
                 a.Descripcion AS Area,
                 s.idSite,
                 s.Descripcion AS Site,
-                v.estatus
+                ev.decripcion AS Estatus
             FROM Vacantes v
             JOIN CatPuestos p ON p.idPuesto = v.idPuesto AND p.Activo = 1
             JOIN CatAreas a ON a.idArea = p.idArea AND a.Activo = 1
             JOIN CatSites s ON s.idSite = v.idSite AND s.idEmpresa = ${companyId}
-            WHERE v.estatus = 'RECLUTAMIENTO_ACTIVO'
+            JOIN CatEstatusVacante ev ON ev.idEstatusVacante = v.idEstatusVacante
+            WHERE v.idEstatusVacante = 5
               AND (${siteId} IS NULL OR s.idSite = ${siteId})
               AND (${areaId} IS NULL OR p.idArea = ${areaId});
         `;
