@@ -1,4 +1,6 @@
 import { PrismaService } from "src/prisma/prisma.service";
+import { AuthUserRow } from "../interfaces/auth-user.interface";
+import { Prisma } from "generated/prisma/client";
 
 export class UsersQueries {
   static async getUsername(prisma: PrismaService, userId: number) {
@@ -41,5 +43,47 @@ export class UsersQueries {
             JOIN CatSites s ON s.idSite = r.idSite
             WHERE r.idUsuario = ${userId} AND r.activo = 1
         `;
+  }
+
+  static async findAllPaginated(prisma: PrismaService, limit: number, offset: number, search?: string): Promise<AuthUserRow[]> {
+    const searchFilter = search
+      ? Prisma.sql`WHERE 
+          u.username LIKE ${`%${search}%`} OR 
+          u.first_name LIKE ${`%${search}%`} OR 
+          u.last_name LIKE ${`%${search}%`} OR 
+          u.email LIKE ${`%${search}%`}`
+      : Prisma.empty;
+
+    return prisma.$queryRaw<AuthUserRow[]>`
+      SELECT
+        u.id, u.uuid, u.username, u.first_name, u.last_name,
+        u.email, u.phone, u.is_superuser, u.is_staff, u.is_active,
+        u.last_login, u.date_joined,
+        r.idRol, c.descripcion AS rol_descripcion
+      FROM auth_user u
+      LEFT JOIN relUsuarioRol r ON r.idUsuario = u.id AND r.activo = 1
+      LEFT JOIN catroles c ON c.idRol = r.idRol AND c.activo = 1
+      ${searchFilter}
+      ORDER BY u.id ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+  }
+
+  static async countAll(prisma: PrismaService, search?: string): Promise<number> {
+    const searchFilter = search
+      ? Prisma.sql`WHERE 
+          u.username LIKE ${`%${search}%`} OR 
+          u.first_name LIKE ${`%${search}%`} OR 
+          u.last_name LIKE ${`%${search}%`} OR 
+          u.email LIKE ${`%${search}%`}`
+      : Prisma.empty;
+
+    const countResult = await prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) as count 
+      FROM auth_user u
+      ${searchFilter}
+    `;
+
+    return countResult[0]?.count ? Number(countResult[0].count) : 0;
   }
 }
