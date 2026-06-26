@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, NotFoundException, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, NotFoundException, HttpCode, HttpStatus, UseGuards, Query, DefaultValuePipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { AuthUserRow } from './interfaces/auth-user.interface';
@@ -19,8 +19,12 @@ export class UsersController {
     description: 'Returns the list of system users (auth_user table). Does not include passwords. Includes idRol and rol_descripcion via relUsuarioRol.',
   })
   @ApiResponse({ status: 200, description: 'List of users successfully retrieved.' })
-  findAll(): Promise<AuthUserRow[]> {
-    return this.usersService.findAll();
+  findAll(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+  ) {
+    return this.usersService.findAll(page, limit, search);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -37,18 +37,20 @@ export class UsersService {
   }
 
   /** GET all users — password never returned, includes role via relUsuarioRol JOIN */
-  async findAll(): Promise<AuthUserRow[]> {
-    return this.prisma.$queryRaw<AuthUserRow[]>`
-      SELECT
-        u.id, u.uuid, u.username, u.first_name, u.last_name,
-        u.email, u.phone, u.is_superuser, u.is_staff, u.is_active,
-        u.last_login, u.date_joined,
-        r.idRol, c.descripcion AS rol_descripcion
-      FROM auth_user u
-      LEFT JOIN relUsuarioRol r ON r.idUsuario = u.id AND r.activo = 1
-      LEFT JOIN catroles c ON c.idRol = r.idRol AND c.activo = 1
-      ORDER BY u.id ASC
-    `;
+  async findAll(page: number, limit: number, search?: string) {
+    const offset = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      UsersQueries.findAllPaginated(this.prisma, limit, offset, search),
+      UsersQueries.countAll(this.prisma, search),
+    ]);
+
+    return {
+      data,
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
   }
 
   /** GET single user by id — password never returned, includes role via relUsuarioRol JOIN */
@@ -82,17 +84,17 @@ export class UsersService {
       const newUser = await tx.auth_user.create({
         data: {
           uuid: randomUUID(),
-          password:     hashedPassword,
-          last_login:   null,
+          password: hashedPassword,
+          last_login: null,
           is_superuser: false,
-          username:     dto.username,
-          first_name:   dto.first_name,
-          last_name:    dto.last_name,
-          email:        dto.email,
-          phone:        dto.phone,
-          is_staff:     false,
-          is_active:    dto.is_active,
-          date_joined:  new Date(),
+          username: dto.username,
+          first_name: dto.first_name,
+          last_name: dto.last_name,
+          email: dto.email,
+          phone: dto.phone,
+          is_staff: false,
+          is_active: dto.is_active,
+          date_joined: new Date(),
         },
         select: { id: true },
       });
@@ -100,8 +102,8 @@ export class UsersService {
       await tx.relUsuarioRol.create({
         data: {
           idUsuario: newUser.id,
-          idRol:     dto.idRol,
-          activo:    true,
+          idRol: dto.idRol,
+          activo: true,
         },
       });
 
@@ -110,7 +112,7 @@ export class UsersService {
       if (dto.empresaIds === 'all') {
         // Fetch all active empresa IDs inside the transaction
         const allEmpresas = await tx.catEmpresas.findMany({
-          where:  { activo: true },
+          where: { activo: true },
           select: { idEmpresa: true },
         });
         empresaIdList = allEmpresas.map(e => e.idEmpresa);
@@ -123,7 +125,7 @@ export class UsersService {
           data: empresaIdList.map(idEmpresa => ({
             idUsuario: newUser.id,
             idEmpresa,
-            activo:    true,
+            activo: true,
           })),
           skipDuplicates: true,
         });
@@ -135,7 +137,7 @@ export class UsersService {
           data: dto.siteIds.map(idSite => ({
             idUsuario: newUser.id,
             idSite,
-            activo:    true,
+            activo: true,
           })),
           skipDuplicates: true,
         });
@@ -158,10 +160,10 @@ export class UsersService {
 
     const userData: Record<string, unknown> = {};
     if (dto.first_name !== undefined) userData.first_name = dto.first_name;
-    if (dto.last_name  !== undefined) userData.last_name  = dto.last_name;
-    if (dto.email      !== undefined) userData.email      = dto.email;
-    if (dto.phone      !== undefined) userData.phone      = dto.phone;
-    if (dto.is_active  !== undefined) userData.is_active  = dto.is_active;
+    if (dto.last_name !== undefined) userData.last_name = dto.last_name;
+    if (dto.email !== undefined) userData.email = dto.email;
+    if (dto.phone !== undefined) userData.phone = dto.phone;
+    if (dto.is_active !== undefined) userData.is_active = dto.is_active;
 
     await this.prisma.$transaction(async (tx) => {
       if (Object.keys(userData).length > 0) {
@@ -172,7 +174,7 @@ export class UsersService {
         // Deactivate previous role, insert new one
         await tx.relUsuarioRol.updateMany({
           where: { idUsuario: id, activo: true },
-          data:  { activo: false },
+          data: { activo: false },
         });
         await tx.relUsuarioRol.create({
           data: { idUsuario: id, idRol: dto.idRol, activo: true },
@@ -194,7 +196,7 @@ export class UsersService {
 
     await this.prisma.auth_user.update({
       where: { id },
-      data:  { is_active: false },
+      data: { is_active: false },
     });
 
     const deactivated = await this.findOne(id);

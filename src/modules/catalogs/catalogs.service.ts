@@ -12,7 +12,8 @@ export type CatalogKey =
   | 'modalidades'
   | 'centro-costos'
   | 'registros-patronales'
-  | 'tipos-ubicaciones';
+  | 'tipos-ubicaciones'
+  | 'empleados';
 
 @Injectable()
 export class CatalogsService {
@@ -133,6 +134,13 @@ export class CatalogsService {
         return this.prisma.catTiposUbicacion.findMany({
           where: { Activo: true },
           orderBy: { idTipoUbicacion: 'asc' },
+        });
+
+      case 'empleados':
+        return this.prisma.empleados.findMany({
+          where: { idEmpresa: companyId, activo: true },
+          select: { idEmpleado: true, nombre: true, primerApellido: true, segundoApellido: true, correo: true },
+          orderBy: { nombre: 'asc' },
         });
 
       default:
