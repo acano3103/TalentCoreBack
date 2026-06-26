@@ -148,12 +148,16 @@ export class HumeService {
                 where: { id: interview.interview_id },
                 include: { EntrevistasCriterios: true }
             })
-            if (!mainInterview || !mainInterview.agent_id || !mainInterview.position_id) throw new NotFoundException('Entrevista de catalogo no encontrada');
+           if (!mainInterview || !mainInterview.agent_id || !mainInterview.idVacante) throw new NotFoundException('Entrevista de catalogo no encontrada');
             const agent = await this.prisma.agentes.findFirst({ where: { id: mainInterview.agent_id } })
             if (!agent || !agent.script) throw new NotFoundException('Agente no encontrado');
-            const position = await this.prisma.catPuestos.findFirst({ where: { idPuesto: mainInterview.position_id } })
+
+            const vacancy = await this.prisma.vacantes.findFirst({ where: { idVacante: mainInterview.idVacante } })
+            if (!vacancy) throw new NotFoundException('Vacante no encontrada');
+
+            const position = await this.prisma.catPuestos.findFirst({ where: { idPuesto: vacancy.idPuesto } })
             if (!position) throw new NotFoundException('Puesto no encontrado');
-            const requirements = await this.prisma.competenciasPuesto.findMany({ where: { idPuesto: mainInterview.position_id } })
+            const requirements = await this.prisma.competenciasPuesto.findMany({ where: { idPuesto: vacancy.idPuesto } })
 
             const evaluation = await analyzeInterviewWithOpenAI(
                 this.configService.get<string>('OPENAI_API_KEY')!,

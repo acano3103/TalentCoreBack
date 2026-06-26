@@ -159,6 +159,7 @@ model CatEmpresas {
   DomicilioEmpresas      DomicilioEmpresas[]
   Integraciones          Integraciones[]
   RelUsuarioEmpresa      RelUsuarioEmpresa[]
+  Vacantes               Vacantes[]
 }
 
 model CatEquipo {
@@ -198,9 +199,10 @@ model CatEstatusExpedientes {
 }
 
 model CatEstatusVacante {
-  idEstatusVacante Int      @id @default(autoincrement())
-  decripcion       String?  @db.VarChar(45)
+  idEstatusVacante Int        @id @default(autoincrement())
+  decripcion       String?    @db.VarChar(45)
   activo           Boolean?
+  Vacantes         Vacantes[]
 }
 
 model CatFuncionespuesto {
@@ -508,7 +510,7 @@ model Entrevistas {
   id                     String                     @id @default(dbgenerated("(uuid())")) @db.Char(36)
   company_id             Int
   area_id                Int
-  position_id            Int?
+  idVacante              Int?
   provider_id            Int
   agent_id               String?                    @db.Char(36)
   description            String?                    @db.VarChar(500)
@@ -521,10 +523,12 @@ model Entrevistas {
   comment                String?                    @db.Text
   active                 Boolean                    @default(true)
   Agentes                Agentes?                   @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_ibfk_1")
+  Vacantes               Vacantes?                  @relation(fields: [idVacante], references: [idVacante], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_idVacante_fk")
   EntrevistasCriterios   EntrevistasCriterios[]
   EntrevistasPostulantes EntrevistasPostulantes[]
 
   @@index([agent_id], map: "agent_id")
+  @@index([idVacante], map: "Entrevistas_idVacante_fk")
 }
 
 model EntrevistasCriterios {
@@ -749,7 +753,7 @@ model Postulaciones {
   uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
   idCandidato     Int?
   idEstatus       Int?      @default(1)
-  idPuesto        Int?
+  idVacante       Int
   nombre          String    @db.VarChar(100)
   primerApellido  String    @db.VarChar(100)
   segundoApellido String?   @db.VarChar(100)
@@ -759,6 +763,9 @@ model Postulaciones {
   fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
   curp            String?   @db.VarChar(45)
   idCampa_a       Int?      @map("idCampaña")
+  Vacantes        Vacantes  @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+
+  @@index([idVacante], map: "fk_postulacion_vacante")
 }
 
 model PreferenciasNotificacionesUsuario {
@@ -910,8 +917,10 @@ model auth_user {
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
+  Empleados                         Empleados[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
+  Vacantes                          Vacantes[]
   auth_user_groups                  auth_user_groups[]
   auth_user_user_permissions        auth_user_user_permissions[]
   django_admin_log                  django_admin_log[]
@@ -1095,37 +1104,41 @@ model RelAreasUbicaciones {
 }
 
 model Empleados {
-  idEmpleado           Int         @id @default(autoincrement())
-  idPuesto             Int?
-  idJefeInmediato      Int?
-  idSite               Int?
-  nombre               String?     @db.VarChar(100)
-  primerApellido       String?     @db.VarChar(100)
-  segundoApellido      String?     @db.VarChar(100)
-  idCampania           Int?
-  idTipoSanguineo      Int?
-  numeroSeguroSocial   String?     @db.VarChar(15)
-  idEstadoCivil        Int?
-  fechaNacimiento      DateTime?   @db.Date
-  rfc                  String?     @db.VarChar(18)
-  correo               String?     @db.VarChar(250)
-  telefonoMovil        String?     @db.VarChar(15)
-  telefonoLocal        String?     @db.VarChar(15)
-  idNivelEstudios      Int?
-  tieneInfonavit       Boolean?
-  tieneHijos           Boolean?
-  FechaRegistro        DateTime?   @default(now()) @db.Timestamp(0)
-  usuarioRegistro      String?     @db.VarChar(250)
-  idGenero             Int?
-  numeroInfonavit      String?     @db.VarChar(30)
-  numeroHijos          Int?
-  imagenFirmaAutografa String?     @db.VarChar(500)
-  activo               Boolean     @default(true)
-  Empleados            Empleados?  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
-  other_Empleados      Empleados[] @relation("EmpleadosToEmpleados")
-  Vacantes             Vacantes[]
+  idEmpleado                                        Int         @id @default(autoincrement())
+  idUsuario                                         String?     @db.VarChar(36)
+  idPuesto                                          Int?
+  idJefeInmediato                                   Int?
+  idSite                                            Int?
+  nombre                                            String?     @db.VarChar(100)
+  primerApellido                                    String?     @db.VarChar(100)
+  segundoApellido                                   String?     @db.VarChar(100)
+  idCampania                                        Int?
+  idTipoSanguineo                                   Int?
+  numeroSeguroSocial                                String?     @db.VarChar(15)
+  idEstadoCivil                                     Int?
+  fechaNacimiento                                   DateTime?   @db.Date
+  rfc                                               String?     @db.VarChar(18)
+  correo                                            String?     @db.VarChar(250)
+  telefonoMovil                                     String?     @db.VarChar(15)
+  telefonoLocal                                     String?     @db.VarChar(15)
+  idNivelEstudios                                   Int?
+  tieneInfonavit                                    Boolean?
+  tieneHijos                                        Boolean?
+  FechaRegistro                                     DateTime?   @default(now()) @db.Timestamp(0)
+  usuarioRegistro                                   String?     @db.VarChar(250)
+  idGenero                                          Int?
+  numeroInfonavit                                   String?     @db.VarChar(30)
+  numeroHijos                                       Int?
+  imagenFirmaAutografa                              String?     @db.VarChar(500)
+  activo                                            Boolean     @default(true)
+  Empleados                                         Empleados?  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
+  other_Empleados                                   Empleados[] @relation("EmpleadosToEmpleados")
+  auth_user                                         auth_user?  @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  Vacantes                                          Vacantes[]
+  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]  @relation("Vacantes_idReclutadorAsignadoToEmpleados")
 
   @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
+  @@index([idUsuario], map: "FK_Empleados_Usuarios")
 }
 
 model Expedientes {
@@ -1168,19 +1181,54 @@ model RelRolPermisos {
 }
 
 model Vacantes {
-  idVacante       Int        @id @default(autoincrement())
-  idPuesto        Int
-  idSite          Int
-  idJefeInmediato Int
-  estatus         String?    @default("COMPARTIDA_INTERNA") @db.VarChar(50)
-  fechaCreacion   DateTime?  @default(now()) @db.Timestamp(0)
-  Empleados       Empleados  @relation(fields: [idJefeInmediato], references: [idEmpleado], map: "fk_vacante_jefe")
-  CatPuestos      CatPuestos @relation(fields: [idPuesto], references: [idPuesto], map: "fk_vacante_puesto")
-  CatSites        CatSites   @relation(fields: [idSite], references: [idSite], map: "fk_vacante_site")
+  idVacante                                          Int                  @id @default(autoincrement())
+  idUsuarioCreador                                   Int
+  idEmpresa                                          Int
+  idPuesto                                           Int
+  idSite                                             Int
+  idJefeInmediato                                    Int
+  Motivo                                             String?              @db.Text
+  SalarioMinimo                                      Decimal              @db.Decimal(10, 2)
+  SalarioMaximo                                      Decimal              @db.Decimal(10, 2)
+  InformacionExtra                                   String?              @db.Text
+  idEstatusVacante                                   Int                  @default(1)
+  idReclutadorAsignado                               Int?
+  idTipoPublicacion                                  Int?
+  comentarios                                        String?              @db.Text
+  fechaCreacion                                      DateTime?            @default(now()) @db.Timestamp(0)
+  fechaActualizacion                                 DateTime?            @default(now()) @db.Timestamp(0)
+  Entrevistas                                        Entrevistas[]
+  Postulaciones                                      Postulaciones[]
+  CatEmpresas                                        CatEmpresas          @relation(fields: [idEmpresa], references: [idEmpresa], map: "fk_vacante_empresa")
+  CatEstatusVacante                                  CatEstatusVacante    @relation(fields: [idEstatusVacante], references: [idEstatusVacante], map: "fk_vacante_estatus")
+  Empleados                                          Empleados            @relation(fields: [idJefeInmediato], references: [idEmpleado], map: "fk_vacante_jefe")
+  CatPuestos                                         CatPuestos           @relation(fields: [idPuesto], references: [idPuesto], map: "fk_vacante_puesto")
+  Empleados_Vacantes_idReclutadorAsignadoToEmpleados Empleados?           @relation("Vacantes_idReclutadorAsignadoToEmpleados", fields: [idReclutadorAsignado], references: [idEmpleado], onDelete: Restrict, map: "fk_vacante_reclutador")
+  CatSites                                           CatSites             @relation(fields: [idSite], references: [idSite], map: "fk_vacante_site")
+  CatTiposPublicacion                                CatTiposPublicacion? @relation(fields: [idTipoPublicacion], references: [idTipoPublicacion], onDelete: Restrict, map: "fk_vacante_tipo_pub")
+  auth_user                                          auth_user            @relation(fields: [idUsuarioCreador], references: [id], map: "fk_vacante_usuario_creador")
 
   @@index([idJefeInmediato], map: "fk_vacante_jefe")
   @@index([idPuesto], map: "fk_vacante_puesto")
   @@index([idSite], map: "fk_vacante_site")
+  @@index([idEmpresa], map: "fk_vacante_empresa")
+  @@index([idEstatusVacante], map: "fk_vacante_estatus")
+  @@index([idReclutadorAsignado], map: "fk_vacante_reclutador")
+  @@index([idTipoPublicacion], map: "fk_vacante_tipo_pub")
+  @@index([idUsuarioCreador], map: "fk_vacante_usuario_creador")
+}
+
+model CatEstatusPostulacion {
+  idEstatusPostulacion Int     @id @default(autoincrement())
+  descripcion          String  @db.VarChar(45)
+  activo               Boolean @default(true)
+}
+
+model CatTiposPublicacion {
+  idTipoPublicacion Int        @id @default(autoincrement())
+  descripcion       String     @db.VarChar(50)
+  activo            Boolean    @default(true)
+  Vacantes          Vacantes[]
 }
 
 enum RelRequisicionHabilidades_nivel {

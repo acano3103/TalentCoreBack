@@ -22,72 +22,76 @@ export class InterviewsService {
 
     private readonly logger = new Logger(InterviewsService.name);
 
-    async findAll(companyId: number, positionId?: number) {
-        return await findAllInterviews(companyId, positionId, this.prisma);
-    }
+   async findAll(companyId: number, vacancyId?: number) {
+    return await findAllInterviews(companyId, vacancyId, this.prisma);
+}
 
-    async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
-        return await findProgrammedInterviews(companyId, mainInterviewId, this.prisma);
-    }
-
-    async findActivePositions(companyId: number) {
-        const activePositions = await this.prisma.catPuestos.findMany({
-            where: {
-                idEmpresa: companyId,
-                aprobada: true,
-                Activo: true
-            },
-            select: {
-                idPuesto: true,
-                NombrePuesto: true,
+async findActiveVacancies(companyId: number) {
+    const activeVacancies = await this.prisma.vacantes.findMany({
+        where: {
+            idEmpresa: companyId,
+            idEstatusVacante: 5,
+        },
+        select: {
+            idVacante: true,
+            CatPuestos: {
+                select: { NombrePuesto: true }
             }
-        });
-        return activePositions;
-    }
+        }
+    });
+    return activeVacancies.map(v => ({
+        idVacante: v.idVacante,
+        nombrePuesto: v.CatPuestos.NombrePuesto,
+    }));
+}
 
-    async create(companyId: number, dto: CreateInterviewDto) {
-        const interviews = await Promise.all(
-            dto.positionIds.map(positionId =>
-                this.prisma.entrevistas.create({
-                    data: {
-                        company_id: companyId,
-                        area_id: dto.areaId,
-                        position_id: positionId,
-                        provider_id: dto.providerId,
-                        agent_id: dto.agentId || null,
-                        description: dto.description || null,
-                        interview_type: dto.interviewType,
-                        modality: dto.modality,
-                        title: dto.title,
-                        duration: dto.duration,
-                        interviewer_name: dto.interviewerName,
-                        location: dto.locationAddress || null,
-                        comment: dto.comment || null,
-                        EntrevistasCriterios: {
-                            create: dto.criteria.map((criterion, index) => ({
-                                name: criterion.name,
-                                description: criterion.description || '',
-                                max_score: criterion.weight || 0,
-                                weight: criterion.weight || 1,
-                                order: criterion.order || index + 1,
-                                CriterioPreguntas: criterion.questions?.length
-                                    ? {
-                                        create: criterion.questions.map(q => ({
-                                            question: q.question,
-                                            expected_answer: q.expectedAnswer || null,
-                                            order: q.order || null,
-                                        })),
-                                    }
-                                    : undefined,
-                            })),
-                        },
+async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
+    return await findProgrammedInterviews(companyId, mainInterviewId, this.prisma);
+}
+
+   async create(companyId: number, dto: CreateInterviewDto) {
+    const interviews = await Promise.all(
+        dto.vacancyIds.map(vacancyId =>
+            this.prisma.entrevistas.create({
+                data: {
+                    company_id: companyId,
+                    area_id: dto.areaId,
+                    idVacante: vacancyId,
+                    provider_id: dto.providerId,
+                    agent_id: dto.agentId || null,
+                    description: dto.description || null,
+                    interview_type: dto.interviewType,
+                    modality: dto.modality,
+                    title: dto.title,
+                    duration: dto.duration,
+                    interviewer_name: dto.interviewerName,
+                    location: dto.locationAddress || null,
+                    comment: dto.comment || null,
+                    EntrevistasCriterios: {
+                        create: dto.criteria.map((criterion, index) => ({
+                            name: criterion.name,
+                            description: criterion.description || '',
+                            max_score: criterion.weight || 0,
+                            weight: criterion.weight || 1,
+                            order: criterion.order || index + 1,
+                            CriterioPreguntas: criterion.questions?.length
+                                ? {
+                                    create: criterion.questions.map(q => ({
+                                        question: q.question,
+                                        expected_answer: q.expectedAnswer || null,
+                                        order: q.order || null,
+                                    })),
+                                }
+                                : undefined,
+                        })),
                     },
-                })
-            )
-        );
+                },
+            })
+        )
+    );
 
-        return { message: 'Entrevistas creadas exitosamente', total: interviews.length };
-    }
+    return { message: 'Entrevistas creadas exitosamente', total: interviews.length };
+}
 
     async programInterview(companyId: number, interviewId: string, dto: ProgramInterviewDto) {
         const mainInterview = await this.prisma.entrevistas.findFirst({
