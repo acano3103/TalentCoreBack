@@ -1,8 +1,10 @@
 import { PrismaClient } from "generated/prisma/client";
 
-export async function findAllInterviews(companyId: number, positionId: number | undefined, prisma: PrismaClient) {
+const VACANCY_APPROVED_STATUS = 5; // APROBADO RH
+
+export async function findAllInterviews(companyId: number, vacancyId: number | undefined, prisma: PrismaClient) {
   let result: any;
-  if (positionId !== undefined) {
+  if (vacancyId !== undefined) {
     result = prisma.$queryRaw`
             SELECT 
                 e.id,
@@ -13,21 +15,23 @@ export async function findAllInterviews(companyId: number, positionId: number | 
                 e.duration,
                 e.interviewer_name,
                 CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
-                p.idPuesto AS position_id,
-                p.NombrePuesto AS position_name,
+                v.idVacante AS vacancy_id,
+                p.NombrePuesto AS vacancy_name,
                 a.Descripcion AS area_name
             FROM Entrevistas e
+            INNER JOIN Vacantes v 
+                ON e.idVacante = v.idVacante
             INNER JOIN CatPuestos p 
-                ON e.position_id = p.idPuesto
+                ON v.idPuesto = p.idPuesto
             INNER JOIN CatAreas a 
                 ON e.area_id = a.idArea
             LEFT JOIN EntrevistasPostulantes ep
                 ON ep.interview_id = e.id
-            WHERE p.aprobada = true
+            WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
             AND e.active = true
-            AND p.idEmpresa = ${companyId}
-            AND e.position_id = ${positionId}
-            GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, p.idPuesto, p.NombrePuesto, a.Descripcion;
+            AND v.idEmpresa = ${companyId}
+            AND e.idVacante = ${vacancyId}
+            GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, v.idVacante, p.NombrePuesto, a.Descripcion;
         `;
   } else {
     result = prisma.$queryRaw`
@@ -40,26 +44,29 @@ export async function findAllInterviews(companyId: number, positionId: number | 
             e.duration,
             e.interviewer_name,
             CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
-            p.idPuesto AS position_id,
-            p.NombrePuesto AS position_name,
+            v.idVacante AS vacancy_id,
+            p.NombrePuesto AS vacancy_name,
             a.Descripcion AS area_name
         FROM Entrevistas e
+        INNER JOIN Vacantes v 
+            ON e.idVacante = v.idVacante
         INNER JOIN CatPuestos p 
-            ON e.position_id = p.idPuesto
+            ON v.idPuesto = p.idPuesto
         INNER JOIN CatAreas a 
             ON e.area_id = a.idArea
         LEFT JOIN EntrevistasPostulantes ep
             ON ep.interview_id = e.id
-        WHERE p.aprobada = true
+        WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
         AND e.active = true
-        AND p.idEmpresa = ${companyId}
-        GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, p.idPuesto, p.NombrePuesto, a.Descripcion;
+        AND v.idEmpresa = ${companyId}
+        GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, v.idVacante, p.NombrePuesto, a.Descripcion;
     `;
   }
 
   return result.then((data: any[]) => data.map((item: any) => ({
     ...item,
     interviews_programed: Number(item.interviews_programed),
+    has_scheduled_candidates: Number(item.interviews_programed) > 0,
   })));
 }
 
@@ -71,42 +78,27 @@ export async function findAllInterviewsByPostulant(postulantUuid: string, prisma
       ep.scheduled_at,
       ep.duration,
       ce.descripcion AS status,
-
-      -- meeting básico
       ep.meeting_url,
       JSON_UNQUOTE(JSON_EXTRACT(ep.metadata, '$.joinUrl')) AS joinUrl,
-
-      -- info entrevista
       e.title,
       e.modality,
       e.interviewer_name,
-
-      -- provider
       cip.name AS provider_name,
-
-      -- resultado resumido
       er.final_score
 
     FROM EntrevistasPostulantes ep
-
     INNER JOIN Entrevistas e 
       ON ep.interview_id = e.id
-
     LEFT JOIN Integraciones i
       ON i.providerId = e.provider_id 
       AND i.idEmpresa = e.company_id
-
     LEFT JOIN CatIntegracionesProvedores cip
       ON cip.id = i.providerId
-
     LEFT JOIN EntrevistasResultados er
       ON er.interview_postulant_id = ep.id
-
     LEFT JOIN CatEstatusEntrevista ce
       ON ce.idEstatusEntrevista = ep.status_id
-
     WHERE ep.candidate_uuid = ${postulantUuid}
-
     ORDER BY ep.scheduled_at DESC
   `;
 }
@@ -123,40 +115,24 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       ep.meeting_id,
       ep.meeting_url,
       ep.location,
-
-      -- metadata limpio
       JSON_UNQUOTE(JSON_EXTRACT(ep.metadata, '$.joinUrl')) AS joinUrl,
       JSON_UNQUOTE(JSON_EXTRACT(ep.metadata, '$.password')) AS password,
-
-      -- entrevista principal
       e.modality,
       e.title,
       e.description,
       e.interviewer_name,
-
-      -- provider
       cip.name AS provider_name,
-
-      -- resultados
       er.final_score,
       er.general_report,
       er.strengths,
       er.improvement_areas,
       er.recommendations,
-
-      -- postulante
       CONCAT(p.nombre, ' ', p.primerApellido, ' ', p.segundoApellido) AS postulant_name,
       p.correo as email,
       p.telefono as phone,
-      
-      -- puesto
-      cp.NombrePuesto AS position_name,
-
-      -- Metadata 
+      cp.NombrePuesto AS vacancy_name,
       ep.metadata as interview_metadata,
       er.metadata as results_metadata,
-
-      -- criterios + preguntas
       (
         SELECT COALESCE(JSON_ARRAYAGG(
           JSON_OBJECT(
@@ -171,13 +147,13 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
             'questions', (
               SELECT COALESCE(JSON_ARRAYAGG(
                 JSON_OBJECT(
-                  'id', cp.id,
-                  'question', cp.question,
-                  'expected_answer', cp.expected_answer
+                  'id', cp2.id,
+                  'question', cp2.question,
+                  'expected_answer', cp2.expected_answer
                 )
               ), JSON_ARRAY())
-              FROM CriterioPreguntas cp
-              WHERE cp.criterio_id = ec.id
+              FROM CriterioPreguntas cp2
+              WHERE cp2.criterio_id = ec.id
             )
           )
         ), JSON_ARRAY())
@@ -189,42 +165,34 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       ) AS criterios
 
     FROM EntrevistasPostulantes ep
-
     INNER JOIN Entrevistas e 
       ON ep.interview_id = e.id
-
     LEFT JOIN Integraciones i
       ON i.providerId = e.provider_id 
       AND i.idEmpresa = e.company_id
-
     LEFT JOIN CatIntegracionesProvedores cip
       ON cip.id = i.providerId
-
     LEFT JOIN EntrevistasResultados er
       ON er.interview_postulant_id = ep.id
-
     LEFT JOIN CatEstatusEntrevista ce
       ON ce.idEstatusEntrevista = ep.status_id
-
     LEFT JOIN Postulaciones p
       ON p.uuid = ep.candidate_uuid
-
+    LEFT JOIN Vacantes v
+      ON v.idVacante = e.idVacante
     LEFT JOIN CatPuestos cp
-      ON cp.idPuesto = e.position_id
-
+      ON cp.idPuesto = v.idPuesto
     WHERE ep.id = ${interviewPostulantId}
   `;
 }
 
 export async function findProgrammedInterviews(companyId: number, mainInterviewId: string, prisma: PrismaClient) {
-  // La consulta SQL con LEFT JOIN garantiza que si existe la fila en 'Entrevistas', 
-  // se traerá aunque las tablas de la derecha (postulantes) sean nulas.
   const rows: any[] = await prisma.$queryRaw`
         SELECT 
             e.id,
             e.company_id,
             e.area_id,
-            e.position_id,
+            e.idVacante,
             e.provider_id,
             e.agent_id,
             e.description,
@@ -235,11 +203,9 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             e.interviewer_name,
             e.comment,
 
-            -- Puesto y área
-            cp.NombrePuesto AS position_name,
+            cp.NombrePuesto AS vacancy_name,
             a.Descripcion AS area_name,
 
-            -- EntrevistasPostulantes (usamos ep_id para validar existencia)
             ep.id AS ep_id,
             ep.candidate_uuid,
             ep.interview_id,
@@ -250,17 +216,18 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             ep.meeting_url,
             ep.location AS ep_location,
 
-            -- Status del postulante
             ce.descripcion AS status,
 
-            -- Datos del Candidato
             CONCAT(p.nombre, ' ', p.primerApellido, ' ', p.segundoApellido) AS candidate_name,
             p.correo AS candidate_email
 
         FROM Entrevistas e
 
+        LEFT JOIN Vacantes v
+            ON e.idVacante = v.idVacante
+
         LEFT JOIN CatPuestos cp 
-            ON e.position_id = cp.idPuesto
+            ON v.idPuesto = cp.idPuesto
 
         LEFT JOIN CatAreas a 
             ON e.area_id = a.idArea
@@ -285,7 +252,6 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
   const interviewsMap = new Map();
 
   for (const row of rows) {
-    // Si la entrevista principal aún no está en el mapa, la agregamos
     if (!interviewsMap.has(row.id)) {
       interviewsMap.set(row.id, {
         id: row.id,
@@ -296,15 +262,12 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
         modality: row.modality,
         interviewer_name: row.interviewer_name,
         comment: row.comment,
-        position_name: row.position_name,
+        vacancy_name: row.vacancy_name,
         area_name: row.area_name,
-        // Se inicializa siempre como un array vacío
         EntrevistasPostulantes: []
       });
     }
 
-    // Solo si existe un ID de postulante (ep_id), lo agregamos al array
-    // Si no hay postulantes, 'ep_id' será null por el LEFT JOIN y no entrará aquí
     if (row.ep_id) {
       interviewsMap.get(row.id).EntrevistasPostulantes.push({
         id: row.ep_id,

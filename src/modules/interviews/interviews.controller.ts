@@ -12,33 +12,33 @@ import { UpdateMeetingDto } from './dto/update-interview.dto';
 export class InterviewsController {
     constructor(private readonly interviewsService: InterviewsService) { }
 
-    @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
     @Get()
     @ApiOperation({ summary: 'Get all interviews', description: 'Get all interviews for a company' })
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this company' })
     @ApiQuery({
-        name: 'positionId',
+        name: 'vacancyId',
         required: false,
         type: Number,
-        description: 'Filter interviews by position ID'
+        description: 'Filter interviews by vacancy ID'
     })
     findAll(
         @Param('companyId', ParseIntPipe) companyId: number,
-        @Query('positionId') positionId?: string
+        @Query('vacancyId') vacancyId?: string
     ) {
-        return this.interviewsService.findAll(companyId, positionId ? Number(positionId) : undefined);
+        return this.interviewsService.findAll(companyId, vacancyId ? Number(vacancyId) : undefined);
     }
 
     @UseGuards(JwtAuthGuard)
-    @Get('/positions')
-    @ApiOperation({ summary: 'Get active positions', description: 'Get active positions for a company' })
-    @ApiResponse({ status: 200, description: 'List of active positions for a company' })
+    @Get('/vacancies')
+    @ApiOperation({ summary: 'Get active vacancies', description: 'Get vacancies approved by RH (idEstatusVacante = 5) for a company' })
+    @ApiResponse({ status: 200, description: 'List of active vacancies for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    @ApiResponse({ status: 404, description: 'No active positions found for this company' })
-    findActivePositions(@Param('companyId', ParseIntPipe) companyId: number) {
-        return this.interviewsService.findActivePositions(companyId);
+    @ApiResponse({ status: 404, description: 'No active vacancies found for this company' })
+    findActiveVacancies(@Param('companyId', ParseIntPipe) companyId: number) {
+        return this.interviewsService.findActiveVacancies(companyId);
     }
 
     @UseGuards(JwtAuthGuard)

@@ -128,23 +128,27 @@ export class PostulationsService {
         throw new BadRequestException(`No se puede cambiar de ${currentStatusName} a ${nextStatusName}. Estado actual: ${currentStatusName}, Estados permitidos: ${allowedNames.join(', ')}`);
       }
 
-      if (dto.statusId === 6) {
-        await generateCredentials(
-          {
-            curp: postulation.curp,
-            nombre: postulation.nombre,
-            apellido1: postulation.primerApellido,
-            apellido2: postulation.segundoApellido || '',
-            correo: postulation.correo,
-            idPuesto: postulation.idPuesto ?? 0,
-            usuario: user.username || 'sistema',
-            idCampania: dto.campaignId || null,
-          },
-          files ?? [],
-          this.prisma,
-          this.notifications.notify.bind(this.notifications)
-        );
-      }
+     if (dto.statusId === 6) {
+    const vacancy = await this.prisma.vacantes.findFirst({
+      where: { idVacante: postulation.idVacante }
+    });
+
+    await generateCredentials(
+      {
+        curp: postulation.curp,
+        nombre: postulation.nombre,
+        apellido1: postulation.primerApellido,
+        apellido2: postulation.segundoApellido || '',
+        correo: postulation.correo,
+        idPuesto: vacancy?.idPuesto ?? 0,
+        usuario: user.username || 'sistema',
+        idCampania: dto.campaignId || null,
+      },
+      files ?? [],
+      this.prisma,
+      this.notifications.notify.bind(this.notifications)
+    );
+}
 
       return await this.prisma.postulaciones.update({
         where: { idPostulacion: postulationId },

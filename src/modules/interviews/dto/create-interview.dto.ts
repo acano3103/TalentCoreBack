@@ -55,7 +55,7 @@ export class CreateInterviewDto {
     @ApiProperty({ type: [Number] })
     @IsArray()
     @IsNumber({}, { each: true })
-    positionIds: number[];
+    vacancyIds: number[];
 
     @ApiProperty()
     @IsNumber()
