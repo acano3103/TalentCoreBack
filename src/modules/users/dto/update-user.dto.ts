@@ -1,38 +1,67 @@
-import { IsString, IsEmail, IsBoolean, IsInt, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsEmail, IsInt, IsOptional, MinLength, MaxLength, IsArray, ValidateNested, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { UserAccessDto } from './create-user.dto';
 
 export class UpdateUserDto {
-    @ApiPropertyOptional({ example: 'Juan', description: 'Nombre del usuario' })
+    @ApiPropertyOptional({ example: 'mguevara' })
+    @IsOptional()
+    @IsString()
+    @MaxLength(150)
+    username?: string; // 👈 Agregado para permitir recibirlo y validarlo
+
+    @ApiPropertyOptional({ example: 'Michael' })
     @IsOptional()
     @IsString()
     @MaxLength(150)
     first_name?: string;
 
-    @ApiPropertyOptional({ example: 'Pérez', description: 'Apellido del usuario' })
+    @ApiPropertyOptional({ example: 'Guevara' })
     @IsOptional()
     @IsString()
     @MaxLength(150)
     last_name?: string;
 
-    @ApiPropertyOptional({ example: 'juan@ejemplo.com', description: 'Correo electrónico' })
+    @ApiPropertyOptional({ example: 'juan@ejemplo.com' })
     @IsOptional()
     @IsEmail()
     @MaxLength(254)
     email?: string;
 
-    @ApiPropertyOptional({ example: true, description: 'Estado activo/inactivo del usuario' })
+    @ApiPropertyOptional({ example: '5564306193' })
     @IsOptional()
-    @IsBoolean()
-    is_active?: boolean;
+    @IsString()
+    @MaxLength(15)
+    phone?: string;
 
-    @ApiPropertyOptional({ example: 2, description: 'ID del nuevo rol desde catroles' })
+    @ApiPropertyOptional({ example: 'NuevaContraseña123', minLength: 4 })
+    @ValidateIf((o) => o.password !== '' && o.password !== undefined)
+    @IsString()
+    @MinLength(4)
+    password?: string;
+
+    @ApiPropertyOptional({ example: 1, description: '1 = Activo, 0 = Inactivo' })
+    @IsOptional()
+    @IsInt()
+    is_active?: number;
+
+    @ApiPropertyOptional({ example: 2 })
     @IsOptional()
     @IsInt()
     idRol?: number;
 
-    @ApiPropertyOptional({ example: '+1234567890', description: 'Teléfono del usuario' })
+    @ApiPropertyOptional({ example: 135, nullable: true })
     @IsOptional()
-    @IsString()
-    @MaxLength(20)
-    phone?: string;
+    @IsInt()
+    idEmpleado?: number | null;
+
+    @ApiPropertyOptional({
+        type: [UserAccessDto],
+        description: 'Nueva estructura relacional de empresas y sites asignados',
+    })
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => UserAccessDto)
+    accesos?: UserAccessDto[];
 }

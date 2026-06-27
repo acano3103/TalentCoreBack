@@ -1,20 +1,33 @@
-import { IsString, IsEmail, IsBoolean, IsInt, IsOptional, MinLength, MaxLength, IsNotEmpty, IsArray, ArrayMinSize, IsIn } from 'class-validator';
+import { IsString, IsEmail, IsInt, IsOptional, MinLength, MaxLength, IsNotEmpty, IsArray, ValidateNested, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
+export class UserAccessDto {
+    @ApiProperty({ example: 1, description: 'ID de la empresa' })
+    @IsInt()
+    @IsNotEmpty()
+    idEmpresa: number;
+
+    @ApiProperty({ example: [1, 2, 3], description: 'IDs de los sites vinculados a esta empresa' })
+    @IsArray()
+    @IsInt({ each: true })
+    ubicaciones: number[];
+}
+
 export class CreateUserDto {
-    @ApiProperty({ example: 'admin_jp' })
+    @ApiProperty({ example: 'acastro' })
     @IsString()
     @IsNotEmpty()
     @MaxLength(150)
     username: string;
 
-    @ApiProperty({ example: 'Juan' })
+    @ApiProperty({ example: 'Michael' })
     @IsString()
     @IsNotEmpty()
     @MaxLength(150)
     first_name: string;
 
-    @ApiProperty({ example: 'Pérez' })
+    @ApiProperty({ example: 'Guevara' })
     @IsString()
     @IsNotEmpty()
     @MaxLength(150)
@@ -26,43 +39,51 @@ export class CreateUserDto {
     @MaxLength(254)
     email: string;
 
-    @ApiProperty({ example: '5551234567', required: false })
+    @ApiProperty({ example: '5564306193', required: false })
     @IsString()
-    @MaxLength(10)
+    @IsOptional()
+    @MaxLength(15) // Aumentado a 15 por si mandan ladas o espacios
     phone: string;
 
-    @ApiProperty({ example: 'MiContraseña123', minLength: 8 })
+    @ApiProperty({ example: 'MiContraseña123', minLength: 4 })
     @IsString()
     @IsNotEmpty()
-    @MinLength(8)
+    @MinLength(4) // Ajustado a 4 caracteres según tu último requerimiento
     password: string;
 
-    @ApiProperty({ example: true })
-    @IsBoolean()
-    is_active: boolean;
-
-    @ApiProperty({ example: 2, description: 'ID del rol desde catroles' })
+    @ApiProperty({ example: 1, description: 'Estatus del usuario (1 = Activo, 0 = Inactivo)' })
     @IsInt()
+    @IsNotEmpty()
+    is_active: number;
+
+    @ApiProperty({ example: 0, description: 'Acceso al panel administrativo' })
+    @IsInt()
+    @IsNotEmpty()
+    is_staff: number;
+
+    @ApiProperty({ example: 0, description: 'Permisos globales de superusuario' })
+    @IsInt()
+    @IsNotEmpty()
+    is_superuser: number;
+
+    @ApiProperty({ example: 2, description: 'ID del rol asignado' })
+    @IsInt()
+    @IsNotEmpty()
     idRol: number;
 
-    /**
-     * IDs de empresas a las que tendrá acceso el usuario,
-     * o el string 'all' para otorgar acceso a todas.
-     */
-    @ApiProperty({
-        example: [1, 2],
-        description: "Array de IDs de empresas (CatEmpresas) o el string 'all' para todas",
-        oneOf: [
-            { type: 'array', items: { type: 'number' } },
-            { type: 'string', enum: ['all'] },
-        ],
-    })
-    @IsNotEmpty()
-    empresaIds: number[] | 'all';
+    @ApiProperty({ example: 131, required: false, nullable: true, description: 'ID del empleado vinculado (Opcional)' })
+    @IsInt()
+    @IsOptional()
+    idEmpleado: number | null;
 
-    @ApiProperty({ example: [1, 3], description: 'Array de IDs de sites (CatSites) a los que tendrá acceso el usuario' })
+    // 2. Reemplazo de los arreglos planos por la estructura relacional anidada
+    @ApiProperty({
+        type: [UserAccessDto],
+        description: 'Estructura relacional de empresas y ubicaciones autorizadas',
+    })
     @IsArray()
-    @ArrayMinSize(0)
-    @IsInt({ each: true })
-    siteIds: number[];
+    @ValidateNested({ each: true })
+    @Type(() => UserAccessDto) // Necesario para class-transformer
+    @IsNotEmpty()
+    accesos: UserAccessDto[];
 }

@@ -949,13 +949,6 @@ model auth_user_user_permissions {
   @@index([permission_id], map: "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm")
 }
 
-model catroles {
-  idRol          Int              @id @default(autoincrement())
-  descripcion    String           @db.VarChar(100)
-  activo         Boolean          @default(true)
-  RelRolPermisos RelRolPermisos[]
-}
-
 model consumonubarium {
   idConsumo      Int       @id @default(autoincrement())
   endPoint       String?   @db.VarChar(100)
@@ -1004,13 +997,6 @@ model django_session {
   expire_date  DateTime @db.DateTime(6)
 
   @@index([expire_date], map: "django_session_expire_date_a5c62663")
-}
-
-model relUsuarioRol {
-  iRel      Int     @id @default(autoincrement())
-  idUsuario Int
-  idRol     Int
-  activo    Boolean @default(true)
 }
 
 model requisiciones {
@@ -1175,7 +1161,7 @@ model RelRolPermisos {
   puedeEliminar   Boolean    @default(false)
   activo          Boolean    @default(true)
   CatModulos      CatModulos @relation(fields: [idModulo], references: [idModulo], onDelete: Cascade, onUpdate: NoAction, map: "fk_permiso_modulo")
-  catroles        catroles   @relation(fields: [idRol], references: [idRol], onDelete: Cascade, map: "fk_permisos_roles")
+  catroles        CatRoles   @relation(fields: [idRol], references: [idRol], onDelete: Cascade, map: "fk_permisos_roles")
 
   @@unique([idRol, idModulo], map: "idx_rol_modulo_v2")
   @@index([idModulo], map: "fk_permisos_modulos")
@@ -1230,6 +1216,20 @@ model CatTiposPublicacion {
   descripcion       String     @db.VarChar(50)
   activo            Boolean    @default(true)
   Vacantes          Vacantes[]
+}
+
+model CatRoles {
+  idRol          Int              @id @default(autoincrement())
+  descripcion    String           @db.VarChar(100)
+  activo         Boolean          @default(true)
+  RelRolPermisos RelRolPermisos[]
+}
+
+model RelUsuarioRol {
+  iRel      Int     @id @default(autoincrement())
+  idUsuario Int
+  idRol     Int
+  activo    Boolean @default(true)
 }
 
 enum RelRequisicionHabilidades_nivel {

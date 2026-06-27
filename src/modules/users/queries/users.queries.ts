@@ -12,8 +12,8 @@ export class UsersQueries {
   static async getRoles(prisma: PrismaService, userId: number) {
     return prisma.$queryRaw<{ descripcion: string }[]>`
       SELECT c.descripcion 
-      FROM relUsuarioRol r
-      JOIN catroles c ON c.idRol = r.idRol
+      FROM RelUsuarioRol r
+      JOIN CatRoles c ON c.idRol = r.idRol
       WHERE r.idUsuario = ${userId} AND r.activo = 1 AND c.activo = 1
     `;
   }
@@ -61,8 +61,8 @@ export class UsersQueries {
         u.last_login, u.date_joined,
         r.idRol, c.descripcion AS rol_descripcion
       FROM auth_user u
-      LEFT JOIN relUsuarioRol r ON r.idUsuario = u.id AND r.activo = 1
-      LEFT JOIN catroles c ON c.idRol = r.idRol AND c.activo = 1
+      LEFT JOIN RelUsuarioRol r ON r.idUsuario = u.id AND r.activo = 1
+      LEFT JOIN CatRoles c ON c.idRol = r.idRol AND c.activo = 1
       ${searchFilter}
       ORDER BY u.id ASC
       LIMIT ${limit} OFFSET ${offset}

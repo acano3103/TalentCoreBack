@@ -6,7 +6,7 @@ export class RolesService {
     constructor(private readonly prismaService: PrismaService) { }
 
     async findAll() {
-        return await this.prismaService.catroles.findMany({
+        return await this.prismaService.catRoles.findMany({
             where: { activo: true },
             include: {
                 RelRolPermisos: {
@@ -20,7 +20,7 @@ export class RolesService {
     }
 
     async findOne(id: number) {
-        return await this.prismaService.catroles.findUnique({
+        return await this.prismaService.catRoles.findUnique({
             where: { idRol: id },
             include: {
                 RelRolPermisos: {

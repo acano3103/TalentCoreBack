@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, NotFoundException, HttpCode, HttpStatus, UseGuards, Query, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, NotFoundException, HttpCode, HttpStatus, UseGuards, Query, DefaultValuePipe, Put, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { AuthUserRow } from './interfaces/auth-user.interface';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard)
@@ -12,7 +15,6 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
-  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({
     summary: 'Get all users',
@@ -27,7 +29,6 @@ export class UsersController {
     return this.usersService.findAll(page, limit, search);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiParam({ name: 'id', type: Number, description: 'User ID' })
   @ApiOperation({
@@ -42,7 +43,6 @@ export class UsersController {
     return user;
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -56,8 +56,7 @@ export class UsersController {
     return this.usersService.create(dto);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Patch(':id')
+  @Put(':id')
   @ApiParam({ name: 'id', type: Number, description: 'ID of the user to edit' })
   @ApiOperation({
     summary: 'Update user',
@@ -74,16 +73,26 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch(':id/deactivate')
-  @HttpCode(HttpStatus.OK)
-  @ApiParam({ name: 'id', type: Number, description: 'ID of the user to deactivate' })
-  @ApiOperation({
-    summary: 'Deactivate user',
-    description: 'Soft-delete: sets is_active = false in auth_user. The user is not deleted from the database.',
-  })
-  @ApiResponse({ status: 200, description: 'User successfully deactivated.' })
-  @ApiResponse({ status: 404, description: 'User not found.' })
-  deactivate(@Param('id', ParseIntPipe) id: number): Promise<AuthUserRow> {
-    return this.usersService.deactivate(id);
+  @Delete(':id')
+  @ApiOperation({ summary: 'Disable a user', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'User disabled successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  disableCompany(
+    @Param('id') id: string,
+  ) {
+    return this.usersService.changeStatus(id, false);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/reactivate')
+  @ApiOperation({ summary: 'Reactivate a user', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'User reactivated successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  reactivateCompany(
+    @Param('id') id: string,
+  ) {
+    return this.usersService.changeStatus(id, true);
   }
 }

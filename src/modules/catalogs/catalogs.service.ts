@@ -23,7 +23,7 @@ export class CatalogsService {
     switch (nombre) {
 
       case 'roles':
-        return this.prisma.catroles.findMany({
+        return this.prisma.catRoles.findMany({
           where: { activo: true },
           select: { idRol: true, descripcion: true, activo: true },
           orderBy: { descripcion: 'asc' },
@@ -139,7 +139,7 @@ export class CatalogsService {
       case 'empleados':
         return this.prisma.empleados.findMany({
           where: { idEmpresa: companyId, activo: true },
-          select: { idEmpleado: true, nombre: true, primerApellido: true, segundoApellido: true, correo: true },
+          select: { idEmpleado: true, nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
           orderBy: { nombre: 'asc' },
         });
 
