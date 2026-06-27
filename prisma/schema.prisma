@@ -18,41 +18,12 @@ model Beneficiarios {
   IdParentesco    Int?
 }
 
-model Candidatos {
-  idCandidato          Int       @id @default(autoincrement())
-  nombre               String?   @db.VarChar(100)
-  primerApellido       String?   @db.VarChar(100)
-  segundoApellido      String?   @db.VarChar(100)
-  idCampania           Int?
-  idTipoSanguineo      Int?
-  numeroSeguroSocial   String?   @db.VarChar(15)
-  idEstadoCivil        Int?
-  fechaNacimiento      DateTime? @db.Date
-  rfc                  String?   @db.VarChar(18)
-  correo               String?   @db.VarChar(250)
-  telefonoMovil        String?   @db.VarChar(15)
-  telefonoLocal        String?   @db.VarChar(15)
-  idNivelEstudios      Int?
-  tieneInfonavit       Boolean?
-  tieneHijos           Boolean?
-  FechaRegistro        DateTime? @default(now()) @db.Timestamp(0)
-  usuarioRegistro      String?   @db.VarChar(250)
-  idGenero             Int?
-  numeroInfonavit      String?   @db.VarChar(30)
-  numeroHijos          Int?
-  imagenFirmaAutografa String?   @db.VarChar(500)
-}
-
 model CatAreas {
-  idArea         Int      @id @default(autoincrement())
-  idCentroCostos Int
-  idSite         Int?
-  Descripcion    String?  @db.VarChar(200)
-  Encargado      String?  @db.VarChar(150)
-  Correo         String?  @db.VarChar(150)
-  Telefono       String?  @db.VarChar(10)
-  Extension      String?  @db.VarChar(10)
-  Activo         Boolean? @default(true)
+  idArea              Int                   @id @default(autoincrement())
+  idEmpresa           Int
+  Descripcion         String                @db.VarChar(200)
+  Activo              Boolean?              @default(true)
+  RelAreasUbicaciones RelAreasUbicaciones[]
 }
 
 model CatCampa_a {
@@ -64,10 +35,18 @@ model CatCampa_a {
 }
 
 model CatCentroCostos {
-  idCentroCostos Int      @id @default(autoincrement())
-  idEmpresa      Int?
-  Descripcion    String?  @db.VarChar(200)
-  Activo         Boolean? @default(true)
+  idCentroCostos       Int                   @id @default(autoincrement())
+  idEmpresa            Int?
+  Codigo               String?               @db.VarChar(50)
+  Descripcion          String?               @db.VarChar(200)
+  PresupuestoAnual     Decimal?              @default(0.00) @db.Decimal(12, 2)
+  PresupuestoEjecutado Decimal?              @default(0.00) @db.Decimal(12, 2)
+  Activo               Boolean?              @default(true)
+  FechaCreacion        DateTime?             @db.DateTime(0)
+  CatEmpresas          CatEmpresas?          @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, map: "FK_CentroCostos_Empresas")
+  RelAreasUbicaciones  RelAreasUbicaciones[]
+
+  @@index([idEmpresa], map: "FK_CentroCostos_Empresas")
 }
 
 model CatCompetenciaspuesto {
@@ -84,11 +63,15 @@ model CatComunicacion {
 }
 
 model CatCursos {
-  idCursos    Int      @id @default(autoincrement())
-  idEmpresa   Int
-  Descripcion String?  @db.VarChar(45)
-  activo      Boolean? @default(true)
-  idArea      Int?
+  idCursos     Int          @id @default(autoincrement())
+  idEmpresa    Int
+  idTipoCurso  Int          @default(1)
+  Descripcion  String?      @db.VarChar(300)
+  activo       Boolean?     @default(true)
+  idArea       Int?
+  CatTipoCurso CatTipoCurso @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
+
+  @@index([idTipoCurso], map: "FK_Cursos_TipoCurso")
 }
 
 model CatDescripcionesPuesto {
@@ -102,25 +85,29 @@ model CatDocumentos {
   IdDocumento     Int       @id @default(autoincrement())
   idEmpresa       Int?
   Descripcion     String?   @db.VarChar(100)
+  EsRequeridoBase Boolean   @default(false)
   FechaRegistro   DateTime? @db.DateTime(0)
   UsuarioRegistro String?   @db.VarChar(45)
   Activo          Boolean?  @default(true)
 }
 
 model CatEmpresas {
-  idEmpresa         Int                 @id @default(autoincrement())
-  razon_social      String              @db.VarChar(200)
-  nombre_comercial  String              @db.VarChar(200)
-  correo            String?             @db.VarChar(200)
-  telefono          String?             @db.VarChar(20)
-  rfc               String?             @db.VarChar(13)
-  logo_empresa      String?             @db.VarChar(300)
-  fechaRegistro     DateTime?           @default(now()) @db.DateTime(0)
-  usuarioRegistro   String?             @db.VarChar(100)
-  activo            Boolean?            @default(true)
-  DomicilioEmpresas DomicilioEmpresas[]
-  Integraciones     Integraciones[]
-  RelUsuarioEmpresa RelUsuarioEmpresa[]
+  idEmpresa              Int                      @id @default(autoincrement())
+  razon_social           String                   @db.VarChar(200)
+  nombre_comercial       String                   @db.VarChar(200)
+  correo                 String?                  @db.VarChar(200)
+  telefono               String?                  @db.VarChar(20)
+  rfc                    String?                  @db.VarChar(13)
+  logo_empresa           String?                  @db.VarChar(300)
+  fechaRegistro          DateTime?                @default(now()) @db.DateTime(0)
+  usuarioRegistro        String?                  @db.VarChar(100)
+  activo                 Boolean?                 @default(true)
+  CatCentroCostos        CatCentroCostos[]
+  CatRegistrosPatronales CatRegistrosPatronales[]
+  DomicilioEmpresas      DomicilioEmpresas[]
+  Integraciones          Integraciones[]
+  RelUsuarioEmpresa      RelUsuarioEmpresa[]
+  Vacantes               Vacantes[]
 }
 
 model CatEquipo {
@@ -160,9 +147,10 @@ model CatEstatusExpedientes {
 }
 
 model CatEstatusVacante {
-  idEstatusVacante Int      @id @default(autoincrement())
-  decripcion       String?  @db.VarChar(45)
+  idEstatusVacante Int        @id @default(autoincrement())
+  decripcion       String?    @db.VarChar(45)
   activo           Boolean?
+  Vacantes         Vacantes[]
 }
 
 model CatFuncionespuesto {
@@ -197,9 +185,12 @@ model CatModalidad {
 }
 
 model CatModulos {
-  idModulo    Int      @id @default(autoincrement())
-  Descripcion String?  @db.VarChar(200)
-  Activo      Boolean? @default(true)
+  idModulo       Int              @id @default(autoincrement())
+  Descripcion    String?          @db.VarChar(200)
+  Codigo         String?          @db.VarChar(100)
+  idPadre        Int?
+  Activo         Boolean?         @default(true)
+  RelRolPermisos RelRolPermisos[]
 }
 
 model CatNivel {
@@ -209,12 +200,14 @@ model CatNivel {
 }
 
 model CatNivelesSalario {
-  IdNivelSalario Int      @default(autoincrement())
-  Descripcion    String?  @db.Text
-  Activo         Boolean? @default(true)
-  IdEmpresa      String   @db.VarChar(45)
-
-  @@id([IdNivelSalario, IdEmpresa])
+  IdNivelSalario Int          @id @default(autoincrement())
+  NombreNivel    String       @db.VarChar(50)
+  Descripcion    String?      @db.Text
+  Activo         Boolean?     @default(true)
+  IdEmpresa      Int          @default(1)
+  SalarioMinimo  Decimal?     @db.Decimal(10, 2)
+  SalarioMaximo  Decimal?     @db.Decimal(10, 2)
+  CatPuestos     CatPuestos[]
 }
 
 model CatParentesco {
@@ -230,42 +223,64 @@ model CatPlataforma {
 }
 
 model CatPuestos {
-  idPuesto             Int                  @id @default(autoincrement())
-  idEmpresa            Int                  @default(1)
-  NombrePuesto         String               @db.VarChar(200)
-  idTipoPuesto         Int?
-  idArea               Int?
-  idTipoContratacion   Int?
-  idModalidad          Int?
-  idSite               Int?
-  idNivelEstudios      Int?
-  DescripcionPuesto    String?              @db.Text
-  SalarioMinimo        String?              @db.Text
-  SalarioMaximo        String?              @db.Text
-  IdNivelSalario       Int?
-  Edad                 String?              @db.Text
-  Vacantes             Int?                 @default(0)
-  Posiciones           Int?
-  DisponibilidadViajar Boolean?             @default(false)
-  idJefeInmediato      Int?
-  UsuarioRegistro      String?              @db.VarChar(30)
-  FechaRegistro        DateTime?            @default(now()) @db.DateTime(0)
-  Activo               Boolean?             @default(true)
-  aprobada             Boolean?             @default(false)
-  pendiente            Boolean?             @default(false)
-  comentarios          String?              @db.Text
-  Salario              String?              @db.VarChar(100)
-  CompetenciasPuesto   CompetenciasPuesto[]
-  FuncionesPuesto      FuncionesPuesto[]
-  HabilidadesPuesto    HabilidadesPuesto[]
-  RequisitosPuesto     RequisitosPuesto[]
+  idPuesto              Int                     @id @default(autoincrement())
+  idEmpresa             Int                     @default(1)
+  NombrePuesto          String                  @db.VarChar(200)
+  idTipoPuesto          Int?
+  idArea                Int?
+  idTipoContratacion    Int?
+  idModalidad           Int?
+  idSite                Int?
+  idNivelEstudios       Int?
+  DescripcionPuesto     String?                 @db.Text
+  IdNivelSalario        Int?
+  DisponibilidadViajar  Boolean?                @default(false)
+  idJefeInmediato       Int?
+  idUsuarioRegistro     String                  @db.VarChar(36)
+  FechaRegistro         DateTime?               @default(now()) @db.DateTime(0)
+  Activo                Boolean                 @default(true)
+  aprobada              Boolean                 @default(false)
+  pendiente             Boolean                 @default(true)
+  comentarios           String?                 @db.Text
+  CatNivelesSalario     CatNivelesSalario?      @relation(fields: [IdNivelSalario], references: [IdNivelSalario], onDelete: Restrict, map: "FK_Puestos_NivelSalario")
+  CatSites              CatSites?               @relation(fields: [idSite], references: [idSite], onDelete: Restrict, map: "FK_Puestos_Sites")
+  CompetenciasPuesto    CompetenciasPuesto[]
+  FuncionesPuesto       FuncionesPuesto[]
+  HabilidadesPuesto     HabilidadesPuesto[]
+  RelPuestosUbicaciones RelPuestosUbicaciones[]
+  Vacantes              Vacantes[]
+
+  @@index([IdNivelSalario], map: "FK_Puestos_NivelSalario")
+  @@index([idSite], map: "FK_Puestos_Sites_idx")
 }
 
 model CatSites {
-  idSite      Int      @id @default(autoincrement())
-  idEmpresa   Int?
-  Descripcion String?  @db.VarChar(200)
-  Activo      Boolean? @default(true)
+  idSite                Int                     @id @default(autoincrement())
+  idEmpresa             Int?
+  idTipoUbicacion       Int                     @default(1)
+  Descripcion           String?                 @db.VarChar(200)
+  EsPrincipal           Boolean?                @default(false)
+  Calle                 String?                 @db.VarChar(250)
+  NoExterior            String?                 @db.VarChar(50)
+  NoInterior            String?                 @db.VarChar(50)
+  Colonia               String?                 @db.VarChar(150)
+  MunicipioDelegacion   String?                 @db.VarChar(150)
+  Estado                String?                 @db.VarChar(150)
+  CodigoPostal          String?                 @db.VarChar(10)
+  Pais                  String?                 @default("México") @db.VarChar(100)
+  Latitud               Decimal?                @db.Decimal(10, 8)
+  Longitud              Decimal?                @db.Decimal(11, 8)
+  idRegistroPatronal    Int?
+  ZonaFronteriza        Boolean?                @default(false)
+  Activo                Boolean?                @default(true)
+  FechaRegistro         DateTime?               @db.DateTime(0)
+  CatPuestos            CatPuestos[]
+  CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
+  RelAreasUbicaciones   RelAreasUbicaciones[]
+  RelPuestosUbicaciones RelPuestosUbicaciones[]
+  Vacantes              Vacantes[]
+
+  @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
 }
 
 model CatSolicitud {
@@ -287,9 +302,10 @@ model CatTipoContratacion {
 }
 
 model CatTipoCurso {
-  idTipoCurso Int      @id @default(autoincrement())
-  Descripcion String   @db.VarChar(60)
-  activo      Boolean? @default(true)
+  idTipoCurso Int         @id @default(autoincrement())
+  Descripcion String      @db.VarChar(200)
+  activo      Boolean?    @default(true)
+  CatCursos   CatCursos[]
 }
 
 model CatTipoPuesto {
@@ -396,19 +412,6 @@ model DomicilioEmpresas {
   @@index([idEmpresa], map: "idEmpresa")
 }
 
-model DomicilioSite {
-  idDomicilioSite Int      @id @default(autoincrement())
-  idSite          Int?
-  cp              String?  @db.VarChar(5)
-  idEstado        Int?
-  idMunicipio     Int?
-  calle           String?  @db.VarChar(100)
-  noInt           String?  @db.VarChar(30)
-  noExt           String?  @db.VarChar(30)
-  idColonia       Int?
-  activo          Boolean? @default(true)
-}
-
 model FuncionesPuesto {
   idFuncionPuesto Int         @id @default(autoincrement())
   idPuesto        Int?
@@ -423,6 +426,7 @@ model HabilidadesPuesto {
   idPuesto          Int?
   Habilidad         String?     @db.Text
   Nivel             String?     @db.Text
+  Tipo              String?     @db.VarChar(100)
   CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "HabilidadesPuesto_ibfk_1")
 
   @@index([idPuesto], map: "idPuesto")
@@ -529,7 +533,7 @@ model Postulaciones {
   uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
   idCandidato     Int?
   idEstatus       Int?      @default(1)
-  idPuesto        Int?
+  idVacante       Int
   nombre          String    @db.VarChar(100)
   primerApellido  String    @db.VarChar(100)
   segundoApellido String?   @db.VarChar(100)
@@ -539,6 +543,9 @@ model Postulaciones {
   fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
   curp            String?   @db.VarChar(45)
   idCampa_a       Int?      @map("idCampaña")
+  Vacantes        Vacantes  @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+
+  @@index([idVacante], map: "fk_postulacion_vacante")
 }
 
 model ProcesosSeleccion {
@@ -556,13 +563,6 @@ model ProcesosSeleccion {
   comentarios         String?   @db.Text
   fechaRegistro       DateTime  @default(now()) @db.Timestamp(0)
   UsuarioRegistro     String?   @db.VarChar(45)
-}
-
-model RelCurso {
-  idRelCurso  Int      @id @default(autoincrement())
-  idCurso     Int
-  idTipoCurso Int
-  activo      Boolean? @default(true)
 }
 
 model RelModuloUsuario {
@@ -623,15 +623,6 @@ model RelUsuarioSite {
   activo    Boolean? @default(true)
 }
 
-model RequisitosPuesto {
-  idRequisitoPuesto Int         @id @default(autoincrement())
-  idPuesto          Int?
-  Requisito         String?     @db.Text
-  CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "RequisitosPuesto_ibfk_1")
-
-  @@index([idPuesto], map: "idPuesto")
-}
-
 model auth_group {
   id                     Int                      @id @default(autoincrement())
   name                   String                   @unique(map: "name") @db.VarChar(150)
@@ -676,8 +667,10 @@ model auth_user {
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
+  Empleados                         Empleados[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
+  Vacantes                          Vacantes[]
   auth_user_groups                  auth_user_groups[]
   auth_user_user_permissions        auth_user_user_permissions[]
   django_admin_log                  django_admin_log[]
@@ -707,9 +700,12 @@ model auth_user_user_permissions {
 }
 
 model catroles {
-  idRol       Int     @id @default(autoincrement())
-  descripcion String  @db.VarChar(100)
-  activo      Boolean @default(true)
+  idRol          Int              @id @default(autoincrement())
+  descripcion    String           @db.VarChar(100)
+  activo         Boolean          @default(true)
+  RelRolPermisos RelRolPermisos[]
+
+  @@map("CatRoles")
 }
 
 model consumonubarium {
@@ -762,22 +758,13 @@ model django_session {
   @@index([expire_date], map: "django_session_expire_date_a5c62663")
 }
 
-model expedientes {
-  idExpediente         Int       @id @default(autoincrement())
-  idCandidato          Int?
-  idPuesto             Int?
-  idEstatus            Int?
-  fechaRegistro        DateTime? @db.Timestamp(0)
-  usuarioRegistro      String?   @db.VarChar(250)
-  fechaActualizacion   DateTime? @default(now()) @db.Timestamp(0)
-  usuarioActualizacion String?   @db.VarChar(250)
-}
-
 model relUsuarioRol {
   iRel      Int     @id @default(autoincrement())
   idUsuario Int
   idRol     Int
   activo    Boolean @default(true)
+
+  @@map("RelUsuarioRol")
 }
 
 model requisiciones {
@@ -928,7 +915,7 @@ model Entrevistas {
   id                     String                     @id @default(dbgenerated("(uuid())")) @db.Char(36)
   company_id             Int
   area_id                Int
-  position_id            Int?
+  idVacante              Int?
   provider_id            Int
   agent_id               String?                    @db.Char(36)
   description            String?                    @db.VarChar(500)
@@ -941,10 +928,12 @@ model Entrevistas {
   comment                String?                    @db.Text
   active                 Boolean                    @default(true)
   Agentes                Agentes?                   @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_ibfk_1")
+  Vacantes               Vacantes?                  @relation(fields: [idVacante], references: [idVacante], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_idVacante_fk")
   EntrevistasCriterios   EntrevistasCriterios[]
   EntrevistasPostulantes EntrevistasPostulantes[]
 
   @@index([agent_id], map: "agent_id")
+  @@index([idVacante], map: "Entrevistas_idVacante_fk")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -1056,6 +1045,196 @@ model AgentesCriterios {
   Agentes     Agentes @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "AgentesCriterios_ibfk_1")
 
   @@index([agent_id], map: "agent_id")
+}
+
+model Vacantes {
+  idVacante                                          Int                  @id @default(autoincrement())
+  idUsuarioCreador                                   Int
+  idEmpresa                                          Int
+  idPuesto                                           Int
+  idSite                                             Int
+  idJefeInmediato                                    Int
+  Motivo                                             String?              @db.Text
+  SalarioMinimo                                      Decimal              @db.Decimal(10, 2)
+  SalarioMaximo                                      Decimal              @db.Decimal(10, 2)
+  InformacionExtra                                   String?              @db.Text
+  idEstatusVacante                                   Int                  @default(1)
+  idReclutadorAsignado                               Int?
+  idTipoPublicacion                                  Int?
+  comentarios                                        String?              @db.Text
+  fechaCreacion                                      DateTime?            @default(now()) @db.Timestamp(0)
+  fechaActualizacion                                 DateTime?            @default(now()) @db.Timestamp(0)
+  Entrevistas                                        Entrevistas[]
+  Postulaciones                                      Postulaciones[]
+  CatEmpresas                                        CatEmpresas          @relation(fields: [idEmpresa], references: [idEmpresa], map: "fk_vacante_empresa")
+  CatEstatusVacante                                  CatEstatusVacante    @relation(fields: [idEstatusVacante], references: [idEstatusVacante], map: "fk_vacante_estatus")
+  Empleados_Vacantes_idJefeInmediatoToEmpleados      Empleados            @relation("Vacantes_idJefeInmediatoToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "fk_vacante_jefe")
+  CatPuestos                                         CatPuestos           @relation(fields: [idPuesto], references: [idPuesto], map: "fk_vacante_puesto")
+  Empleados_Vacantes_idReclutadorAsignadoToEmpleados Empleados?           @relation("Vacantes_idReclutadorAsignadoToEmpleados", fields: [idReclutadorAsignado], references: [idEmpleado], onDelete: Restrict, map: "fk_vacante_reclutador")
+  CatSites                                           CatSites             @relation(fields: [idSite], references: [idSite], map: "fk_vacante_site")
+  CatTiposPublicacion                                CatTiposPublicacion? @relation(fields: [idTipoPublicacion], references: [idTipoPublicacion], onDelete: Restrict, map: "fk_vacante_tipo_pub")
+  auth_user                                          auth_user            @relation(fields: [idUsuarioCreador], references: [id], map: "fk_vacante_usuario_creador")
+
+  @@index([idEmpresa], map: "fk_vacante_empresa")
+  @@index([idEstatusVacante], map: "fk_vacante_estatus")
+  @@index([idJefeInmediato], map: "fk_vacante_jefe")
+  @@index([idPuesto], map: "fk_vacante_puesto")
+  @@index([idReclutadorAsignado], map: "fk_vacante_reclutador")
+  @@index([idSite], map: "fk_vacante_site")
+  @@index([idTipoPublicacion], map: "fk_vacante_tipo_pub")
+  @@index([idUsuarioCreador], map: "fk_vacante_usuario_creador")
+}
+
+model CatEstatusPostulacion {
+  idEstatusPostulacion Int     @id @default(autoincrement())
+  descripcion          String  @db.VarChar(45)
+  activo               Boolean @default(true)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatRegistrosPatronales {
+  idRegistroPatronal Int         @id @default(autoincrement())
+  idEmpresa          Int
+  RegistroPatronal   String      @unique(map: "UK_Registro_Patronal") @db.VarChar(11)
+  RazonSocial        String      @db.VarChar(250)
+  ClaseRiesgo        String      @db.VarChar(10)
+  PrimaRiesgo        Decimal     @default(0.50000) @db.Decimal(7, 5)
+  Activo             Boolean?    @default(true)
+  CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, onUpdate: NoAction, map: "FK_RegPatronal_Empresa")
+
+  @@index([idEmpresa], map: "FK_RegPatronal_Empresa")
+}
+
+model CatTiposPublicacion {
+  idTipoPublicacion Int        @id @default(autoincrement())
+  descripcion       String     @db.VarChar(50)
+  activo            Boolean    @default(true)
+  Vacantes          Vacantes[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatTiposUbicacion {
+  idTipoUbicacion Int        @id @default(autoincrement())
+  Codigo          String     @unique(map: "UK_Codigo_Tipo") @db.VarChar(50)
+  Descripcion     String     @db.VarChar(150)
+  Activo          Boolean?   @default(true)
+  CatSites        CatSites[]
+}
+
+model Empleados {
+  idEmpleado                                        Int         @id @default(autoincrement())
+  idUsuario                                         String?     @db.VarChar(36)
+  idEmpresa                                         Int?
+  idPuesto                                          Int?
+  idJefeInmediato                                   Int?
+  idSite                                            Int?
+  nombre                                            String?     @db.VarChar(100)
+  primerApellido                                    String?     @db.VarChar(100)
+  segundoApellido                                   String?     @db.VarChar(100)
+  idCampania                                        Int?
+  idTipoSanguineo                                   Int?
+  numeroSeguroSocial                                String?     @db.VarChar(15)
+  idEstadoCivil                                     Int?
+  fechaNacimiento                                   DateTime?   @db.Date
+  rfc                                               String?     @db.VarChar(18)
+  correo                                            String?     @db.VarChar(250)
+  telefonoMovil                                     String?     @db.VarChar(15)
+  telefonoLocal                                     String?     @db.VarChar(15)
+  idNivelEstudios                                   Int?
+  tieneInfonavit                                    Boolean?
+  tieneHijos                                        Boolean?
+  FechaRegistro                                     DateTime?   @default(now()) @db.Timestamp(0)
+  usuarioRegistro                                   String?     @db.VarChar(250)
+  idGenero                                          Int?
+  numeroInfonavit                                   String?     @db.VarChar(30)
+  numeroHijos                                       Int?
+  imagenFirmaAutografa                              String?     @db.VarChar(500)
+  activo                                            Boolean     @default(true)
+  Empleados                                         Empleados?  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
+  other_Empleados                                   Empleados[] @relation("EmpleadosToEmpleados")
+  auth_user                                         auth_user?  @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  Vacantes_Vacantes_idJefeInmediatoToEmpleados      Vacantes[]  @relation("Vacantes_idJefeInmediatoToEmpleados")
+  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]  @relation("Vacantes_idReclutadorAsignadoToEmpleados")
+
+  @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
+  @@index([idUsuario], map: "FK_Empleados_Usuarios")
+}
+
+model Expedientes {
+  idExpediente         Int       @id @default(autoincrement())
+  idEmpleado           Int?
+  idPuesto             Int?
+  idEstatus            Int?
+  fechaRegistro        DateTime? @db.Timestamp(0)
+  usuarioRegistro      String?   @db.VarChar(250)
+  fechaActualizacion   DateTime? @default(now()) @db.Timestamp(0)
+  usuarioActualizacion String?   @db.VarChar(250)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelAreasUbicaciones {
+  idAreaUbicacion      Int              @id @default(autoincrement())
+  idArea               Int
+  idCentroCostos       Int?
+  idSite               Int?
+  PresupuestoAsignado  Decimal?         @default(0.00) @db.Decimal(12, 2)
+  PresupuestoEjecutado Decimal?         @default(0.00) @db.Decimal(12, 2)
+  Encargado            String?          @db.VarChar(150)
+  Correo               String?          @db.VarChar(150)
+  Telefono             String?          @db.VarChar(10)
+  Extension            String?          @db.VarChar(10)
+  Activo               Boolean?         @default(true)
+  CatAreas             CatAreas         @relation(fields: [idArea], references: [idArea], onDelete: Cascade, map: "FK_AreasUbicaciones_Areas")
+  CatCentroCostos      CatCentroCostos? @relation(fields: [idCentroCostos], references: [idCentroCostos], onDelete: Restrict, map: "FK_AreasUbicaciones_CentroCostos")
+  CatSites             CatSites?        @relation(fields: [idSite], references: [idSite], map: "FK_AreasUbicaciones_Sites")
+
+  @@index([idArea], map: "FK_AreasUbicaciones_Areas")
+  @@index([idCentroCostos], map: "FK_AreasUbicaciones_CentroCostos")
+  @@index([idSite], map: "FK_AreasUbicaciones_Sites")
+}
+
+model RelPuestosUbicaciones {
+  idPuestoUbicacion Int        @id @default(autoincrement())
+  idPuesto          Int
+  idSite            Int
+  PlazasAutorizadas Int        @default(0)
+  CatPuestos        CatPuestos @relation(fields: [idPuesto], references: [idPuesto], onDelete: Cascade, map: "FK_PuestosUbicaciones_Puestos")
+  CatSites          CatSites   @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_PuestosUbicaciones_Sites")
+
+  @@unique([idPuesto, idSite], map: "UK_Puesto_Site")
+  @@index([idSite], map: "FK_PuestosUbicaciones_Sites")
+}
+
+model RelRolPermisos {
+  id              Int        @id @default(autoincrement())
+  idRol           Int
+  idModulo        Int
+  puedeVer        Boolean    @default(false)
+  puedeCrear      Boolean    @default(false)
+  puedeActualizar Boolean    @default(false)
+  puedeEliminar   Boolean    @default(false)
+  activo          Boolean    @default(true)
+  CatModulos      CatModulos @relation(fields: [idModulo], references: [idModulo], onDelete: Cascade, onUpdate: NoAction, map: "fk_permiso_modulo")
+  catroles        catroles   @relation(fields: [idRol], references: [idRol], onDelete: Cascade, map: "fk_permisos_roles")
+
+  @@unique([idRol, idModulo], map: "idx_rol_modulo_v2")
+  @@index([idModulo], map: "fk_permisos_modulos")
+}
+
+model UserEvents {
+  id             String    @id @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  company_id     Int
+  user_id        String    @db.VarChar(36)
+  title          String    @db.VarChar(150)
+  description    String?   @db.Text
+  start_datetime DateTime  @db.DateTime(0)
+  end_datetime   DateTime  @db.DateTime(0)
+  color          String    @default("blue") @db.VarChar(30)
+  is_all_day     Boolean   @default(false)
+  created_at     DateTime? @default(now()) @db.Timestamp(0)
+  updated_at     DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([user_id, start_datetime, end_datetime], map: "idx_user_events_lookup")
 }
 
 enum RelRequisicionHabilidades_nivel {

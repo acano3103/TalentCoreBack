@@ -54,6 +54,9 @@ const createDto = {
   password: 'MiPassword123',
   is_active: true,
   idRol: 2,
+  phone: '1234567890',
+  empresaIds: [1],
+  siteIds: [1],
 };
 
 // ─── Mock PrismaService ───────────────────────────────────────────────────────

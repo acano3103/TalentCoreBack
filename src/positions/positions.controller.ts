@@ -1,4 +1,4 @@
-import { Controller, Patch, Get, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Patch, Get, Param, Body, UseGuards, Query, Req } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -24,8 +24,8 @@ export class PositionsController {
     })
     @ApiResponse({ status: 200, description: 'Positions successfully retrieved.' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    async getPositions(@Param('companyId') companyId: number, @Query('status') status?: string) {
-        return this.service.findAllPositions(Number(companyId), status);
+    async getPositions(@Param('companyId') companyId: number, @Req() req: any, @Query('status') status?: string) {
+        return this.service.findAllPositions(Number(companyId), req.user, status);
     }
 
     @UseGuards(JwtAuthGuard)

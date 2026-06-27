@@ -10,8 +10,8 @@ export class UsersQueries {
   static async getRoles(prisma: PrismaService, userId: number) {
     return prisma.$queryRaw<{ descripcion: string }[]>`
       SELECT c.descripcion 
-      FROM relUsuarioRol r
-      JOIN catroles c ON c.idRol = r.idRol
+      FROM RelUsuarioRol r
+      JOIN CatRoles c ON c.idRol = r.idRol
       WHERE r.idUsuario = ${userId} AND r.activo = 1 AND c.activo = 1
     `;
   }

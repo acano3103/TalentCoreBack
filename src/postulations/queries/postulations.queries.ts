@@ -25,11 +25,11 @@ export async function createCandidateWithCredentials(
   } = data;
 
   return await prisma.$transaction(async (tx) => {
-    // 🔹 1. Insert candidato
+    // 🔹 1. Insert postulacion
     await tx.$executeRaw`
-      INSERT INTO Candidatos (
-        nombre, primerApellido, segundoApellido, idCampania,
-        rfc, correo, FechaRegistro, usuarioRegistro
+      INSERT INTO Postulaciones (
+        nombre, primerApellido, segundoApellido, idCampaña,
+        curp, correo, telefono, fechaRegistro, idVacante
       ) VALUES (
         ${nombre},
         ${apellido1.trim()},
@@ -37,12 +37,13 @@ export async function createCandidateWithCredentials(
         ${idCampania},
         ${curp.trim()},
         ${correo},
+        '',
         NOW(),
-        ${usuario}
+        ${idPuesto}
       );
     `;
 
-    // 🔥 Obtener ID candidato
+    // 🔥 Obtener ID postulacion
     const resultCandidato = await tx.$queryRaw<{ id: number }[]>`
       SELECT LAST_INSERT_ID() as id;
     `;
@@ -52,6 +53,11 @@ export async function createCandidateWithCredentials(
     if (!idCandidato) {
       throw new Error("No se pudo insertar candidato");
     }
+
+    // Actualizar idCandidato en la postulacion (para retrocompatibilidad)
+    await tx.$executeRaw`
+      UPDATE Postulaciones SET idCandidato = ${idCandidato} WHERE idPostulacion = ${idCandidato};
+    `;
 
     // 🔹 2. Insert expediente
     await tx.$executeRaw`

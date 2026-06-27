@@ -23,9 +23,40 @@ export class PositionsService {
 
     private readonly logger = new Logger(PositionsService.name);
 
-    async findAllPositions(companyId: number, status?: string) {
+    async findAllPositions(companyId: number, user: any, status?: string) {
         try {
-            const rows = await PositionQueries.getActivePositions(this.prisma, Number(companyId)) as any[];
+            let rbacFilter = '';
+            
+            const roles = user?.roles || [];
+            
+            if (!user?.id) return { data: [], total: 0 };
+
+            const authUser = await this.prisma.auth_user.findUnique({
+                where: { id: user.id },
+                select: { uuid: true }
+            });
+
+            if (authUser?.uuid) {
+                const empleado = await this.prisma.empleados.findFirst({
+                    where: { idUsuario: authUser.uuid }
+                });
+
+                let areaId: number | null | undefined = null;
+                if (empleado?.idPuesto) {
+                    const puesto = await this.prisma.catPuestos.findUnique({ where: { idPuesto: empleado.idPuesto } });
+                    areaId = puesto?.idArea;
+                }
+
+                if (roles.includes('Administrador') || roles.includes('RH') || roles.includes('Admin')) {
+                    // Se pueden ver todas las de la empresa (sin filtro extra)
+                } else if (roles.includes('Manager') && areaId) {
+                    rbacFilter = `AND a.idArea = ${areaId}`;
+                } else if (roles.includes('Reclutador') && empleado?.idEmpleado) {
+                    rbacFilter = `AND v.idReclutadorAsignado = ${empleado.idEmpleado}`;
+                }
+            }
+
+            const rows = await PositionQueries.getActivePositions(this.prisma, Number(companyId), rbacFilter) as any[];
 
             const puestos = rows.map((p) => {
                 return {

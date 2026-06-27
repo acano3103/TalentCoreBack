@@ -52,7 +52,7 @@ export class InterviewsService {
                     data: {
                         company_id: companyId,
                         area_id: dto.areaId,
-                        position_id: positionId,
+                        idVacante: positionId,
                         provider_id: dto.providerId,
                         agent_id: dto.agentId || null,
                         description: dto.description || null,

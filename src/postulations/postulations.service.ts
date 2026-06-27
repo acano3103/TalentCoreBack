@@ -136,7 +136,7 @@ export class PostulationsService {
             apellido1: postulation.primerApellido,
             apellido2: postulation.segundoApellido || '',
             correo: postulation.correo,
-            idPuesto: postulation.idPuesto ?? 0,
+            idPuesto: postulation.idVacante ?? 0,
             usuario: user.username || 'sistema',
             idCampania: dto.campaignId || null,
           },

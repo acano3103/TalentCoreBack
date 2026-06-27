@@ -119,14 +119,14 @@ export class AuthService {
                     where: { idUsuario: userRec.idUsuario },
                     data: { token: token2fa }
                 });
-                const candidate = await this.prisma.candidatos.findFirst({ where: { idCandidato: userRec.idCandidato } });
+                const candidate = await this.prisma.postulaciones.findFirst({ where: { idCandidato: userRec.idCandidato } });
                 if (!candidate?.correo) throw new BadRequestException('El candidato no tiene correo registrado');
 
                 await this.notifications.notify({
                     userUuid: userRec.uuid,
                     notificationTypeCode: '2FA',
                     to: candidate.correo,
-                    phone: candidate.telefonoMovil || undefined,
+                    phone: candidate.telefono || undefined,
                     subject: 'Código de Verificación - Talent Core',
                     context: {
                         name: `${candidate.nombre} ${candidate.primerApellido}`,
@@ -262,7 +262,7 @@ export class AuthService {
             const userRec = await this.prisma.usuarios.findFirst({ where: { idUsuario, activo: true } });
             if (!userRec?.idCandidato) throw new BadRequestException('Usuario no válido');
 
-            const candidate = await this.prisma.candidatos.findFirst({ where: { idCandidato: userRec.idCandidato } });
+            const candidate = await this.prisma.postulaciones.findFirst({ where: { idCandidato: userRec.idCandidato } });
             if (!candidate?.correo) throw new BadRequestException('El candidato no tiene correo');
 
             await this.prisma.usuarios.update({
@@ -274,7 +274,7 @@ export class AuthService {
                 userUuid: userRec.uuid,
                 notificationTypeCode: '2FA',
                 to: candidate.correo,
-                phone: candidate.telefonoMovil || undefined,
+                phone: candidate.telefono || undefined,
                 subject: 'Código de Verificación - Talent Core',
                 context: {
                     name: `${candidate.nombre} ${candidate.primerApellido}`,
