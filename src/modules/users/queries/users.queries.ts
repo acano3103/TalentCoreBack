@@ -27,13 +27,28 @@ export class UsersQueries {
     `;
   }
 
-  static async getModules(prisma: PrismaService, userId: number) {
+  static async getModules(prisma: PrismaService, userId: number): Promise<{ Descripcion: string }[]> {
+    // 1. Primero obtenemos los IDs de los roles activos del usuario
+    const rolesRaw = await prisma.$queryRaw<{ idRol: number }[]>`
+    SELECT idRol FROM RelUsuarioRol 
+    WHERE idUsuario = ${userId} AND activo = 1
+  `;
+
+    const rolesIds = rolesRaw.map(r => r.idRol);
+
+    // Si el usuario no tiene roles asignados, evitamos que truene el IN y retornamos vacío
+    if (rolesIds.length === 0) return [];
+
+    // 2. Traemos las descripciones únicas de los módulos donde tenga permiso de ver (puedeVer = 1)
     return prisma.$queryRaw<{ Descripcion: string }[]>`
-      SELECT m.Descripcion
-      FROM RelModuloUsuario r
-      JOIN CatModulos m ON m.idModulo = r.idModulo
-      WHERE r.idUsuario = ${userId} AND r.Activo = 1 AND m.Activo = 1
-    `;
+    SELECT DISTINCT m.Descripcion
+    FROM RelRolPermisos p
+    JOIN CatModulos m ON m.idModulo = p.idModulo
+    WHERE p.idRol IN (${Prisma.join(rolesIds)}) 
+      AND p.puedeVer = 1 
+      AND p.activo = 1 
+      AND m.Activo = 1
+  `;
   }
 
   static async getSites(prisma: PrismaService, userId: number) {

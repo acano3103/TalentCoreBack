@@ -799,14 +799,6 @@ model ProcesosSeleccion {
   UsuarioRegistro     String?   @db.VarChar(45)
 }
 
-model RelModuloUsuario {
-  idRelacion    Int       @id @default(autoincrement())
-  idUsuario     Int
-  idModulo      Int
-  FechaRegistro DateTime? @default(now()) @db.DateTime(0)
-  Activo        Boolean?  @default(true)
-}
-
 model RelPuestoCurso {
   idRelPuestoCurso Int       @id @default(autoincrement())
   idPuesto         Int
