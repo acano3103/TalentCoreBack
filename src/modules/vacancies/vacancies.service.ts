@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { VacanciesQueries } from './queries/vacancies.queries';
 
 @Injectable()
 export class VacanciesService {
@@ -13,11 +14,40 @@ export class VacanciesService {
     }
 
     async findAllRequisitions(companyId: number, page: number, search: string, limit: number, activeUser: ActiveUserDto) {
-        const user = await this.prisma.relUsuarioRol.findFirst({
+        const userRole = await this.prisma.relUsuarioRol.findFirst({
             where: {
                 idUsuario: activeUser.id
             }
-        })
+        });
+
+        if (!userRole) throw new NotFoundException('Usuario no encontrado');
+
+        const skip = (page - 1) * limit;
+
+        const requisitions = await VacanciesQueries.getPaginatedRequisitions(
+            this.prisma,
+            companyId,
+            activeUser.id,
+            userRole.idRol,
+            skip,
+            limit,
+            search
+        );
+
+        const total = await VacanciesQueries.countRequisitions(
+            this.prisma,
+            companyId,
+            activeUser.id,
+            userRole.idRol,
+            search
+        );
+
+        return {
+            data: requisitions,
+            total,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 
     async createRequisition() {
