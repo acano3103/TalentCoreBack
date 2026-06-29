@@ -7,7 +7,6 @@ import * as handlebars from 'handlebars';
 import { MailProvider } from './providers/mail/mail.provider';
 import { WhatsappProvider } from './providers/whatsapp/whatsapp.provider';
 import { NotificationDispatcher } from './notification.dispatcher';
-import { PrismaModule } from 'src/prisma/prisma.module';
 import { WebsocketProvider } from './providers/websocket/websocket.provider';
 import { WebsocketGateway } from './gateways/websockets.gateway';
 import { NotificationsService } from './notifications.service';
@@ -16,7 +15,6 @@ import { NotificationsController } from './notifications.controller';
 @Global()
 @Module({
     imports: [
-        PrismaModule,
         MailerModule.forRootAsync({
             useFactory: (config: ConfigService) => ({
                 transport: {

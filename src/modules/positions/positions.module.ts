@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { PositionsController } from './positions.controller';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationsModule } from 'src/modules/notifications/notifications.module';
 import { OrganizationChartModule } from './organization-chart/organization-chart.module';
 
 @Module({
-  providers: [PositionsService, PrismaService],
+  providers: [PositionsService],
   controllers: [PositionsController],
   imports: [NotificationsModule, OrganizationChartModule]
 })

@@ -24,13 +24,13 @@ export class CatalogsController {
   @ApiParam({
     name: 'nombre',
     description: 'Nombre del catálogo a consultar',
-    enum: ['roles', 'empresas', 'sites', 'modulos', 'areas', 'tipos-contratacion', 'modalidades'],
+    enum: ['roles', 'empresas', 'sites', 'modulos', 'areas', 'tipos-contratacion', 'modalidades', 'centro-costos', 'registros-patronales', 'tipos-ubicaciones', 'empleados'],
   })
   @ApiOperation({
     summary: 'Obtener catálogo genérico',
     description:
       'Retorna los registros activos del catálogo indicado en el path param. ' +
-      'Valores aceptados: roles, empresas, sites, modulos, areas, tipos-contratacion, modalidades.',
+      'Valores aceptados: roles, empresas, sites, modulos, areas, tipos-contratacion, modalidades, centro-costos, registros-patronales, tipos-ubicaciones, empleados',
   })
   @ApiResponse({ status: 200, description: 'Lista de registros del catálogo.' })
   @ApiResponse({ status: 400, description: 'Catálogo no reconocido.' })

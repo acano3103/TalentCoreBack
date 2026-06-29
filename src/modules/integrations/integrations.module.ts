@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { IntegrationsService } from './integrations.service';
 import { IntegrationsController } from './integrations.controller';
-import { PrismaModule } from 'src/prisma/prisma.module';
 import { IntegrationsFactory } from './providers/factory.service';
 import { ZoomProvider } from './providers/communication/zoom.provider';
 import { EncryptionService } from 'src/common/utils/encryption.util';
@@ -11,7 +10,7 @@ import { HttpModule } from '@nestjs/axios';
 import { OpenAiProvider } from './providers/ia/openai.provider';
 
 @Module({
-    imports: [PrismaModule, HttpModule],
+    imports: [HttpModule],
     controllers: [IntegrationsController, HumeController],
     providers: [
         IntegrationsService,
