@@ -119,17 +119,17 @@ export class AuthService {
                     where: { idUsuario: userRec.idUsuario },
                     data: { token: token2fa }
                 });
-                const candidate = await this.prisma.empleados.findFirst({ where: { idEmpleado: userRec.idCandidato } });
-                if (!candidate?.correo) throw new BadRequestException('El candidato no tiene correo registrado');
+                const candidate = await this.prisma.postulaciones.findFirst({ where: { idPostulacion: userRec.idCandidato } });
+                if (!candidate?.telefono) throw new BadRequestException('El candidato no tiene telefono registrado');
 
                 await this.notifications.notify({
                     userUuid: userRec.uuid,
                     notificationTypeCode: '2FA',
-                    to: candidate.correo,
-                    phone: candidate.telefonoMovil || undefined,
+                    to: candidate.correo || '',
+                    phone: candidate.telefono || undefined,
                     subject: 'Código de Verificación - Talent Core',
                     context: {
-                        name: `${candidate.nombre} ${candidate.primerApellido}`,
+                        name: `${candidate.nombre} ${candidate.primerApellido || ''}`,
                         token: token2fa
                     }
                 })
@@ -137,7 +137,7 @@ export class AuthService {
                 // Se asienta la sesión activa en DB vinculada al proceso intermedio
                 await this.registerSessionInDb(userRec.uuid, browser || 'Unknown Browser');
 
-                return { requires2FA: true, idUsuario: userRec.idUsuario, userType: 'candidato', message: `Código enviado a: ${this.ofuscarCorreo(candidate.correo)}` };
+                return { requires2FA: true, idUsuario: userRec.idUsuario, userType: 'candidato', message: `Código enviado a: ${this.ofuscarCorreo(candidate.correo || '')}` };
             }
 
             // Registro directo de sesión si no usa 2FA
