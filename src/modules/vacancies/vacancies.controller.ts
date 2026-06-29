@@ -17,8 +17,10 @@ export class VacanciesController {
 
     @Get()
     async getActiveVacancies(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number
     ) {
-        return this.vacanciesService.findActiveVacancies();
+        return this.vacanciesService.findActiveVacancies(companyId, activeUser);
     }
 
     //      SECCIÓN 2: REQUISICIONES (SOLICITUDES)

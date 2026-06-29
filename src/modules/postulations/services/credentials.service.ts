@@ -22,7 +22,7 @@ export async function generateCredentials(
 
     const { curp, idPuesto } = data;
 
-    const exists = await prisma.empleados.findFirst({ where: { rfc: curp } });
+    const exists = await prisma.postulaciones.findFirst({ where: { curp: curp } });
     if (exists) throw new BadRequestException(`El CURP ${curp} ya existe`);
 
     const result = await createCandidateWithCredentials(data, prisma);
@@ -77,18 +77,18 @@ export async function generateCredentials(
     const usuarioDB = await prisma.usuarios.findFirst({ where: { idCandidato: idCandidatoNumber } });
     if (!usuarioDB) throw new BadRequestException('No se encontró el usuario');
 
-    const candidato = await prisma.empleados.findFirst({ where: { idEmpleado: idCandidatoNumber } });
+    const candidato = await prisma.postulaciones.findFirst({ where: { idPostulacion: idCandidatoNumber } });
     if (!candidato) throw new BadRequestException('No se encontró el candidato');
 
     await notify({
         userUuid: usuarioDB.uuid,
         notificationTypeCode: 'CREDENTIALS_CREATED',
-        to: candidato.correo,
-        phone: candidato.telefonoMovil,
+        to: candidato.correo || '',
+        phone: candidato.telefono || undefined,
         subject: '📎 Documentación requerida para tu postulación - DataVoice',
 
         context: {
-            nombre: `${candidato.nombre} ${candidato.primerApellido} ${candidato.segundoApellido || ''}`,
+            nombre: `${candidato.nombre} ${candidato.primerApellido || ''} ${candidato.segundoApellido || ''}`,
             documentos,
             claveusuario: claveUsuario,
             password: password,
