@@ -339,6 +339,7 @@ model CatSites {
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   RelAreasUbicaciones   RelAreasUbicaciones[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
+  RelUsuarioSite        RelUsuarioSite[]
   Vacantes              Vacantes[]
 
   @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
@@ -843,10 +844,15 @@ model RelUsuarioEmpresa {
 }
 
 model RelUsuarioSite {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   idUsuario Int?
   idSite    Int?
-  activo    Boolean? @default(true)
+  activo    Boolean?   @default(true)
+  auth_user auth_user? @relation(fields: [idUsuario], references: [id], onDelete: Cascade, map: "FK_RelUsuarioSite_AuthUser")
+  CatSites  CatSites?  @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_RelUsuarioSite_CatSites")
+
+  @@index([idUsuario], map: "FK_RelUsuarioSite_AuthUser")
+  @@index([idSite], map: "FK_RelUsuarioSite_CatSites")
 }
 
 model UserEvents {
@@ -912,6 +918,7 @@ model auth_user {
   Empleados                         Empleados[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
+  RelUsuarioSite                    RelUsuarioSite[]
   Vacantes                          Vacantes[]
   auth_user_groups                  auth_user_groups[]
   auth_user_user_permissions        auth_user_user_permissions[]

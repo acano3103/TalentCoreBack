@@ -552,7 +552,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 2, idModulo: 11, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Organigrama Autorizado
             { idRol: 2, idModulo: 12, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Organigrama Nominal
             { idRol: 2, idModulo: 13, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
-            { idRol: 2, idModulo: 14, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Requisiciones
+            { idRol: 2, idModulo: 14, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Requisiciones
             { idRol: 2, idModulo: 15, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
             { idRol: 2, idModulo: 16, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
             { idRol: 2, idModulo: 17, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
