@@ -1,7 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { VacanciesQueries } from './queries/vacancies.queries';
+import { CreateRequisitionDto } from './dto/create-requisition.dto';
 
 @Injectable()
 export class VacanciesService {
@@ -118,7 +119,9 @@ export class VacanciesService {
         const allPositions = await this.prisma.catPuestos.findMany({
             where: {
                 idEmpresa: companyId,
-                Activo: true
+                Activo: true,
+                aprobada: true,
+                pendiente: false
             },
             select: {
                 idPuesto: true,
@@ -182,8 +185,152 @@ export class VacanciesService {
             }));
     }
 
-    async createRequisition() {
+    async findRequisitionCatalogs(companyId: number, positionId: number, activeUser: ActiveUserDto) {
+        // Obtener los tipos de publicación activos
+        const publicationTypes = await this.prisma.catTiposPublicacion.findMany({
+            where: { activo: true }
+        });
 
+        // Obtener el puesto seleccionado para extraer su puesto jefe estructural (idJefeInmediato)
+        const selectedPosition = await this.prisma.catPuestos.findUnique({
+            where: { idPuesto: positionId },
+            select: { idJefeInmediato: true }
+        });
+
+        // Si el puesto no existe o no tiene un puesto superior configurado (es la cabeza del organigrama)
+        if (!selectedPosition || !selectedPosition.idJefeInmediato) {
+            return {
+                publicationTypes,
+                immediateBosses: []
+            };
+        }
+
+        // Obtener los empleados activos que ocupan físicamente el puesto superior dentro de la empresa
+        const employees = await this.prisma.empleados.findMany({
+            where: {
+                idEmpresa: companyId,
+                idPuesto: selectedPosition.idJefeInmediato,
+                activo: true
+            },
+            select: {
+                idEmpleado: true,
+                nombre: true,
+                primerApellido: true,
+                segundoApellido: true,
+                CatPuestos: {
+                    select: {
+                        NombrePuesto: true
+                    }
+                }
+            }
+        });
+
+        // Mapeamos los empleados formateando el nombre completo JUNTO con su puesto entre paréntesis
+        const immediateBosses = employees.map(emp => {
+            const fullName = `${emp.nombre || ""} ${emp.primerApellido || ""} ${emp.segundoApellido || ""}`.trim().toUpperCase();
+            const positionName = emp.CatPuestos?.NombrePuesto ? ` (${emp.CatPuestos.NombrePuesto.toUpperCase()})` : "";
+
+            return {
+                value: String(emp.idEmpleado),
+                label: `${fullName}${positionName}`
+            };
+        });
+
+        return { publicationTypes, immediateBosses };
+    }
+
+    async createRequisition(companyId: number, requisitionDto: CreateRequisitionDto, activeUser: ActiveUserDto) {
+        // Obtener el puesto e incluir su nivel salarial asignado de una sola vez
+        const position = await this.prisma.catPuestos.findUnique({
+            where: {
+                idPuesto: requisitionDto.idPuesto,
+                idEmpresa: companyId,
+                Activo: true,
+                aprobada: true,
+                pendiente: false
+            },
+            include: { CatNivelesSalario: true }
+        });
+
+        if (!position) {
+            throw new NotFoundException('El puesto seleccionado no existe, o no ha sido aprobado. Por favor, seleccione un puesto válido.');
+        }
+
+        // Validar que el salario ingresado se encuentre dentro de los rangos del nivel salarial asignado al puesto
+        if (position.CatNivelesSalario) {
+            const { SalarioMinimo: nivelMin, SalarioMaximo: nivelMax, NombreNivel } = position.CatNivelesSalario;
+
+            // Validar que el salario mínimo ingresado no sea menor al permitido por el nivel
+            if (nivelMin !== null && requisitionDto.salarioMinimo < Number(nivelMin)) {
+                throw new BadRequestException(
+                    `El salario mínimo ingresado $${requisitionDto.salarioMinimo} es menor al permitido para el nivel salarial del puesto "${NombreNivel}" $${nivelMin}.`
+                );
+            }
+
+            // Validar que el salario máximo ingresado no supere el permitido por el nivel
+            if (nivelMax !== null && requisitionDto.salarioMaximo > Number(nivelMax)) {
+                throw new BadRequestException(
+                    `El salario máximo ingresado $${requisitionDto.salarioMaximo} supera el límite permitido para el nivel salarial del puesto "${NombreNivel}" $${nivelMax}.`
+                );
+            }
+        }
+
+        // Validar consistencia lógica básica del rango ingresado en el DTO
+        if (requisitionDto.salarioMinimo > requisitionDto.salarioMaximo) {
+            throw new BadRequestException('El salario mínimo no puede ser mayor que el salario máximo.');
+        }
+
+        // Obtener plazas autorizadas y empleados ocupando el puesto en esa ubicación específica en paralelo
+        const [allocation, occupiedPlazasCount] = await Promise.all([
+            this.prisma.relPuestosUbicaciones.findUnique({
+                where: {
+                    idPuesto_idSite: {
+                        idPuesto: requisitionDto.idPuesto,
+                        idSite: requisitionDto.idSite
+                    }
+                },
+                select: {
+                    PlazasAutorizadas: true
+                }
+            }),
+            this.prisma.empleados.count({
+                where: {
+                    idEmpresa: companyId,
+                    idPuesto: requisitionDto.idPuesto,
+                    idSite: requisitionDto.idSite,
+                    activo: true
+                }
+            })
+        ]);
+
+        const authorizedPlazas = allocation?.PlazasAutorizadas ?? 0;
+        const availablePlazas = authorizedPlazas - occupiedPlazasCount;
+
+        // Validar si el número de vacantes solicitado cabe en las plazas libres
+        if (requisitionDto.numeroVacantes > availablePlazas) {
+            throw new BadRequestException(
+                `Cupo de plazas insuficiente. Plazas autorizadas en esta sede: ${authorizedPlazas}, ocupadas actualmente: ${occupiedPlazasCount}. Disponibles: ${availablePlazas}. Solicitaste: ${requisitionDto.numeroVacantes}.`
+            );
+        }
+
+        const newRequisition = await this.prisma.vacantes.create({
+            data: {
+                idUsuarioCreador: activeUser.id,
+                idEmpresa: companyId,
+                idPuesto: requisitionDto.idPuesto,
+                idSite: requisitionDto.idSite,
+                idJefeInmediato: requisitionDto.idJefeInmediato ?? 0,
+                Motivo: requisitionDto.motivo,
+                numeroVacantes: requisitionDto.numeroVacantes,
+                SalarioMinimo: requisitionDto.salarioMinimo,
+                SalarioMaximo: requisitionDto.salarioMaximo,
+                InformacionExtra: requisitionDto.informacionExtra,
+                idEstatusVacante: 1,
+                idTipoPublicacion: requisitionDto.idTipoPublicacion,
+            }
+        });
+
+        return { message: 'Requisición validada y creada exitosamente.' };
     }
 
     async updateRequisition() {
