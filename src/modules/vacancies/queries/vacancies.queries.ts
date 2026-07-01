@@ -154,4 +154,47 @@ export class VacanciesQueries {
         return Number(result[0].total);
     }
 
+    static async getPublicActiveVacancies(
+        prisma: PrismaService,
+        companyId: number,
+    ): Promise<any[]> {
+        return prisma.$queryRaw<any[]>`
+      SELECT
+        v.idVacante,
+        v.SalarioMinimo,
+        v.SalarioMaximo,
+        v.fechaCreacion,
+        v.Motivo,
+        v.InformacionExtra,
+        p.NombrePuesto,
+        p.DescripcionPuesto,
+        p.DisponibilidadViajar,
+        a.Descripcion   AS areaName,
+        m.Descripcion   AS modalityName,
+        s.Descripcion   AS siteName,
+        tc.Descripcion  AS contractTypeName,
+        tp.descripcion  AS tipoPublicacionName,
+        e.nombre_comercial AS empresaName
+      FROM Vacantes v
+      INNER JOIN CatPuestos p
+        ON p.idPuesto = v.idPuesto
+      INNER JOIN CatEmpresas e
+        ON e.idEmpresa = v.idEmpresa
+      LEFT JOIN CatAreas a
+        ON a.idArea = p.idArea
+      LEFT JOIN CatModalidad m
+        ON m.idModalidad = p.idModalidad
+      LEFT JOIN CatSites s
+        ON s.idSite = v.idSite
+      LEFT JOIN CatTipoContratacion tc
+        ON tc.idTipoContratacion = p.idTipoContratacion
+      LEFT JOIN CatTiposPublicacion tp
+        ON tp.idTipoPublicacion = v.idTipoPublicacion
+      WHERE
+        v.idEmpresa    = ${companyId}
+        AND v.idEstatusVacante = 5
+      ORDER BY v.fechaCreacion DESC
+    `;
+    }
+
 }
