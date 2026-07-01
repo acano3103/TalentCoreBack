@@ -5,7 +5,7 @@ import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { quotePlus } from 'src/common/utils/address.utils';
 import { formatDate, formatHour } from 'src/common/utils/time.utils';
-import { findAllInterviews, findAllInterviewsByPostulant, findInterviewDetail, findProgrammedInterviews } from './queries/interviews.queries';
+import { findAllInterviews, countInterviews, findAllInterviewsByPostulant, findInterviewDetail, findProgrammedInterviews } from './queries/interviews.queries';
 import { ProgramInterviewDto } from './dto/program-interview.dto';
 import { calculateFinalScore } from './utils/calculate-final-score';
 import { UpdateMeetingDto } from './dto/update-interview.dto';
@@ -22,9 +22,25 @@ export class InterviewsService {
 
     private readonly logger = new Logger(InterviewsService.name);
 
-   async findAll(companyId: number, vacancyId?: number) {
-    return await findAllInterviews(companyId, vacancyId, this.prisma);
-}
+   async findAll(
+       companyId: number,
+       vacancyId: number | undefined,
+       page: number,
+       search: string,
+       limit: number
+   ) {
+       const skip = (page - 1) * limit;
+
+       const data = await findAllInterviews(companyId, vacancyId, search, skip, limit, this.prisma);
+       const total = await countInterviews(companyId, vacancyId, search, this.prisma);
+
+       return {
+           data,
+           total,
+           currentPage: page,
+           totalPages: Math.ceil(total / limit)
+       };
+   }
 
 async findActiveVacancies(companyId: number) {
     const activeVacancies = await this.prisma.vacantes.findMany({

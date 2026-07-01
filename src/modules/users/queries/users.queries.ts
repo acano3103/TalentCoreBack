@@ -74,10 +74,13 @@ export class UsersQueries {
         u.id, u.uuid, u.username, u.first_name, u.last_name,
         u.email, u.phone, u.is_superuser, u.is_staff, u.is_active,
         u.last_login, u.date_joined,
-        r.idRol, c.descripcion AS rol_descripcion
+        r.idRol, c.descripcion AS rol_descripcion,
+        p.NombrePuesto AS puesto_nombre
       FROM auth_user u
       LEFT JOIN RelUsuarioRol r ON r.idUsuario = u.id AND r.activo = 1
       LEFT JOIN CatRoles c ON c.idRol = r.idRol AND c.activo = 1
+      LEFT JOIN Empleados e ON e.idUsuario = u.uuid AND e.activo = 1
+      LEFT JOIN CatPuestos p ON p.idPuesto = e.idPuesto AND p.Activo = 1
       ${searchFilter}
       ORDER BY u.id ASC
       LIMIT ${limit} OFFSET ${offset}

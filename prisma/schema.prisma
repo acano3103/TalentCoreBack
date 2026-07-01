@@ -306,6 +306,7 @@ model CatPuestos {
   CatNivelesSalario     CatNivelesSalario?      @relation(fields: [IdNivelSalario], references: [IdNivelSalario], onDelete: Restrict, map: "FK_Puestos_NivelSalario")
   CatSites              CatSites?               @relation(fields: [idSite], references: [idSite], onDelete: Restrict, map: "FK_Puestos_Sites")
   CompetenciasPuesto    CompetenciasPuesto[]
+  Empleados             Empleados[]
   FuncionesPuesto       FuncionesPuesto[]
   HabilidadesPuesto     HabilidadesPuesto[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
@@ -339,6 +340,7 @@ model CatSites {
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   RelAreasUbicaciones   RelAreasUbicaciones[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
+  RelUsuarioSite        RelUsuarioSite[]
   Vacantes              Vacantes[]
 
   @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
@@ -813,22 +815,6 @@ model RelPuestoCurso {
   @@index([idPuesto], map: "idx_puesto")
 }
 
-model RelRequisicionHabilidades {
-  idRelReqHab   Int                              @id @default(autoincrement())
-  idRequisicion Int
-  idHabilidad   Int
-  nivel         RelRequisicionHabilidades_nivel? @default(MEDIO)
-  fechaRegistro DateTime?                        @default(now()) @db.DateTime(0)
-}
-
-model RelRequisicionRequerimientos {
-  idRelReqReq      Int       @id @default(autoincrement())
-  idRequisicion    Int
-  idEquipo         Int
-  especificaciones String?   @db.VarChar(500)
-  fechaRegistro    DateTime? @default(now()) @db.DateTime(0)
-}
-
 model RelUsuarioEmpresa {
   idRelacion    Int         @id @default(autoincrement())
   idEmpresa     Int
@@ -843,10 +829,15 @@ model RelUsuarioEmpresa {
 }
 
 model RelUsuarioSite {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   idUsuario Int?
   idSite    Int?
-  activo    Boolean? @default(true)
+  activo    Boolean?   @default(true)
+  auth_user auth_user? @relation(fields: [idUsuario], references: [id], onDelete: Cascade, map: "FK_RelUsuarioSite_AuthUser")
+  CatSites  CatSites?  @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_RelUsuarioSite_CatSites")
+
+  @@index([idUsuario], map: "FK_RelUsuarioSite_AuthUser")
+  @@index([idSite], map: "FK_RelUsuarioSite_CatSites")
 }
 
 model UserEvents {
@@ -912,6 +903,7 @@ model auth_user {
   Empleados                         Empleados[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
+  RelUsuarioSite                    RelUsuarioSite[]
   Vacantes                          Vacantes[]
   auth_user_groups                  auth_user_groups[]
   auth_user_user_permissions        auth_user_user_permissions[]
@@ -1110,6 +1102,7 @@ model Empleados {
   numeroHijos                                       Int?
   imagenFirmaAutografa                              String?     @db.VarChar(500)
   activo                                            Boolean     @default(true)
+  CatPuestos                                        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
   Empleados                                         Empleados?  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                   Empleados[] @relation("EmpleadosToEmpleados")
   auth_user                                         auth_user?  @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
@@ -1118,6 +1111,7 @@ model Empleados {
 
   @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
   @@index([idUsuario], map: "FK_Empleados_Usuarios")
+  @@index([idPuesto], map: "FK_Empleados_CatPuestos_idx")
 }
 
 model Expedientes {
@@ -1167,6 +1161,7 @@ model Vacantes {
   idSite                                             Int
   idJefeInmediato                                    Int
   Motivo                                             String?              @db.Text
+  numeroVacantes                                     Int                  @default(1)
   SalarioMinimo                                      Decimal              @db.Decimal(10, 2)
   SalarioMaximo                                      Decimal              @db.Decimal(10, 2)
   InformacionExtra                                   String?              @db.Text
@@ -1222,12 +1217,6 @@ model RelUsuarioRol {
   idUsuario Int
   idRol     Int
   activo    Boolean @default(true)
-}
-
-enum RelRequisicionHabilidades_nivel {
-  ALTO
-  MEDIO
-  BAJO
 }
 
 enum Entrevistas_interview_type {

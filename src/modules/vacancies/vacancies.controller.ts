@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { CreateRequisitionDto } from './dto/create-requisition.dto';
 
 @ApiTags('Vacancies')
 @UseGuards(JwtAuthGuard)
@@ -16,6 +17,10 @@ export class VacanciesController {
     //      SECCIÓN 1: VACANTES
 
     @Get()
+    @ApiOperation({ summary: 'Get all active vacancies', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Active vacancies obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Active vacancies not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async getActiveVacancies(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number
@@ -41,9 +46,51 @@ export class VacanciesController {
         return this.vacanciesService.findAllRequisitions(companyId, page, querySearch, limit, activeUser);
     }
 
+    @Get('requisitions/allowed-positions')
+    @ApiOperation({ summary: 'Get all allowed positions for requisition', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Allowed positions for requisition obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Allowed positions for requisition not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getAllowedPositionsForRequisition(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number
+    ) {
+        return this.vacanciesService.findAllowedPositions(companyId, activeUser);
+    }
+
+    @Get('requisitions/allowed-locations')
+    @ApiOperation({ summary: 'Get all allowed physical locations for requisition based on user permissions', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Allowed locations for requisition obtained successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getAllowedLocationsForRequisition(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number
+    ) {
+        return this.vacanciesService.findAllowedLocations(companyId, activeUser);
+    }
+
+    @Get('requisitions/catalogs')
+    @ApiOperation({ summary: 'Get all catalogs needed in requisition creation', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Catalogs for requisition obtained successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getRequisitionCatalogs(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Query('positionId', ParseIntPipe) positionId: number,
+    ) {
+        return this.vacanciesService.findRequisitionCatalogs(companyId, positionId, activeUser);
+    }
+
     @Post('requisitions')
-    async createRequisition() {
-        return this.vacanciesService.createRequisition();
+    @ApiOperation({ summary: 'Create a new requisition', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Requisition created successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async createRequisition(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Body() createRequisitionDto: CreateRequisitionDto,
+    ) {
+        return this.vacanciesService.createRequisition(companyId, createRequisitionDto, activeUser);
     }
 
     @Put('requisitions/:id')
