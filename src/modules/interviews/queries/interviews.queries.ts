@@ -1,73 +1,102 @@
-import { PrismaClient } from "generated/prisma/client";
+import { Prisma, PrismaClient } from "generated/prisma/client";
 
 const VACANCY_APPROVED_STATUS = 5; // APROBADO RH
 
-export async function findAllInterviews(companyId: number, vacancyId: number | undefined, prisma: PrismaClient) {
-  let result: any;
-  if (vacancyId !== undefined) {
-    result = prisma.$queryRaw`
-            SELECT 
-                e.id,
-                e.title,
-                e.description,
-                e.modality,
-                e.interview_type,
-                e.duration,
-                e.interviewer_name,
-                CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
-                v.idVacante AS vacancy_id,
-                p.NombrePuesto AS vacancy_name,
-                a.Descripcion AS area_name
-            FROM Entrevistas e
-            INNER JOIN Vacantes v 
-                ON e.idVacante = v.idVacante
-            INNER JOIN CatPuestos p 
-                ON v.idPuesto = p.idPuesto
-            INNER JOIN CatAreas a 
-                ON e.area_id = a.idArea
-            LEFT JOIN EntrevistasPostulantes ep
-                ON ep.interview_id = e.id
-            WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
-            AND e.active = true
-            AND v.idEmpresa = ${companyId}
-            AND e.idVacante = ${vacancyId}
-            GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, v.idVacante, p.NombrePuesto, a.Descripcion;
-        `;
-  } else {
-    result = prisma.$queryRaw`
-        SELECT 
-            e.id,
-            e.title,
-            e.description,
-            e.modality,
-            e.interview_type,
-            e.duration,
-            e.interviewer_name,
-            CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
-            v.idVacante AS vacancy_id,
-            p.NombrePuesto AS vacancy_name,
-            a.Descripcion AS area_name
-        FROM Entrevistas e
-        INNER JOIN Vacantes v 
-            ON e.idVacante = v.idVacante
-        INNER JOIN CatPuestos p 
-            ON v.idPuesto = p.idPuesto
-        INNER JOIN CatAreas a 
-            ON e.area_id = a.idArea
-        LEFT JOIN EntrevistasPostulantes ep
-            ON ep.interview_id = e.id
-        WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
-        AND e.active = true
-        AND v.idEmpresa = ${companyId}
-        GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, v.idVacante, p.NombrePuesto, a.Descripcion;
-    `;
-  }
+export async function findAllInterviews(
+  companyId: number,
+  vacancyId: number | undefined,
+  search: string,
+  skip: number,
+  limit: number,
+  prisma: PrismaClient
+) {
+  const vacancyFilter = vacancyId !== undefined
+    ? Prisma.sql`AND e.idVacante = ${vacancyId}`
+    : Prisma.empty;
 
-  return result.then((data: any[]) => data.map((item: any) => ({
+  const searchFilter = search
+    ? Prisma.sql`
+        AND (
+          e.title LIKE ${`%${search}%`}
+          OR p.NombrePuesto LIKE ${`%${search}%`}
+        )
+      `
+    : Prisma.empty;
+
+  const result: any[] = await prisma.$queryRaw`
+    SELECT 
+        e.id,
+        e.title,
+        e.description,
+        e.modality,
+        e.interview_type,
+        e.duration,
+        e.interviewer_name,
+        CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
+        v.idVacante AS vacancy_id,
+        p.NombrePuesto AS vacancy_name,
+        a.Descripcion AS area_name
+    FROM Entrevistas e
+    INNER JOIN Vacantes v 
+        ON e.idVacante = v.idVacante
+    INNER JOIN CatPuestos p 
+        ON v.idPuesto = p.idPuesto
+    INNER JOIN CatAreas a 
+        ON e.area_id = a.idArea
+    LEFT JOIN EntrevistasPostulantes ep
+        ON ep.interview_id = e.id
+    WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
+    AND e.active = true
+    AND v.idEmpresa = ${companyId}
+    ${vacancyFilter}
+    ${searchFilter}
+    GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, v.idVacante, p.NombrePuesto, a.Descripcion
+    ORDER BY e.id DESC
+    LIMIT ${limit}
+    OFFSET ${skip}
+  `;
+
+  return result.map((item: any) => ({
     ...item,
     interviews_programed: Number(item.interviews_programed),
     has_scheduled_candidates: Number(item.interviews_programed) > 0,
-  })));
+  }));
+}
+
+export async function countInterviews(
+  companyId: number,
+  vacancyId: number | undefined,
+  search: string,
+  prisma: PrismaClient
+): Promise<number> {
+  const vacancyFilter = vacancyId !== undefined
+    ? Prisma.sql`AND e.idVacante = ${vacancyId}`
+    : Prisma.empty;
+
+  const searchFilter = search
+    ? Prisma.sql`
+        AND (
+          e.title LIKE ${`%${search}%`}
+          OR p.NombrePuesto LIKE ${`%${search}%`}
+        )
+      `
+    : Prisma.empty;
+
+  const result: { total: bigint }[] = await prisma.$queryRaw`
+    SELECT COUNT(DISTINCT e.id) AS total
+    FROM Entrevistas e
+    INNER JOIN Vacantes v 
+        ON e.idVacante = v.idVacante
+    INNER JOIN CatPuestos p 
+        ON v.idPuesto = p.idPuesto
+    WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
+    AND e.active = true
+    AND v.idEmpresa = ${companyId}
+    ${vacancyFilter}
+    ${searchFilter}
+  `;
+
+  return Number(result[0].total);
 }
 
 export async function findAllInterviewsByPostulant(postulantUuid: string, prisma: PrismaClient) {
@@ -281,6 +310,7 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
       });
     }
   }
-
   return Array.from(interviewsMap.values());
 }
+
+

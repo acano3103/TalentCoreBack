@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query, Patch } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query, Patch, DefaultValuePipe } from '@nestjs/common';
 import { InterviewsService } from './interviews.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -12,23 +12,30 @@ import { UpdateMeetingDto } from './dto/update-interview.dto';
 export class InterviewsController {
     constructor(private readonly interviewsService: InterviewsService) { }
 
-  @UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
     @Get()
     @ApiOperation({ summary: 'Get all interviews', description: 'Get all interviews for a company' })
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this company' })
-    @ApiQuery({
-        name: 'vacancyId',
-        required: false,
-        type: Number,
-        description: 'Filter interviews by vacancy ID'
-    })
+    @ApiQuery({name: 'vacancyId', required: false, type: Number, description: 'Filter interviews by vacancy ID'})
+    @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
+    @ApiQuery({ name: 'limit', required: false, type: Number,description: 'Items per page'})
+    @ApiQuery({name: 'search',required: false, type: String, description: 'Search by title or vacancy name'})
     findAll(
         @Param('companyId', ParseIntPipe) companyId: number,
-        @Query('vacancyId') vacancyId?: string
+        @Query('vacancyId') vacancyId?: string,
+        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
+        @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+        @Query('search') search?: string
     ) {
-        return this.interviewsService.findAll(companyId, vacancyId ? Number(vacancyId) : undefined);
+        return this.interviewsService.findAll(
+            companyId,
+            vacancyId ? Number(vacancyId) : undefined,
+            page ?? 1,
+            search || '',
+            limit ?? 10
+        );
     }
 
     @UseGuards(JwtAuthGuard)
