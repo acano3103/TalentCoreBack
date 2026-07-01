@@ -53,6 +53,36 @@ export class VacanciesService {
         };
     }
 
+    async findPublicActiveVacancies(companyId: number) {
+        const vacancies = await VacanciesQueries.getPublicActiveVacancies(
+            this.prisma,
+            companyId,
+        );
+
+        const serialized = vacancies.map((v: any) => ({
+            idVacante:            typeof v.idVacante === 'bigint' ? Number(v.idVacante) : v.idVacante,
+            salarioMinimo:        v.SalarioMinimo ? String(v.SalarioMinimo) : null,
+            salarioMaximo:        v.SalarioMaximo ? String(v.SalarioMaximo) : null,
+            fechaCreacion:        v.fechaCreacion,
+            motivo:               v.Motivo || null,
+            informacionExtra:     v.InformacionExtra || null,
+            nombrePuesto:         v.NombrePuesto,
+            descripcionPuesto:    v.DescripcionPuesto || null,
+            disponibilidadViajar: v.DisponibilidadViajar ?? false,
+            areaName:             v.areaName || null,
+            modalityName:         v.modalityName || null,
+            siteName:             v.siteName || null,
+            contractTypeName:     v.contractTypeName || null,
+            tipoPublicacionName:  v.tipoPublicacionName || null,
+            empresaName:          v.empresaName || null,
+        }));
+
+        return {
+            data: serialized,
+            total: serialized.length,
+        };
+    }
+
     async findAllRequisitions(companyId: number, page: number, search: string, limit: number, activeUser: ActiveUserDto) {
         const userRole = await this.prisma.relUsuarioRol.findFirst({
             where: {
