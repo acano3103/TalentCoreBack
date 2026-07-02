@@ -15,6 +15,7 @@ import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.ut
 import { ConfigService } from '@nestjs/config';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { CreatePositionRequestDto } from './dto/create-position-request.dto';
 
 @Injectable()
 export class PositionsService {
@@ -453,6 +454,136 @@ export class PositionsService {
         }
     }
 
+    async createRequest(companyId: number, activeUser: ActiveUserDto, dto: CreatePositionRequestDto) {
+        await this.prisma.$transaction(async (tx) => {
+            const newRequest = await tx.solicitudPuesto.create({
+                data: {
+                    idEmpresa: companyId,
+                    idUsuarioSolicita: activeUser.id,
+                    descripcion: dto.description,
+                    estatusId: 1,
+                    fechaCreacion: new Date(),
+                    fechaActualizacion: new Date(),
+                }
+            });
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'CREAR',
+                    tablaOrigen: 'SolicitudPuesto',
+                    idRegistro: newRequest.id,
+                    descripcion: `Solicitud de puesto creada por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            });
+            return { message: 'Solicitud creada exitosamente' };
+        });
+    }
+
+    async findAllRequests(
+        companyId: number,
+        activeUser: ActiveUserDto,
+        page: number,
+        limit: number,
+        filterByUser: number,
+        estatusId?: number,
+        search?: string
+    ) {
+        const offset = (page - 1) * limit;
+
+        const whereConditions: any = {
+            idEmpresa: companyId,
+            idUsuarioSolicita: activeUser.id
+        };
+
+        if (filterByUser === 1) {
+            whereConditions.idUsuarioSolicita = activeUser.id;
+        }
+
+        if (estatusId) {
+            whereConditions.estatusId = Number(estatusId);
+        }
+
+        if (search && search.trim() !== '') {
+            whereConditions.descripcion = {
+                contains: search,
+            };
+        }
+
+        const [requests, totalItems] = await Promise.all([
+            this.prisma.solicitudPuesto.findMany({
+                where: whereConditions,
+                skip: offset,
+                take: limit,
+                orderBy: {
+                    fechaCreacion: 'desc',
+                },
+                include: {
+                    CatEstatusSolicitudPuesto: {
+                        select: {
+                            id: true,
+                            descripcion: true,
+                        }
+                    },
+                    auth_user: {
+                        select: {
+                            id: true,
+                            first_name: true,
+                            last_name: true,
+                            username: true,
+                            email: true,
+                            phone: true,
+                        }
+                    }
+
+                }
+            }),
+            this.prisma.solicitudPuesto.count({
+                where: whereConditions,
+            }),
+        ]);
+
+        return {
+            data: requests,
+            total: totalItems,
+            currentPage: page,
+            totalPages: Math.ceil(totalItems / limit),
+        };
+    }
+
+    async getRequestsStatus(companyId: number) {
+        const requestsStatus = await this.prisma.catEstatusSolicitudPuesto.findMany({
+            where: { activo: true },
+        });
+        return requestsStatus;
+    }
+
+    async deleteRequest(companyId: number, requestId: number, activeUser: ActiveUserDto) {
+        await this.prisma.$transaction(async (tx) => {
+            const request = await tx.solicitudPuesto.findUnique({
+                where: { id: requestId },
+            });
+            if (!request) throw new NotFoundException('No se encontró la solicitud');
+
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'ELIMINAR',
+                    tablaOrigen: 'SolicitudPuesto',
+                    idRegistro: requestId,
+                    descripcion: `Solicitud de puesto eliminada por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            });
+
+            await tx.solicitudPuesto.delete({
+                where: { id: requestId },
+            });
+            return { message: 'Solicitud eliminada exitosamente' };
+        });
+    }
 
 
 

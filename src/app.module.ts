@@ -23,6 +23,7 @@ import { HeadcountModule } from './modules/headcount/headcount.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { VacanciesController } from './modules/vacancies/vacancies.controller';
 import { VacanciesModule } from './modules/vacancies/vacancies.module';
+import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
 
 @Module({
   imports: [
@@ -57,7 +58,8 @@ import { VacanciesModule } from './modules/vacancies/vacancies.module';
     EventsModule,
     HeadcountModule,
     RolesModule,
-    VacanciesModule
+    VacanciesModule,
+    ActivityLogsModule
   ],
   controllers: [],
   providers: [AreasService],

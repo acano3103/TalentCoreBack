@@ -7,6 +7,7 @@ import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { CreatePositionRequestDto } from './dto/create-position-request.dto';
 
 @ApiTags('Positions')
 @UseGuards(JwtAuthGuard)
@@ -15,6 +16,62 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 export class PositionsController {
     constructor(private readonly service: PositionsService) { }
 
+    // Position requests endpoints
+    @Get('requests')
+    @ApiOperation({ summary: 'Get all position requests for the administration panel', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Requests obtained successfully.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    async findAllRequests(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+        @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+        @Query('filterByUser', new DefaultValuePipe(0), ParseIntPipe) filterByUser: number,
+        @Query('estatusId') estatusId?: number,
+        @Query('search') search?: string,
+    ) {
+        return this.service.findAllRequests(companyId, activeUser, page, limit, filterByUser, estatusId, search);
+    }
+
+    @Get('requests/status')
+    @ApiOperation({ summary: 'Get all catalog status of requests', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Requests status obtained successfully.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    async getRequestsStatus(
+        @Param('companyId', ParseIntPipe) companyId: number,
+    ) {
+        return this.service.getRequestsStatus(companyId);
+    }
+
+    @Post('requests')
+    @ApiOperation({ summary: 'Create a new position request (raw text)', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 201, description: 'Request registered successfully.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    async createRequest(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Body() data: CreatePositionRequestDto,
+    ) {
+        return this.service.createRequest(companyId, activeUser, data);
+    }
+
+    @Delete('requests/:requestId')
+    @ApiOperation({ summary: 'Delete a position request', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Request deleted successfully.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    async deleteRequest(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('requestId', ParseIntPipe) requestId: number,
+    ) {
+        return this.service.deleteRequest(companyId, requestId, activeUser);
+    }
+
+    // positions endpoints
     @Get()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get all positions', description: SWAGGER_AUTH_DESCRIPTION })

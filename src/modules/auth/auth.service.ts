@@ -11,7 +11,8 @@ import { ResendTokenDto } from './dto/resend-token.dto';
 import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { CaptchaService } from './providers/captcha.service';
 import { v4 as uuidv4 } from 'uuid';
-import { ActiveUserDto } from './dto/active-user.dto';
+import { ActiveUserDto, UserFullInfoDto } from './dto/active-user.dto';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class AuthService {
@@ -23,7 +24,8 @@ export class AuthService {
         private readonly jwtService: JwtService,
         private readonly dataService: AuthDataService,
         private readonly notifications: NotificationDispatcher,
-        private readonly captchaService: CaptchaService
+        private readonly captchaService: CaptchaService,
+        private readonly userSerrvice: UsersService
     ) { }
 
     async login(loginDto: LoginDto) {
@@ -153,8 +155,10 @@ export class AuthService {
             throw new UnauthorizedException('No se encontraron credenciales de usuario activas.');
         }
 
+        const user: UserFullInfoDto = await this.userSerrvice.getUserFullInfo(activeUser.id)
+
         const userId = activeUser.id;
-        const userType = activeUser.roles && activeUser.roles.length > 0 ? 'staff' : 'candidato';
+        const userType = user.roles && user.roles.length > 0 ? 'staff' : 'candidato';
 
         let userUuid = '';
 

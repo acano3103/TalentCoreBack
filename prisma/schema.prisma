@@ -901,9 +901,11 @@ model auth_user {
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
   Empleados                         Empleados[]
+  HistoricoMovimientos              HistoricoMovimientos[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
   RelUsuarioSite                    RelUsuarioSite[]
+  SolicitudPuesto                   SolicitudPuesto[]
   Vacantes                          Vacantes[]
   auth_user_groups                  auth_user_groups[]
   auth_user_user_permissions        auth_user_user_permissions[]
@@ -1217,6 +1219,49 @@ model RelUsuarioRol {
   idUsuario Int
   idRol     Int
   activo    Boolean @default(true)
+}
+
+model CatEstatusSolicitudPuesto {
+  id              Int               @id @default(autoincrement())
+  descripcion     String            @db.VarChar(50)
+  activo          Boolean?          @default(true)
+  fecha_creacion  DateTime?         @default(now()) @db.Timestamp(0)
+  SolicitudPuesto SolicitudPuesto[]
+}
+
+model SolicitudPuesto {
+  id                        Int                        @id @default(autoincrement())
+  idEmpresa                 Int
+  idUsuarioSolicita         Int
+  descripcion               String                     @db.Text
+  estatusId                 Int?                       @default(1)
+  comentarios               String?                    @db.Text
+  fechaCreacion             DateTime?                  @default(now()) @db.Timestamp(0)
+  fechaActualizacion        DateTime?                  @default(now()) @db.Timestamp(0)
+  CatEstatusSolicitudPuesto CatEstatusSolicitudPuesto? @relation(fields: [estatusId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_estatus")
+  auth_user                 auth_user                  @relation(fields: [idUsuarioSolicita], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_usuario")
+
+  @@index([estatusId], map: "fk_solicitud_estatus")
+  @@index([idEmpresa, estatusId], map: "idx_empresa_estatus")
+  @@index([fechaCreacion], map: "idx_fecha")
+  @@index([idUsuarioSolicita], map: "fk_solicitud_usuario")
+}
+
+model HistoricoMovimientos {
+  id            Int       @id @default(autoincrement())
+  idUsuario     Int
+  idEmpresa     Int
+  accion        String    @db.VarChar(50)
+  tablaOrigen   String    @db.VarChar(100)
+  idRegistro    Int
+  descripcion   String    @db.Text
+  detalles_json Json?
+  fechaCreacion DateTime? @default(now()) @db.Timestamp(0)
+  auth_user     auth_user @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
+
+  @@index([fechaCreacion], map: "idx_creado_at")
+  @@index([tablaOrigen, idRegistro], map: "idx_polimorfico")
+  @@index([idUsuario], map: "idx_usuario")
 }
 
 enum Entrevistas_interview_type {

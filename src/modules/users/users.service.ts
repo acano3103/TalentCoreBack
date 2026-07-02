@@ -12,6 +12,13 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
 
+  async getUserBasicInfo(userID: number) {
+    return await this.prisma.auth_user.findUnique({
+      where: { id: userID },
+      select: { id: true, uuid: true, username: true, first_name: true, last_name: true, email: true, phone: true },
+    });
+  }
+
   async getUserFullInfo(userId: number) {
     const [username, roles, enterprises, modules, sites] = await Promise.all([
       UsersQueries.getUsername(this.prisma, userId),

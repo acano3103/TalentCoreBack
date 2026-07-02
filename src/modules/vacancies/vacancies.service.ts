@@ -1,18 +1,21 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ActiveUserDto, UserFullInfoDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { VacanciesQueries } from './queries/vacancies.queries';
 import { CreateRequisitionDto } from './dto/create-requisition.dto';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class VacanciesService {
     constructor(
         private readonly prisma: PrismaService,
+        private readonly usersService: UsersService
     ) { }
 
     async findActiveVacancies(companyId: number, activeUser: ActiveUserDto) {
         let rbacFilter = '';
-        const roles = activeUser?.roles || [];
+        const user: UserFullInfoDto = await this.usersService.getUserFullInfo(activeUser.id)
+        const roles = user?.roles || [];
 
         const authUser = await this.prisma.auth_user.findUnique({
             where: { id: activeUser.id },
@@ -51,6 +54,36 @@ export class VacanciesService {
         return {
             data: vacancies,
             total: Array.isArray(vacancies) ? vacancies.length : 0
+        };
+    }
+
+    async findPublicActiveVacancies(companyId: number) {
+        const vacancies = await VacanciesQueries.getPublicActiveVacancies(
+            this.prisma,
+            companyId,
+        );
+
+        const serialized = vacancies.map((v: any) => ({
+            idVacante: typeof v.idVacante === 'bigint' ? Number(v.idVacante) : v.idVacante,
+            salarioMinimo: v.SalarioMinimo ? String(v.SalarioMinimo) : null,
+            salarioMaximo: v.SalarioMaximo ? String(v.SalarioMaximo) : null,
+            fechaCreacion: v.fechaCreacion,
+            motivo: v.Motivo || null,
+            informacionExtra: v.InformacionExtra || null,
+            nombrePuesto: v.NombrePuesto,
+            descripcionPuesto: v.DescripcionPuesto || null,
+            disponibilidadViajar: v.DisponibilidadViajar ?? false,
+            areaName: v.areaName || null,
+            modalityName: v.modalityName || null,
+            siteName: v.siteName || null,
+            contractTypeName: v.contractTypeName || null,
+            tipoPublicacionName: v.tipoPublicacionName || null,
+            empresaName: v.empresaName || null,
+        }));
+
+        return {
+            data: serialized,
+            total: serialized.length,
         };
     }
 
