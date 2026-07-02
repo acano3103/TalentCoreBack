@@ -8,6 +8,7 @@ import { CreatePositionDto } from './dto/create-position.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreatePositionRequestDto } from './dto/create-position-request.dto';
+import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 
 @ApiTags('Positions')
 @UseGuards(JwtAuthGuard)
@@ -27,7 +28,7 @@ export class PositionsController {
         @GetActiveUser() activeUser: ActiveUserDto,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-        @Query('filterByUser', new DefaultValuePipe(0), ParseIntPipe) filterByUser: number,
+        @Query('filterByUser') filterByUser: boolean,
         @Query('estatusId') estatusId?: number,
         @Query('search') search?: string,
     ) {
@@ -56,6 +57,20 @@ export class PositionsController {
         @Body() data: CreatePositionRequestDto,
     ) {
         return this.service.createRequest(companyId, activeUser, data);
+    }
+
+    @Patch('requests/:requestId')
+    @ApiOperation({ summary: 'Validate a position request', description: 'Validates a position request and public it.' })
+    @ApiResponse({ status: 201, description: 'Position request successfully validated.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    async approveOrRejectRequests(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('requestId', ParseIntPipe) requestId: number,
+        @Body() data: ValidatePositionRequestDto,
+    ) {
+        return this.service.approveOrRejectRequests(companyId, requestId, activeUser, data);
     }
 
     @Delete('requests/:requestId')
@@ -156,7 +171,7 @@ export class PositionsController {
         return this.service.changeStatus(companyId, positionId, false);
     }
 
-    @UseGuards(JwtAuthGuard)//@UseGuards(JwtAuthGuard, ModulesGuard)
+    //@UseGuards(JwtAuthGuard, ModulesGuard)
     //@Modules('Administrador')
     @Patch(':positionId')
     @ApiOperation({ summary: 'Validate a position', description: 'Validates a position and public it.' })

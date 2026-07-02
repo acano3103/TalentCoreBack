@@ -16,6 +16,7 @@ import { ConfigService } from '@nestjs/config';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreatePositionRequestDto } from './dto/create-position-request.dto';
+import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 
 @Injectable()
 export class PositionsService {
@@ -455,8 +456,8 @@ export class PositionsService {
     }
 
     async createRequest(companyId: number, activeUser: ActiveUserDto, dto: CreatePositionRequestDto) {
-        await this.prisma.$transaction(async (tx) => {
-            const newRequest = await tx.solicitudPuesto.create({
+        const newRequest = await this.prisma.$transaction(async (tx) => {
+            const request = await tx.solicitudPuesto.create({
                 data: {
                     idEmpresa: companyId,
                     idUsuarioSolicita: activeUser.id,
@@ -466,19 +467,76 @@ export class PositionsService {
                     fechaActualizacion: new Date(),
                 }
             });
+
             await tx.historicoMovimientos.create({
                 data: {
                     idUsuario: activeUser.id,
                     idEmpresa: companyId,
                     accion: 'CREAR',
                     tablaOrigen: 'SolicitudPuesto',
-                    idRegistro: newRequest.id,
+                    idRegistro: request.id,
                     descripcion: `Solicitud de puesto creada por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
             });
-            return { message: 'Solicitud creada exitosamente' };
+
+            return request;
         });
+
+        try {
+            // Cruzamos RelUsuarioEmpresa (para la empresa activa) y RelUsuarioRol (para el rol de RH = 2)
+            const rhUsers = await this.prisma.$queryRaw<Array<{ uuid: string; email: string; phone: string; first_name: string; last_name: string }>>`
+            SELECT 
+                au.uuid,
+                au.email,
+                au.phone,
+                au.first_name,
+                au.last_name
+            FROM auth_user au
+            INNER JOIN RelUsuarioEmpresa rue ON au.id = rue.idUsuario
+            INNER JOIN RelUsuarioRol rur ON au.id = rur.idUsuario
+            WHERE rue.idEmpresa = ${companyId}
+              AND rue.activo = 1
+              AND rur.idRol = 2
+              AND rur.activo = 1
+              AND au.is_active = 1
+        `;
+
+            const maxLength = 80;
+            const rawDesc = newRequest.descripcion || '';
+            const truncatedDesc = rawDesc.length > maxLength
+                ? `${rawDesc.substring(0, maxLength)}...`
+                : rawDesc;
+
+            // Si encontramos usuarios de RH para esa empresa, los mapeamos uno a uno para enviar el notify
+            if (rhUsers && rhUsers.length > 0) {
+                await Promise.all(
+                    rhUsers.map(async (rh) => {
+                        try {
+                            await this.notifications.notify({
+                                userUuid: rh.uuid,
+                                notificationTypeCode: 'POSITION_REQUEST_CREATED',
+                                to: rh.email,
+                                phone: rh.phone,
+                                subject: 'Nueva solicitud de puesto creada',
+                                context: {
+                                    name: `${rh.first_name} ${rh.last_name}`,
+                                    requestId: newRequest.id,
+                                    requestDate: newRequest.fechaCreacion,
+                                    shortDescription: truncatedDesc
+                                }
+                            });
+                        } catch (notifyError) {
+                            this.logger.error(`Error enviando notificación al usuario de RH con UUID ${rh.uuid}:`, notifyError);
+                        }
+                    })
+                );
+            }
+        } catch (error) {
+            this.logger.error('Error procesando las notificaciones para el equipo de RH:', error);
+        }
+
+        return { message: 'Solicitud creada exitosamente' };
     }
 
     async findAllRequests(
@@ -486,7 +544,7 @@ export class PositionsService {
         activeUser: ActiveUserDto,
         page: number,
         limit: number,
-        filterByUser: number,
+        filterByUser: boolean,
         estatusId?: number,
         search?: string
     ) {
@@ -494,10 +552,9 @@ export class PositionsService {
 
         const whereConditions: any = {
             idEmpresa: companyId,
-            idUsuarioSolicita: activeUser.id
         };
 
-        if (filterByUser === 1) {
+        if (filterByUser === true) {
             whereConditions.idUsuarioSolicita = activeUser.id;
         }
 
@@ -562,7 +619,7 @@ export class PositionsService {
     async deleteRequest(companyId: number, requestId: number, activeUser: ActiveUserDto) {
         await this.prisma.$transaction(async (tx) => {
             const request = await tx.solicitudPuesto.findUnique({
-                where: { id: requestId },
+                where: { id: requestId, idUsuarioSolicita: activeUser.id },
             });
             if (!request) throw new NotFoundException('No se encontró la solicitud');
 
@@ -583,6 +640,96 @@ export class PositionsService {
             });
             return { message: 'Solicitud eliminada exitosamente' };
         });
+    }
+
+    async approveOrRejectRequests(companyId: number, requestId: number, activeUser: ActiveUserDto, dto: ValidatePositionRequestDto) {
+        try {
+            const request = await this.prisma.solicitudPuesto.findUnique({
+                where: { id: requestId, idEmpresa: companyId },
+            });
+            if (!request) throw new NotFoundException('No se encontró la solicitud de creación de puesto');
+
+            const auth_user = await this.prisma.auth_user.findUnique({
+                where: { id: request.idUsuarioSolicita },
+            });
+            if (!auth_user) throw new NotFoundException('No se encontró el usuario solicitante');
+
+            const { id, uuid, username, first_name, last_name, email, phone, } = auth_user;
+            const comment = dto.comment || '';
+            const action = dto.action;
+
+            const subject = action === 'aprobar'
+                ? `✅ Solicitud de puesto #${requestId} aprobada - TalentCore`
+                : `❌ Solicitud de puesto #${requestId} rechazada - TalentCore`;
+
+            await this.prisma.$transaction(async (tx) => {
+                if (action === 'aprobar') {
+                    await tx.solicitudPuesto.update({
+                        where: { id: requestId, idEmpresa: companyId },
+                        data: {
+                            estatusId: 3,
+                            fechaActualizacion: new Date(),
+                            comentarios: comment,
+                        }
+                    })
+                } else {
+                    await tx.solicitudPuesto.update({
+                        where: { id: requestId, idEmpresa: companyId },
+                        data: {
+                            estatusId: 2,
+                            fechaActualizacion: new Date(),
+                            comentarios: comment,
+                        }
+                    })
+                }
+
+                await tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: activeUser.id,
+                        idEmpresa: companyId,
+                        accion: action === 'aprobar' ? 'APROBAR' : 'RECHAZAR',
+                        tablaOrigen: 'SolicitudPuesto',
+                        idRegistro: requestId,
+                        descripcion: `Solicitud de puesto ${action === 'aprobar' ? 'aprobada' : 'rechazada'} por ${activeUser.first_name} ${activeUser.last_name}`,
+                        fechaCreacion: new Date()
+                    }
+                });
+            });
+
+            const requestDate = new Date(request.fechaCreacion).toLocaleDateString("es-MX", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+            });
+
+            // Cortamos la descripción a 60 caracteres para el subtítulo del correo
+            const shortDescription = request.descripcion.length > 60
+                ? `${request.descripcion.substring(0, 60)}...`
+                : request.descripcion;
+
+            await this.notifications.notify({
+                userUuid: uuid,
+                notificationTypeCode: 'POSITION_REQUEST_STATUS_UPDATE',
+                to: email,
+                phone: phone,
+                subject: subject,
+                context: {
+                    name: `${first_name} ${last_name}`,
+                    requestId: request.id,
+                    requestDate: requestDate,
+                    shortDescription: shortDescription,
+                    comment,
+                    action,
+                    isApproved: action === 'aprobar'
+                }
+            });
+
+            return { message: `Requisición ${action == 'aprobar' ? 'aprobada' : 'rechazada'} correctamente` };
+
+        } catch (error) {
+            this.logger.error('Error en aprobar/rechazar puesto:', error);
+            throw new InternalServerErrorException(error.message);
+        }
     }
 
 

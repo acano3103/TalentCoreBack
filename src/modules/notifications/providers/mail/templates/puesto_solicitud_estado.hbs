@@ -1,0 +1,59 @@
+<div style="background-color: #f4f6f9; padding: 40px 15px; font-family: 'Segoe UI', Arial, sans-serif; color: #333;">
+    <table width="100%" cellpadding="0" cellspacing="0"
+        style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.06);">
+        <tr>
+            <td style="background-color: #ffffff; text-align: center; padding: 40px 30px 30px;">
+                <img src="{{ logoUrl }}" alt="DataVoice Talent Core"
+                    style="max-width: 200px; display: block; margin: auto;">
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 0 30px 40px;">
+                <h2 style="margin: 0 0 20px; color: #005578; font-size: 24px; font-weight: 600;">
+                    📝 Estatus de tu Solicitud de Puesto
+                </h2>
+                <p style="font-size: 16px; color: #444; margin-bottom: 20px; line-height: 1.5;">
+                    Hola {{ name }}, la solicitud de puesto <strong>#{{ requestId }}</strong> levantada el día
+                    <strong>{{ requestDate }}</strong> (<em>"{{ shortDescription }}"</em>) ha sido:
+                </p>
+
+                <div style="text-align: center; margin: 25px 0;">
+                    {{#if isApproved}}
+                    <span
+                        style="display: inline-block; font-size: 20px; font-weight: bold; background-color: #198754; color: #ffffff; padding: 14px 50px; border-radius: 12px; letter-spacing: 2px; box-shadow: 0 6px 16px rgba(0,0,0,0.08);">
+                        ✅ APROBADA
+                    </span>
+                    {{else}}
+                    <span
+                        style="display: inline-block; font-size: 20px; font-weight: bold; background-color: #dc3545; color: #ffffff; padding: 14px 50px; border-radius: 12px; letter-spacing: 2px; box-shadow: 0 6px 16px rgba(0,0,0,0.08);">
+                        ❌ RECHAZADA
+                    </span>
+                    {{/if}}
+                </div>
+
+                {{#if comment}}
+                <p style="font-size: 15px; color: #555; line-height: 1.6; margin-bottom: 8px;">
+                    <strong>Comentario del revisor:</strong>
+                </p>
+                <div
+                    style="background-color: #f8f9fa; border-left: 4px solid #005578; padding: 15px 20px; border-radius: 10px;">
+                    <p style="margin: 0; color: #333; font-size: 14px; white-space: pre-wrap;">{{ comment }}</p>
+                </div>
+                {{/if}}
+
+                <p style="font-size: 15px; color: #555; line-height: 1.6; margin-top: 30px;">
+                    Puedes consultar el estado y los detalles completos directamente en tu sesión en
+                    <strong>TalentCore</strong>.
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td style="background-color: #005578; text-align: center; padding: 20px;">
+                <p style="margin: 0; font-size: 13px; color: #ffffff;">
+                    © 2026 <strong>DataVoice</strong> — Todos los derechos reservados.<br>
+                    <span style="opacity: 0.8;"> TalentCore</span>
+                </p>
+            </td>
+        </tr>
+    </table>
+</div>

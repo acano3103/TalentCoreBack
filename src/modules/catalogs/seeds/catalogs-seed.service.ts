@@ -33,6 +33,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedTiposUbicacion(); /** CatTiposUbicacion */
             await this.seedRoles(); /** catroles */
             await this.seedRolesPermisos(); /** RelRolPermisos */
+            await this.seedEstatusSolicitudPuesto(); /** CatEstatusSolicitudPuesto */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -83,6 +84,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 2, code: 'POSITION_STATUS_UPDATE', description: 'Notificación de actualización del estado de la posición', activo: true },
             { id: 3, code: 'INTERVIEW_SCHEDULED', description: 'Notificación de programación de entrevista', activo: true },
             { id: 4, code: 'CREDENTIALS_CREATED', description: 'Notificación de creación de credenciales', activo: true },
+            { id: 5, code: 'POSITION_REQUEST_STATUS_UPDATE', description: 'Notificación de actualización del estado de la solicitud de posición', activo: true },
+            { id: 6, code: 'POSITION_REQUEST_CREATED', description: 'Notificación de creación de solicitud de posición', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -116,7 +119,17 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 13, notification_type_id: 4, channel_id: 1, enabled: true }, // Email
             { id: 14, notification_type_id: 4, channel_id: 2, enabled: true }, // WhatsApp
             { id: 15, notification_type_id: 4, channel_id: 3, enabled: false }, // SMS
-            { id: 16, notification_type_id: 4, channel_id: 4, enabled: false } // Sockets
+            { id: 16, notification_type_id: 4, channel_id: 4, enabled: false }, // Sockets
+            // --- 5. POSITION_REQUEST_STATUS_UPDATE (Actualización del estado de la solicitud de posición) ---
+            { id: 17, notification_type_id: 5, channel_id: 1, enabled: true }, // Email
+            { id: 18, notification_type_id: 5, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 19, notification_type_id: 5, channel_id: 3, enabled: false }, // SMS
+            { id: 20, notification_type_id: 5, channel_id: 4, enabled: true }, // Sockets
+            // --- 6. POSITION_REQUEST_CREATED (Creación de solicitud de posición) ---
+            { id: 21, notification_type_id: 6, channel_id: 1, enabled: false }, // Email
+            { id: 22, notification_type_id: 6, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 23, notification_type_id: 6, channel_id: 3, enabled: false }, // SMS
+            { id: 24, notification_type_id: 6, channel_id: 4, enabled: true }, // Sockets
         ];
 
         for (const tc of typeChannels) {
@@ -653,6 +666,25 @@ export class CatalogsSeedService implements OnModuleInit {
                     PuedeEliminar = VALUES(PuedeEliminar),
                     Activo = VALUES(Activo);
             `;
+        }
+    }
+
+    // Seeds initial request position status into the database.
+    private async seedEstatusSolicitudPuesto() {
+        const types = [
+            { id: 1, descripcion: 'PENDIENTE', activo: 1 },
+            { id: 2, descripcion: 'RECHAZADO', activo: 1 },
+            { id: 3, descripcion: 'APROBADO', activo: 1 },
+        ];
+
+        for (const type of types) {
+            await this.prisma.$queryRaw`
+            INSERT INTO CatEstatusSolicitudPuesto (id, descripcion, activo)
+            VALUES (${type.id}, ${type.descripcion}, ${type.activo})
+            ON DUPLICATE KEY UPDATE 
+                descripcion = VALUES(descripcion), 
+                activo = VALUES(activo);
+        `;
         }
     }
 

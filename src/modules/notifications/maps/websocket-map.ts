@@ -19,6 +19,24 @@ export const SOCKET_NOTIFICATION_MAP: Record<string, NotificationTemplateConfig>
             return `Se ha agendado una entrevista para ti: "${ctx?.entvistasNombre || 'Asignada'}" el día ${ctx?.dia || 'Pendiente'}.`;
         },
     },
+    POSITION_REQUEST_CREATED: {
+        severity: 'warning',
+        buildMessage: (ctx) => {
+            const id = ctx?.requestId ? `#${ctx.requestId}` : '';
+            const solicitante = ctx?.name ? ` por ${ctx.name}` : '';
+            const desc = ctx?.shortDescription ? `: "${ctx.shortDescription}"` : '';
+            return `Nueva solicitud de puesto ${id} creada${solicitante}${desc}. Disponible para revisión en Puestos > Solicitudes. 📋`;
+        },
+    },
+    POSITION_REQUEST_STATUS_UPDATE: {
+        severity: 'info',
+        buildMessage: (ctx) => {
+            const estado = ctx?.action === 'aprobar' ? 'APROBADA ✅' : 'RECHAZADA ❌';
+            const id = ctx?.requestId ? `#${ctx.requestId}` : 'de puesto';
+            const fecha = ctx?.requestDate ? ` del ${ctx.requestDate}` : '';
+            return `Tu solicitud ${id}${fecha} ha sido ${estado} por el área de Recursos Humanos.`;
+        },
+    },
 };
 
 export function formatNotificationPayload(typeCode: string, context: any, fallbackTitle?: string) {

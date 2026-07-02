@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, ParseIntPipe, UseGuards, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Query, ParseIntPipe, UseGuards, DefaultValuePipe, Delete } from '@nestjs/common';
 import { VacanciesService } from './vacancies.service';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -91,6 +91,18 @@ export class VacanciesController {
         @Body() createRequisitionDto: CreateRequisitionDto,
     ) {
         return this.vacanciesService.createRequisition(companyId, createRequisitionDto, activeUser);
+    }
+
+    @Delete('requisitions/:requisitionId')
+    @ApiOperation({ summary: 'Delete a requisition', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Requisition deleted successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async deleteRequisition(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('requisitionId', ParseIntPipe) requisitionId: number,
+    ) {
+        return this.vacanciesService.deleteRequisition(companyId, requisitionId, activeUser);
     }
 
     @Put('requisitions/:id')

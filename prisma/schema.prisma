@@ -1230,16 +1230,16 @@ model CatEstatusSolicitudPuesto {
 }
 
 model SolicitudPuesto {
-  id                        Int                        @id @default(autoincrement())
+  id                        Int                       @id @default(autoincrement())
   idEmpresa                 Int
   idUsuarioSolicita         Int
-  descripcion               String                     @db.Text
-  estatusId                 Int?                       @default(1)
-  comentarios               String?                    @db.Text
-  fechaCreacion             DateTime?                  @default(now()) @db.Timestamp(0)
-  fechaActualizacion        DateTime?                  @default(now()) @db.Timestamp(0)
-  CatEstatusSolicitudPuesto CatEstatusSolicitudPuesto? @relation(fields: [estatusId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_estatus")
-  auth_user                 auth_user                  @relation(fields: [idUsuarioSolicita], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_usuario")
+  descripcion               String                    @db.Text
+  estatusId                 Int                       @default(1)
+  comentarios               String?                   @db.Text
+  fechaCreacion             DateTime                  @default(now()) @db.Timestamp(0)
+  fechaActualizacion        DateTime?                 @default(now()) @db.Timestamp(0)
+  CatEstatusSolicitudPuesto CatEstatusSolicitudPuesto @relation(fields: [estatusId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_estatus")
+  auth_user                 auth_user                 @relation(fields: [idUsuarioSolicita], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_usuario")
 
   @@index([estatusId], map: "fk_solicitud_estatus")
   @@index([idEmpresa, estatusId], map: "idx_empresa_estatus")

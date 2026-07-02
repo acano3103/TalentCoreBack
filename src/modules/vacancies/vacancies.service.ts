@@ -366,6 +366,32 @@ export class VacanciesService {
         return { message: 'Requisición validada y creada exitosamente.' };
     }
 
+    async deleteRequisition(companyId: number, requisitionId: number, activeUser: ActiveUserDto) {
+        await this.prisma.$transaction(async (tx) => {
+            const requisition = await tx.vacantes.findUnique({
+                where: { idVacante: requisitionId },
+            });
+            if (!requisition) throw new NotFoundException('No se encontró la requisición');
+
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'ELIMINAR',
+                    tablaOrigen: 'Vacantes',
+                    idRegistro: requisitionId,
+                    descripcion: `Requisición eliminada por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            });
+
+            await tx.vacantes.delete({
+                where: { idVacante: requisitionId },
+            });
+            return { message: 'Requisición eliminada exitosamente' };
+        });
+    }
+
     async updateRequisition() {
 
     }
