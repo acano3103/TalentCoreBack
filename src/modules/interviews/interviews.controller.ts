@@ -1,10 +1,11 @@
-import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query, Patch, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, ParseIntPipe, Query, Patch, Delete, DefaultValuePipe } from '@nestjs/common';
 import { InterviewsService } from './interviews.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProgramInterviewDto } from './dto/program-interview.dto';
 import { UpdateMeetingDto } from './dto/update-interview.dto';
+import { UpdateInterviewDto, RescheduleInterviewDto } from './dto/update-interview-base.dto';
 
 @ApiTags('Interviews')
 @ApiBearerAuth()
@@ -12,16 +13,18 @@ import { UpdateMeetingDto } from './dto/update-interview.dto';
 export class InterviewsController {
     constructor(private readonly interviewsService: InterviewsService) { }
 
-@UseGuards(JwtAuthGuard)
+    // ─── GETs estáticos primero ───────────────────────────────────────
+
+    @UseGuards(JwtAuthGuard)
     @Get()
     @ApiOperation({ summary: 'Get all interviews', description: 'Get all interviews for a company' })
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this company' })
-    @ApiQuery({name: 'vacancyId', required: false, type: Number, description: 'Filter interviews by vacancy ID'})
+    @ApiQuery({ name: 'vacancyId', required: false, type: Number, description: 'Filter interviews by vacancy ID' })
     @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
-    @ApiQuery({ name: 'limit', required: false, type: Number,description: 'Items per page'})
-    @ApiQuery({name: 'search',required: false, type: String, description: 'Search by title or vacancy name'})
+    @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page' })
+    @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by title or vacancy name' })
     findAll(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('vacancyId') vacancyId?: string,
@@ -58,6 +61,44 @@ export class InterviewsController {
     }
 
     @UseGuards(JwtAuthGuard)
+    @Get('/detail/:interviewId')
+    @ApiOperation({ summary: 'Get interview base data', description: 'Get editable data of an interview' })
+    @ApiResponse({ status: 200, description: 'Interview data obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Interview not found' })
+    findOne(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('interviewId') interviewId: string
+    ) {
+        return this.interviewsService.findOne(companyId, interviewId);
+    }
+
+    @Get('/postulant/:postulantId')
+    @ApiOperation({ summary: 'Get all interviews for a postulante', description: 'Get all interviews for a postulante' })
+    @ApiResponse({ status: 200, description: 'List of interviews for a postulante' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 404, description: 'No interviews found for this postulante' })
+    findAllByPostulant(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('postulantId', ParseIntPipe) postulantId: number
+    ) {
+        return this.interviewsService.findAllByPostulant(companyId, postulantId);
+    }
+
+    @Get('/meetings/:meetingId')
+    @ApiOperation({ summary: 'Get meeting detail', description: 'Get meeting detail' })
+    @ApiResponse({ status: 200, description: 'Meeting detail' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
+    getMeetingDetail(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('meetingId') meetingId: string
+    ) {
+        return this.interviewsService.getMeetingDetail(companyId, meetingId);
+    }
+
+    // ─── GET dinámico al final ────────────────────────────────────────
+
+    @UseGuards(JwtAuthGuard)
     @Get(':interviewId')
     @ApiOperation({ summary: 'Get all programed interviews', description: 'Get all interviews that are programed, main interview and all its secondary interviews' })
     @ApiResponse({ status: 200, description: 'List of interviews for a company' })
@@ -69,6 +110,8 @@ export class InterviewsController {
     ) {
         return this.interviewsService.findProgrammedInterviews(companyId, interviewId);
     }
+
+    // ─── POSTs ───────────────────────────────────────────────────────
 
     @UseGuards(JwtAuthGuard)
     @Post()
@@ -97,28 +140,19 @@ export class InterviewsController {
         return this.interviewsService.programInterview(companyId, interviewId, dto);
     }
 
-    @Get('/postulant/:postulantId')
-    @ApiOperation({ summary: 'Get all interviews for a postulante', description: 'Get all interviews for a postulante' })
-    @ApiResponse({ status: 200, description: 'List of interviews for a postulante' })
-    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    @ApiResponse({ status: 404, description: 'No interviews found for this postulante' })
-    findAllByPostulant(
-        @Param('companyId', ParseIntPipe) companyId: number,
-        @Param('postulantId', ParseIntPipe) postulantId: number
-    ) {
-        return this.interviewsService.findAllByPostulant(companyId, postulantId);
-    }
+    // ─── PATCHs ──────────────────────────────────────────────────────
 
-    @Get('/meetings/:meetingId')
-    @ApiOperation({ summary: 'Get meeting detail', description: 'Get meeting detail' })
-    @ApiResponse({ status: 200, description: 'Meeting detail' })
-    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
-    getMeetingDetail(
+    @UseGuards(JwtAuthGuard)
+    @Patch('/detail/:interviewId')
+    @ApiOperation({ summary: 'Update interview', description: 'Update editable fields of an interview' })
+    @ApiResponse({ status: 200, description: 'Interview updated successfully' })
+    @ApiResponse({ status: 404, description: 'Interview not found' })
+    updateInterview(
         @Param('companyId', ParseIntPipe) companyId: number,
-        @Param('meetingId') meetingId: string
+        @Param('interviewId') interviewId: string,
+        @Body() dto: UpdateInterviewDto
     ) {
-        return this.interviewsService.getMeetingDetail(companyId, meetingId);
+        return this.interviewsService.updateInterview(companyId, interviewId, dto);
     }
 
     @Patch('/meetings/:meetingId')
@@ -132,5 +166,32 @@ export class InterviewsController {
         @Body() dto: UpdateMeetingDto
     ) {
         return this.interviewsService.updateMeeting(companyId, meetingId, dto);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Patch('/meetings/:meetingId/reschedule')
+    @ApiOperation({ summary: 'Reschedule interview meeting', description: 'Update scheduled date and duration of a meeting' })
+    @ApiResponse({ status: 200, description: 'Meeting rescheduled successfully' })
+    @ApiResponse({ status: 404, description: 'Meeting not found' })
+    rescheduleInterview(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('meetingId') meetingId: string,
+        @Body() dto: RescheduleInterviewDto
+    ) {
+        return this.interviewsService.rescheduleInterview(companyId, meetingId, dto);
+    }
+
+    // ─── DELETE ──────────────────────────────────────────────────────
+
+    @UseGuards(JwtAuthGuard)
+    @Delete('/detail/:interviewId')
+    @ApiOperation({ summary: 'Delete interview', description: 'Delete an interview permanently' })
+    @ApiResponse({ status: 200, description: 'Interview deleted successfully' })
+    @ApiResponse({ status: 404, description: 'Interview not found' })
+    deleteInterview(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('interviewId') interviewId: string
+    ) {
+        return this.interviewsService.deleteInterview(companyId, interviewId);
     }
 }

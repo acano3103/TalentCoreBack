@@ -9,6 +9,7 @@ import { findAllInterviews, countInterviews, findAllInterviewsByPostulant, findI
 import { ProgramInterviewDto } from './dto/program-interview.dto';
 import { calculateFinalScore } from './utils/calculate-final-score';
 import { UpdateMeetingDto } from './dto/update-interview.dto';
+import { UpdateInterviewDto, RescheduleInterviewDto } from './dto/update-interview-base.dto';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -270,19 +271,101 @@ async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
         return { message: 'Entrevista actualizada exitosamente' };
     }
 
-    async getStatus(companyId: number) {
-        const status = await this.prisma.catEstatusEntrevista.findMany({
-            where: { activo: true },
-            select: {
-                idEstatusEntrevista: true,
-                descripcion: true
+    async findOne(companyId: number, interviewId: string) {
+    const interview = await this.prisma.entrevistas.findFirst({
+        where: {
+            id: interviewId,
+            company_id: companyId,
+            active: true
+        },
+        include: {
+            EntrevistasCriterios: {
+                include: {
+                    CriterioPreguntas: true
+                }
+            }
+        }
+    });
+
+    if (!interview) throw new BadRequestException('No se encontró la entrevista');
+    return interview;
+}
+
+async updateInterview(companyId: number, interviewId: string, dto: UpdateInterviewDto) {
+    const interview = await this.prisma.entrevistas.findFirst({
+        where: { id: interviewId, company_id: companyId, active: true }
+    });
+
+    if (!interview) throw new BadRequestException('No se encontró la entrevista');
+await this.prisma.entrevistas.update({
+            where: { id: interviewId },
+            data: {
+                title: dto.title,
+                description: dto.description ?? null,
+                interview_type: dto.interviewType as any,
+                modality: dto.modality as any,
+                duration: dto.duration,
+                interviewer_name: dto.interviewerName,
+                location: dto.locationAddress ?? null,
+                comment: dto.comment ?? null,
+                area_id: dto.areaId,
+                idVacante: dto.vacancyId,
             }
         });
 
-        return status.map(s => ({
-            id: s.idEstatusEntrevista,
-            description: s.descripcion
-        }));
-    }
+    return { message: 'Entrevista actualizada exitosamente' };
+}
+
+async rescheduleInterview(companyId: number, meetingId: string, dto: RescheduleInterviewDto) {
+    const meeting = await this.prisma.entrevistasPostulantes.findFirst({
+        where: { id: meetingId }
+    });
+
+    if (!meeting) throw new BadRequestException('No se encontró el meeting');
+
+    await this.prisma.entrevistasPostulantes.update({
+        where: { id: meetingId },
+        data: {
+            scheduled_at: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
+            duration: dto.duration ?? undefined,
+        }
+    });
+
+    return { message: 'Entrevista reprogramada exitosamente' };
+}
+
+
+
+async deleteInterview(companyId: number, interviewId: string) {
+    const interview = await this.prisma.entrevistas.findFirst({
+        where: { id: interviewId, company_id: companyId }
+    });
+
+    if (!interview) throw new BadRequestException('No se encontró la entrevista');
+
+    await this.prisma.entrevistas.delete({
+        where: { id: interviewId }
+    });
+
+    return { message: 'Entrevista eliminada exitosamente' };
+}
+
+async getStatus(companyId: number) {
+    const status = await this.prisma.catEstatusEntrevista.findMany({
+        where: { activo: true },
+        select: {
+            idEstatusEntrevista: true,
+            descripcion: true
+        }
+    });
+
+    return status.map(s => ({
+        id: s.idEstatusEntrevista,
+        description: s.descripcion
+    }));
+}
 
 }
+
+
+
