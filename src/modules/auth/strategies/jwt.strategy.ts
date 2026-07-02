@@ -27,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
         if (!userId) throw new UnauthorizedException('Token inválido');
 
-        const user = await this.usersService.getUserFullInfo(userId);
+        const user = await this.usersService.getUserBasicInfo(userId);
         if (!user) throw new UnauthorizedException('Usuario no encontrado');
 
         const allowConcurrentEnv = this.configService.get('ALLOW_CONCURRENT_SESSIONS', 'true');
