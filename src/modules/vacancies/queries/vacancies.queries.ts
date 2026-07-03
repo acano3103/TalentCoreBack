@@ -121,13 +121,45 @@ export class VacanciesQueries {
     static async getPublicActiveVacancies(
         prisma: PrismaService,
         companyId: number,
+        locationId: number | null,
+        areaId: number | null,
+        minSalary: number | null,
+        maxSalary: number | null,
     ): Promise<any[]> {
+        // Condición dinámica para Empresa (Si es 0 o null, no filtra por empresa específica)
+        const companyFilter = (companyId && companyId !== 0)
+            ? Prisma.sql`AND v.idEmpresa = ${companyId}`
+            : Prisma.empty;
+
+        // Condición dinámica para Ubicación
+        const locationFilter = (locationId && locationId !== 0)
+            ? Prisma.sql`AND v.idSite = ${locationId}`
+            : Prisma.empty;
+
+        // Condición dinámica para Área Ocupacional
+        const areaFilter = (areaId && areaId !== 0)
+            ? Prisma.sql`AND p.idArea = ${areaId}`
+            : Prisma.empty;
+
+        // Condición dinámica para Rangos de Salario (multiplicamos por 1000 en el query si tu front manda '35k' como 35)
+        // Se asume que el Front manda el número crudo (ej: minSalary: 35, maxSalary: 45) -> se compara contra pesos reales en BD multiplicando por 1000
+        const salaryFilter = (minSalary !== null && maxSalary !== null)
+            ? Prisma.sql`AND (
+          (v.SalarioMinimo >= ${minSalary * 1000} AND v.SalarioMinimo <= ${maxSalary * 1000}) 
+          OR 
+          (v.SalarioMaximo >= ${minSalary * 1000} AND v.SalarioMaximo <= ${maxSalary * 1000})
+          OR
+          (v.SalarioMinimo <= ${minSalary * 1000} AND v.SalarioMaximo >= ${maxSalary * 1000})
+        )`
+            : Prisma.empty;
+
+        // Ejecución segura de la consulta cruda inyectando los bloques construídos
         return prisma.$queryRaw<any[]>`
       SELECT
         v.idVacante,
         v.SalarioMinimo,
         v.SalarioMaximo,
-        v.fechaCreacion,
+        v.fechaActualizacion as fechaCreacion,
         v.Motivo,
         v.InformacionExtra,
         p.NombrePuesto,
@@ -155,10 +187,66 @@ export class VacanciesQueries {
       LEFT JOIN CatTiposPublicacion tp
         ON tp.idTipoPublicacion = v.idTipoPublicacion
       WHERE
-        v.idEmpresa    = ${companyId}
-        AND v.idEstatusVacante = 5
-      ORDER BY v.fechaCreacion DESC
+        v.idEstatusVacante = 5
+        ${companyFilter}
+        ${locationFilter}
+        ${areaFilter}
+        ${salaryFilter}
+      ORDER BY v.fechaActualizacion DESC
     `;
+    }
+
+    static async getPublicActiveVacancyById(
+        prisma: PrismaService,
+        companyId: number,
+        vacancyId: number,
+    ): Promise<any | null> {
+        // Condición dinámica opcional por empresa si tu lógica lo requiere (ej: multitenant o multi-portal)
+        const companyFilter = (companyId && companyId !== 0)
+            ? Prisma.sql`AND v.idEmpresa = ${companyId}`
+            : Prisma.empty;
+
+        const results = await prisma.$queryRaw<any[]>`
+            SELECT
+                v.idVacante,
+                v.SalarioMinimo,
+                v.SalarioMaximo,
+                v.fechaActualizacion as fechaCreacion,
+                v.Motivo,
+                v.InformacionExtra,
+                p.NombrePuesto,
+                p.DescripcionPuesto,
+                p.DisponibilidadViajar,
+                a.Descripcion   AS areaName,
+                m.Descripcion   AS modalityName,
+                s.Descripcion   AS siteName,
+                tc.Descripcion  AS contractTypeName,
+                tp.descripcion  AS tipoPublicacionName,
+                e.nombre_comercial AS empresaName
+            FROM Vacantes v
+            INNER JOIN CatPuestos p
+                ON p.idPuesto = v.idPuesto
+            INNER JOIN CatEmpresas e
+                ON e.idEmpresa = v.idEmpresa
+            LEFT JOIN CatAreas a
+                ON a.idArea = p.idArea
+            LEFT JOIN CatModalidad m
+                ON m.idModalidad = p.idModalidad
+            LEFT JOIN CatSites s
+                ON s.idSite = v.idSite
+            LEFT JOIN CatTipoContratacion tc
+                ON tc.idTipoContratacion = p.idTipoContratacion
+            LEFT JOIN CatTiposPublicacion tp
+                ON tp.idTipoPublicacion = v.idTipoPublicacion
+            WHERE
+                v.idVacante = ${vacancyId}
+                AND v.idEstatusVacante = 5
+                ${companyFilter}
+            LIMIT 1
+        `;
+
+        // Retornamos el primer elemento si existe, de lo contrario null
+        return results.length > 0 ? results[0] : null;
     }
 
 }

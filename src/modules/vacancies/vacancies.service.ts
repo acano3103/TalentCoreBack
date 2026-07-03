@@ -61,10 +61,21 @@ export class VacanciesService {
         };
     }
 
-    async findPublicActiveVacancies(companyId: number) {
+    // Función para obtener vacantes públicas para la bolsa de trabajo
+    async findPublicActiveVacancies(
+        companyId: number,
+        locationId: number | null,
+        areaId: number | null,
+        minSalary: number | null,
+        maxSalary: number | null,
+    ) {
         const vacancies = await VacanciesQueries.getPublicActiveVacancies(
             this.prisma,
             companyId,
+            locationId,
+            areaId,
+            minSalary,
+            maxSalary,
         );
 
         const serialized = vacancies.map((v: any) => ({
@@ -89,6 +100,39 @@ export class VacanciesService {
             data: serialized,
             total: serialized.length,
         };
+    }
+
+    // Obtener vacante activa pública por ID para la bolsa de trabajo
+    async findPublicActiveVacancyById(companyId: number, vacancyId: number) {
+        const vacancy = await VacanciesQueries.getPublicActiveVacancyById(
+            this.prisma,
+            companyId,
+            vacancyId,
+        );
+
+        if (!vacancy) {
+            throw new NotFoundException(`La vacante con ID ${vacancyId} no fue encontrada o no está disponible.`);
+        }
+
+        const serialized = {
+            idVacante: typeof vacancy.idVacante === 'bigint' ? Number(vacancy.idVacante) : vacancy.idVacante,
+            salarioMinimo: vacancy.SalarioMinimo ? String(vacancy.SalarioMinimo) : null,
+            salarioMaximo: vacancy.SalarioMaximo ? String(vacancy.SalarioMaximo) : null,
+            fechaCreacion: vacancy.fechaCreacion,
+            motivo: vacancy.Motivo || null,
+            informacionExtra: vacancy.InformacionExtra || null,
+            nombrePuesto: vacancy.NombrePuesto,
+            descripcionPuesto: vacancy.DescripcionPuesto || null,
+            disponibilidadViajar: vacancy.DisponibilidadViajar ?? false,
+            areaName: vacancy.areaName || null,
+            modalityName: vacancy.modalityName || null,
+            siteName: vacancy.siteName || null,
+            contractTypeName: vacancy.contractTypeName || null,
+            tipoPublicacionName: vacancy.tipoPublicacionName || null,
+            empresaName: vacancy.empresaName || null,
+        };
+
+        return { data: serialized };
     }
 
     async findAllRequisitions(companyId: number, page: number, search: string, limit: number, activeUser: ActiveUserDto) {
