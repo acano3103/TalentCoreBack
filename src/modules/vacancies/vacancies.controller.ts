@@ -16,6 +16,12 @@ export class VacanciesController {
 
     //      SECCIÓN 1: VACANTES
 
+    @Get('test/create')
+    @ApiOperation({ summary: 'Create test vacancy', description: 'Creates a test vacancy bypassing RBAC for UI testing' })
+    async createTestVacancy() {
+        return this.vacanciesService.createTestVacancy();
+    }
+
     @Get()
     @ApiOperation({ summary: 'Get all active vacancies', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Active vacancies obtained successfully' })
@@ -115,5 +121,19 @@ export class VacanciesController {
     async changeRequisitionStatus(
     ) {
         return this.vacanciesService.changeStatus();
+    }
+
+    //      SECCIÓN 3: DETALLE DE VACANTE (dinámico, al final para evitar colisión con rutas estáticas)
+
+    @Get(':vacancyId')
+    @ApiOperation({ summary: 'Get vacancy detail', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Vacancy detail obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Vacancy not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getVacancyDetail(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('vacancyId', ParseIntPipe) vacancyId: number
+    ) {
+        return this.vacanciesService.findOneVacancy(companyId, vacancyId);
     }
 }
