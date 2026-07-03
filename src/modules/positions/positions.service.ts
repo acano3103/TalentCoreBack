@@ -610,21 +610,21 @@ export class PositionsService {
         try {
             // Cruzamos RelUsuarioEmpresa (para la empresa activa) y RelUsuarioRol (para el rol de RH = 2)
             const rhUsers = await this.prisma.$queryRaw<Array<{ uuid: string; email: string; phone: string; first_name: string; last_name: string }>>`
-            SELECT 
-                au.uuid,
-                au.email,
-                au.phone,
-                au.first_name,
-                au.last_name
-            FROM auth_user au
-            INNER JOIN RelUsuarioEmpresa rue ON au.id = rue.idUsuario
-            INNER JOIN RelUsuarioRol rur ON au.id = rur.idUsuario
-            WHERE rue.idEmpresa = ${companyId}
-              AND rue.activo = 1
-              AND rur.idRol = 2
-              AND rur.activo = 1
-              AND au.is_active = 1
-        `;
+                SELECT 
+                    au.uuid,
+                    au.email,
+                    au.phone,
+                    au.first_name,
+                    au.last_name
+                FROM auth_user au
+                INNER JOIN RelUsuarioEmpresa rue ON au.id = rue.idUsuario
+                INNER JOIN RelUsuarioRol rur ON au.id = rur.idUsuario
+                WHERE rue.idEmpresa = ${companyId}
+                    AND rue.activo = 1
+                    AND rur.idRol = 2
+                    AND rur.activo = 1
+                    AND au.is_active = 1
+                `;
 
             const maxLength = 80;
             const rawDesc = newRequest.descripcion || '';

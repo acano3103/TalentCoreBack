@@ -1170,6 +1170,7 @@ model Vacantes {
   idEstatusVacante                                   Int                  @default(1)
   idReclutadorAsignado                               Int?
   idTipoPublicacion                                  Int?
+  links                                              Json?
   comentarios                                        String?              @db.Text
   fechaCreacion                                      DateTime?            @default(now()) @db.Timestamp(0)
   fechaActualizacion                                 DateTime?            @default(now()) @db.Timestamp(0)

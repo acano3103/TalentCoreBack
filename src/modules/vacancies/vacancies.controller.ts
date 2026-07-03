@@ -81,6 +81,19 @@ export class VacanciesController {
         return this.vacanciesService.findRequisitionCatalogs(companyId, positionId, activeUser);
     }
 
+    @Get('requisitions/:requisitionId')
+    @ApiOperation({ summary: 'Get a requisition by id', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Requisition obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Requisition not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getRequisitionsById(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('requisitionId', ParseIntPipe) requisitionId: number,
+    ) {
+        return this.vacanciesService.findRequisitionById(companyId, requisitionId, activeUser);
+    }
+
     @Post('requisitions')
     @ApiOperation({ summary: 'Create a new requisition', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requisition created successfully' })
@@ -103,6 +116,19 @@ export class VacanciesController {
         @Param('requisitionId', ParseIntPipe) requisitionId: number,
     ) {
         return this.vacanciesService.deleteRequisition(companyId, requisitionId, activeUser);
+    }
+
+    @Patch('requisitions/:requisitionId')
+    @ApiOperation({ summary: 'Evaluate a requisition', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Requisition evaluated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async evaluateRequisition(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('requisitionId', ParseIntPipe) requisitionId: number,
+        @Body('action', new DefaultValuePipe('aprobar')) action: 'aprobar' | 'rechazar',
+    ) {
+        return this.vacanciesService.evaluateRequisition(companyId, requisitionId, action, activeUser);
     }
 
     @Put('requisitions/:id')
