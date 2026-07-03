@@ -4,12 +4,14 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { VacanciesQueries } from './queries/vacancies.queries';
 import { CreateRequisitionDto } from './dto/create-requisition.dto';
 import { UsersService } from '../users/users.service';
+import { NotificationDispatcher } from '../notifications/notification.dispatcher';
 
 @Injectable()
 export class VacanciesService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly usersService: UsersService
+        private readonly usersService: UsersService,
+        private readonly notifications: NotificationDispatcher,
     ) { }
 
     async findActiveVacancies(companyId: number, activeUser: ActiveUserDto) {
@@ -346,22 +348,75 @@ export class VacanciesService {
             );
         }
 
-        const newRequisition = await this.prisma.vacantes.create({
-            data: {
-                idUsuarioCreador: activeUser.id,
-                idEmpresa: companyId,
-                idPuesto: requisitionDto.idPuesto,
-                idSite: requisitionDto.idSite,
-                idJefeInmediato: requisitionDto.idJefeInmediato ?? 0,
-                Motivo: requisitionDto.motivo,
-                numeroVacantes: requisitionDto.numeroVacantes,
-                SalarioMinimo: requisitionDto.salarioMinimo,
-                SalarioMaximo: requisitionDto.salarioMaximo,
-                InformacionExtra: requisitionDto.informacionExtra,
-                idEstatusVacante: 1,
-                idTipoPublicacion: requisitionDto.idTipoPublicacion,
+        const txResult = await this.prisma.$transaction(async (tx) => {
+            // Crear la vacante en la base de datos
+            const requisition = await this.prisma.vacantes.create({
+                data: {
+                    idUsuarioCreador: activeUser.id,
+                    idEmpresa: companyId,
+                    idPuesto: requisitionDto.idPuesto,
+                    idSite: requisitionDto.idSite,
+                    idJefeInmediato: requisitionDto.idJefeInmediato ?? 0,
+                    Motivo: requisitionDto.motivo,
+                    numeroVacantes: requisitionDto.numeroVacantes,
+                    SalarioMinimo: requisitionDto.salarioMinimo,
+                    SalarioMaximo: requisitionDto.salarioMaximo,
+                    InformacionExtra: requisitionDto.informacionExtra,
+                    idEstatusVacante: 1,
+                    idTipoPublicacion: requisitionDto.idTipoPublicacion,
+                }
+            });
+            // Registrar el movimiento en el histórico
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'CREAR',
+                    tablaOrigen: 'Vacantes',
+                    idRegistro: requisition.idVacante,
+                    descripcion: `Requisición creada por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            });
+
+            let jefeSolicitante = null;
+            // Traer el jefe inmediato del usuario creador de la requisición
+            const bossResult = await tx.$queryRaw<any[]>`
+                SELECT u.uuid, u.email, u.first_name, u.last_name, u.phone
+                FROM Empleados creador
+                JOIN Empleados jefe ON creador.idJefeInmediato = jefe.idEmpleado
+                JOIN auth_user u ON jefe.idUsuario = u.uuid
+                WHERE creador.idUsuario = ${activeUser.uuid}
+                    AND creador.idEmpresa = ${companyId}
+                    AND jefe.activo = 1
+                    AND u.is_active = 1
+            `;
+
+            if (bossResult && bossResult.length > 0) {
+                jefeSolicitante = bossResult[0];
             }
+
+            return { requisition, jefeSolicitante };
         });
+
+        if (txResult.jefeSolicitante) {
+            const { uuid, email, phone, first_name, last_name } = txResult.jefeSolicitante;
+
+            await this.notifications.notify({
+                userUuid: uuid,
+                notificationTypeCode: 'REQUISITION_CREATED',
+                to: email,
+                phone: phone,
+                subject: "Nueva requisición de vacante creada",
+                context: {
+                    name: `${first_name} ${last_name}`,
+                    requestingUser: `${activeUser.first_name} ${activeUser.last_name}`,
+                    numberOfVacancies: txResult.requisition.numeroVacantes,
+                    position: position.NombrePuesto,
+                    date: txResult.requisition.fechaCreacion
+                }
+            });
+        }
 
         return { message: 'Requisición validada y creada exitosamente.' };
     }

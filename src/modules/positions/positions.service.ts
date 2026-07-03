@@ -92,6 +92,7 @@ export class PositionsService {
 
             const { generalInfo, languages } = dto;
 
+            // Creamos el puesto padre de forma secuencial (Obligatorio para obtener el ID)
             const nuevoPuesto = await tx.catPuestos.create({
                 data: {
                     idEmpresa: companyId,
@@ -115,18 +116,19 @@ export class PositionsService {
 
             const newPositionId = nuevoPuesto.idPuesto;
 
-            // =========================================================================
-            // 2. INSERCIONES DE RELACIONES HIJAS (OPCIONALES CON VALIDACIÓN SECUENCIAL)
-            // =========================================================================
+            // INSERCIONES EN PARALELO (OPTIMIZACIÓN CLAVE)
+            const dbOperations: Promise<any>[] = [];
 
             // === RELACIÓN: IDIOMAS REQUERIDOS ===
             if (languages?.idiomas && languages.idiomas.length > 0) {
-                await tx.idiomasPuesto.createMany({
-                    data: languages.idiomas.map((idIdioma) => ({
-                        idPuesto: newPositionId,
-                        idIdioma: Number(idIdioma),
-                    })),
-                });
+                dbOperations.push(
+                    tx.idiomasPuesto.createMany({
+                        data: languages.idiomas.map((idIdioma) => ({
+                            idPuesto: newPositionId,
+                            idIdioma: Number(idIdioma),
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: HORARIOS DEL PUESTO ===
@@ -141,38 +143,44 @@ export class PositionsService {
                     }))
                 });
 
-                await tx.horariosPuesto.createMany({ data: turnosData });
+                dbOperations.push(tx.horariosPuesto.createMany({ data: turnosData }));
             }
 
             // === RELACIÓN: DOCUMENTOS SELECCIONADOS ===
             if (dto.documents?.documentosSeleccionados && dto.documents.documentosSeleccionados.length > 0) {
-                await tx.documentosPuesto.createMany({
-                    data: dto.documents.documentosSeleccionados.map((doc) => ({
-                        idPuesto: newPositionId,
-                        idDocumento: doc.idDocumento,
-                        esObligatorio: doc.Obligatorio === 1,
-                    })),
-                });
+                dbOperations.push(
+                    tx.documentosPuesto.createMany({
+                        data: dto.documents.documentosSeleccionados.map((doc) => ({
+                            idPuesto: newPositionId,
+                            idDocumento: doc.idDocumento,
+                            esObligatorio: doc.Obligatorio === 1,
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: FUNCIONES / ACTIVIDADES CLAVE ===
             if (dto.functions?.actividades && dto.functions.actividades.length > 0) {
-                await tx.funcionesPuesto.createMany({
-                    data: dto.functions.actividades.map((actividad) => ({
-                        idPuesto: newPositionId,
-                        Funcion: actividad.trim(),
-                    })),
-                });
+                dbOperations.push(
+                    tx.funcionesPuesto.createMany({
+                        data: dto.functions.actividades.map((actividad) => ({
+                            idPuesto: newPositionId,
+                            Funcion: actividad.trim(),
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: COMPETENCIAS CONDUCTUALES ===
             if (dto.competencies?.competencias && dto.competencies.competencias.length > 0) {
-                await tx.competenciasPuesto.createMany({
-                    data: dto.competencies.competencias.map((competencia) => ({
-                        idPuesto: newPositionId,
-                        Competencia: competencia.trim(),
-                    })),
-                });
+                dbOperations.push(
+                    tx.competenciasPuesto.createMany({
+                        data: dto.competencies.competencias.map((competencia) => ({
+                            idPuesto: newPositionId,
+                            Competencia: competencia.trim(),
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: HABILIDADES (DURAS Y BLANDAS UNIFICADAS) ===
@@ -184,33 +192,55 @@ export class PositionsService {
             ];
 
             if (todasLasHabilidades.length > 0) {
-                await tx.habilidadesPuesto.createMany({
-                    data: todasLasHabilidades.map((hab) => ({
-                        idPuesto: newPositionId,
-                        Habilidad: hab.name.trim(),
-                        Nivel: hab.level,
-                        Tipo: hab.tipo,
-                    })),
-                });
+                dbOperations.push(
+                    tx.habilidadesPuesto.createMany({
+                        data: todasLasHabilidades.map((hab) => ({
+                            idPuesto: newPositionId,
+                            Habilidad: hab.name.trim(),
+                            Nivel: hab.level,
+                            Tipo: hab.tipo,
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: PLANES DE CAPACITACIÓN / CURSOS ===
             if (dto.courses?.cursosSeleccionados && dto.courses.cursosSeleccionados.length > 0) {
-                await tx.relPuestoCurso.createMany({
-                    data: dto.courses.cursosSeleccionados.map((curso) => ({
-                        idPuesto: newPositionId,
-                        idCurso: curso.idCurso,
-                        idTipoCurso: curso.idTipoCourse,
-                        activo: true,
-                        fechaRegistro: new Date()
-                    })),
-                });
+                dbOperations.push(
+                    tx.relPuestoCurso.createMany({
+                        data: dto.courses.cursosSeleccionados.map((curso) => ({
+                            idPuesto: newPositionId,
+                            idCurso: curso.idCurso,
+                            idTipoCurso: curso.idTipoCourse,
+                            activo: true,
+                            fechaRegistro: new Date()
+                        })),
+                    })
+                );
             }
+
+            // === RELACIÓN: HISTÓRICO DE MOVIMIENTOS ===
+            dbOperations.push(
+                tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: activeUser.id,
+                        idEmpresa: companyId,
+                        accion: 'CREAR',
+                        tablaOrigen: 'CatPuestos',
+                        idRegistro: newPositionId,
+                        descripcion: `Puesto creado por ${activeUser.first_name} ${activeUser.last_name}`,
+                        fechaCreacion: new Date()
+                    }
+                })
+            );
+
+            // Ejecutamos TODAS las inserciones hijas simultáneamente en un único viaje
+            await Promise.all(dbOperations);
 
             return { message: "Puesto creado exitosamente", id: newPositionId };
         }, {
             maxWait: 5000,
-            timeout: 20000
+            timeout: 25000
         });
     }
 
@@ -224,40 +254,56 @@ export class PositionsService {
             const puestoExistente = await tx.catPuestos.findFirst({ where: { idPuesto: positionId, idEmpresa: companyId } });
             if (!puestoExistente) throw new NotFoundException('El puesto solicitado no existe en esta empresa');
 
-            await tx.catPuestos.update({
-                where: { idPuesto: positionId },
-                data: {
-                    NombrePuesto: generalInfo.nombrePuesto.trim(),
-                    idTipoPuesto: Number(generalInfo.idTipoPuesto),
-                    idArea: Number(generalInfo.idArea),
-                    idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,
-                    idModalidad: Number(generalInfo.idModalidad),
-                    idNivelEstudios: generalInfo.idNivelEstudios ? Number(generalInfo.idNivelEstudios) : null,
-                    DescripcionPuesto: languages.description || null,
-                    IdNivelSalario: generalInfo.idNivelSalario ? Number(generalInfo.idNivelSalario) : null,
-                    DisponibilidadViajar: languages?.disponibilidadViajar ? true : false,
-                    idJefeInmediato: languages?.idJefeInmediato ? Number(languages.idJefeInmediato) : null,
-                    idUsuarioRegistro: user.uuid,
-                }
-            });
+            // =========================================================================
+            // FASE 1: ACTUALIZACIÓN PADRE Y LIMPIEZA DE RELACIONES ANTERIORES EN PARALELO
+            // =========================================================================
+            const cleanUpOperations: Promise<any>[] = [
+                tx.catPuestos.update({
+                    where: { idPuesto: positionId },
+                    data: {
+                        NombrePuesto: generalInfo.nombrePuesto.trim(),
+                        idTipoPuesto: Number(generalInfo.idTipoPuesto),
+                        idArea: Number(generalInfo.idArea),
+                        idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,
+                        idModalidad: Number(generalInfo.idModalidad),
+                        idNivelEstudios: generalInfo.idNivelEstudios ? Number(generalInfo.idNivelEstudios) : null,
+                        DescripcionPuesto: languages.description || null,
+                        IdNivelSalario: generalInfo.idNivelSalario ? Number(generalInfo.idNivelSalario) : null,
+                        DisponibilidadViajar: languages?.disponibilidadViajar ? true : false,
+                        idJefeInmediato: languages?.idJefeInmediato ? Number(languages.idJefeInmediato) : null,
+                        idUsuarioRegistro: user.uuid,
+                    }
+                }),
+                tx.idiomasPuesto.deleteMany({ where: { idPuesto: positionId } }),
+                tx.horariosPuesto.deleteMany({ where: { idPuesto: positionId } }),
+                tx.documentosPuesto.deleteMany({ where: { idPuesto: positionId } }),
+                tx.funcionesPuesto.deleteMany({ where: { idPuesto: positionId } }),
+                tx.competenciasPuesto.deleteMany({ where: { idPuesto: positionId } }),
+                tx.habilidadesPuesto.deleteMany({ where: { idPuesto: positionId } }),
+                tx.relPuestoCurso.deleteMany({ where: { idPuesto: positionId } })
+            ];
+
+            // Esperamos a que el puesto se actualice y todas las tablas hijas se limpien simultáneamente
+            await Promise.all(cleanUpOperations);
 
             // =========================================================================
-            // APLICACIÓN DE LA ESTRATEGIA A: BORRADO Y REINSERCIÓN DE RELACIONES HIJAS
+            // FASE 2: REINSERCIÓN DE LAS NUEVAS RELACIONES EN PARALELO
             // =========================================================================
+            const insertOperations: Promise<any>[] = [];
 
             // === RELACIÓN: IDIOMAS REQUERIDOS ===
-            await tx.idiomasPuesto.deleteMany({ where: { idPuesto: positionId } });
             if (languages?.idiomas && languages.idiomas.length > 0) {
-                await tx.idiomasPuesto.createMany({
-                    data: languages.idiomas.map((idIdioma) => ({
-                        idPuesto: positionId,
-                        idIdioma: Number(idIdioma),
-                    })),
-                });
+                insertOperations.push(
+                    tx.idiomasPuesto.createMany({
+                        data: languages.idiomas.map((idIdioma) => ({
+                            idPuesto: positionId,
+                            idIdioma: Number(idIdioma),
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: HORARIOS DEL PUESTO ===
-            await tx.horariosPuesto.deleteMany({ where: { idPuesto: positionId } });
             if (data.schedules?.turnos && data.schedules.turnos.length > 0) {
                 const turnosData = data.schedules.turnos.flatMap((turno) => {
                     const fechaBase = '1970-01-01';
@@ -268,45 +314,47 @@ export class PositionsService {
                         HoraSalida: new Date(`${fechaBase}T${turno.end}:00Z`),
                     }));
                 });
-                await tx.horariosPuesto.createMany({ data: turnosData });
+                insertOperations.push(tx.horariosPuesto.createMany({ data: turnosData }));
             }
 
             // === RELACIÓN: DOCUMENTOS SELECCIONADOS ===
-            await tx.documentosPuesto.deleteMany({ where: { idPuesto: positionId } });
             if (data.documents?.documentosSeleccionados && data.documents.documentosSeleccionados.length > 0) {
-                await tx.documentosPuesto.createMany({
-                    data: data.documents.documentosSeleccionados.map((doc) => ({
-                        idPuesto: positionId,
-                        idDocumento: doc.idDocumento,
-                        esObligatorio: doc.Obligatorio === 1,
-                    })),
-                });
+                insertOperations.push(
+                    tx.documentosPuesto.createMany({
+                        data: data.documents.documentosSeleccionados.map((doc) => ({
+                            idPuesto: positionId,
+                            idDocumento: doc.idDocumento,
+                            esObligatorio: doc.Obligatorio === 1,
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: FUNCIONES / ACTIVIDADES CLAVE ===
-            await tx.funcionesPuesto.deleteMany({ where: { idPuesto: positionId } });
             if (data.functions?.actividades && data.functions.actividades.length > 0) {
-                await tx.funcionesPuesto.createMany({
-                    data: data.functions.actividades.map((actividad) => ({
-                        idPuesto: positionId,
-                        Funcion: actividad.trim(),
-                    })),
-                });
+                insertOperations.push(
+                    tx.funcionesPuesto.createMany({
+                        data: data.functions.actividades.map((actividad) => ({
+                            idPuesto: positionId,
+                            Funcion: actividad.trim(),
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: COMPETENCIAS CONDUCTUALES ===
-            await tx.competenciasPuesto.deleteMany({ where: { idPuesto: positionId } });
             if (data.competencies?.competencias && data.competencies.competencias.length > 0) {
-                await tx.competenciasPuesto.createMany({
-                    data: data.competencies.competencias.map((competencia) => ({
-                        idPuesto: positionId,
-                        Competencia: competencia.trim(),
-                    })),
-                });
+                insertOperations.push(
+                    tx.competenciasPuesto.createMany({
+                        data: data.competencies.competencias.map((competencia) => ({
+                            idPuesto: positionId,
+                            Competencia: competencia.trim(),
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: HABILIDADES (DURAS Y BLANDAS UNIFICADAS) ===
-            await tx.habilidadesPuesto.deleteMany({ where: { idPuesto: positionId } });
             const duras = data.skills?.duras || [];
             const blandas = data.skills?.blandas || [];
             const todasLasHabilidades = [
@@ -314,38 +362,59 @@ export class PositionsService {
                 ...blandas.map(h => ({ name: h.name, level: h.level, tipo: "BLANDA" }))
             ];
             if (todasLasHabilidades.length > 0) {
-                await tx.habilidadesPuesto.createMany({
-                    data: todasLasHabilidades.map((hab) => ({
-                        idPuesto: positionId,
-                        Habilidad: hab.name.trim(),
-                        Nivel: hab.level,
-                        Tipo: hab.tipo,
-                    })),
-                });
+                insertOperations.push(
+                    tx.habilidadesPuesto.createMany({
+                        data: todasLasHabilidades.map((hab) => ({
+                            idPuesto: positionId,
+                            Habilidad: hab.name.trim(),
+                            Nivel: hab.level,
+                            Tipo: hab.tipo,
+                        })),
+                    })
+                );
             }
 
             // === RELACIÓN: PLANES DE CAPACITACIÓN / CURSOS ===
-            await tx.relPuestoCurso.deleteMany({ where: { idPuesto: positionId } });
             if (data.courses?.cursosSeleccionados && data.courses.cursosSeleccionados.length > 0) {
-                await tx.relPuestoCurso.createMany({
-                    data: data.courses.cursosSeleccionados.map((curso) => ({
-                        idPuesto: positionId,
-                        idCurso: curso.idCurso,
-                        idTipoCurso: curso.idTipoCourse,
-                        activo: true,
-                        fechaRegistro: new Date()
-                    })),
-                });
+                insertOperations.push(
+                    tx.relPuestoCurso.createMany({
+                        data: data.courses.cursosSeleccionados.map((curso) => ({
+                            idPuesto: positionId,
+                            idCurso: curso.idCurso,
+                            idTipoCurso: curso.idTipoCourse,
+                            activo: true,
+                            fechaRegistro: new Date()
+                        })),
+                    })
+                );
             }
+
+            // Registrar el movimiento en el histórico
+            insertOperations.push(
+                tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: activeUser.id,
+                        idEmpresa: companyId,
+                        accion: 'EDITAR',
+                        tablaOrigen: 'CatPuestos',
+                        idRegistro: positionId,
+                        descripcion: `Puesto actualizado por ${activeUser.first_name} ${activeUser.last_name}`,
+                        fechaCreacion: new Date()
+                    }
+                })
+            );
+
+            // Ejecutamos todas las inserciones concurrentemente
+            await Promise.all(insertOperations);
 
             return { message: "Puesto actualizado exitosamente" };
         }, {
             maxWait: 5000,
-            timeout: 20000
+            timeout: 25000
         });
     }
 
-    async changeStatus(companyId: number, id: number, active: boolean) {
+    async changeStatus(companyId: number, id: number, active: boolean, activeUser: ActiveUserDto) {
         const positionExists = await this.prisma.catPuestos.findFirst({
             where: {
                 idPuesto: id,
@@ -362,9 +431,20 @@ export class PositionsService {
             },
         });
 
-        return {
-            message: active ? 'Puesto activado correctamente' : 'Puesto desactivado correctamente'
-        };
+        // Registrar el movimiento en el histórico
+        await this.prisma.historicoMovimientos.create({
+            data: {
+                idUsuario: activeUser.id,
+                idEmpresa: companyId,
+                accion: 'VALIDAR',
+                tablaOrigen: 'CatPuestos',
+                idRegistro: id,
+                descripcion: `Puesto ${active ? 'activado' : 'desactivado'} por ${activeUser.first_name} ${activeUser.last_name}`,
+                fechaCreacion: new Date()
+            }
+        });
+
+        return { message: active ? 'Puesto activado correctamente' : 'Puesto desactivado correctamente' };
     }
 
     async getCatalogs(companyId: number) {
@@ -416,7 +496,7 @@ export class PositionsService {
         return { areas, positionTypes, modalities, educationLevels, hiringTypes, salaryLevels, languages, positions, documents, courseTypes, courses };
     }
 
-    async approveOrReject(companyId: number, positionId: number, dto: ValidatePositionDto) {
+    async approveOrReject(companyId: number, positionId: number, dto: ValidatePositionDto, activeUser: ActiveUserDto) {
         try {
             const position = await PositionQueries.getPositionInfo(this.prisma, positionId);
             if (!position) throw new NotFoundException('No se encontró el puesto');
@@ -432,6 +512,20 @@ export class PositionsService {
                 await PositionQueries.rejectPosition(this.prisma, positionId, comment);
             }
 
+            // Registrar el movimiento en el histórico
+            await this.prisma.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'VALIDAR',
+                    tablaOrigen: 'CatPuestos',
+                    idRegistro: positionId,
+                    descripcion: `Puesto ${action === 'aprobar' ? 'aprobado' : 'rechazado'} por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            });
+
+            // Notificar al usuario que creo el puesto
             await this.notifications.notify({
                 userUuid: userUuid,
                 notificationTypeCode: 'POSITION_STATUS_UPDATE',

@@ -5,7 +5,8 @@ export const TEMPLATE_MAP = {
         'POSITION_STATUS_UPDATE': 'puesto_estado',
         'INTERVIEW_SCHEDULED': 'email_entrevista',
         'CREDENTIALS_CREATED': 'documentacion_requerida',
-        'POSITION_REQUEST_STATUS_UPDATE': 'puesto_solicitud_estado'
+        'POSITION_REQUEST_STATUS_UPDATE': 'puesto_solicitud_estado',
+        'REQUISITION_CREATED': 'requisition_created'
     },
     WHATSAPP: {
         '2FA': 'token_whatsapp',
@@ -17,5 +18,6 @@ export const TEMPLATE_MAP = {
         'POSITION_STATUS_UPDATE': 'puesto_estado_stream',
         'POSITION_REQUEST_CREATED': 'puesto_estado_stream',
         'POSITION_REQUEST_STATUS_UPDATE': 'puesto_estado_stream',
+        'REQUISITION_CREATED': 'requisicion_creada_stream'
     }
 };

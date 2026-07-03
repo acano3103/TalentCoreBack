@@ -167,8 +167,9 @@ export class PositionsController {
     async disable(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
+        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.changeStatus(companyId, positionId, false);
+        return this.service.changeStatus(companyId, positionId, false, activeUser);
     }
 
     //@UseGuards(JwtAuthGuard, ModulesGuard)
@@ -181,9 +182,10 @@ export class PositionsController {
     async approveOrReject(
         @Param('companyId') companyId: number,
         @Param('positionId') positionId: number,
-        @Body() dto: ValidatePositionDto
+        @Body() dto: ValidatePositionDto,
+        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.approveOrReject(companyId, positionId, dto);
+        return this.service.approveOrReject(companyId, positionId, dto, activeUser);
     }
 
     @Patch(':positionId/reactivate')
@@ -194,8 +196,9 @@ export class PositionsController {
     async reactivate(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
+        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.changeStatus(companyId, positionId, true);
+        return this.service.changeStatus(companyId, positionId, true, activeUser);
     }
 
 

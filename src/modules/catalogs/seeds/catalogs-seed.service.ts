@@ -86,6 +86,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 4, code: 'CREDENTIALS_CREATED', description: 'Notificación de creación de credenciales', activo: true },
             { id: 5, code: 'POSITION_REQUEST_STATUS_UPDATE', description: 'Notificación de actualización del estado de la solicitud de posición', activo: true },
             { id: 6, code: 'POSITION_REQUEST_CREATED', description: 'Notificación de creación de solicitud de posición', activo: true },
+            { id: 7, code: 'REQUISITION_CREATED', description: 'Notificación de creación de requisición', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -130,6 +131,11 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 22, notification_type_id: 6, channel_id: 2, enabled: false }, // WhatsApp
             { id: 23, notification_type_id: 6, channel_id: 3, enabled: false }, // SMS
             { id: 24, notification_type_id: 6, channel_id: 4, enabled: true }, // Sockets
+            // --- 7. REQUISITION_CREATED (Creación de requisición) ---
+            { id: 25, notification_type_id: 7, channel_id: 1, enabled: true }, // Email
+            { id: 26, notification_type_id: 7, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 27, notification_type_id: 7, channel_id: 3, enabled: false }, // SMS
+            { id: 28, notification_type_id: 7, channel_id: 4, enabled: true }, // Sockets
         ];
 
         for (const tc of typeChannels) {
