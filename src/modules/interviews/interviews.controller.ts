@@ -194,4 +194,16 @@ export class InterviewsController {
     ) {
         return this.interviewsService.deleteInterview(companyId, interviewId);
     }
+
+    @UseGuards(JwtAuthGuard)
+    @Delete('/meetings/:meetingId')
+    @ApiOperation({ summary: 'Delete meeting', description: 'Delete a meeting permanently' })
+    @ApiResponse({ status: 200, description: 'Meeting deleted successfully' })
+    @ApiResponse({ status: 404, description: 'Meeting not found' })
+    deleteMeeting(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('meetingId') meetingId: string
+) {
+    return this.interviewsService.deleteMeeting(companyId, meetingId);
+}
 }
