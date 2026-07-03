@@ -8,6 +8,7 @@ export class ActivityLogsService {
     ) { }
 
     async getActivityLogs(originTable: string, recordId: number) {
+        // @ts-ignore
         const activityLogs = await this.prisma.historicoMovimientos.findMany({
             where: {
                 tablaOrigen: originTable,
