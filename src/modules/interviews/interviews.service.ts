@@ -365,6 +365,20 @@ async getStatus(companyId: number) {
     }));
 }
 
+async deleteMeeting(companyId: number, meetingId: string) {
+    const meeting = await this.prisma.entrevistasPostulantes.findFirst({
+        where: { id: meetingId }
+    });
+
+    if (!meeting) throw new BadRequestException('No se encontró el meeting');
+
+    await this.prisma.entrevistasPostulantes.delete({
+        where: { id: meetingId }
+    });
+
+    return { message: 'Meeting eliminado exitosamente' };
+}
+
 }
 
 
