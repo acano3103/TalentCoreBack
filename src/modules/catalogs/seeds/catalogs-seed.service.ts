@@ -48,6 +48,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 3, code: 'TEAMS', name: 'Teams', type: 'communication', isActive: true },
             { id: 4, code: 'OPENAI', name: 'OpenAI', type: 'ai', isActive: true },
             { id: 5, code: 'GEMINI', name: 'Gemini', type: 'ai', isActive: true },
+            { id: 6, code: 'CLAUDE', name: 'Claude', type: 'ai', isActive: true },
         ];
 
         for (const medio of medios) {

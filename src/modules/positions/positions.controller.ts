@@ -145,6 +145,20 @@ export class PositionsController {
         return this.service.update(companyId, positionId, activeUser, data);
     }
 
+    @Post(':positionId/generate-ai-description')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Generate AI description for a vacanci', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'AI description generated successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async generateAIPositionDescription(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('positionId', ParseIntPipe) positionId: number,
+    ) {
+        return this.service.generateAIPositionDescription(companyId, positionId, activeUser);
+    }
+
     @Post()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Create a new position', description: SWAGGER_AUTH_DESCRIPTION })

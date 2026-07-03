@@ -37,6 +37,15 @@ export const SOCKET_NOTIFICATION_MAP: Record<string, NotificationTemplateConfig>
             return `Tu solicitud ${id}${fecha} ha sido ${estado} por el área de Recursos Humanos.`;
         },
     },
+    REQUISITION_CREATED: {
+        severity: 'warning',
+        buildMessage: (ctx) => {
+            const solicitante = ctx?.requestingUser || 'Un coordinador';
+            const puesto = ctx?.position || 'Sin Nombre';
+            const vacantes = ctx?.numberOfVacancies ? ` (${ctx.numberOfVacancies} plazas)` : '';
+            return `🚨 Tienes una nueva requisición por revisar: ${solicitante} ha solicitado la vacante de "${puesto}"${vacantes}. Ingresa al módulo de Reclutamiento para dictaminar.`;
+        },
+    },
 };
 
 export function formatNotificationPayload(typeCode: string, context: any, fallbackTitle?: string) {

@@ -7,7 +7,7 @@ import { IntegrationsFactory } from './providers/factory.service';
 export class IntegrationsService {
     constructor(
         private prisma: PrismaService,
-        private communicationFactory: IntegrationsFactory,
+        private integrationFactory: IntegrationsFactory,
     ) { }
 
     async getIntegrations(companyId: number) {
@@ -41,12 +41,12 @@ export class IntegrationsService {
     }
 
     async connect(companyId: number, providerId: number, dto: ConnectIntegrationDto) {
-        const provider = await this.communicationFactory.getProvider(providerId);
+        const provider = await this.integrationFactory.getProvider(providerId);
         return provider.connect(companyId, providerId, dto);
     }
 
     async disconnect(companyId: number, providerId: number) {
-        const provider = await this.communicationFactory.getProvider(providerId);
+        const provider = await this.integrationFactory.getProvider(providerId);
         return provider.disconnect(companyId, providerId);
     }
 }

@@ -17,6 +17,7 @@ import { CreatePositionDto } from './dto/create-position.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreatePositionRequestDto } from './dto/create-position-request.dto';
 import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
+import { IntegrationsFactory } from '../integrations/providers/factory.service';
 
 @Injectable()
 export class PositionsService {
@@ -24,6 +25,7 @@ export class PositionsService {
         private readonly prisma: PrismaService,
         private readonly notifications: NotificationDispatcher,
         private readonly configService: ConfigService,
+        private integrationFactory: IntegrationsFactory,
     ) { }
 
     private readonly logger = new Logger(PositionsService.name);
@@ -445,6 +447,34 @@ export class PositionsService {
         });
 
         return { message: active ? 'Puesto activado correctamente' : 'Puesto desactivado correctamente' };
+    }
+
+    async generateAIPositionDescription(companyId: number, positionId: number, activeUser: ActiveUserDto) {
+        const position = await this.findOne(companyId, positionId, 1);
+
+        const activeAiIntegration = await this.prisma.integraciones.findFirst({
+            where: {
+                idEmpresa: companyId,
+                isConnected: true,
+                CatIntegracionesProvedores: {
+                    type: 'ai',
+                    isActive: true
+                }
+            },
+            include: {
+                CatIntegracionesProvedores: true
+            }
+        });
+
+        if (!activeAiIntegration) {
+            throw new BadRequestException('La empresa no tiene ningún proveedor de Inteligencia Artificial conectado. Por favor conecta uno en Configuración > Integraciones');
+        }
+
+        const providerId = activeAiIntegration.providerId;
+        const aiProvider = await this.integrationFactory.getProvider(providerId);
+        const aiGeneratedDescription = await aiProvider.generateJobDescription(companyId, position);
+
+        return { description: aiGeneratedDescription };
     }
 
     async getCatalogs(companyId: number) {
