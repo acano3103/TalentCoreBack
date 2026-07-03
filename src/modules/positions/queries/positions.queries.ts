@@ -187,15 +187,16 @@ export class PositionQueries {
         p.rutaCV,
         p.fechaRegistro,
         c.NombrePuesto,
-        c.SalarioMinimo,
-        c.SalarioMaximo,
-        c.Vacantes,
+        v.SalarioMinimo,
+        v.SalarioMaximo,
+        v.numeroVacantes AS Vacantes,
         m.Descripcion AS Modalidad
       FROM Postulaciones p
-      INNER JOIN CatPuestos c ON p.idPuesto = c.idPuesto
+      INNER JOIN Vacantes v ON p.idVacante = v.idVacante
+      INNER JOIN CatPuestos c ON v.idPuesto = c.idPuesto
       LEFT JOIN CatModalidad m ON c.idModalidad = m.idModalidad
       LEFT JOIN PerfilPostulante pp ON p.idPostulacion = pp.idPostulacion
-      WHERE p.idPuesto = ${idPuesto}
+      WHERE v.idPuesto = ${idPuesto}
       AND pp.score_global IS NOT NULL
       ORDER BY pp.score_global DESC;
     `;
@@ -218,9 +219,9 @@ export class PositionQueries {
         COALESCE(counts.total_aprobados, 0) AS TotalAprobados,
         COALESCE(counts.total_rechazados, 0) AS TotalRechazados
       FROM CatPuestos p
-      INNER JOIN CatAreas a ON a.idArea = p.idArea
-      INNER JOIN CatSites s ON s.idSite = a.idSite
-      INNER JOIN CatEmpresas ce ON ce.idEmpresa = s.idEmpresa
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatSites s ON s.idSite = p.idSite
+      LEFT JOIN CatEmpresas ce ON ce.idEmpresa = COALESCE(s.idEmpresa, a.idEmpresa, p.idEmpresa)
       LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
       LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
       LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
@@ -229,18 +230,19 @@ export class PositionQueries {
       -- Subquery óptimo para agrupar postulaciones por puesto
       LEFT JOIN (
         SELECT 
-          post.idPuesto,
+          v.idPuesto,
           COUNT(post.idPostulacion) AS total_cvs,
           -- Contamos como aprobados los que tengan score mayor o igual a 8
           SUM(CASE WHEN perf.score_global >= 8 THEN 1 ELSE 0 END) AS total_aprobados,
           -- Contamos como rechazados los que tengan score menor a 8 o estén explícitamente descartados
           SUM(CASE WHEN perf.score_global < 8 OR perf.score_global IS NULL THEN 1 ELSE 0 END) AS total_rechazados
         FROM Postulaciones post
+        INNER JOIN Vacantes v ON post.idVacante = v.idVacante
         LEFT JOIN PerfilPostulante perf ON post.idPostulacion = perf.idPostulacion
-        GROUP BY post.idPuesto
+        GROUP BY v.idPuesto
       ) counts ON counts.idPuesto = p.idPuesto
 
-      WHERE ce.idEmpresa = ${companyId}
+      WHERE COALESCE(a.idEmpresa, p.idEmpresa) = ${companyId}
         AND p.Activo = 1
         AND p.aprobada = 1;
     `;
