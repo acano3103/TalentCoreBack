@@ -37,6 +37,38 @@ export const SOCKET_NOTIFICATION_MAP: Record<string, NotificationTemplateConfig>
             return `Tu solicitud ${id}${fecha} ha sido ${estado} por el área de Recursos Humanos.`;
         },
     },
+    REQUISITION_CREATED: {
+        severity: 'warning',
+        buildMessage: (ctx) => {
+            const solicitante = ctx?.requestingUser || 'Un coordinador';
+            const puesto = ctx?.position || 'Sin Nombre';
+            const vacantes = ctx?.numberOfVacancies ? ` (${ctx.numberOfVacancies} plazas)` : '';
+            return `🚨 Tienes una nueva requisición por revisar: ${solicitante} ha solicitado la vacante de "${puesto}"${vacantes}. Ingresa al módulo de Reclutamiento para dictaminar.`;
+        },
+    },
+    REQUISITION_APPROVED_BY_MANAGER: {
+        severity: 'success',
+        buildMessage: (ctx) => {
+            const id = ctx?.requestId ? `#${ctx.requestId}` : '';
+            const fecha = ctx?.requestDate ? ` del ${ctx.requestDate}` : '';
+            return `🎉 ¡Buenas noticias! Tu requisición de vacante ${id}${fecha} ha sido aprobada por tu Manager y ha sido enviada al área de Recursos Humanos para su validación final y publicación.`;
+        },
+    },
+    REQUISITION_APPROVED_BY_MANAGER_TO_RH: {
+        severity: 'info',
+        buildMessage: (ctx) => {
+            const id = ctx?.requestId ? `#${ctx.requestId}` : '';
+            const nombreRh = ctx?.name ? ` ${ctx.name}` : '';
+            return `📋 Hola${nombreRh}, hay una nueva requisición ${id} autorizada por el Manager. Está lista para tu revisión final, dictamen y generación de enlaces de difusión en Reclutamiento > Requisiciones.`;
+        },
+    },
+    REQUISITION_APPROVED_BY_RH: {
+        severity: 'success',
+        buildMessage: (ctx) => {
+            const puesto = ctx?.positionName || 'Sin Nombre';
+            return `🚀 ¡Tu requisición para el puesto de "${puesto}" ya está aprobada por Recursos Humanos y ha sido publicada oficialmente como vacante activa en TalentCore!`;
+        },
+    },
 };
 
 export function formatNotificationPayload(typeCode: string, context: any, fallbackTitle?: string) {

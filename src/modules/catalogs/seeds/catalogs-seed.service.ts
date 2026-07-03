@@ -48,6 +48,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 3, code: 'TEAMS', name: 'Teams', type: 'communication', isActive: true },
             { id: 4, code: 'OPENAI', name: 'OpenAI', type: 'ai', isActive: true },
             { id: 5, code: 'GEMINI', name: 'Gemini', type: 'ai', isActive: true },
+            { id: 6, code: 'CLAUDE', name: 'Claude', type: 'ai', isActive: true },
         ];
 
         for (const medio of medios) {
@@ -86,6 +87,10 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 4, code: 'CREDENTIALS_CREATED', description: 'Notificación de creación de credenciales', activo: true },
             { id: 5, code: 'POSITION_REQUEST_STATUS_UPDATE', description: 'Notificación de actualización del estado de la solicitud de posición', activo: true },
             { id: 6, code: 'POSITION_REQUEST_CREATED', description: 'Notificación de creación de solicitud de posición', activo: true },
+            { id: 7, code: 'REQUISITION_CREATED', description: 'Notificación de creación de requisición', activo: true },
+            { id: 8, code: 'REQUISITION_APPROVED_BY_MANAGER', description: 'Notificación de aprobación de requisición por parte del manager', activo: true },
+            { id: 9, code: 'REQUISITION_APPROVED_BY_MANAGER_TO_RH', description: 'Notificación de aprobación de requisición por parte del manager a Recursos Humanos', activo: true },
+            { id: 10, code: 'REQUISITION_APPROVED_BY_RH', description: 'Notificación de aprobación de requisición por parte de Recursos Humanos', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -130,6 +135,26 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 22, notification_type_id: 6, channel_id: 2, enabled: false }, // WhatsApp
             { id: 23, notification_type_id: 6, channel_id: 3, enabled: false }, // SMS
             { id: 24, notification_type_id: 6, channel_id: 4, enabled: true }, // Sockets
+            // --- 7. REQUISITION_CREATED (Creación de requisición) ---
+            { id: 25, notification_type_id: 7, channel_id: 1, enabled: true }, // Email
+            { id: 26, notification_type_id: 7, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 27, notification_type_id: 7, channel_id: 3, enabled: false }, // SMS
+            { id: 28, notification_type_id: 7, channel_id: 4, enabled: true }, // Sockets
+            // --- 8. REQUISITION_APPROVED_BY_MANAGER (Aprobación de requisición por parte del manager) ---
+            { id: 29, notification_type_id: 8, channel_id: 1, enabled: true }, // Email
+            { id: 30, notification_type_id: 8, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 31, notification_type_id: 8, channel_id: 3, enabled: false }, // SMS
+            { id: 32, notification_type_id: 8, channel_id: 4, enabled: true }, // Sockets
+            // --- 9. REQUISITION_APPROVED_BY_MANAGER_TO_RH (Aprobación de requisición por parte del manager a Recursos Humanos) ---
+            { id: 33, notification_type_id: 9, channel_id: 1, enabled: false }, // Email
+            { id: 34, notification_type_id: 9, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 35, notification_type_id: 9, channel_id: 3, enabled: false }, // SMS
+            { id: 36, notification_type_id: 9, channel_id: 4, enabled: true }, // Sockets
+            // --- 10. REQUISITION_APPROVED_BY_RH (Aprobación de requisición por parte de Recursos Humanos) ---
+            { id: 37, notification_type_id: 10, channel_id: 1, enabled: true }, // Email
+            { id: 38, notification_type_id: 10, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 39, notification_type_id: 10, channel_id: 3, enabled: false }, // SMS
+            { id: 40, notification_type_id: 10, channel_id: 4, enabled: true }, // Sockets
         ];
 
         for (const tc of typeChannels) {

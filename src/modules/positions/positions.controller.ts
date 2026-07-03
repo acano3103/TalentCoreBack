@@ -163,6 +163,20 @@ export class PositionsController {
         return this.service.update(companyId, positionId, activeUser, data);
     }
 
+    @Post(':positionId/generate-ai-description')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Generate AI description for a vacanci', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'AI description generated successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async generateAIPositionDescription(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('positionId', ParseIntPipe) positionId: number,
+    ) {
+        return this.service.generateAIPositionDescription(companyId, positionId, activeUser);
+    }
+
     @Post()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Create a new position', description: SWAGGER_AUTH_DESCRIPTION })
@@ -185,8 +199,9 @@ export class PositionsController {
     async disable(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
+        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.changeStatus(companyId, positionId, false);
+        return this.service.changeStatus(companyId, positionId, false, activeUser);
     }
 
     //@UseGuards(JwtAuthGuard, ModulesGuard)
@@ -199,9 +214,10 @@ export class PositionsController {
     async approveOrReject(
         @Param('companyId') companyId: number,
         @Param('positionId') positionId: number,
-        @Body() dto: ValidatePositionDto
+        @Body() dto: ValidatePositionDto,
+        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.approveOrReject(companyId, positionId, dto);
+        return this.service.approveOrReject(companyId, positionId, dto, activeUser);
     }
 
     @Patch(':positionId/reactivate')
@@ -212,8 +228,9 @@ export class PositionsController {
     async reactivate(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
+        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.changeStatus(companyId, positionId, true);
+        return this.service.changeStatus(companyId, positionId, true, activeUser);
     }
 
 
