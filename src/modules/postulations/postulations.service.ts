@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
 import { generateCredentials } from './services/credentials.service';
 import { ALLOWED_STATUS_TRANSITIONS } from './utils/allowed-transitions';
@@ -9,6 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { IntegrationsFactory } from '../integrations/providers/factory.service';
+import { CreatePostulationDto } from './dto/create-postulation.dto';
 
 @Injectable()
 export class PostulationsService {
@@ -16,86 +18,136 @@ export class PostulationsService {
     private prisma: PrismaService,
     private readonly notifications: NotificationDispatcher,
     private readonly httpService: HttpService,
+    private readonly integrationFactory: IntegrationsFactory,
   ) { }
 
-  async createPostulation(data: any, file: Express.Multer.File) {
-    const { vacante_id, nombre, primerApellido, segundoApellido, correo, telefono, curp } = data;
+  private readonly logger = new Logger(PostulationsService.name);
+
+  async createPostulation(companyId: number, data: CreatePostulationDto, file: Express.Multer.File) {
+    const { vacante_id, nombre, primerApellido, segundoApellido, correo, telefono, curp, utm_source } = data;
 
     if (!file) throw new BadRequestException('El archivo CV es obligatorio');
 
+    const alreadyPostulated = await this.prisma.postulaciones.findFirst({
+      where: { idVacante: parseInt(vacante_id), curp }
+    });
+    if (alreadyPostulated) throw new BadRequestException('Ya te has postulado a esta vacante');
+
+    let physicalPathToDelete: string | null = null;
+
     try {
       // 1. Obtener nombre de la vacante
-      const puesto: any[] = await this.prisma.$queryRaw`
-            SELECT NombrePuesto FROM CatPuestos WHERE idPuesto = ${parseInt(vacante_id)}
-          `;
+      const vacante = await this.prisma.vacantes.findFirst({
+        where: { idVacante: parseInt(vacante_id), idEmpresa: companyId },
+        include: { CatPuestos: true }
+      });
+      if (!vacante) throw new NotFoundException('Vacante no encontrada');
 
-      const nombrePuestoRaw = puesto[0]?.NombrePuesto || `Puesto_${vacante_id}`;
-      const nombrePuesto = nombrePuestoRaw.replace(/\s+/g, '_');
-      const nombrePostulante = `${nombre}_${primerApellido}`.replace(/\s+/g, '_');
+      const nombrePuestoRaw = vacante?.CatPuestos?.NombrePuesto || `Puesto_${vacante_id}`;
+      // Sanitizar nombres eliminando caracteres de control de rutas (.., /, \)
+      const cleanNombrePuesto = nombrePuestoRaw.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+      const cleanNombre = nombre.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+      const cleanApellido = primerApellido.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+
+      const nombrePostulante = `${cleanNombre}_${cleanApellido}`;
 
       // 2. Rutas Físicas
-      const rootPath = path.join(process.cwd(), 'media');
-      const relativePath = path.join('VACANTES', nombrePuesto, nombrePostulante);
+      const rootPath = path.resolve(process.cwd(), 'media');
+      const relativePath = path.join('VACANTES', cleanNombrePuesto, nombrePostulante);
       const targetFolder = path.join(rootPath, relativePath);
+
+      // Validar el prefijo para destruir cualquier intento de Path Traversal
+      if (!targetFolder.startsWith(rootPath)) {
+        throw new BadRequestException('Path Injection detected and blocked.');
+      }
+
+      // Lista blanca de extensiones para el CV (Solo PDF)
+      const extension = path.extname(file.originalname).toLowerCase();
+      const allowedExtensions = ['.pdf'];
+      if (!allowedExtensions.includes(extension)) {
+        throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
+      }
 
       if (!fs.existsSync(targetFolder)) {
         fs.mkdirSync(targetFolder, { recursive: true });
       }
 
-      const extension = path.extname(file.originalname).toLowerCase();
       const fileName = `CV_${uuidv4()}${extension}`;
       const physicalPath = path.join(targetFolder, fileName);
-      const webPath = path.join(relativePath, fileName).replace(/\\/g, '/');
+      const webPath = `/media/${path.join(relativePath, fileName).replace(/\\/g, '/')}`;
 
+      // Guardamos el archivo y registramos la ruta física por si necesitamos borrarlo en el catch
       fs.writeFileSync(physicalPath, file.buffer);
+      physicalPathToDelete = physicalPath;
 
-      // 3. Ejecutar Store Procedure (MySQL)
-      // Guardamos el resultado pero lo tratamos con cuidado
-      const rawResult: any[] = await this.prisma.$queryRaw`
-            CALL SpInsPostulaciones(
-              0, 1, ${parseInt(vacante_id)}, ${nombre}, ${primerApellido}, 
-              ${segundoApellido || ''}, ${correo}, ${telefono}, ${webPath}, ${curp.toUpperCase()}
-            )
-          `;
+      // 3. Transacción en paralelo de Base de Datos
+      const [postulation, activeAiIntegration] = await this.prisma.$transaction(async (tx) => {
+        const postulationPromise = tx.postulaciones.create({
+          data: {
+            idEstatus: 1,
+            idVacante: parseInt(vacante_id),
+            nombre,
+            primerApellido,
+            segundoApellido,
+            correo,
+            telefono,
+            curp,
+            utmSource: utm_source,
+            rutaCV: webPath,
+            fechaRegistro: new Date()
+          }
+        });
 
-      // Extraemos el ID y lo convertimos a número inmediatamente
-      // Esto evita que el tipo BigInt se propague al objeto de retorno
-      const firstRow = rawResult[0];
-      const idRaw = firstRow ? Object.values(firstRow)[0] : null;
-      const idPostulacion = (typeof idRaw === 'bigint' ? Number(idRaw) : idRaw) as number;
+        const aiIntegrationPromise = tx.integraciones.findFirst({
+          where: {
+            idEmpresa: companyId,
+            isConnected: true,
+            CatIntegracionesProvedores: {
+              type: 'ai',
+              isActive: true
+            }
+          },
+          include: {
+            CatIntegracionesProvedores: true
+          }
+        });
 
-      // 4. Enviar Webhook
-      // No esperamos a que termine para no retrasar la respuesta al usuario
-      this.sendToWebhook(vacante_id, idPostulacion, file, fileName);
+        return await Promise.all([postulationPromise, aiIntegrationPromise]);
+      });
 
-      // IMPORTANTE: Solo retornamos datos primitivos limpios
-      return {
-        success: true,
-        ruta_cv: webPath
-      };
+      // Si la empresa no tiene la IA configurada, forzamos un error para disparar el catch y borrar el CV recién subido
+      if (!activeAiIntegration) {
+        throw new BadRequestException('La empresa no cuenta con una integración de Inteligencia Artificial activa.');
+      }
+
+      // 4. DISPARO ASÍNCRONO (Background Job)
+      const providerId = activeAiIntegration.providerId;
+      this.integrationFactory.getProvider(providerId).then((aiProvider) => {
+        return aiProvider.analyzeCV(
+          companyId,
+          postulation.idPostulacion,
+          vacante.idVacante,
+          file.buffer,
+          vacante.InformacionExtra || ''
+        );
+      }).catch((aiError) => {
+        this.logger.error('Error asíncrono en el procesamiento de la IA para el CV:', aiError);
+      });
+
+      return { message: "Postulación aplicada correctamente" };
 
     } catch (error) {
-      // Si el error es por BigInt aquí, lo capturamos
-      console.error('Error en CandidatesService:', error);
-      throw new BadRequestException('Error al procesar el registro: ' + error.message);
-    }
-  }
+      if (physicalPathToDelete && fs.existsSync(physicalPathToDelete)) {
+        try {
+          fs.unlinkSync(physicalPathToDelete);
+          this.logger.log(`Rollback del archivo ejecutado con éxito: ${physicalPathToDelete}`);
+        } catch (unlinkError) {
+          this.logger.error('Error al intentar borrar el archivo durante el rollback:', unlinkError);
+        }
+      }
 
-  private async sendToWebhook(vacanteId: string, postulacionId: number, file: Express.Multer.File, fileName: string) {
-    const webhookUrl = "https://dvdigital.app.n8n.cloud/webhook/candidate-sended";
-    const formData = new FormData();
-
-    const fileData = new Uint8Array(file.buffer);
-    const blob = new Blob([fileData], { type: file.mimetype });
-
-    formData.append('cv', blob, fileName);
-    formData.append('idVacante', vacanteId);
-    formData.append('idPostulacion', postulacionId?.toString());
-
-    try {
-      await this.httpService.axiosRef.post(webhookUrl, formData);
-    } catch (err) {
-      console.error('Error enviando a n8n:', err.message);
+      this.logger.error('Error en CandidatesService:', error);
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -128,27 +180,27 @@ export class PostulationsService {
         throw new BadRequestException(`No se puede cambiar de ${currentStatusName} a ${nextStatusName}. Estado actual: ${currentStatusName}, Estados permitidos: ${allowedNames.join(', ')}`);
       }
 
-     if (dto.statusId === 6) {
-    const vacancy = await this.prisma.vacantes.findFirst({
-      where: { idVacante: postulation.idVacante }
-    });
+      if (dto.statusId === 6) {
+        const vacancy = await this.prisma.vacantes.findFirst({
+          where: { idVacante: postulation.idVacante }
+        });
 
-    await generateCredentials(
-      {
-        curp: postulation.curp,
-        nombre: postulation.nombre,
-        apellido1: postulation.primerApellido,
-        apellido2: postulation.segundoApellido || '',
-        correo: postulation.correo,
-        idPuesto: vacancy?.idPuesto ?? 0,
-        usuario: user.username || 'sistema',
-        idCampania: dto.campaignId || null,
-      },
-      files ?? [],
-      this.prisma,
-      this.notifications.notify.bind(this.notifications)
-    );
-}
+        await generateCredentials(
+          {
+            curp: postulation.curp,
+            nombre: postulation.nombre,
+            apellido1: postulation.primerApellido,
+            apellido2: postulation.segundoApellido || '',
+            correo: postulation.correo,
+            idPuesto: vacancy?.idPuesto ?? 0,
+            usuario: user.username || 'sistema',
+            idCampania: dto.campaignId || null,
+          },
+          files ?? [],
+          this.prisma,
+          this.notifications.notify.bind(this.notifications)
+        );
+      }
 
       return await this.prisma.postulaciones.update({
         where: { idPostulacion: postulationId },

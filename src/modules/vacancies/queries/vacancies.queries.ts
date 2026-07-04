@@ -222,6 +222,7 @@ export class VacanciesQueries {
                 s.Descripcion   AS siteName,
                 tc.Descripcion  AS contractTypeName,
                 tp.descripcion  AS tipoPublicacionName,
+                e.idEmpresa as companyId,
                 e.nombre_comercial AS empresaName
             FROM Vacantes v
             INNER JOIN CatPuestos p

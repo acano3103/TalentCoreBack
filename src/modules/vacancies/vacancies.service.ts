@@ -144,7 +144,6 @@ export class VacanciesService {
         };
     }
 
-    async findPublicActiveVacancies(companyId: number) {
     // Función para obtener vacantes públicas para la bolsa de trabajo
     async findPublicActiveVacancies(
         companyId: number,
@@ -213,6 +212,7 @@ export class VacanciesService {
             siteName: vacancy.siteName || null,
             contractTypeName: vacancy.contractTypeName || null,
             tipoPublicacionName: vacancy.tipoPublicacionName || null,
+            companyId: vacancy.companyId || null,
             empresaName: vacancy.empresaName || null,
         };
 
@@ -400,14 +400,12 @@ export class VacanciesService {
             where: {
                 idUsuario: activeUser.id,
                 activo: true,
-                // @ts-ignore
                 CatSites: {
                     idEmpresa: companyId,
                     Activo: true
                 }
             },
             select: {
-                // @ts-ignore
                 CatSites: {
                     select: {
                         idSite: true,
@@ -417,7 +415,6 @@ export class VacanciesService {
                 }
             },
             orderBy: {
-                // @ts-ignore
                 CatSites: {
                     Descripcion: 'asc'
                 }
@@ -425,14 +422,10 @@ export class VacanciesService {
         });
 
         return userSites
-            // @ts-ignore
             .filter(us => us.CatSites !== null)
             .map(us => ({
-                // @ts-ignore
                 idSite: us.CatSites!.idSite,
-                // @ts-ignore
                 Descripcion: us.CatSites!.Descripcion,
-                // @ts-ignore
                 EsPrincipal: us.CatSites!.EsPrincipal
             }));
     }
@@ -469,7 +462,6 @@ export class VacanciesService {
                 nombre: true,
                 primerApellido: true,
                 segundoApellido: true,
-                // @ts-ignore
                 CatPuestos: {
                     select: {
                         NombrePuesto: true
@@ -481,7 +473,6 @@ export class VacanciesService {
         // Mapeamos los empleados formateando el nombre completo JUNTO con su puesto entre paréntesis
         const immediateBosses = employees.map(emp => {
             const fullName = `${emp.nombre || ""} ${emp.primerApellido || ""} ${emp.segundoApellido || ""}`.trim().toUpperCase();
-            // @ts-ignore
             const positionName = emp.CatPuestos?.NombrePuesto ? ` (${emp.CatPuestos.NombrePuesto.toUpperCase()})` : "";
 
             return {
@@ -567,21 +558,52 @@ export class VacanciesService {
             );
         }
 
-        const newRequisition = await this.prisma.vacantes.create({
-            data: {
-                idUsuarioCreador: activeUser.id,
-                idEmpresa: companyId,
-                idPuesto: requisitionDto.idPuesto,
-                idSite: requisitionDto.idSite,
-                idJefeInmediato: requisitionDto.idJefeInmediato ?? 0,
-                Motivo: requisitionDto.motivo,
-                // @ts-ignore
-                numeroVacantes: requisitionDto.numeroVacantes,
-                SalarioMinimo: requisitionDto.salarioMinimo,
-                SalarioMaximo: requisitionDto.salarioMaximo,
-                InformacionExtra: requisitionDto.informacionExtra,
-                idEstatusVacante: 1,
-                idTipoPublicacion: requisitionDto.idTipoPublicacion,
+        const txResult = await this.prisma.$transaction(async (tx) => {
+            // Crear la vacante en la base de datos
+            const requisition = await this.prisma.vacantes.create({
+                data: {
+                    idUsuarioCreador: activeUser.id,
+                    idEmpresa: companyId,
+                    idPuesto: requisitionDto.idPuesto,
+                    idSite: requisitionDto.idSite,
+                    idJefeInmediato: requisitionDto.idJefeInmediato ?? 0,
+                    Motivo: requisitionDto.motivo,
+                    numeroVacantes: requisitionDto.numeroVacantes,
+                    SalarioMinimo: requisitionDto.salarioMinimo,
+                    SalarioMaximo: requisitionDto.salarioMaximo,
+                    InformacionExtra: requisitionDto.informacionExtra,
+                    idEstatusVacante: 1,
+                    idTipoPublicacion: requisitionDto.idTipoPublicacion,
+                }
+            });
+            // Registrar el movimiento en el histórico
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'CREAR',
+                    tablaOrigen: 'Vacantes',
+                    idRegistro: requisition.idVacante,
+                    descripcion: `Requisición creada por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            });
+
+            let jefeSolicitante = null;
+            // Traer el jefe inmediato del usuario creador de la requisición
+            const bossResult = await tx.$queryRaw<any[]>`
+                SELECT u.uuid, u.email, u.first_name, u.last_name, u.phone
+                FROM Empleados creador
+                JOIN Empleados jefe ON creador.idJefeInmediato = jefe.idEmpleado
+                JOIN auth_user u ON jefe.idUsuario = u.uuid
+                WHERE creador.idUsuario = ${activeUser.uuid}
+                    AND creador.idEmpresa = ${companyId}
+                    AND jefe.activo = 1
+                    AND u.is_active = 1
+            `;
+
+            if (bossResult && bossResult.length > 0) {
+                jefeSolicitante = bossResult[0];
             }
 
             return { requisition, jefeSolicitante };
@@ -616,7 +638,6 @@ export class VacanciesService {
             });
             if (!requisition) throw new NotFoundException('No se encontró la requisición');
 
-            // @ts-ignore
             await tx.historicoMovimientos.create({
                 data: {
                     idUsuario: activeUser.id,

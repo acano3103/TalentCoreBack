@@ -727,7 +727,7 @@ model NubariumValidaciones {
 model PerfilPostulante {
   idPerfilPostulante    Int       @id @default(autoincrement())
   idPostulacion         Int
-  idPuesto              Int
+  idVacante             Int
   estado_proceso        String?   @db.VarChar(50)
   score_global          Float?    @db.Float
   clasificacion         String?   @db.VarChar(50)
@@ -753,7 +753,6 @@ model PesoCategoriaPuesto {
 model Postulaciones {
   idPostulacion   Int       @id @default(autoincrement())
   uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
-  idCandidato     Int?
   idEstatus       Int?      @default(1)
   idVacante       Int
   nombre          String    @db.VarChar(100)
@@ -761,9 +760,10 @@ model Postulaciones {
   segundoApellido String?   @db.VarChar(100)
   correo          String    @db.VarChar(250)
   telefono        String    @db.VarChar(10)
+  curp            String?   @db.VarChar(45)
+  utmSource       String?   @db.VarChar(100)
   rutaCV          String    @db.VarChar(500)
   fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
-  curp            String?   @db.VarChar(45)
   idCampa_a       Int?      @map("idCampaña")
   Vacantes        Vacantes  @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
 

@@ -20,10 +20,11 @@ export class PostulationsController {
     @ApiResponse({ status: 200, description: 'Postulation registed successfully.' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     async registerCandidate(
+        @Param('companyId', ParseIntPipe) companyId: number,
         @Body() body: CreatePostulationDto,
         @UploadedFile() file: Express.Multer.File
     ) {
-        return await this.service.createPostulation(body, file);
+        return await this.service.createPostulation(companyId, body, file);
     }
 
     @UseGuards(JwtAuthGuard)

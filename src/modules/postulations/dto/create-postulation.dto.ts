@@ -37,4 +37,8 @@ export class CreatePostulationDto {
   @IsString()
   @MaxLength(18)
   curp: string;
+
+  @ApiProperty({ example: 'facebook' })
+  @IsString()
+  utm_source: string;
 }
