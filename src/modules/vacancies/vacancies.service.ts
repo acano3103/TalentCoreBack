@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto, UserFullInfoDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { VacanciesQueries } from './queries/vacancies.queries';
@@ -6,6 +6,9 @@ import { CreateRequisitionDto } from './dto/create-requisition.dto';
 import { UsersService } from '../users/users.service';
 import { NotificationDispatcher } from '../notifications/notification.dispatcher';
 import { ConfigService } from '@nestjs/config';
+import * as path from 'path';
+import * as fs from 'fs';
+import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.util';
 
 @Injectable()
 export class VacanciesService {
@@ -16,74 +19,130 @@ export class VacanciesService {
         private readonly configService: ConfigService,
     ) { }
 
-    async createTestVacancy() {
-        const company = await this.prisma.catEmpresas.findFirst();
-        if (!company) return { success: false, error: "No company found" };
+    // Obtener todas las vacantes activas por empresa
+    async findAll(companyId: number, page: number, search: string, limit: number, activeUser: ActiveUserDto) {
+        try {
+            const skip = (page - 1) * limit;
 
-        const position = await this.prisma.catPuestos.findFirst({ where: { idEmpresa: company.idEmpresa } });
-        if (!position) return { success: false, error: "No position found" };
+            // Ejecución en paralelo para optimizar tiempos de respuesta
+            const [rows, total] = await Promise.all([
+                VacanciesQueries.getPaginatedActiveVacancies(
+                    this.prisma,
+                    companyId,
+                    skip,
+                    limit,
+                    search
+                ),
+                VacanciesQueries.countActiveVacancies(
+                    this.prisma,
+                    companyId,
+                    search
+                )
+            ]);
 
-        const site = await this.prisma.catSites.findFirst();
-        const user = await this.prisma.auth_user.findFirst();
-
-        const idSite = site?.idSite || 'NULL';
-        const idUsuario = user?.id || 'NULL';
-
-        await this.prisma.$executeRawUnsafe(`
-            INSERT INTO Vacantes (idEmpresa, idPuesto, idSite, idEstatusVacante, idEstatus, numeroVacantes, SalarioMinimo, SalarioMaximo, Motivo, idUsuarioCreador, InformacionExtra, comentarios, fechaCreacion, fechaActualizacion)
-            VALUES (${company.idEmpresa}, ${position.idPuesto}, ${idSite}, 2, 2, 5, 15000, 25000, 'TEST_VACANTE_GLOBAL', ${idUsuario}, 'Esta es una vacante de prueba creada para validar el diseño de la UI del detalle de la vacante sin restricciones de rol.', 'Vacante global visible para todos los roles.', NOW(), NOW())
-        `);
-
-        return { success: true, message: "Test vacancy created successfully" };
-    }
-
-    async findActiveVacancies(companyId: number, activeUser: ActiveUserDto) {
-        let rbacFilter = '';
-        const user: UserFullInfoDto = await this.usersService.getUserFullInfo(activeUser.id)
-        const roles = user?.roles || [];
-
-        const authUser = await this.prisma.auth_user.findUnique({
-            where: { id: activeUser.id },
-            select: { uuid: true }
-        });
-
-        if (authUser?.uuid) {
-            const empleado = await this.prisma.empleados.findFirst({
-                where: { idUsuario: authUser.uuid }
+            // Mapeo y limpieza de datos para el cliente frontend
+            const vacantesActivas = rows.map((v) => {
+                return {
+                    idVacante: typeof v.idVacante === 'bigint' ? Number(v.idVacante) : v.idVacante,
+                    idPuesto: typeof v.idPuesto === 'bigint' ? Number(v.idPuesto) : v.idPuesto,
+                    NombrePuesto: v.NombrePuesto,
+                    DescripcionPuesto: v.DescripcionPuesto,
+                    NumeroVacantes: v.numeroVacantes ? Number(v.numeroVacantes) : 1,
+                    SalarioMinimo: v.SalarioMinimo ? String(v.SalarioMinimo) : null,
+                    SalarioMaximo: v.SalarioMaximo ? String(v.SalarioMaximo) : null,
+                    Area: v.Area,
+                    TipoPuesto: v.TipoPuesto,
+                    TipoContratacion: v.TipoContratacion,
+                    Site: v.Site,
+                    idReclutadorAsignado: v.idReclutadorAsignado ? Number(v.idReclutadorAsignado) : null,
+                    reclutadorAsignado: v.reclutadorAsignado || null,
+                    TotalCVs: v.TotalCVs ? Number(v.TotalCVs) : 0,
+                    TotalAprobados: v.TotalAprobados ? Number(v.TotalAprobados) : 0,
+                    TotalRechazados: v.TotalRechazados ? Number(v.TotalRechazados) : 0,
+                };
             });
 
-            let areaId: number | null | undefined = null;
-            if (empleado?.idPuesto) {
-                const puesto = await this.prisma.catPuestos.findUnique({ where: { idPuesto: empleado.idPuesto } });
-                areaId = puesto?.idArea;
-            }
+            return {
+                data: vacantesActivas,
+                total,
+                currentPage: page,
+                totalPages: Math.ceil(total / limit)
+            };
 
-            if (roles.includes('MANAGER') && areaId) {
-                rbacFilter = `AND p.idArea = ${areaId}`;
-            } else if (roles.includes('RECLUTADOR') && empleado?.idEmpleado) {
-                rbacFilter = `AND v.idReclutadorAsignado = ${empleado.idEmpleado}`;
-            }
+        } catch (error) {
+            console.error('Error al obtener vacantes activas paginadas:', error);
+            throw new InternalServerErrorException('Error al procesar las vacantes');
         }
-
-        const query = `
-            SELECT v.*, p.NombrePuesto, s.Descripcion as siteName
-            FROM Vacantes v
-            JOIN CatPuestos p ON v.idPuesto = p.idPuesto
-            LEFT JOIN CatSites s ON p.idSite = s.idSite
-            WHERE v.idEmpresa = ${companyId} 
-              AND v.idEstatusVacante = 2
-              AND (
-                  (1=1 ${rbacFilter})
-                  OR v.Motivo = 'TEST_VACANTE_GLOBAL'
-              )
-        `;
-
-        const vacancies = await this.prisma.$queryRawUnsafe(query);
-        return {
-            data: vacancies,
-            total: Array.isArray(vacancies) ? vacancies.length : 0
-        };
     }
+
+    // async createTestVacancy() {
+    //     const company = await this.prisma.catEmpresas.findFirst();
+    //     if (!company) return { success: false, error: "No company found" };
+
+    //     const position = await this.prisma.catPuestos.findFirst({ where: { idEmpresa: company.idEmpresa } });
+    //     if (!position) return { success: false, error: "No position found" };
+
+    //     const site = await this.prisma.catSites.findFirst();
+    //     const user = await this.prisma.auth_user.findFirst();
+
+    //     const idSite = site?.idSite || 'NULL';
+    //     const idUsuario = user?.id || 'NULL';
+
+    //     await this.prisma.$executeRawUnsafe(`
+    //         INSERT INTO Vacantes (idEmpresa, idPuesto, idSite, idEstatusVacante, idEstatus, numeroVacantes, SalarioMinimo, SalarioMaximo, Motivo, idUsuarioCreador, InformacionExtra, comentarios, fechaCreacion, fechaActualizacion)
+    //         VALUES (${company.idEmpresa}, ${position.idPuesto}, ${idSite}, 2, 2, 5, 15000, 25000, 'TEST_VACANTE_GLOBAL', ${idUsuario}, 'Esta es una vacante de prueba creada para validar el diseño de la UI del detalle de la vacante sin restricciones de rol.', 'Vacante global visible para todos los roles.', NOW(), NOW())
+    //     `);
+
+    //     return { success: true, message: "Test vacancy created successfully" };
+    // }
+
+    // async findActiveVacancies(companyId: number, activeUser: ActiveUserDto) {
+    //     let rbacFilter = '';
+    //     const user: UserFullInfoDto = await this.usersService.getUserFullInfo(activeUser.id)
+    //     const roles = user?.roles || [];
+
+    //     const authUser = await this.prisma.auth_user.findUnique({
+    //         where: { id: activeUser.id },
+    //         select: { uuid: true }
+    //     });
+
+    //     if (authUser?.uuid) {
+    //         const empleado = await this.prisma.empleados.findFirst({
+    //             where: { idUsuario: authUser.uuid }
+    //         });
+
+    //         let areaId: number | null | undefined = null;
+    //         if (empleado?.idPuesto) {
+    //             const puesto = await this.prisma.catPuestos.findUnique({ where: { idPuesto: empleado.idPuesto } });
+    //             areaId = puesto?.idArea;
+    //         }
+
+    //         if (roles.includes('MANAGER') && areaId) {
+    //             rbacFilter = `AND p.idArea = ${areaId}`;
+    //         } else if (roles.includes('RECLUTADOR') && empleado?.idEmpleado) {
+    //             rbacFilter = `AND v.idReclutadorAsignado = ${empleado.idEmpleado}`;
+    //         }
+    //     }
+
+    //     const query = `
+    //         SELECT v.*, p.NombrePuesto, s.Descripcion as siteName
+    //         FROM Vacantes v
+    //         JOIN CatPuestos p ON v.idPuesto = p.idPuesto
+    //         LEFT JOIN CatSites s ON p.idSite = s.idSite
+    //         WHERE v.idEmpresa = ${companyId} 
+    //           AND v.idEstatusVacante = 2
+    //           AND (
+    //               (1=1 ${rbacFilter})
+    //               OR v.Motivo = 'TEST_VACANTE_GLOBAL'
+    //           )
+    //     `;
+
+    //     const vacancies = await this.prisma.$queryRawUnsafe(query);
+    //     return {
+    //         data: vacancies,
+    //         total: Array.isArray(vacancies) ? vacancies.length : 0
+    //     };
+    // }
 
     async findOneVacancy(companyId: number, vacancyId: number) {
         const rows: any[] = await this.prisma.$queryRawUnsafe(`
@@ -142,6 +201,62 @@ export class VacanciesService {
                 totalPostulantes: typeof v.totalPostulantes === 'bigint' ? Number(v.totalPostulantes) : (v.totalPostulantes || 0),
             }
         };
+    }
+
+    async getVacancyPostulantsSummary(companyId: number, vacancyId: number) {
+        const CV_DEFAULT = "https://fileonline.datavoice.com.mx/RR-HH/media/GRUS990820HDFVRC07/documento_1_GRUS990820HDFVRC07.pdf";
+        const mediaPrefixRaw = this.configService.get<string>('MEDIA_PATH_PREFIX') || 'media';
+        const mediaPrefix = mediaPrefixRaw.replace(/^\/+|\/+$/g, '');
+
+        try {
+            const rows = await VacanciesQueries.getVacancyPostulantsSummary(this.prisma, companyId, Number(vacancyId)) as any[];
+
+            const postulantes = rows.map((p) => {
+                let indices = p.indices ? (typeof p.indices === 'string' ? JSON.parse(p.indices) : p.indices) : {};
+                if (indices && Object.keys(indices).length > 0) {
+                    indices['indice_ajuste_tecnico'] = calculatePercentage(indices['indice_ajuste_tecnico']);
+                    indices['indice_ajuste_competencial'] = calculatePercentage(indices['indice_ajuste_competencial']);
+                }
+
+                let categorias = p.detalle_por_categoria
+                    ? (typeof p.detalle_por_categoria === 'string' ? JSON.parse(p.detalle_por_categoria) : p.detalle_por_categoria)
+                    : [];
+
+                if (Array.isArray(categorias)) {
+                    categorias = categorias.map((c: any) => {
+                        const { peso, justificacion, score_ponderado, ...rest } = c;
+                        return {
+                            ...rest,
+                            porcentaje_cumplimiento: calculatePercentage(c.porcentaje_cumplimiento),
+                        };
+                    });
+                }
+
+                let finalRutaCV = CV_DEFAULT;
+                if (p.rutaCV) {
+                    const rootPath = path.join(process.cwd(), 'media');
+                    const rutaFisica = path.join(rootPath, p.rutaCV);
+                    if (fs.existsSync(rutaFisica)) {
+                        finalRutaCV = p.rutaCV.startsWith('http') ? p.rutaCV : `/${mediaPrefix}/${p.rutaCV}`;
+                    }
+                }
+
+                return {
+                    ...p,
+                    idPostulacion: typeof p.idPostulacion === 'bigint' ? Number(p.idPostulacion) : p.idPostulacion,
+                    indices,
+                    detalle_por_categoria: categorias,
+                    rutaCV: finalRutaCV,
+                    semaforo_global: getScoreTrafficLight(Number(p.score_global)),
+                };
+            });
+
+            return { postulantes };
+
+        } catch (error) {
+            console.error('Error en servicio:', error);
+            throw new InternalServerErrorException('Error al procesar postulantes');
+        }
     }
 
     // Función para obtener vacantes públicas para la bolsa de trabajo

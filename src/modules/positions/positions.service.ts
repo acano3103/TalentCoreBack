@@ -11,7 +11,7 @@ import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { PositionQueries } from './queries/positions.queries';
 import * as fs from 'fs';
 import * as path from 'path';
-import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.util';
+import { calculatePercentage, getScoreTrafficLight } from '../vacancies/utils/formatters.util';
 import { ConfigService } from '@nestjs/config';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
@@ -907,15 +907,6 @@ export class PositionsService {
             console.error('Error al obtener posiciones activas con métricas:', error);
             throw new InternalServerErrorException('Error al procesar las vacantes');
         }
-    }
-
-    async findPositionById(companyId: number, positionId: number) {
-        return this.prisma.catPuestos.findFirst({
-            where: {
-                idPuesto: positionId,
-                Activo: true
-            }
-        })
     }
 
     async getPostulantsSummary(idPuesto: number) {

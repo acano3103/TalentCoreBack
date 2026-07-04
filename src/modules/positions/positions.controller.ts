@@ -116,24 +116,6 @@ export class PositionsController {
         return this.service.getCatalogs(companyId);
     }
 
-    // Endpoint de la version vieja, eliminar cuando el modulo de reclutamiento este completo y ya no se usen
-    @Get('/vacancies')
-    @ApiOperation({
-        summary: 'Get all positions',
-        description: 'Returns all positions for a company, optionally filtered by status (e.g., active, inactive).'
-    })
-    @ApiQuery({
-        name: 'status',
-        required: false,
-        type: String,
-        description: 'Filter positions by status (active, inactive). If omitted, returns all positions.'
-    })
-    @ApiResponse({ status: 200, description: 'Positions successfully retrieved.' })
-    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    async getPositions(@Param('companyId') companyId: number, @Query('status') status?: string) {
-        return this.service.findAllPositions(Number(companyId), status);
-    }
-
     @Get(':positionId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get a position', description: SWAGGER_AUTH_DESCRIPTION })
@@ -234,13 +216,22 @@ export class PositionsController {
     }
 
 
-    @UseGuards(JwtAuthGuard)
-    @Get(':positionId')
-    @ApiOperation({ summary: 'Get position', description: 'Returns a position.' })
-    @ApiResponse({ status: 200, description: 'Position successfully retrieved.' })
+    // Endpoint de la version vieja, eliminar cuando el modulo de reclutamiento este completo y ya no se usen
+    @Get('/vacancies')
+    @ApiOperation({
+        summary: 'Get all positions',
+        description: 'Returns all positions for a company, optionally filtered by status (e.g., active, inactive).'
+    })
+    @ApiQuery({
+        name: 'status',
+        required: false,
+        type: String,
+        description: 'Filter positions by status (active, inactive). If omitted, returns all positions.'
+    })
+    @ApiResponse({ status: 200, description: 'Positions successfully retrieved.' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    async getPosition(@Param('companyId') companyId: number, @Param('positionId') positionId: number) {
-        return this.service.findPositionById(companyId, positionId);
+    async getPositions(@Param('companyId') companyId: number, @Query('status') status?: string) {
+        return this.service.findAllPositions(Number(companyId), status);
     }
 
     @UseGuards(JwtAuthGuard)
