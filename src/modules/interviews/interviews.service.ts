@@ -23,92 +23,92 @@ export class InterviewsService {
 
     private readonly logger = new Logger(InterviewsService.name);
 
-   async findAll(
-       companyId: number,
-       vacancyId: number | undefined,
-       page: number,
-       search: string,
-       limit: number
-   ) {
-       const skip = (page - 1) * limit;
+    async findAll(
+        companyId: number,
+        vacancyId: number | undefined,
+        page: number,
+        search: string,
+        limit: number
+    ) {
+        const skip = (page - 1) * limit;
 
-       const data = await findAllInterviews(companyId, vacancyId, search, skip, limit, this.prisma);
-       const total = await countInterviews(companyId, vacancyId, search, this.prisma);
+        const data = await findAllInterviews(companyId, vacancyId, search, skip, limit, this.prisma);
+        const total = await countInterviews(companyId, vacancyId, search, this.prisma);
 
-       return {
-           data,
-           total,
-           currentPage: page,
-           totalPages: Math.ceil(total / limit)
-       };
-   }
+        return {
+            data,
+            total,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit)
+        };
+    }
 
-async findActiveVacancies(companyId: number) {
-    const activeVacancies = await this.prisma.vacantes.findMany({
-        where: {
-            idEmpresa: companyId,
-            idEstatusVacante: 5,
-        },
-        select: {
-            idVacante: true,
-            CatPuestos: {
-                select: { NombrePuesto: true }
+    async findActiveVacancies(companyId: number) {
+        const activeVacancies = await this.prisma.vacantes.findMany({
+            where: {
+                idEmpresa: companyId,
+                idEstatusVacante: 5,
+            },
+            select: {
+                idVacante: true,
+                CatPuestos: {
+                    select: { NombrePuesto: true }
+                }
             }
-        }
-    });
-    return activeVacancies.map(v => ({
-        idVacante: v.idVacante,
-        nombrePuesto: v.CatPuestos.NombrePuesto,
-    }));
-}
+        });
+        return activeVacancies.map(v => ({
+            idVacante: v.idVacante,
+            nombrePuesto: v.CatPuestos.NombrePuesto,
+        }));
+    }
 
-async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
-    return await findProgrammedInterviews(companyId, mainInterviewId, this.prisma);
-}
+    async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
+        return await findProgrammedInterviews(companyId, mainInterviewId, this.prisma);
+    }
 
-   async create(companyId: number, dto: CreateInterviewDto) {
-    const interviews = await Promise.all(
-        dto.vacancyIds.map(vacancyId =>
-            this.prisma.entrevistas.create({
-                data: {
-                    company_id: companyId,
-                    area_id: dto.areaId,
-                    idVacante: vacancyId,
-                    provider_id: dto.providerId,
-                    agent_id: dto.agentId || null,
-                    description: dto.description || null,
-                    interview_type: dto.interviewType,
-                    modality: dto.modality,
-                    title: dto.title,
-                    duration: dto.duration,
-                    interviewer_name: dto.interviewerName,
-                    location: dto.locationAddress || null,
-                    comment: dto.comment || null,
-                    EntrevistasCriterios: {
-                        create: dto.criteria.map((criterion, index) => ({
-                            name: criterion.name,
-                            description: criterion.description || '',
-                            max_score: criterion.weight || 0,
-                            weight: criterion.weight || 1,
-                            order: criterion.order || index + 1,
-                            CriterioPreguntas: criterion.questions?.length
-                                ? {
-                                    create: criterion.questions.map(q => ({
-                                        question: q.question,
-                                        expected_answer: q.expectedAnswer || null,
-                                        order: q.order || null,
-                                    })),
-                                }
-                                : undefined,
-                        })),
+    async create(companyId: number, dto: CreateInterviewDto) {
+        const interviews = await Promise.all(
+            dto.vacancyIds.map(vacancyId =>
+                this.prisma.entrevistas.create({
+                    data: {
+                        company_id: companyId,
+                        area_id: dto.areaId,
+                        idVacante: vacancyId,
+                        provider_id: dto.providerId,
+                        agent_id: dto.agentId || null,
+                        description: dto.description || null,
+                        interview_type: dto.interviewType,
+                        modality: dto.modality,
+                        title: dto.title,
+                        duration: dto.duration,
+                        interviewer_name: dto.interviewerName,
+                        location: dto.locationAddress || null,
+                        comment: dto.comment || null,
+                        EntrevistasCriterios: {
+                            create: dto.criteria.map((criterion, index) => ({
+                                name: criterion.name,
+                                description: criterion.description || '',
+                                max_score: criterion.weight || 0,
+                                weight: criterion.weight || 1,
+                                order: criterion.order || index + 1,
+                                CriterioPreguntas: criterion.questions?.length
+                                    ? {
+                                        create: criterion.questions.map(q => ({
+                                            question: q.question,
+                                            expected_answer: q.expectedAnswer || null,
+                                            order: q.order || null,
+                                        })),
+                                    }
+                                    : undefined,
+                            })),
+                        },
                     },
-                },
-            })
-        )
-    );
+                })
+            )
+        );
 
-    return { message: 'Entrevistas creadas exitosamente', total: interviews.length };
-}
+        return { message: 'Entrevistas creadas exitosamente', total: interviews.length };
+    }
 
     async programInterview(companyId: number, interviewId: string, dto: ProgramInterviewDto) {
         const mainInterview = await this.prisma.entrevistas.findFirst({
@@ -210,6 +210,7 @@ async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
 
     }
 
+    // Método para obtener todas las entrevistas de un postulante
     async findAllByPostulant(companyId: number, postulantId: number) {
         const postulant = await this.prisma.postulaciones.findFirst({
             where: { idPostulacion: postulantId }
@@ -219,6 +220,7 @@ async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
         return await findAllInterviewsByPostulant(postulant.uuid, this.prisma);
     }
 
+    // Metodo para obtener detalles de una entrevista especifica
     async getMeetingDetail(companyId: number, interviewId: string) {
         return await findInterviewDetail(interviewId, this.prisma);
     }
@@ -272,32 +274,32 @@ async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
     }
 
     async findOne(companyId: number, interviewId: string) {
-    const interview = await this.prisma.entrevistas.findFirst({
-        where: {
-            id: interviewId,
-            company_id: companyId,
-            active: true
-        },
-        include: {
-            EntrevistasCriterios: {
-                include: {
-                    CriterioPreguntas: true
+        const interview = await this.prisma.entrevistas.findFirst({
+            where: {
+                id: interviewId,
+                company_id: companyId,
+                active: true
+            },
+            include: {
+                EntrevistasCriterios: {
+                    include: {
+                        CriterioPreguntas: true
+                    }
                 }
             }
-        }
-    });
+        });
 
-    if (!interview) throw new BadRequestException('No se encontró la entrevista');
-    return interview;
-}
+        if (!interview) throw new BadRequestException('No se encontró la entrevista');
+        return interview;
+    }
 
-async updateInterview(companyId: number, interviewId: string, dto: UpdateInterviewDto) {
-    const interview = await this.prisma.entrevistas.findFirst({
-        where: { id: interviewId, company_id: companyId, active: true }
-    });
+    async updateInterview(companyId: number, interviewId: string, dto: UpdateInterviewDto) {
+        const interview = await this.prisma.entrevistas.findFirst({
+            where: { id: interviewId, company_id: companyId, active: true }
+        });
 
-    if (!interview) throw new BadRequestException('No se encontró la entrevista');
-await this.prisma.entrevistas.update({
+        if (!interview) throw new BadRequestException('No se encontró la entrevista');
+        await this.prisma.entrevistas.update({
             where: { id: interviewId },
             data: {
                 title: dto.title,
@@ -313,71 +315,71 @@ await this.prisma.entrevistas.update({
             }
         });
 
-    return { message: 'Entrevista actualizada exitosamente' };
-}
+        return { message: 'Entrevista actualizada exitosamente' };
+    }
 
-async rescheduleInterview(companyId: number, meetingId: string, dto: RescheduleInterviewDto) {
-    const meeting = await this.prisma.entrevistasPostulantes.findFirst({
-        where: { id: meetingId }
-    });
+    async rescheduleInterview(companyId: number, meetingId: string, dto: RescheduleInterviewDto) {
+        const meeting = await this.prisma.entrevistasPostulantes.findFirst({
+            where: { id: meetingId }
+        });
 
-    if (!meeting) throw new BadRequestException('No se encontró el meeting');
+        if (!meeting) throw new BadRequestException('No se encontró el meeting');
 
-    await this.prisma.entrevistasPostulantes.update({
-        where: { id: meetingId },
-        data: {
-            scheduled_at: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
-            duration: dto.duration ?? undefined,
-        }
-    });
+        await this.prisma.entrevistasPostulantes.update({
+            where: { id: meetingId },
+            data: {
+                scheduled_at: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
+                duration: dto.duration ?? undefined,
+            }
+        });
 
-    return { message: 'Entrevista reprogramada exitosamente' };
-}
+        return { message: 'Entrevista reprogramada exitosamente' };
+    }
 
 
 
-async deleteInterview(companyId: number, interviewId: string) {
-    const interview = await this.prisma.entrevistas.findFirst({
-        where: { id: interviewId, company_id: companyId }
-    });
+    async deleteInterview(companyId: number, interviewId: string) {
+        const interview = await this.prisma.entrevistas.findFirst({
+            where: { id: interviewId, company_id: companyId }
+        });
 
-    if (!interview) throw new BadRequestException('No se encontró la entrevista');
+        if (!interview) throw new BadRequestException('No se encontró la entrevista');
 
-    await this.prisma.entrevistas.delete({
-        where: { id: interviewId }
-    });
+        await this.prisma.entrevistas.delete({
+            where: { id: interviewId }
+        });
 
-    return { message: 'Entrevista eliminada exitosamente' };
-}
+        return { message: 'Entrevista eliminada exitosamente' };
+    }
 
-async getStatus(companyId: number) {
-    const status = await this.prisma.catEstatusEntrevista.findMany({
-        where: { activo: true },
-        select: {
-            idEstatusEntrevista: true,
-            descripcion: true
-        }
-    });
+    async getStatus(companyId: number) {
+        const status = await this.prisma.catEstatusEntrevista.findMany({
+            where: { activo: true },
+            select: {
+                idEstatusEntrevista: true,
+                descripcion: true
+            }
+        });
 
-    return status.map(s => ({
-        id: s.idEstatusEntrevista,
-        description: s.descripcion
-    }));
-}
+        return status.map(s => ({
+            id: s.idEstatusEntrevista,
+            description: s.descripcion
+        }));
+    }
 
-async deleteMeeting(companyId: number, meetingId: string) {
-    const meeting = await this.prisma.entrevistasPostulantes.findFirst({
-        where: { id: meetingId }
-    });
+    async deleteMeeting(companyId: number, meetingId: string) {
+        const meeting = await this.prisma.entrevistasPostulantes.findFirst({
+            where: { id: meetingId }
+        });
 
-    if (!meeting) throw new BadRequestException('No se encontró el meeting');
+        if (!meeting) throw new BadRequestException('No se encontró el meeting');
 
-    await this.prisma.entrevistasPostulantes.delete({
-        where: { id: meetingId }
-    });
+        await this.prisma.entrevistasPostulantes.delete({
+            where: { id: meetingId }
+        });
 
-    return { message: 'Meeting eliminado exitosamente' };
-}
+        return { message: 'Meeting eliminado exitosamente' };
+    }
 
 }
 

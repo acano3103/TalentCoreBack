@@ -205,8 +205,6 @@ export class VacanciesService {
 
     async getVacancyPostulantsSummary(companyId: number, vacancyId: number) {
         const CV_DEFAULT = "https://fileonline.datavoice.com.mx/RR-HH/media/GRUS990820HDFVRC07/documento_1_GRUS990820HDFVRC07.pdf";
-        const mediaPrefixRaw = this.configService.get<string>('MEDIA_PATH_PREFIX') || 'media';
-        const mediaPrefix = mediaPrefixRaw.replace(/^\/+|\/+$/g, '');
 
         try {
             const rows = await VacanciesQueries.getVacancyPostulantsSummary(this.prisma, companyId, Number(vacancyId)) as any[];
@@ -234,10 +232,10 @@ export class VacanciesService {
 
                 let finalRutaCV = CV_DEFAULT;
                 if (p.rutaCV) {
-                    const rootPath = path.join(process.cwd(), 'media');
+                    const rootPath = path.join(process.cwd());
                     const rutaFisica = path.join(rootPath, p.rutaCV);
                     if (fs.existsSync(rutaFisica)) {
-                        finalRutaCV = p.rutaCV.startsWith('http') ? p.rutaCV : `/${mediaPrefix}/${p.rutaCV}`;
+                        finalRutaCV = p.rutaCV.startsWith('http') ? p.rutaCV : `/${p.rutaCV}`;
                     }
                 }
 

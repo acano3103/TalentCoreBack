@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
 import { generateCredentials } from './services/credentials.service';
 import { ALLOWED_STATUS_TRANSITIONS } from './utils/allowed-transitions';
@@ -11,6 +11,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { CreatePostulationDto } from './dto/create-postulation.dto';
+import { PostulationsQueries } from './queries/postulations.queries';
+import { calculatePercentage } from '../vacancies/utils/formatters.util';
 
 @Injectable()
 export class PostulationsService {
@@ -23,6 +25,7 @@ export class PostulationsService {
 
   private readonly logger = new Logger(PostulationsService.name);
 
+  // Esta función es pública, crea una postulación desde la bolsa de trabajo, y dispara el perfilador de IA para el análisis de CV
   async createPostulation(companyId: number, data: CreatePostulationDto, file: Express.Multer.File) {
     const { vacante_id, nombre, primerApellido, segundoApellido, correo, telefono, curp, utm_source } = data;
 
@@ -151,6 +154,7 @@ export class PostulationsService {
     }
   }
 
+  // Esta función obtiene el catalogo de estatus de las postulaciones
   async getStatus() {
     const statuses = await this.prisma.catEstatusVacante.findMany({ where: { activo: true } });
     return statuses.map(s => ({
@@ -159,6 +163,85 @@ export class PostulationsService {
     }));
   }
 
+  // Esta función obtiene el detalle de una postulación por su id
+  async getPostulation(companyId: number, postulationId: number) {
+    try {
+      const rows = await PostulationsQueries.getProfileEvaluationDetail(
+        this.prisma,
+        companyId,
+        postulationId
+      );
+
+      if (!rows || rows.length === 0) {
+        throw new NotFoundException(`No se encontró la evaluación de la postulación con ID ${postulationId}`);
+      }
+
+      const rawData = rows[0];
+
+      const safeJsonParse = (str: string | null, defaultValue: any) => {
+        if (!str) return defaultValue;
+        try {
+          return typeof str === 'string' ? JSON.parse(str) : str;
+        } catch {
+          return defaultValue;
+        }
+      };
+
+      // 1. Parseamos los índices técnicos y competenciales
+      let indices = safeJsonParse(rawData.indices, {});
+      if (indices && Object.keys(indices).length > 0) {
+        // Aplicamos tu helper de porcentaje tal como se hacía en Python
+        indices['indice_ajuste_tecnico'] = calculatePercentage(indices['indice_ajuste_tecnico']);
+        indices['indice_ajuste_competencial'] = calculatePercentage(indices['indice_ajuste_competencial']);
+      }
+
+      const categoriasRaw = safeJsonParse(rawData.detalle_por_categoria, []);
+      const fortalezas_clave = safeJsonParse(rawData.fortalezas_clave, []);
+      const brechas_criticas = safeJsonParse(rawData.brechas_criticas, []);
+      const requisitos_knockout = safeJsonParse(rawData.requisitos_knockout, []);
+
+      // 2. Parseamos y aplicamos el helper a cada categoría del desglose
+      const detalle_por_categoria = Array.isArray(categoriasRaw)
+        ? categoriasRaw.map((c: any) => {
+          return {
+            ...c,
+            // Pasamos por el helper los valores numéricos de cumplimiento y score ponderado
+            porcentaje_cumplimiento: calculatePercentage(c.porcentaje_cumplimiento),
+            score_ponderado: calculatePercentage(c.score_ponderado),
+          };
+        })
+        : [];
+
+      return {
+        profile_data: {
+          nombre: rawData.nombre,
+          primerApellido: rawData.primerApellido,
+          segundoApellido: rawData.segundoApellido,
+          NombrePuesto: rawData.NombrePuesto,
+          fechaRegistro: rawData.fechaRegistro,
+          resumen: rawData.resumen,
+          estado_proceso: rawData.estado_proceso,
+          estatus_vacante: rawData.estatus_vacante,
+          score_global: rawData.score_global ? Number(rawData.score_global) : null,
+          clasificacion: rawData.clasificacion,
+          decision: rawData.decision,
+          indices,
+          detalle_por_categoria,
+          fortalezas_clave,
+          brechas_criticas,
+          requisitos_knockout
+        }
+      };
+
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+
+      this.logger.error('Error al obtener la evaluación del postulante:', error);
+      throw new InternalServerErrorException('Error interno al procesar la evaluación del postulante');
+    }
+  }
+
+  // Esta función obtiene el estatus de una postulación por su id
   async updateStatus(companyId: number, postulationId: number, dto: UpdatePostulationStatusDto, user: userFullInfo, files: Express.Multer.File[]) {
     try {
       const postulation = await this.prisma.postulaciones.findFirst({

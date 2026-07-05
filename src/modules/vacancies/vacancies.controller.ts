@@ -14,8 +14,11 @@ import { CreateRequisitionDto } from './dto/create-requisition.dto';
 export class VacanciesController {
     constructor(private readonly vacanciesService: VacanciesService) { }
 
+    // -------------------------------------------------------------------
     //      SECCIÓN 1: VACANTES
+    // -------------------------------------------------------------------
 
+    // Endpoint para obtener todas las vacantes paginadas de una empresa
     @Get()
     @ApiOperation({ summary: 'Get all vacancies', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Vacancies obtained successfully' })
@@ -32,6 +35,7 @@ export class VacanciesController {
         return this.vacanciesService.findAll(companyId, page, querySearch, limit, activeUser);
     }
 
+    // Endpoint para obtener el resumen de postulaciones de una vacante específica
     @Get(':vacancyId/summary')
     @ApiOperation({ summary: 'Get summary of postulants for a specific vacancy' })
     @ApiResponse({ status: 200, description: 'Vacancy summary obtained successfully.' })
@@ -61,7 +65,10 @@ export class VacanciesController {
     //     return this.vacanciesService.findActiveVacancies(companyId, activeUser);
     // }
 
+
+    // -------------------------------------------------------------------
     //      SECCIÓN 2: REQUISICIONES (SOLICITUDES)
+    // -------------------------------------------------------------------
 
     @Get('requisitions')
     @ApiOperation({ summary: 'Get all requisitions', description: SWAGGER_AUTH_DESCRIPTION })

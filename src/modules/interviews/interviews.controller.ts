@@ -72,6 +72,8 @@ export class InterviewsController {
         return this.interviewsService.findOne(companyId, interviewId);
     }
 
+    // Endpoint para obtener todas las entrevistas de un postulante (Perfil del postulante)
+    @UseGuards(JwtAuthGuard)
     @Get('/postulant/:postulantId')
     @ApiOperation({ summary: 'Get all interviews for a postulante', description: 'Get all interviews for a postulante' })
     @ApiResponse({ status: 200, description: 'List of interviews for a postulante' })
@@ -84,6 +86,8 @@ export class InterviewsController {
         return this.interviewsService.findAllByPostulant(companyId, postulantId);
     }
 
+    // Endpoint para obtener el detalle de una reunión específica
+    @UseGuards(JwtAuthGuard)
     @Get('/meetings/:meetingId')
     @ApiOperation({ summary: 'Get meeting detail', description: 'Get meeting detail' })
     @ApiResponse({ status: 200, description: 'Meeting detail' })
@@ -201,9 +205,9 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'Meeting deleted successfully' })
     @ApiResponse({ status: 404, description: 'Meeting not found' })
     deleteMeeting(
-    @Param('companyId', ParseIntPipe) companyId: number,
-    @Param('meetingId') meetingId: string
-) {
-    return this.interviewsService.deleteMeeting(companyId, meetingId);
-}
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('meetingId') meetingId: string
+    ) {
+        return this.interviewsService.deleteMeeting(companyId, meetingId);
+    }
 }
