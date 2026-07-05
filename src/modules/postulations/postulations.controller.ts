@@ -3,9 +3,10 @@ import { PostulationsService } from './postulations.service';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { CreatePostulationDto } from './dto/create-postulation.dto';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @ApiTags('Postulations')
 @ApiBearerAuth()
@@ -65,7 +66,7 @@ export class PostulationsController {
         @Param('postulationId', ParseIntPipe) postulationId: number,
         @Body() dto: UpdatePostulationStatusDto,
         @UploadedFiles() files: Express.Multer.File[] = [],
-        @CurrentUser() user: any
+        @GetActiveUser() user: ActiveUserDto
     ) {
         return this.service.updateStatus(companyId, postulationId, dto, user, files);
     }

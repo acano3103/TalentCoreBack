@@ -31,7 +31,7 @@ export async function findAllInterviews(
         e.modality,
         e.interview_type,
         e.duration,
-        e.interviewer_name,
+        CONCAT(emp.nombre, ' ', emp.primerApellido, ' ', emp.segundoApellido) AS interviewer_name,
         CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
         v.idVacante AS vacancy_id,
         p.NombrePuesto AS vacancy_name,
@@ -45,12 +45,14 @@ export async function findAllInterviews(
         ON e.area_id = a.idArea
     LEFT JOIN EntrevistasPostulantes ep
         ON ep.interview_id = e.id
+    LEFT JOIN Empleados emp
+        ON emp.idEmpleado = e.interviewer_id
     WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
     AND e.active = true
     AND v.idEmpresa = ${companyId}
     ${vacancyFilter}
     ${searchFilter}
-    GROUP BY e.id, e.title, e.description, e.modality, e.duration, e.interviewer_name, v.idVacante, p.NombrePuesto, a.Descripcion
+    GROUP BY e.id, e.title, e.description, e.modality, e.duration, v.idVacante, p.NombrePuesto, a.Descripcion
     ORDER BY e.id DESC
     LIMIT ${limit}
     OFFSET ${skip}
@@ -111,7 +113,7 @@ export async function findAllInterviewsByPostulant(postulantUuid: string, prisma
       JSON_UNQUOTE(JSON_EXTRACT(ep.metadata, '$.joinUrl')) AS joinUrl,
       e.title,
       e.modality,
-      e.interviewer_name,
+      CONCAT(emp.nombre, ' ', emp.primerApellido, ' ', emp.segundoApellido) AS interviewer_name,
       cip.name AS provider_name,
       er.final_score
 
@@ -127,6 +129,8 @@ export async function findAllInterviewsByPostulant(postulantUuid: string, prisma
       ON er.interview_postulant_id = ep.id
     LEFT JOIN CatEstatusEntrevista ce
       ON ce.idEstatusEntrevista = ep.status_id
+    LEFT JOIN Empleados emp
+      ON emp.idEmpleado = e.interviewer_id
     WHERE ep.candidate_uuid = ${postulantUuid}
     ORDER BY ep.scheduled_at DESC
   `;
@@ -149,7 +153,7 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       e.modality,
       e.title,
       e.description,
-      e.interviewer_name,
+      CONCAT(emp.nombre, ' ', emp.primerApellido, ' ', emp.segundoApellido) AS interviewer_name,
       cip.name AS provider_name,
       er.final_score,
       er.general_report,
@@ -211,6 +215,8 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
       ON v.idVacante = e.idVacante
     LEFT JOIN CatPuestos cp
       ON cp.idPuesto = v.idPuesto
+    LEFT JOIN Empleados emp
+      ON emp.idEmpleado = e.interviewer_id
     WHERE ep.id = ${interviewPostulantId}
   `;
 }
@@ -229,7 +235,7 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             e.modality,
             e.title,
             e.duration,
-            e.interviewer_name,
+            CONCAT(emp.nombre, ' ', emp.primerApellido, ' ', emp.segundoApellido) AS interviewer_name,
             e.comment,
 
             cp.NombrePuesto AS vacancy_name,
@@ -269,6 +275,9 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
 
         LEFT JOIN Postulaciones p
             ON p.uuid = ep.candidate_uuid
+
+        LEFT JOIN Empleados emp
+            ON emp.idEmpleado = e.interviewer_id
 
         WHERE 
             e.company_id = ${companyId}

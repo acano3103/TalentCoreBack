@@ -47,6 +47,20 @@ export class VacanciesController {
         return await this.vacanciesService.getVacancyPostulantsSummary(companyId, vacancyId);
     }
 
+    // Endpoint para cerrar o cancelar una vacante
+    @Patch(':vacancyId/state')
+    @ApiOperation({ summary: 'Close or cancel a vacancy' })
+    @ApiResponse({ status: 200, description: 'Vacancy closed or canceled successfully.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    async closeOrCancelVacancy(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('vacancyId', ParseIntPipe) vacancyId: number,
+        @Query('status') status: "CERRADA" | "CANCELADA",
+        @GetActiveUser() activeUser: ActiveUserDto
+    ) {
+        return await this.vacanciesService.closeOrCancelVacancy(companyId, vacancyId, status, activeUser);
+    }
+
     // @Get('test/create')
     // @ApiOperation({ summary: 'Create test vacancy', description: 'Creates a test vacancy bypassing RBAC for UI testing' })
     // async createTestVacancy() {

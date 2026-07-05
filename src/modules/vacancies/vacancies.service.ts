@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto, UserFullInfoDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { VacanciesQueries } from './queries/vacancies.queries';
@@ -19,24 +19,51 @@ export class VacanciesService {
         private readonly configService: ConfigService,
     ) { }
 
+    private readonly logger = new Logger(VacanciesService.name);
+
     // Obtener todas las vacantes activas por empresa
     async findAll(companyId: number, page: number, search: string, limit: number, activeUser: ActiveUserDto) {
         try {
             const skip = (page - 1) * limit;
+            let recruiterEmployeeId: number | null = null;
 
-            // Ejecución en paralelo para optimizar tiempos de respuesta
+            // 1. Verificar si el usuario tiene el rol de reclutador
+            const userRoles = await this.prisma.$queryRaw<{ idRol: number }[]>`
+            SELECT idRol FROM RelUsuarioRol 
+            WHERE idUsuario = ${activeUser.id} AND activo = 1;
+        `;
+
+            const isReclutador = userRoles.some(r => r.idRol === 4);
+
+            // 2. Si es reclutador, obtenemos su idEmpleado cruzando con auth_user por su ID de usuario histórico
+            if (isReclutador) {
+                const empleado = await this.prisma.$queryRaw<{ idEmpleado: number }[]>`
+                SELECT e.idEmpleado 
+                FROM Empleados e
+                INNER JOIN auth_user u ON e.idUsuario = u.uuid
+                WHERE u.id = ${activeUser.id} AND e.activo = 1
+                LIMIT 1;
+            `;
+                if (empleado.length > 0) {
+                    recruiterEmployeeId = empleado[0].idEmpleado;
+                }
+            }
+
+            // Ejecución en paralelo pasando el filtro opcional de reclutador
             const [rows, total] = await Promise.all([
                 VacanciesQueries.getPaginatedActiveVacancies(
                     this.prisma,
                     companyId,
                     skip,
                     limit,
-                    search
+                    search,
+                    recruiterEmployeeId
                 ),
                 VacanciesQueries.countActiveVacancies(
                     this.prisma,
                     companyId,
-                    search
+                    search,
+                    recruiterEmployeeId
                 )
             ]);
 
@@ -70,7 +97,7 @@ export class VacanciesService {
             };
 
         } catch (error) {
-            console.error('Error al obtener vacantes activas paginadas:', error);
+            this.logger.error('Error al obtener vacantes activas paginadas:', error);
             throw new InternalServerErrorException('Error al procesar las vacantes');
         }
     }
@@ -254,6 +281,49 @@ export class VacanciesService {
         } catch (error) {
             console.error('Error en servicio:', error);
             throw new InternalServerErrorException('Error al procesar postulantes');
+        }
+    }
+
+    async closeOrCancelVacancy(companyId: number, vacancyId: number, status: "CERRADA" | "CANCELADA", activeUser: ActiveUserDto) {
+        try {
+            const vacancy = await this.prisma.vacantes.findUnique({
+                where: {
+                    idVacante: vacancyId,
+                    idEmpresa: companyId
+                }
+            });
+
+            if (!vacancy) throw new NotFoundException('Vacante no encontrada');
+
+            await this.prisma.$transaction(async (tx) => {
+                await Promise.all([
+                    // Actualizamos el estatus de la vacante
+                    tx.vacantes.update({
+                        where: { idVacante: vacancyId },
+                        data: {
+                            idEstatusVacante: status === "CERRADA" ? 7 : 8,
+                            fechaActualizacion: new Date()
+                        }
+                    }),
+                    // Registramos el moviemiento en el historico
+                    tx.historicoMovimientos.create({
+                        data: {
+                            idUsuario: activeUser.id,
+                            idEmpresa: companyId,
+                            accion: 'EDITAR',
+                            tablaOrigen: 'Vacantes',
+                            idRegistro: vacancyId,
+                            descripcion: `Vacante ${status} correctamente`,
+                            fechaCreacion: new Date()
+                        }
+                    })
+                ])
+            })
+
+            return { message: "Vacante " + status + " correctamente" };
+        } catch (error) {
+            console.error('Error en servicio:', error);
+            throw new InternalServerErrorException('Error al cerrar o cancelar vacante');
         }
     }
 

@@ -15,7 +15,7 @@ export class PostulationsQueries {
                 p.segundoApellido,
                 p.fechaRegistro,
                 c.NombrePuesto,
-                ev.decripcion AS estatus_vacante,
+                ep.descripcion AS estatus_postulacion,
                 pp.resumen,
                 pp.estado_proceso,
                 pp.score_global,
@@ -30,7 +30,7 @@ export class PostulationsQueries {
             INNER JOIN Postulaciones p ON p.idPostulacion = pp.idPostulacion
             INNER JOIN Vacantes v ON p.idVacante = v.idVacante
             INNER JOIN CatPuestos c ON v.idPuesto = c.idPuesto
-            LEFT JOIN CatEstatusVacante ev ON v.idEstatusVacante = ev.idEstatusVacante
+            LEFT JOIN CatEstatusPostulacion ep ON p.idEstatus = ep.idEstatusPostulacion
             WHERE pp.idPostulacion = ${postulationId}
               AND v.idEmpresa = ${companyId};
         `;

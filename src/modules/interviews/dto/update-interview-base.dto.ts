@@ -28,9 +28,9 @@ export class UpdateInterviewDto {
     duration?: number;
 
     @ApiProperty()
-    @IsString()
+    @IsNumber()
     @IsOptional()
-    interviewerName?: string;
+    interviewerId?: number;
 
     @ApiProperty({ required: false })
     @IsOptional()

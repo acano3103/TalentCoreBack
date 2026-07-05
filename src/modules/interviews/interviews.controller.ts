@@ -6,6 +6,8 @@ import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@ne
 import { ProgramInterviewDto } from './dto/program-interview.dto';
 import { UpdateMeetingDto } from './dto/update-interview.dto';
 import { UpdateInterviewDto, RescheduleInterviewDto } from './dto/update-interview-base.dto';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @ApiTags('Interviews')
 @ApiBearerAuth()
@@ -100,8 +102,6 @@ export class InterviewsController {
         return this.interviewsService.getMeetingDetail(companyId, meetingId);
     }
 
-    // ─── GET dinámico al final ────────────────────────────────────────
-
     @UseGuards(JwtAuthGuard)
     @Get(':interviewId')
     @ApiOperation({ summary: 'Get all programed interviews', description: 'Get all interviews that are programed, main interview and all its secondary interviews' })
@@ -115,8 +115,7 @@ export class InterviewsController {
         return this.interviewsService.findProgrammedInterviews(companyId, interviewId);
     }
 
-    // ─── POSTs ───────────────────────────────────────────────────────
-
+    // Crear una entrevista como catalogo
     @UseGuards(JwtAuthGuard)
     @Post()
     @ApiOperation({ summary: 'Create an interview', description: 'Create an interview' })
@@ -130,6 +129,7 @@ export class InterviewsController {
         return this.interviewsService.create(companyId, dto);
     }
 
+    // Programar una entrevista ya creada como catalogo
     @UseGuards(JwtAuthGuard)
     @Post('/:interviewId')
     @ApiOperation({ summary: 'Program an interview', description: 'Program an interview' })
@@ -140,8 +140,9 @@ export class InterviewsController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string,
         @Body() dto: ProgramInterviewDto,
+        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.programInterview(companyId, interviewId, dto);
+        return this.interviewsService.programInterview(companyId, interviewId, dto, user);
     }
 
     // ─── PATCHs ──────────────────────────────────────────────────────

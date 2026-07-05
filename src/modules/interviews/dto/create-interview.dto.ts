@@ -92,8 +92,8 @@ export class CreateInterviewDto {
     duration: number;
 
     @ApiProperty()
-    @IsString()
-    interviewerName: string;
+    @IsNumber()
+    interviewerId: number;
 
     @ApiProperty()
     @IsOptional()

@@ -203,10 +203,7 @@ export class OpenAiProvider implements IAiProvider {
 
             // Parseamos el JSON del resumen
             const extractedData = JSON.parse(prompt1Response.data.choices[0].message.content);
-            console.log("Resumen extraído del CV--------------", extractedData);
-
             const summaryText = extractedData.resumen || 'Resumen no disponible.';
-            console.log("Resumen optimizado del CV--------------", summaryText);
 
             // ==========================================
             // PROMPT 2: Evaluación Comparativa Universal (Texto en Crudo)
@@ -257,7 +254,6 @@ export class OpenAiProvider implements IAiProvider {
             );
 
             const aiEvaluationResult = JSON.parse(prompt3Response.data.choices[0].message.content);
-            console.log("Evaluación estructurada de la IA--------------", aiEvaluationResult);
 
             // ==========================================
             // 4. PROCESAMIENTO MATEMÁTICO UNIFICADO

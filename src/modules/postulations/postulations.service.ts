@@ -13,6 +13,7 @@ import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { CreatePostulationDto } from './dto/create-postulation.dto';
 import { PostulationsQueries } from './queries/postulations.queries';
 import { calculatePercentage } from '../vacancies/utils/formatters.util';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @Injectable()
 export class PostulationsService {
@@ -83,9 +84,25 @@ export class PostulationsService {
       fs.writeFileSync(physicalPath, file.buffer);
       physicalPathToDelete = physicalPath;
 
-      // 3. Transacción en paralelo de Base de Datos
-      const [postulation, activeAiIntegration] = await this.prisma.$transaction(async (tx) => {
-        const postulationPromise = tx.postulaciones.create({
+      // Buscamos si la empresa tiene una integración de IA activa
+      const activeAiIntegration = await this.prisma.integraciones.findFirst({
+        where: {
+          idEmpresa: companyId,
+          isConnected: true,
+          CatIntegracionesProvedores: {
+            type: 'ai',
+            isActive: true
+          }
+        },
+        include: {
+          CatIntegracionesProvedores: true
+        }
+      });
+
+      // 3. Transacción secuencial estricta solo para lo que escribe en la BD y depende entre sí
+      const [postulation, log] = await this.prisma.$transaction(async (tx) => {
+        // Primero registramos la postulación para obtener su ID
+        const newPostulation = await tx.postulaciones.create({
           data: {
             idEstatus: 1,
             idVacante: parseInt(vacante_id),
@@ -101,21 +118,20 @@ export class PostulationsService {
           }
         });
 
-        const aiIntegrationPromise = tx.integraciones.findFirst({
-          where: {
+        // Registramos el moviemiento en el historico
+        const newLog = await tx.historicoMovimientos.create({
+          data: {
+            idUsuario: 1,
             idEmpresa: companyId,
-            isConnected: true,
-            CatIntegracionesProvedores: {
-              type: 'ai',
-              isActive: true
-            }
-          },
-          include: {
-            CatIntegracionesProvedores: true
+            accion: 'CREAR',
+            tablaOrigen: 'Postulaciones',
+            idRegistro: newPostulation.idPostulacion,
+            descripcion: `Postulación registrada a la vacante ${vacante.CatPuestos?.NombrePuesto}`,
+            fechaCreacion: new Date()
           }
         });
 
-        return await Promise.all([postulationPromise, aiIntegrationPromise]);
+        return [newPostulation, newLog];
       });
 
       // Si la empresa no tiene la IA configurada, forzamos un error para disparar el catch y borrar el CV recién subido
@@ -156,10 +172,10 @@ export class PostulationsService {
 
   // Esta función obtiene el catalogo de estatus de las postulaciones
   async getStatus() {
-    const statuses = await this.prisma.catEstatusVacante.findMany({ where: { activo: true } });
+    const statuses = await this.prisma.catEstatusPostulacion.findMany({ where: { activo: true } });
     return statuses.map(s => ({
-      id: s.idEstatusVacante,
-      description: s.decripcion
+      id: s.idEstatusPostulacion,
+      description: s.descripcion
     }));
   }
 
@@ -221,7 +237,7 @@ export class PostulationsService {
           fechaRegistro: rawData.fechaRegistro,
           resumen: rawData.resumen,
           estado_proceso: rawData.estado_proceso,
-          estatus_vacante: rawData.estatus_vacante,
+          estatus_vacante: rawData.estatus_postulacion,
           score_global: rawData.score_global ? Number(rawData.score_global) : null,
           clasificacion: rawData.clasificacion,
           decision: rawData.decision,
@@ -242,7 +258,7 @@ export class PostulationsService {
   }
 
   // Esta función obtiene el estatus de una postulación por su id
-  async updateStatus(companyId: number, postulationId: number, dto: UpdatePostulationStatusDto, user: userFullInfo, files: Express.Multer.File[]) {
+  async updateStatus(companyId: number, postulationId: number, dto: UpdatePostulationStatusDto, user: ActiveUserDto, files: Express.Multer.File[]) {
     try {
       const postulation = await this.prisma.postulaciones.findFirst({
         where: { idPostulacion: postulationId }
@@ -250,8 +266,8 @@ export class PostulationsService {
       if (!postulation) throw new NotFoundException('Postulación no encontrada');
       if (!postulation.curp) throw new Error('Los datos del postulante no estan completos');
 
-      const statuses = await this.prisma.catEstatusVacante.findMany({ where: { activo: true } });
-      const statusMap = new Map(statuses.map(s => [s.idEstatusVacante, s.decripcion]));
+      const statuses = await this.prisma.catEstatusPostulacion.findMany({ where: { activo: true } });
+      const statusMap = new Map(statuses.map(s => [s.idEstatusPostulacion, s.descripcion]));
 
       const currentStatus = postulation.idEstatus || 1;
       const nextStatus = dto.statusId;
@@ -285,10 +301,26 @@ export class PostulationsService {
         );
       }
 
-      return await this.prisma.postulaciones.update({
-        where: { idPostulacion: postulationId },
-        data: { idEstatus: dto.statusId }
-      });
+      await this.prisma.$transaction(async (tx) => {
+        const updatedPostulation = tx.postulaciones.update({
+          where: { idPostulacion: postulationId },
+          data: { idEstatus: dto.statusId }
+        });
+        const log = tx.historicoMovimientos.create({
+          data: {
+            idUsuario: user.id,
+            idEmpresa: companyId,
+            accion: 'EDITAR',
+            tablaOrigen: 'Postulaciones',
+            idRegistro: postulationId,
+            descripcion: `Estatus de la postulación de ${postulation.nombre} ${postulation.primerApellido} ${postulation.segundoApellido} actualizado a ${statusMap.get(dto.statusId)} por ${user.first_name} ${user.last_name}`,
+            fechaCreacion: new Date()
+          }
+        });
+        return Promise.all([updatedPostulation, log]);
+      })
+
+      return { message: 'Estatus de la postulación actualizado correctamente' };
     }
     catch (error) { throw error; }
   }

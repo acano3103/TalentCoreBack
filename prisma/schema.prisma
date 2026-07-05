@@ -520,7 +520,7 @@ model Entrevistas {
   modality               Entrevistas_modality
   title                  String?                    @db.VarChar(255)
   duration               Int?
-  interviewer_name       String?                    @db.VarChar(150)
+  interviewer_id         Int?
   location               String?                    @db.VarChar(255)
   comment                String?                    @db.Text
   active                 Boolean                    @default(true)

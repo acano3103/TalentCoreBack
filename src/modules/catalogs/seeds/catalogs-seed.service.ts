@@ -91,6 +91,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 8, code: 'REQUISITION_APPROVED_BY_MANAGER', description: 'Notificación de aprobación de requisición por parte del manager', activo: true },
             { id: 9, code: 'REQUISITION_APPROVED_BY_MANAGER_TO_RH', description: 'Notificación de aprobación de requisición por parte del manager a Recursos Humanos', activo: true },
             { id: 10, code: 'REQUISITION_APPROVED_BY_RH', description: 'Notificación de aprobación de requisición por parte de Recursos Humanos', activo: true },
+            { id: 11, code: 'INTERVIEW_SCHEDULED_INTERVIEWER', description: 'Notificación de programación de entrevista al entrevistador', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -119,7 +120,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 9, notification_type_id: 3, channel_id: 1, enabled: true }, // Email
             { id: 10, notification_type_id: 3, channel_id: 2, enabled: true }, // WhatsApp
             { id: 11, notification_type_id: 3, channel_id: 3, enabled: false }, // SMS
-            { id: 12, notification_type_id: 3, channel_id: 4, enabled: true }, // Sockets
+            { id: 12, notification_type_id: 3, channel_id: 4, enabled: false }, // Sockets
             // --- 4. CREDENTIALS_CREATED (Creación de cuenta/credenciales) ---
             { id: 13, notification_type_id: 4, channel_id: 1, enabled: true }, // Email
             { id: 14, notification_type_id: 4, channel_id: 2, enabled: true }, // WhatsApp
@@ -155,6 +156,11 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 38, notification_type_id: 10, channel_id: 2, enabled: false }, // WhatsApp
             { id: 39, notification_type_id: 10, channel_id: 3, enabled: false }, // SMS
             { id: 40, notification_type_id: 10, channel_id: 4, enabled: true }, // Sockets
+            // --- 11. INTERVIEW_SCHEDULED_INTERVIEWER (Programación de entrevista al entrevistador) ---
+            { id: 41, notification_type_id: 11, channel_id: 1, enabled: true }, // Email
+            { id: 42, notification_type_id: 11, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 43, notification_type_id: 11, channel_id: 3, enabled: false }, // SMS
+            { id: 44, notification_type_id: 11, channel_id: 4, enabled: true }, // Sockets
         ];
 
         for (const tc of typeChannels) {
@@ -230,14 +236,18 @@ export class CatalogsSeedService implements OnModuleInit {
             { idEstatusvacante: 4, decripcion: 'PENDIENTE RH', activo: true },
             { idEstatusvacante: 5, decripcion: 'APROBADO RH', activo: true },
             { idEstatusvacante: 6, decripcion: 'RECHAZADO RH', activo: true },
-        ]
+            { idEstatusvacante: 7, decripcion: 'CERRADA', activo: true },
+            { idEstatusvacante: 8, decripcion: 'CANCELADA', activo: true },
+        ];
 
         for (const vacantStatus of vacantsStatus) {
             await this.prisma.$queryRaw`
-                INSERT INTO CatEstatusVacante (idEstatusvacante, decripcion, activo)
-                VALUES (${vacantStatus.idEstatusvacante}, ${vacantStatus.decripcion}, ${vacantStatus.activo})
-                ON DUPLICATE KEY UPDATE decripcion = VALUES(decripcion), activo = VALUES(activo);
-            `;
+            INSERT INTO CatEstatusVacante (idEstatusvacante, decripcion, activo)
+            VALUES (${vacantStatus.idEstatusvacante}, ${vacantStatus.decripcion}, ${vacantStatus.activo})
+            ON DUPLICATE KEY UPDATE 
+                decripcion = ${vacantStatus.decripcion}, 
+                activo = ${vacantStatus.activo};
+        `;
         }
     }
 

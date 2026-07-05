@@ -69,6 +69,12 @@ export const SOCKET_NOTIFICATION_MAP: Record<string, NotificationTemplateConfig>
             return `🚀 ¡Tu requisición para el puesto de "${puesto}" ya está aprobada por Recursos Humanos y ha sido publicada oficialmente como vacante activa en TalentCore!`;
         },
     },
+    INTERVIEW_SCHEDULED_INTERVIEWER: {
+        severity: 'info',
+        buildMessage: (ctx) => {
+            return `📅 Nueva entrevista asignada: Tienes la evaluación "${ctx?.entrevistasNombre || 'Evaluación de Candidato'}" con el postulante ${ctx?.postulant || 'Candidato'} agendada para el día ${ctx?.dia || 'Pendiente'}.`;
+        },
+    },
 };
 
 export function formatNotificationPayload(typeCode: string, context: any, fallbackTitle?: string) {
