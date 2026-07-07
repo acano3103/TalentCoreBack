@@ -1,10 +1,8 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
-import { generateCredentials } from './services/credentials.service';
+import { generateEmployeeAndLink } from './services/credentials.service';
 import { ALLOWED_STATUS_TRANSITIONS } from './utils/allowed-transitions';
-import { userFullInfo } from 'src/common/interfaces/user.interface';
 import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
-import { HttpService } from '@nestjs/axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,14 +12,17 @@ import { CreatePostulationDto } from './dto/create-postulation.dto';
 import { PostulationsQueries } from './queries/postulations.queries';
 import { calculatePercentage } from '../vacancies/utils/formatters.util';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class PostulationsService {
   constructor(
     private prisma: PrismaService,
     private readonly notifications: NotificationDispatcher,
-    private readonly httpService: HttpService,
     private readonly integrationFactory: IntegrationsFactory,
+    private readonly configService: ConfigService,
+    private readonly jwtService: JwtService,
   ) { }
 
   private readonly logger = new Logger(PostulationsService.name);
@@ -257,7 +258,7 @@ export class PostulationsService {
     }
   }
 
-  // Esta función obtiene el estatus de una postulación por su id
+  // Esta función actualiza el estatus de una postulación por su id
   async updateStatus(companyId: number, postulationId: number, dto: UpdatePostulationStatusDto, user: ActiveUserDto, files: Express.Multer.File[]) {
     try {
       const postulation = await this.prisma.postulaciones.findFirst({
@@ -269,8 +270,10 @@ export class PostulationsService {
       const statuses = await this.prisma.catEstatusPostulacion.findMany({ where: { activo: true } });
       const statusMap = new Map(statuses.map(s => [s.idEstatusPostulacion, s.descripcion]));
 
+      // Obtenemos el status actual y el nuevo status
       const currentStatus = postulation.idEstatus || 1;
       const nextStatus = dto.statusId;
+      // Validamos que la transición sea permitida
       const allowedTransitions = ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
       if (!allowedTransitions.includes(nextStatus)) {
         const currentStatusName = statusMap.get(currentStatus) || 'DESCONOCIDO';
@@ -279,21 +282,30 @@ export class PostulationsService {
         throw new BadRequestException(`No se puede cambiar de ${currentStatusName} a ${nextStatusName}. Estado actual: ${currentStatusName}, Estados permitidos: ${allowedNames.join(', ')}`);
       }
 
+      // Si el nuevo estatus es contratado
       if (dto.statusId === 6) {
         const vacancy = await this.prisma.vacantes.findFirst({
           where: { idVacante: postulation.idVacante }
         });
+        if (!vacancy) throw new NotFoundException('Vacante no encontrada');
 
-        await generateCredentials(
+        // Creamos el registro de empleado y el link para que pueda subir su info y documentación
+        await generateEmployeeAndLink(
           {
-            curp: postulation.curp,
+            jwtService: this.jwtService,
+            frontUrl: this.configService.get<string>('FRONT_URL') || '',
             nombre: postulation.nombre,
             apellido1: postulation.primerApellido,
             apellido2: postulation.segundoApellido || '',
+            curp: postulation.curp,
             correo: postulation.correo,
-            idPuesto: vacancy?.idPuesto ?? 0,
-            usuario: user.username || 'sistema',
+            telefono: postulation.telefono,
+            idPuesto: vacancy.idPuesto,
+            idUsuario: user.uuid,
             idCampania: dto.campaignId || null,
+            idEmpresa: companyId,
+            idJefeInmediato: vacancy.idJefeInmediato,
+            idSite: vacancy.idSite
           },
           files ?? [],
           this.prisma,
@@ -302,10 +314,12 @@ export class PostulationsService {
       }
 
       await this.prisma.$transaction(async (tx) => {
+        // Actualizamos el status en la db
         const updatedPostulation = tx.postulaciones.update({
           where: { idPostulacion: postulationId },
           data: { idEstatus: dto.statusId }
         });
+        // Registramos el movimiento en el historico
         const log = tx.historicoMovimientos.create({
           data: {
             idUsuario: user.id,
@@ -322,6 +336,10 @@ export class PostulationsService {
 
       return { message: 'Estatus de la postulación actualizado correctamente' };
     }
-    catch (error) { throw error; }
+    catch (error) {
+      this.logger.error(error);
+      throw error;
+    }
+
   }
 }

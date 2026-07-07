@@ -23,19 +23,22 @@
                 </p>
 
                 <p style="font-size: 15px; color: #555; line-height: 1.6;">
-                    Para continuar con tu proceso, ingresa al sistema y carga los siguientes documentos:
+                    ¡Felicitaciones por avanzar en tu proceso! Para continuar, utiliza el enlace seguro que encontrarás
+                    al final de este correo para completar tus datos y cargar los siguientes documentos requeridos para
+                    tu puesto:
                 </p>
             </td>
         </tr>
 
-        <!-- DOCUMENTOS -->
+        <!-- DOCUMENTOS REQUERIDOS -->
         <tr>
-            <td style="padding: 0 30px;">
+            <td style="padding: 0 30px 15px;">
                 <ul
-                    style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 12px; padding: 20px; list-style: none;">
+                    style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 12px; padding: 20px; list-style: none; margin: 0;">
                     {{#each documentos}}
-                    <li style="padding: 8px 0;">
-                        {{#if obligatorio}}✅{{else}}⚪{{/if}} {{nombre}}
+                    <li style="padding: 8px 0; font-size: 14px;">
+                        {{#if obligatorio}}✅{{else}}⚪{{/if}} {{nombre}} {{#if obligatorio}}<span
+                            style="color: #c62828; font-size: 12px;">(Obligatorio)</span>{{/if}}
                     </li>
                     {{/each}}
                 </ul>
@@ -45,22 +48,22 @@
         <!-- DOCUMENTOS EMPRESA -->
         {{#if docs_empresa.length}}
         <tr>
-            <td style="padding: 0 30px 10px;">
+            <td style="padding: 0 30px 15px;">
                 <div
                     style="background-color: #fff8e1; border: 1px solid #ffe082; border-radius: 12px; padding: 15px 20px;">
 
                     <p style="margin: 0 0 8px; color: #e65100;">
-                        <strong>📎 Documentos adjuntos:</strong>
+                        <strong>📎 Documentos adjuntos por la empresa:</strong>
                     </p>
 
-                    <ul style="margin: 0; padding-left: 18px;">
+                    <ul style="margin: 0; padding-left: 18px; font-size: 14px;">
                         {{#each docs_empresa}}
                         <li>{{this}}</li>
                         {{/each}}
                     </ul>
 
-                    <p style="margin-top: 10px; font-size: 13px;">
-                        Descarga, firma y súbelos en el portal.
+                    <p style="margin-top: 10px; font-size: 13px; color: #555;">
+                        Por favor descárgalos, fírmalos y súbelos también a través del portal.
                     </p>
 
                 </div>
@@ -68,26 +71,23 @@
         </tr>
         {{/if}}
 
-        <!-- CREDENCIALES -->
+        <!-- INSTRUCCIÓN DE ENLACE ÚNICO -->
         <tr>
-            <td style="padding: 30px;">
-                <div style="background-color: #f4f6f9; border-radius: 10px; padding: 15px 20px;">
-
-                    <p><strong>🔐 Credenciales:</strong></p>
-
-                    <p><strong>Usuario:</strong> {{claveusuario}}</p>
-                    <p><strong>Contraseña:</strong> {{password}}</p>
-
-                </div>
+            <td style="padding: 10px 30px 15px;">
+                <p
+                    style="font-size: 14px; color: #666; background-color: #e8f4f8; padding: 12px 15px; border-radius: 8px; margin: 0; text-align: center;">
+                    ⚠️ El siguiente botón contiene un acceso único y directo a tu expediente. No compartas este enlace
+                    con nadie.
+                </p>
             </td>
         </tr>
 
-        <!-- BOTÓN -->
+        <!-- BOTÓN DE ACCESO DIRECTO -->
         <tr>
-            <td style="text-align: center; padding: 10px 30px 20px;">
-                <a href="https://fileonline.datavoice.com.mx/talentcore/login" target="_blank"
-                    style="background-color: #005578; color: white; padding: 12px 28px; border-radius: 10px; text-decoration: none;">
-                    📎 Ingresar al Portal
+            <td style="text-align: center; padding: 15px 30px 30px;">
+                <a href="{{link}}" target="_blank"
+                    style="background-color: #005578; color: white; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: bold; display: inline-block; box-shadow: 0 4px 12px rgba(0,85,120,0.2);">
+                    🚀 Subir mi Documentación
                 </a>
             </td>
         </tr>
@@ -95,7 +95,7 @@
         <!-- FOOTER -->
         <tr>
             <td style="background-color: #005578; text-align: center; padding: 20px;">
-                <p style="color: white; font-size: 13px;">
+                <p style="color: white; font-size: 13px; margin: 0;">
                     © 2026 DataVoice — Talent Core
                 </p>
             </td>

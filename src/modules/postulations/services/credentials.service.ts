@@ -2,71 +2,89 @@ import { BadRequestException } from "@nestjs/common";
 import { PrismaClient } from "generated/prisma/client";
 import * as fs from "fs";
 import * as path from "path";
-import { createCandidateWithCredentials } from "../queries/postulations.queries";
+import { createEmployee } from "../queries/postulations.queries";
+import { JwtService } from "@nestjs/jwt";
 
-export async function generateCredentials(
+interface DocumentoPuestoRow {
+    Documento: string;
+    esObligatorio: number;
+    IdDocumento: number;
+}
+
+export async function generateEmployeeAndLink(
     data: {
-        curp: string;
-        nombre: string;
-        apellido1: string;
-        apellido2: string;
-        correo: string;
-        idPuesto: number;
-        usuario: string;
-        idCampania: number | null;
+        jwtService: JwtService,
+        frontUrl: string,
+        nombre: string,
+        apellido1: string,
+        apellido2: string,
+        curp: string,
+        correo: string,
+        telefono: string,
+        idPuesto: number,
+        idUsuario: string,
+        idCampania: number | null,
+        idEmpresa: number,
+        idJefeInmediato: number,
+        idSite: number
     },
     files: Express.Multer.File[] = [],
     prisma: PrismaClient,
     notify: (payload: any) => Promise<void>
 ) {
 
-    const { curp, idPuesto } = data;
+    // Verificamos que el empleado no exista ya en db
+    const exists = await prisma.empleados.findFirst({ where: { curp: data.curp } });
+    if (exists) throw new BadRequestException(`El CURP ${data.curp} ya esta dado de alta con un empleado`);
 
-    const exists = await prisma.postulaciones.findFirst({ where: { curp: curp } });
-    if (exists) throw new BadRequestException(`El CURP ${curp} ya existe`);
+    // Creamos al empleado en db y generamos su link para subir sus documentos e información
+    const result = await createEmployee(data, prisma);
+    const { idEmpleado, uploadLink } = result;
 
-    const result = await createCandidateWithCredentials(data, prisma);
-    const { idCandidato, claveUsuario, password } = result;
-    const idCandidatoNumber = Number(idCandidato);
-
-    const documentosRaw = await prisma.$queryRaw<any[]>`
-        CALL SpConDocumentosPuesto(${idPuesto});
+    // Obtenemos los documentos que se requieren para el puesto
+    const documentosRaw = await prisma.$queryRaw<DocumentoPuestoRow[]>`
+        SELECT 
+            CD.Descripcion AS Documento,
+            DP.esObligatorio,
+            CD.IdDocumento 
+        FROM DocumentosPuesto DP
+        INNER JOIN CatDocumentos CD ON CD.IdDocumento = DP.idDocumento
+        WHERE DP.idPuesto = ${data.idPuesto}
+          AND CD.Activo = 1;
     `;
 
-    const rows = Array.isArray(documentosRaw[0]) ? documentosRaw[0] : documentosRaw;
-    const documentos = rows
-        .map(d => Object.values(d)[0] as any[])
-        .filter(v => Array.isArray(v) && v[0])
-        .map(values => ({
-            nombre: values[0],
-            obligatorio: Number(values[1]) === 1
-        }));
+    const documentos = documentosRaw.map(row => ({
+        nombre: row.Documento,
+        obligatorio: Number(row.esObligatorio) === 1
+    }));
 
     const docsEmpresaAdjuntos: string[] = [];
 
+    // Guardamos los documentos del empleado en el servidor
     if (files?.length) {
         const folderPath = path.join(
             process.cwd(),
-            "src/media",
+            "media",
             "empresa_docs",
-            String(idCandidatoNumber)
+            String(idEmpleado)
         );
 
         await fs.promises.mkdir(folderPath, { recursive: true });
 
+        // Guardamos los documentos en la db
         for (const file of files) {
             const fileName = `${Date.now()}-${file.originalname}`;
             const filePath = path.join(folderPath, fileName);
 
             await fs.promises.writeFile(filePath, file.buffer);
 
-            const relativePath = `empresa_docs/${idCandidatoNumber}/${fileName}`;
+            const relativePath = `/media/empresa_docs/${idEmpleado}/${fileName}`;
 
             await prisma.$executeRaw`
                 INSERT INTO DocumentosEmpresa (
-                    idCandidato, nombre, rutaOriginal, usuarioRegistro
+                    idEmpleado, nombre, rutaOriginal, usuarioRegistro
                 ) VALUES (
-                    ${idCandidatoNumber}, ${fileName}, ${relativePath}, ${data.usuario}
+                    ${idEmpleado}, ${fileName}, ${relativePath}, ${data.idUsuario}
                 )
             `;
 
@@ -74,24 +92,18 @@ export async function generateCredentials(
         }
     }
 
-    const usuarioDB = await prisma.usuarios.findFirst({ where: { idCandidato: idCandidatoNumber } });
-    if (!usuarioDB) throw new BadRequestException('No se encontró el usuario');
-
-    const candidato = await prisma.postulaciones.findFirst({ where: { idPostulacion: idCandidatoNumber } });
-    if (!candidato) throw new BadRequestException('No se encontró el candidato');
-
+    // Enviamos la notificación al nuevo empleado para que suba su documentación
     await notify({
-        userUuid: usuarioDB.uuid,
-        notificationTypeCode: 'CREDENTIALS_CREATED',
-        to: candidato.correo || '',
-        phone: candidato.telefono || undefined,
-        subject: '📎 Documentación requerida para tu postulación - DataVoice',
+        userUuid: String(idEmpleado),
+        notificationTypeCode: 'LINK_CREATED',
+        to: data.correo || '',
+        phone: data.telefono || undefined,
+        subject: '📎 Documentación requerida para tu postulación',
 
         context: {
-            nombre: `${candidato.nombre} ${candidato.primerApellido || ''} ${candidato.segundoApellido || ''}`,
+            nombre: `${data.nombre} ${data.apellido1 || ''} ${data.apellido2 || ''}`,
             documentos,
-            claveusuario: claveUsuario,
-            password: password,
+            link: uploadLink,
             docs_empresa: docsEmpresaAdjuntos
         },
 

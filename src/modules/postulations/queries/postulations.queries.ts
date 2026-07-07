@@ -1,3 +1,4 @@
+import { JwtService } from "@nestjs/jwt";
 import { PrismaClient } from "generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 
@@ -37,84 +38,81 @@ export class PostulationsQueries {
   }
 }
 
-export async function createCandidateWithCredentials(
+export async function createEmployee(
   data: {
+    jwtService: JwtService;
+    frontUrl: string;
     nombre: string;
     apellido1: string;
     apellido2: string;
     curp: string;
     correo: string;
+    telefono: string;
     idPuesto: number;
-    usuario: string;
+    idUsuario: string;
     idCampania: number | null;
+    idEmpresa: number;
+    idJefeInmediato: number;
+    idSite: number;
   },
   prisma: PrismaClient
 ) {
-  const {
-    nombre,
-    apellido1,
-    apellido2,
-    curp,
-    correo,
-    idPuesto,
-    usuario,
-    idCampania,
-  } = data;
+  const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, idPuesto, idUsuario, idCampania, idEmpresa, idJefeInmediato, idSite } = data;
 
   return await prisma.$transaction(async (tx) => {
-    // 🔹 1. Insert candidato
+    // Insertamos al postulante en la tabla de empleados
     await tx.$executeRaw`
-      INSERT INTO Candidatos (
-        nombre, primerApellido, segundoApellido, idCampania,
-        rfc, correo, FechaRegistro, usuarioRegistro
+      INSERT INTO Empleados (
+        idEmpresa, idPuesto, idJefeInmediato, idSite, nombre, primerApellido, segundoApellido, idCampania,
+        rfc, correo, telefonoMovil, FechaRegistro, usuarioRegistro
       ) VALUES (
+        ${idEmpresa},
+        ${idPuesto},
+        ${idJefeInmediato},
+        ${idSite},
         ${nombre},
         ${apellido1.trim()},
         ${apellido2.trim()},
         ${idCampania},
         ${curp.trim()},
         ${correo},
+        ${telefono},
         NOW(),
-        ${usuario}
+        ${idUsuario}
       );
     `;
 
-    // 🔥 Obtener ID candidato
-    const resultCandidato = await tx.$queryRaw<{ id: number }[]>`
+    // Obtener ID empleado
+    const resultEmployee = await tx.$queryRaw<{ id: any }[]>`
       SELECT LAST_INSERT_ID() as id;
     `;
 
-    const idCandidato = resultCandidato[0]?.id;
+    // Convertimos explícitamente el BigInt a un Number de JS
+    const idEmpleado = resultEmployee[0]?.id ? Number(resultEmployee[0].id) : null;
+    if (!idEmpleado) throw new Error("No se pudo insertar empleado");
 
-    if (!idCandidato) {
-      throw new Error("No se pudo insertar candidato");
-    }
-
-    // 🔹 2. Insert expediente
+    // Insert expediente del empleado
     await tx.$executeRaw`
-      INSERT INTO expedientes (
-        idCandidato, idPuesto, idEstatus, fechaRegistro, usuarioRegistro
+      INSERT INTO Expedientes (
+        idEmpleado, idPuesto, idEstatus, fechaRegistro, usuarioRegistro
       ) VALUES (
-        ${idCandidato},
+        ${idEmpleado},
         ${idPuesto},
         1,
         NOW(),
-        ${usuario}
+        ${idUsuario}
       );
     `;
 
-    // 🔥 Obtener ID expediente
+    // Obtener ID expediente
     const resultExpediente = await tx.$queryRaw<{ id: number }[]>`
       SELECT LAST_INSERT_ID() as id;
     `;
 
-    const idExpediente = resultExpediente[0]?.id;
+    const idExpediente = resultExpediente[0]?.id ? Number(resultExpediente[0].id) : null;
+    if (!idExpediente) throw new Error("No se pudo insertar el expediente del empleado");
 
-    if (!idExpediente) {
-      throw new Error("No se pudo insertar expediente");
-    }
-
-    // 🔹 3. Historial
+    // Guardamos el historial de cambios del expediente
     await tx.$executeRaw`
       INSERT INTO HistorialExpediente (
         idExpediente,
@@ -128,62 +126,27 @@ export async function createCandidateWithCredentials(
         NULL,
         1,
         NOW(),
-        ${usuario},
-        'Creación de credenciales'
+        ${idUsuario},
+        'Creación de link para subida de documentos'
       );
     `;
 
-    // 🔹 4. Generar clave única (igual que SP)
-    const base = (nombre[0] + apellido1).toUpperCase();
-    let claveFinal = base;
-    let i = 1;
+    // Generamos el token con expiración de un mes
+    const token = jwtService.sign(
+      { employee_id: idEmpleado },
+      { expiresIn: '30d' }
+    );
 
-    while (true) {
-      const exists = await tx.$queryRaw<any[]>`
-        SELECT 1 
-        FROM usuarios 
-        WHERE claveUsuario = ${claveFinal}
-        LIMIT 1;
-      `;
+    // Generamos el link que le enviaremos al empleado para que suba su info y documentación
+    const uploadLink = `${frontUrl}upload-information/${token}`;
 
-      if (!exists.length) break;
-
-      claveFinal = `${base}${i}`;
-      i++;
-    }
-
-    // 🔹 5. Insert usuario
+    // Insertamos el link y el token en la info del empleado
     await tx.$executeRaw`
-      INSERT INTO usuarios (
-        idCandidato, claveUsuario, password, activo, fechaRegistro
-      ) VALUES (
-        ${idCandidato},
-        ${claveFinal},
-        LEFT(${curp}, 10),
-        1,
-        NOW()
-      );
+      UPDATE Empleados 
+      SET uploadLink = ${uploadLink}, token = ${token}
+      WHERE idEmpleado = ${idEmpleado};
     `;
 
-    // 🔹 6. Obtener credenciales
-    const credenciales = await tx.$queryRaw<{
-      claveUsuario: string;
-      password: string;
-    }[]>`
-      SELECT claveUsuario, password 
-      FROM usuarios 
-      WHERE idCandidato = ${idCandidato}
-      LIMIT 1;
-    `;
-
-    if (!credenciales.length) {
-      throw new Error("No se generaron credenciales");
-    }
-
-    return {
-      idCandidato,
-      claveUsuario: credenciales[0].claveUsuario,
-      password: credenciales[0].password,
-    };
+    return { idEmpleado, uploadLink };
   });
 }

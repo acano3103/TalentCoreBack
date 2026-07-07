@@ -84,7 +84,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 1, code: '2FA', description: 'Notificación de verificación de dos pasos', activo: true },
             { id: 2, code: 'POSITION_STATUS_UPDATE', description: 'Notificación de actualización del estado de la posición', activo: true },
             { id: 3, code: 'INTERVIEW_SCHEDULED', description: 'Notificación de programación de entrevista', activo: true },
-            { id: 4, code: 'CREDENTIALS_CREATED', description: 'Notificación de creación de credenciales', activo: true },
+            { id: 4, code: 'LINK_CREATED', description: 'Notificación de creación de empleado y envio de link', activo: true },
             { id: 5, code: 'POSITION_REQUEST_STATUS_UPDATE', description: 'Notificación de actualización del estado de la solicitud de posición', activo: true },
             { id: 6, code: 'POSITION_REQUEST_CREATED', description: 'Notificación de creación de solicitud de posición', activo: true },
             { id: 7, code: 'REQUISITION_CREATED', description: 'Notificación de creación de requisición', activo: true },

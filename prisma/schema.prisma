@@ -437,7 +437,7 @@ model DocumentosCandidato {
 
 model DocumentosEmpresa {
   idDocumentoEmpresa Int       @id @default(autoincrement())
-  idCandidato        Int?
+  idEmpleado         Int?
   nombre             String?   @db.VarChar(255)
   rutaOriginal       String?   @db.VarChar(500)
   rutaFirmado        String?   @db.VarChar(500)
@@ -1089,6 +1089,7 @@ model Empleados {
   numeroSeguroSocial                                String?     @db.VarChar(15)
   idEstadoCivil                                     Int?
   fechaNacimiento                                   DateTime?   @db.Date
+  curp                                              String?     @db.VarChar(18)
   rfc                                               String?     @db.VarChar(18)
   correo                                            String?     @db.VarChar(250)
   telefonoMovil                                     String?     @db.VarChar(15)
@@ -1102,6 +1103,8 @@ model Empleados {
   numeroInfonavit                                   String?     @db.VarChar(30)
   numeroHijos                                       Int?
   imagenFirmaAutografa                              String?     @db.VarChar(500)
+  uploadLink                                        String?     @db.VarChar(100)
+  token                                             String?     @db.VarChar(100)
   activo                                            Boolean     @default(true)
   CatPuestos                                        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
   Empleados                                         Empleados?  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")

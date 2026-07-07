@@ -4,7 +4,7 @@ export const TEMPLATE_MAP = {
         '2FA': 'token_email',
         'POSITION_STATUS_UPDATE': 'puesto_estado',
         'INTERVIEW_SCHEDULED': 'email_entrevista',
-        'CREDENTIALS_CREATED': 'documentacion_requerida',
+        'LINK_CREATED': 'documentacion_requerida',
         'POSITION_REQUEST_STATUS_UPDATE': 'puesto_solicitud_estado',
         'REQUISITION_CREATED': 'requisition_created',
         'REQUISITION_APPROVED_BY_MANAGER': 'requisicion_aprovada_manager',
@@ -17,7 +17,7 @@ export const TEMPLATE_MAP = {
         '2FA': 'token_whatsapp',
         'POSITION_STATUS_UPDATE': 'puesto_estado',
         'INTERVIEW_SCHEDULED': 'whatsapp_entrevista',
-        'CREDENTIALS_CREATED': 'documentos_requeridos',
+        'LINK_CREATED': 'documentos_requeridos',
         'INTERVIEW_SCHEDULED_INTERVIEWER': 'whatsapp_entrevista_entrevistador',
         'INTERVIEW_RESCHEDULED': 'resend_entrevista',
         'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador'
