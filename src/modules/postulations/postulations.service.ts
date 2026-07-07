@@ -125,7 +125,7 @@ export class PostulationsService {
             idEmpresa: companyId,
             accion: 'CREAR',
             tablaOrigen: 'Postulaciones',
-            idRegistro: newPostulation.idPostulacion,
+            idRegistro: String(newPostulation.idPostulacion),
             descripcion: `Postulación registrada a la vacante ${vacante.CatPuestos?.NombrePuesto}`,
             fechaCreacion: new Date()
           }
@@ -312,7 +312,7 @@ export class PostulationsService {
             idEmpresa: companyId,
             accion: 'EDITAR',
             tablaOrigen: 'Postulaciones',
-            idRegistro: postulationId,
+            idRegistro: String(postulationId),
             descripcion: `Estatus de la postulación de ${postulation.nombre} ${postulation.primerApellido} ${postulation.segundoApellido} actualizado a ${statusMap.get(dto.statusId)} por ${user.first_name} ${user.last_name}`,
             fechaCreacion: new Date()
           }

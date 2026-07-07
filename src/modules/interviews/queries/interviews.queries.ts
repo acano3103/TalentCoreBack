@@ -34,15 +34,12 @@ export async function findAllInterviews(
         CONCAT(emp.nombre, ' ', emp.primerApellido, ' ', emp.segundoApellido) AS interviewer_name,
         CAST(COUNT(ep.id) AS SIGNED) AS interviews_programed,
         v.idVacante AS vacancy_id,
-        p.NombrePuesto AS vacancy_name,
-        a.Descripcion AS area_name
+        p.NombrePuesto AS vacancy_name
     FROM Entrevistas e
     INNER JOIN Vacantes v 
         ON e.idVacante = v.idVacante
     INNER JOIN CatPuestos p 
         ON v.idPuesto = p.idPuesto
-    INNER JOIN CatAreas a 
-        ON e.area_id = a.idArea
     LEFT JOIN EntrevistasPostulantes ep
         ON ep.interview_id = e.id
     LEFT JOIN Empleados emp
@@ -52,7 +49,7 @@ export async function findAllInterviews(
     AND v.idEmpresa = ${companyId}
     ${vacancyFilter}
     ${searchFilter}
-    GROUP BY e.id, e.title, e.description, e.modality, e.duration, v.idVacante, p.NombrePuesto, a.Descripcion
+    GROUP BY e.id, e.title, e.description, e.modality, e.duration, v.idVacante, p.NombrePuesto
     ORDER BY e.id DESC
     LIMIT ${limit}
     OFFSET ${skip}
@@ -60,6 +57,7 @@ export async function findAllInterviews(
 
   return result.map((item: any) => ({
     ...item,
+    interviewer_name: item.interviewer_name?.trim() ? item.interviewer_name.trim() : "AGENTE DE IA",
     interviews_programed: Number(item.interviews_programed),
     has_scheduled_candidates: Number(item.interviews_programed) > 0,
   }));
@@ -226,7 +224,6 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
         SELECT 
             e.id,
             e.company_id,
-            e.area_id,
             e.idVacante,
             e.provider_id,
             e.agent_id,
@@ -239,7 +236,6 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             e.comment,
 
             cp.NombrePuesto AS vacancy_name,
-            a.Descripcion AS area_name,
 
             ep.id AS ep_id,
             ep.candidate_uuid,
@@ -263,9 +259,6 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
 
         LEFT JOIN CatPuestos cp 
             ON v.idPuesto = cp.idPuesto
-
-        LEFT JOIN CatAreas a 
-            ON e.area_id = a.idArea
 
         LEFT JOIN EntrevistasPostulantes ep
             ON ep.interview_id = e.id

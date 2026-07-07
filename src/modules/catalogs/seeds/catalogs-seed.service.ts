@@ -92,6 +92,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 9, code: 'REQUISITION_APPROVED_BY_MANAGER_TO_RH', description: 'Notificación de aprobación de requisición por parte del manager a Recursos Humanos', activo: true },
             { id: 10, code: 'REQUISITION_APPROVED_BY_RH', description: 'Notificación de aprobación de requisición por parte de Recursos Humanos', activo: true },
             { id: 11, code: 'INTERVIEW_SCHEDULED_INTERVIEWER', description: 'Notificación de programación de entrevista al entrevistador', activo: true },
+            { id: 12, code: 'INTERVIEW_RESCHEDULED', description: 'Notificación de reprogramación de entrevista', activo: true },
+            { id: 13, code: 'INTERVIEW_RESCHEDULED_INTERVIEWER', description: 'Notificación de reprogramación de entrevista al entrevistador', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -161,6 +163,16 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 42, notification_type_id: 11, channel_id: 2, enabled: true }, // WhatsApp
             { id: 43, notification_type_id: 11, channel_id: 3, enabled: false }, // SMS
             { id: 44, notification_type_id: 11, channel_id: 4, enabled: true }, // Sockets
+            // --- 12. INTERVIEW_RESCHEDULED (Reprogramación de entrevista) ---
+            { id: 45, notification_type_id: 12, channel_id: 1, enabled: true }, // Email
+            { id: 46, notification_type_id: 12, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 47, notification_type_id: 12, channel_id: 3, enabled: false }, // SMS
+            { id: 48, notification_type_id: 12, channel_id: 4, enabled: false }, // Sockets
+            // --- 13. INTERVIEW_RESCHEDULED_INTERVIEWER (Reprogramación de entrevista al entrevistador) ---
+            { id: 49, notification_type_id: 13, channel_id: 1, enabled: true }, // Email
+            { id: 50, notification_type_id: 13, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 51, notification_type_id: 13, channel_id: 3, enabled: false }, // SMS
+            { id: 52, notification_type_id: 13, channel_id: 4, enabled: true }, // Sockets
         ];
 
         for (const tc of typeChannels) {

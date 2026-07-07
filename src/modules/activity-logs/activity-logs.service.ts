@@ -7,7 +7,7 @@ export class ActivityLogsService {
         private readonly prisma: PrismaService,
     ) { }
 
-    async getActivityLogs(originTable: string, recordId: number) {
+    async getActivityLogs(originTable: string, recordId: string) {
         // @ts-ignore
         const activityLogs = await this.prisma.historicoMovimientos.findMany({
             where: {

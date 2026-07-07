@@ -312,7 +312,7 @@ export class VacanciesService {
                             idEmpresa: companyId,
                             accion: 'EDITAR',
                             tablaOrigen: 'Vacantes',
-                            idRegistro: vacancyId,
+                            idRegistro: String(vacancyId),
                             descripcion: `Vacante ${status} correctamente`,
                             fechaCreacion: new Date()
                         }
@@ -766,7 +766,7 @@ export class VacanciesService {
                     idEmpresa: companyId,
                     accion: 'CREAR',
                     tablaOrigen: 'Vacantes',
-                    idRegistro: requisition.idVacante,
+                    idRegistro: String(requisition.idVacante),
                     descripcion: `Requisición creada por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
@@ -827,7 +827,7 @@ export class VacanciesService {
                     idEmpresa: companyId,
                     accion: 'ELIMINAR',
                     tablaOrigen: 'Vacantes',
-                    idRegistro: requisitionId,
+                    idRegistro: String(requisitionId),
                     descripcion: `Requisición eliminada por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
@@ -869,7 +869,7 @@ export class VacanciesService {
                     idEmpresa: companyId,
                     accion: 'RECHAZAR',
                     tablaOrigen: 'Vacantes',
-                    idRegistro: requisitionId,
+                    idRegistro: String(requisitionId),
                     descripcion: `Requisición rechazada por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
@@ -897,7 +897,7 @@ export class VacanciesService {
                     idEmpresa: companyId,
                     accion: 'APROBAR',
                     tablaOrigen: 'Vacantes',
-                    idRegistro: requisitionId,
+                    idRegistro: String(requisitionId),
                     descripcion: `Requisición aprobada por el Manager: ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
@@ -994,7 +994,7 @@ export class VacanciesService {
                             idEmpresa: companyId,
                             accion: 'APROBAR',
                             tablaOrigen: 'Vacantes',
-                            idRegistro: requisitionId,
+                            idRegistro: String(requisitionId),
                             descripcion: `Requisición aprobada y publicada por Recursos Humanos: ${activeUser.first_name} ${activeUser.last_name}`,
                             fechaCreacion: new Date()
                         }

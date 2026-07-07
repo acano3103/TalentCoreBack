@@ -45,11 +45,6 @@ export class UpdateInterviewDto {
     @ApiProperty()
     @IsNumber()
     @IsOptional()
-    areaId?: number;
-
-    @ApiProperty()
-    @IsNumber()
-    @IsOptional()
     vacancyId?: number;
 }
 
@@ -57,7 +52,7 @@ export class RescheduleInterviewDto {
     @ApiProperty()
     @IsString()
     @IsOptional()
-    scheduledAt?: string;
+    scheduledAt: string;
 
     @ApiProperty()
     @IsNumber()

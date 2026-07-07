@@ -75,6 +75,12 @@ export const SOCKET_NOTIFICATION_MAP: Record<string, NotificationTemplateConfig>
             return `📅 Nueva entrevista asignada: Tienes la evaluación "${ctx?.entrevistasNombre || 'Evaluación de Candidato'}" con el postulante ${ctx?.postulant || 'Candidato'} agendada para el día ${ctx?.dia || 'Pendiente'}.`;
         },
     },
+    INTERVIEW_RESCHEDULED_INTERVIEWER: {
+        severity: 'warning',
+        buildMessage: (ctx) => {
+            return `🔄 Entrevista reprogramada: La evaluación "${ctx?.entrevistasNombre || 'Evaluación de Candidato'}" con el postulante ${ctx?.postulant || 'Candidato'} ha cambiado para el día ${ctx?.dia || 'Pendiente'} a las ${ctx?.hora || 'Pendiente'}.`;
+        },
+    },
 };
 
 export function formatNotificationPayload(typeCode: string, context: any, fallbackTitle?: string) {

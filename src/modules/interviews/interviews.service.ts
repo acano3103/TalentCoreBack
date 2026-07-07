@@ -68,48 +68,69 @@ export class InterviewsService {
     }
 
     // Función para crear una entrevista como catalogo
-    async create(companyId: number, dto: CreateInterviewDto) {
-        const interviews = await Promise.all(
-            dto.vacancyIds.map(vacancyId =>
-                this.prisma.entrevistas.create({
-                    data: {
-                        company_id: companyId,
-                        area_id: dto.areaId,
-                        idVacante: vacancyId,
-                        provider_id: dto.providerId,
-                        agent_id: dto.agentId || null,
-                        description: dto.description || null,
-                        interview_type: dto.interviewType,
-                        modality: dto.modality,
-                        title: dto.title,
-                        duration: dto.duration,
-                        interviewer_id: dto.interviewerId,
-                        location: dto.locationAddress || null,
-                        comment: dto.comment || null,
-                        EntrevistasCriterios: {
-                            create: dto.criteria.map((criterion, index) => ({
-                                name: criterion.name,
-                                description: criterion.description || '',
-                                max_score: criterion.weight || 0,
-                                weight: criterion.weight || 1,
-                                order: criterion.order || index + 1,
-                                CriterioPreguntas: criterion.questions?.length
-                                    ? {
-                                        create: criterion.questions.map(q => ({
-                                            question: q.question,
-                                            expected_answer: q.expectedAnswer || null,
-                                            order: q.order || null,
-                                        })),
-                                    }
-                                    : undefined,
-                            })),
-                        },
-                    },
-                })
-            )
-        );
+    async create(companyId: number, dto: CreateInterviewDto, user: ActiveUserDto) {
 
-        return { message: 'Entrevistas creadas exitosamente', total: interviews.length };
+        return await this.prisma.$transaction(async (tx) => {
+            // Creamos todas las entrevistas en base a los vacancyIds
+            const interviews = await Promise.all(
+                dto.vacancyIds.map(vacancyId =>
+                    tx.entrevistas.create({
+                        data: {
+                            company_id: companyId,
+                            idVacante: vacancyId,
+                            provider_id: dto.providerId,
+                            agent_id: dto.agentId || null,
+                            description: dto.description || null,
+                            interview_type: dto.interviewType,
+                            modality: dto.modality,
+                            title: dto.title,
+                            duration: dto.duration,
+                            interviewer_id: dto.interviewerId,
+                            location: dto.locationAddress || null,
+                            comment: dto.comment || null,
+                            EntrevistasCriterios: {
+                                create: dto.criteria.map((criterion, index) => ({
+                                    name: criterion.name,
+                                    description: criterion.description || '',
+                                    max_score: criterion.weight || 0,
+                                    weight: criterion.weight || 1,
+                                    order: criterion.order || index + 1,
+                                    CriterioPreguntas: criterion.questions?.length
+                                        ? {
+                                            create: criterion.questions.map(q => ({
+                                                question: q.question,
+                                                expected_answer: q.expectedAnswer || null,
+                                                order: q.order || null,
+                                            })),
+                                        }
+                                        : undefined,
+                                })),
+                            },
+                        },
+                    })
+                )
+            );
+
+            // Mapeamos las entrevistas creadas para generar los registros del histórico
+            if (interviews.length > 0) {
+                const historicosData = interviews.map(interview => ({
+                    idUsuario: user.id,
+                    idEmpresa: companyId,
+                    accion: 'CREACION',
+                    tablaOrigen: 'Entrevistas',
+                    idRegistro: interview.id,
+                    descripcion: `Entrevista "${interview.title}" creada por ${user.first_name} ${user.last_name} para la vacante #${interview.idVacante}`,
+                    fechaCreacion: new Date()
+                }));
+
+                // Insertamos de forma masiva todos los registros históricos en un solo paso
+                await tx.historicoMovimientos.createMany({
+                    data: historicosData
+                });
+            }
+
+            return { message: 'Entrevistas creadas exitosamente', total: interviews.length };
+        });
     }
 
     // Función para programar una entrevista ya creada como catalogo
@@ -136,8 +157,8 @@ export class InterviewsService {
 
             // Resolver reuniones ONLINE externas (Ej. Zoom)
             if (mainInterview.interview_type === 'PERSONA' && mainInterview.modality === 'ONLINE') {
-                const zoomProvider = await this.integrationsFactory.getProvider(mainInterview.provider_id);
-                meetingData = await zoomProvider.createMeeting(companyId, mainInterview.provider_id, dto);
+                const meetingProvider = await this.integrationsFactory.getProvider(mainInterview.provider_id);
+                meetingData = await meetingProvider.createMeeting(companyId, mainInterview.provider_id, dto);
             }
 
             const interview = await this.prisma.$transaction(async (tx) => {
@@ -165,7 +186,7 @@ export class InterviewsService {
 
                 // Si es IA, actualizamos su propia URL usando el ID recién creado
                 if (mainInterview.interview_type === 'IA') {
-                    meetingData.url = `${this.configService.get<string>('FRONT_URL')}/entrevista/${newInterview.id}`;
+                    meetingData.url = `${this.configService.get<string>('FRONT_URL')}ai-interview/${newInterview.id}`;
                     meetingData.id = newInterview.id;
 
                     await tx.entrevistasPostulantes.update({
@@ -187,8 +208,19 @@ export class InterviewsService {
                         idEmpresa: companyId,
                         accion: 'EDITAR',
                         tablaOrigen: 'Postulaciones',
-                        idRegistro: dto.postulantId,
+                        idRegistro: String(dto.postulantId),
                         descripcion: `Se programó una entrevista con fecha y hora ${day} - ${hour} para ${postulant.nombre} ${postulant.primerApellido} ${postulant.segundoApellido}`,
+                        fechaCreacion: new Date()
+                    }
+                });
+                await tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: user.id,
+                        idEmpresa: companyId,
+                        accion: 'CREAR',
+                        tablaOrigen: 'EntrevistasPostulantes',
+                        idRegistro: newInterview.id,
+                        descripcion: `Se creó una entrevista para ${postulant.nombre} ${postulant.primerApellido} ${postulant.segundoApellido} de la vacante ${mainInterview.title}`,
                         fechaCreacion: new Date()
                     }
                 });
@@ -262,7 +294,7 @@ export class InterviewsService {
             this.logger.error('Error creating interview', error);
 
             // Si falló algo y se llegó a crear una reunión en Zoom, la borramos para no dejar basura
-            if (meetingData?.id && mainInterview.interview_type === 'PERSONA') {
+            if (meetingData?.id && mainInterview.interview_type === 'PERSONA' && mainInterview.modality === 'ONLINE') {
                 const provider = await this.integrationsFactory.getProvider(mainInterview.provider_id);
                 if (provider) await provider.deleteMeeting(companyId, mainInterview.provider_id, meetingData.id);
             }
@@ -287,10 +319,11 @@ export class InterviewsService {
     }
 
     // Metodo para actualizar detalles de una entrevista programada
-    async updateMeeting(companyId: number, meetingId: string, dto: UpdateMeetingDto) {
+    async updateMeeting(companyId: number, meetingId: string, dto: UpdateMeetingDto, user: ActiveUserDto) {
         const interviewPostulant = await this.prisma.entrevistasPostulantes.findFirst({
             where: { id: meetingId },
             include: {
+                Entrevistas: true,
                 EntrevistasResultados: true,
                 EntrevistaCriteriosEvaluacion: {
                     include: {
@@ -301,6 +334,7 @@ export class InterviewsService {
         })
         if (!interviewPostulant) throw new BadRequestException('No se encontró la entrevista');
 
+        // Calculamos la puntuación final si la entrevista ha sido finalizada
         let finalScore: number | null = null;
         if (dto.statusId === 2) {
             finalScore = calculateFinalScore(
@@ -308,6 +342,7 @@ export class InterviewsService {
             );
         }
 
+        // Actualizamos la entrevista
         await this.prisma.entrevistasPostulantes.update({
             where: { id: meetingId },
             data: {
@@ -332,6 +367,25 @@ export class InterviewsService {
                 }
             }
         })
+
+        // Si se esta actualizando el status, guardamos el movimiento en el historico
+        if (dto.statusId) {
+            const meetingStatus = await this.prisma.catEstatusEntrevista.findFirst({
+                where: { idEstatusEntrevista: dto.statusId }
+            })
+            await this.prisma.historicoMovimientos.create({
+                data: {
+                    idUsuario: user.id,
+                    idEmpresa: companyId,
+                    accion: 'ACTUALIZACION',
+                    tablaOrigen: 'EntrevistasPostulantes',
+                    idRegistro: meetingId,
+                    descripcion: `Entrevista actualizada a ${meetingStatus?.descripcion} por ${user.first_name} ${user.last_name} para la vacante #${interviewPostulant.Entrevistas.idVacante}`,
+                    fechaCreacion: new Date()
+                }
+            })
+        }
+
         return { message: 'Entrevista actualizada exitosamente' };
     }
 
@@ -355,61 +409,201 @@ export class InterviewsService {
         return interview;
     }
 
-    async updateInterview(companyId: number, interviewId: string, dto: UpdateInterviewDto) {
+    // Esta función actualiza una entrevista catalogo cuando no tiene entrevistas programadas
+    async updateInterview(companyId: number, interviewId: string, dto: UpdateInterviewDto, user: ActiveUserDto) {
         const interview = await this.prisma.entrevistas.findFirst({
             where: { id: interviewId, company_id: companyId, active: true }
         });
-
         if (!interview) throw new BadRequestException('No se encontró la entrevista');
-        await this.prisma.entrevistas.update({
-            where: { id: interviewId },
-            data: {
-                title: dto.title,
-                description: dto.description ?? null,
-                interview_type: dto.interviewType as any,
-                modality: dto.modality as any,
-                duration: dto.duration,
-                interviewer_id: dto.interviewerId,
-                location: dto.locationAddress ?? null,
-                comment: dto.comment ?? null,
-                area_id: dto.areaId,
-                idVacante: dto.vacancyId,
-            }
+
+        await this.prisma.$transaction(async (tx) => {
+            // Actualizamos la entrevista catalogo
+            const interviewUpdated = tx.entrevistas.update({
+                where: { id: interviewId },
+                data: {
+                    title: dto.title,
+                    description: dto.description ?? null,
+                    interview_type: dto.interviewType as any,
+                    modality: dto.modality as any,
+                    duration: dto.duration,
+                    interviewer_id: dto.interviewerId,
+                    location: dto.locationAddress ?? null,
+                    comment: dto.comment ?? null,
+                    idVacante: dto.vacancyId,
+                }
+            });
+            // Guardamos el movimiento en el historico
+            const historicosData = tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: user.id,
+                    idEmpresa: companyId,
+                    accion: 'ACTUALIZACION',
+                    tablaOrigen: 'Entrevistas',
+                    idRegistro: interview.id,
+                    descripcion: `Entrevista "${interview.title}" actualizada por ${user.first_name} ${user.last_name} para la vacante #${interview.idVacante}`,
+                    fechaCreacion: new Date()
+                }
+            })
+            return Promise.all([interviewUpdated, historicosData]);
         });
 
         return { message: 'Entrevista actualizada exitosamente' };
     }
 
-    async rescheduleInterview(companyId: number, meetingId: string, dto: RescheduleInterviewDto) {
+    // Esta funcion actualiza la fecha, hora y duracion de una entrevista programada
+    async rescheduleInterview(companyId: number, meetingId: string, dto: RescheduleInterviewDto, user: ActiveUserDto) {
         const meeting = await this.prisma.entrevistasPostulantes.findFirst({
-            where: { id: meetingId }
-        });
-
-        if (!meeting) throw new BadRequestException('No se encontró el meeting');
-
-        await this.prisma.entrevistasPostulantes.update({
             where: { id: meetingId },
-            data: {
-                scheduled_at: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
-                duration: dto.duration ?? undefined,
+            include: {
+                Entrevistas: true
             }
         });
+        if (!meeting) throw new BadRequestException('No se encontró el meeting');
 
-        return { message: 'Entrevista reprogramada exitosamente' };
+        const postulant = await this.prisma.postulaciones.findFirst({
+            where: { uuid: meeting.candidate_uuid }
+        });
+        if (!postulant) throw new BadRequestException('No se encontró el postulante');
+
+        try {
+            // Constantes para el correo y log de actividades
+            const date = new Date(dto.scheduledAt);
+            const day = formatDate(date);
+            const hour = formatHour(date);
+
+            let meetingData: any = { id: null, interviewId: null, url: null, metadata: null };
+
+            // Si existe una reunion programada y es tipo persona online, se elimina
+            if (meeting?.id && meeting.Entrevistas.interview_type === 'PERSONA' && meeting.Entrevistas.modality === 'ONLINE') {
+                const provider = await this.integrationsFactory.getProvider(meeting.Entrevistas.provider_id);
+                if (provider) await provider.deleteMeeting(companyId, meeting.Entrevistas.provider_id, meeting.id);
+            }
+
+            // Si es online volvemos a crear la reunión en el provedor elegido
+            if (meeting.Entrevistas.interview_type === 'PERSONA' && meeting.Entrevistas.modality === 'ONLINE') {
+                const meetingProvider = await this.integrationsFactory.getProvider(meeting.Entrevistas.provider_id);
+                meetingData = await meetingProvider.createMeeting(companyId, meeting.Entrevistas.provider_id, { title: meeting.Entrevistas.title, scheduledAt: dto.scheduledAt, duration: dto.duration });
+            }
+
+            await this.prisma.$transaction(async (tx) => {
+                // ACtualizamos la entrevista en base de datos
+                const meetingUpdated = tx.entrevistasPostulantes.update({
+                    where: { id: meetingId },
+                    data: {
+                        scheduled_at: date,
+                        duration: dto.duration ?? undefined,
+                        meeting_id: meetingData?.id || null,
+                        meeting_url: meetingData?.url || null,
+                        metadata: meetingData?.metadata || null,
+                    }
+                });
+                // Guardamos el movimiento en el historico
+                const historicosData = tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: user.id,
+                        idEmpresa: companyId,
+                        accion: 'EDITAR',
+                        tablaOrigen: 'EntrevistasPostulantes',
+                        idRegistro: meeting.id,
+                        descripcion: `Entrevista reprogramada por ${user.first_name} ${user.last_name}`,
+                        fechaCreacion: new Date()
+                    }
+                })
+                return Promise.all([meetingUpdated, historicosData]);
+            });
+
+            // Construcción de enlaces de mapa para la notificación
+            let map_link: string | null = null;
+            let map_img: string | null = null;
+            let lugar_mostrado = meeting.Entrevistas.location;
+
+            if (lugar_mostrado && !meetingData?.url) {
+                const q = quotePlus(lugar_mostrado.trim());
+                map_link = `http://googleusercontent.com/maps.google.com/?q=${q}`;
+                map_img = `https://staticmap.openstreetmap.de/staticmap.php?center=${q}&zoom=16&size=600x300&markers=${q},red-pushpin`;
+            }
+
+            // Envío de Notificaciones externas a la DB
+            this.notifications.notify({
+                userUuid: postulant.uuid,
+                notificationTypeCode: 'INTERVIEW_RESCHEDULED',
+                to: postulant.correo,
+                phone: postulant.telefono,
+                subject: meeting.Entrevistas.title || '',
+                context: {
+                    nombre: `${postulant.nombre} ${postulant.primerApellido}`,
+                    entrevistasNombre: meeting.Entrevistas.title || '',
+                    dia: day,
+                    hora: hour,
+                    lugar: lugar_mostrado,
+                    liga: meetingData?.url,
+                    map_link: map_link,
+                    map_img: map_img,
+                    comentarios: meeting.Entrevistas.comment,
+                }
+            });
+
+            if (meeting.Entrevistas.interview_type === 'PERSONA' && meeting.Entrevistas.interviewer_id && meeting.Entrevistas.interviewer_id !== 0) {
+                const interviewer = await this.prisma.empleados.findFirst({
+                    where: { idEmpleado: meeting.Entrevistas.interviewer_id },
+                    include: { auth_user: true }
+                });
+
+                this.notifications.notify({
+                    userUuid: interviewer?.auth_user?.uuid || '',
+                    notificationTypeCode: 'INTERVIEW_RESCHEDULED_INTERVIEWER',
+                    to: interviewer?.auth_user?.email || '',
+                    phone: interviewer?.auth_user?.phone || '',
+                    subject: meeting.Entrevistas.title || '',
+                    context: {
+                        nombre: `${interviewer?.nombre} ${interviewer?.primerApellido}`,
+                        entrevistasNombre: meeting.Entrevistas.title || '',
+                        postulant: `${postulant.nombre} ${postulant.primerApellido}`,
+                        dia: day,
+                        hora: hour,
+                        lugar: lugar_mostrado,
+                        liga: meetingData?.url,
+                        map_link: map_link,
+                        map_img: map_img,
+                        comentarios: meeting.Entrevistas.comment,
+                    }
+                });
+            }
+
+            return { message: 'Entrevista reprogramada exitosamente' };
+        } catch (error) {
+            this.logger.error(`Error al reprogramar la entrevista ${meetingId} para la empresa ${companyId}`, error);
+            throw new BadRequestException('Error al reprogramar la entrevista');
+        }
     }
 
-
-
-    async deleteInterview(companyId: number, interviewId: string) {
+    // Esta funcion elimina una entrevista catalogo cuando no tiene reuniones programadas
+    async deleteInterview(companyId: number, interviewId: string, user: ActiveUserDto) {
         const interview = await this.prisma.entrevistas.findFirst({
             where: { id: interviewId, company_id: companyId }
         });
 
         if (!interview) throw new BadRequestException('No se encontró la entrevista');
 
-        await this.prisma.entrevistas.delete({
-            where: { id: interviewId }
-        });
+        await this.prisma.$transaction(async (tx) => {
+            // Eliminamos la entrevista catalogo
+            const deleteInterview = tx.entrevistas.delete({
+                where: { id: interviewId }
+            });
+            // Guardamos el movimiento en el historico
+            const historicosData = tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: user.id,
+                    idEmpresa: companyId,
+                    accion: 'ELIMINACION',
+                    tablaOrigen: 'Entrevistas',
+                    idRegistro: interview.id,
+                    descripcion: `Entrevista "${interview.title}" eliminada por ${user.first_name} ${user.last_name} para la vacante #${interview.idVacante}`,
+                    fechaCreacion: new Date()
+                }
+            })
+            return Promise.all([deleteInterview, historicosData])
+        })
 
         return { message: 'Entrevista eliminada exitosamente' };
     }
@@ -429,16 +623,30 @@ export class InterviewsService {
         }));
     }
 
-    async deleteMeeting(companyId: number, meetingId: string) {
+    async deleteMeeting(companyId: number, meetingId: string, user: ActiveUserDto) {
         const meeting = await this.prisma.entrevistasPostulantes.findFirst({
             where: { id: meetingId }
         });
-
         if (!meeting) throw new BadRequestException('No se encontró el meeting');
 
-        await this.prisma.entrevistasPostulantes.delete({
-            where: { id: meetingId }
-        });
+
+        await this.prisma.$transaction(async (tx) => {
+            const deleteInterview = tx.entrevistasPostulantes.delete({
+                where: { id: meetingId }
+            });
+            const historicosData = tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: user.id,
+                    idEmpresa: companyId,
+                    accion: 'ELIMINACION',
+                    tablaOrigen: 'EntrevistasPostulantes',
+                    idRegistro: meetingId,
+                    descripcion: `Entrevista programada con fecha ${meeting.scheduled_at} eliminada por ${user.first_name} ${user.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            })
+            return Promise.all([deleteInterview, historicosData])
+        })
 
         return { message: 'Meeting eliminado exitosamente' };
     }

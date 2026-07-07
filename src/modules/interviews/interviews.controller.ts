@@ -17,6 +17,7 @@ export class InterviewsController {
 
     // ─── GETs estáticos primero ───────────────────────────────────────
 
+    // Endpoint para obtener todas las entrevistas de una empresa
     @UseGuards(JwtAuthGuard)
     @Get()
     @ApiOperation({ summary: 'Get all interviews', description: 'Get all interviews for a company' })
@@ -43,6 +44,7 @@ export class InterviewsController {
         );
     }
 
+    // Endpoint para obtener el catalogo de vacantes activas para el formulario de creación de entrevista
     @UseGuards(JwtAuthGuard)
     @Get('/vacancies')
     @ApiOperation({ summary: 'Get active vacancies', description: 'Get vacancies approved by RH (idEstatusVacante = 5) for a company' })
@@ -53,6 +55,7 @@ export class InterviewsController {
         return this.interviewsService.findActiveVacancies(companyId);
     }
 
+    // Endpoint para obtener el catalogo de estatus de entrevistas
     @UseGuards(JwtAuthGuard)
     @Get('/status')
     @ApiOperation({ summary: 'Get catalog of status for interviews', description: 'Get catalog of status for interviews' })
@@ -62,9 +65,10 @@ export class InterviewsController {
         return this.interviewsService.getStatus(companyId);
     }
 
+    // Endpoint para obtener el detalle completo de una entrevista catalogo
     @UseGuards(JwtAuthGuard)
     @Get('/detail/:interviewId')
-    @ApiOperation({ summary: 'Get interview base data', description: 'Get editable data of an interview' })
+    @ApiOperation({ summary: 'Get interview base data', description: 'Get complete editable data of an interview' })
     @ApiResponse({ status: 200, description: 'Interview data obtained successfully' })
     @ApiResponse({ status: 404, description: 'Interview not found' })
     findOne(
@@ -88,8 +92,7 @@ export class InterviewsController {
         return this.interviewsService.findAllByPostulant(companyId, postulantId);
     }
 
-    // Endpoint para obtener el detalle de una reunión específica
-    @UseGuards(JwtAuthGuard)
+    // Endpoint para obtener el detalle de una entrevista programada específica
     @Get('/meetings/:meetingId')
     @ApiOperation({ summary: 'Get meeting detail', description: 'Get meeting detail' })
     @ApiResponse({ status: 200, description: 'Meeting detail' })
@@ -102,6 +105,7 @@ export class InterviewsController {
         return this.interviewsService.getMeetingDetail(companyId, meetingId);
     }
 
+    // Endpoint para obtener todas las entrevistas programadas por id de entrevista catalogo
     @UseGuards(JwtAuthGuard)
     @Get(':interviewId')
     @ApiOperation({ summary: 'Get all programed interviews', description: 'Get all interviews that are programed, main interview and all its secondary interviews' })
@@ -115,7 +119,7 @@ export class InterviewsController {
         return this.interviewsService.findProgrammedInterviews(companyId, interviewId);
     }
 
-    // Crear una entrevista como catalogo
+    // Crear una entrevista como catalogo disponible para ser programada en una o varias vacantes
     @UseGuards(JwtAuthGuard)
     @Post()
     @ApiOperation({ summary: 'Create an interview', description: 'Create an interview' })
@@ -125,11 +129,12 @@ export class InterviewsController {
     create(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Body() dto: CreateInterviewDto,
+        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.create(companyId, dto);
+        return this.interviewsService.create(companyId, dto, user);
     }
 
-    // Programar una entrevista ya creada como catalogo
+    // Programar una entrevista ya creada como catalogo para un postulante
     @UseGuards(JwtAuthGuard)
     @Post('/:interviewId')
     @ApiOperation({ summary: 'Program an interview', description: 'Program an interview' })
@@ -147,6 +152,7 @@ export class InterviewsController {
 
     // ─── PATCHs ──────────────────────────────────────────────────────
 
+    // Endpoint para actualizar una entrevista catalogo cuando no tiene entrevistas programadas
     @UseGuards(JwtAuthGuard)
     @Patch('/detail/:interviewId')
     @ApiOperation({ summary: 'Update interview', description: 'Update editable fields of an interview' })
@@ -155,11 +161,14 @@ export class InterviewsController {
     updateInterview(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string,
-        @Body() dto: UpdateInterviewDto
+        @Body() dto: UpdateInterviewDto,
+        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.updateInterview(companyId, interviewId, dto);
+        return this.interviewsService.updateInterview(companyId, interviewId, dto, user);
     }
 
+    // Endpoint que actualiza una entrevista programada
+    @UseGuards(JwtAuthGuard)
     @Patch('/meetings/:meetingId')
     @ApiOperation({ summary: 'Update meeting', description: 'Update meeting' })
     @ApiResponse({ status: 200, description: 'Meeting updated successfully' })
@@ -168,11 +177,13 @@ export class InterviewsController {
     updateMeeting(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string,
-        @Body() dto: UpdateMeetingDto
+        @Body() dto: UpdateMeetingDto,
+        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.updateMeeting(companyId, meetingId, dto);
+        return this.interviewsService.updateMeeting(companyId, meetingId, dto, user);
     }
 
+    // Endpoint para reprogramar una entrevista
     @UseGuards(JwtAuthGuard)
     @Patch('/meetings/:meetingId/reschedule')
     @ApiOperation({ summary: 'Reschedule interview meeting', description: 'Update scheduled date and duration of a meeting' })
@@ -181,13 +192,15 @@ export class InterviewsController {
     rescheduleInterview(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string,
-        @Body() dto: RescheduleInterviewDto
+        @Body() dto: RescheduleInterviewDto,
+        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.rescheduleInterview(companyId, meetingId, dto);
+        return this.interviewsService.rescheduleInterview(companyId, meetingId, dto, user);
     }
 
     // ─── DELETE ──────────────────────────────────────────────────────
 
+    // Endpoint para elimanr una entrevista catalogo cuando no tiene entrevistas programadas
     @UseGuards(JwtAuthGuard)
     @Delete('/detail/:interviewId')
     @ApiOperation({ summary: 'Delete interview', description: 'Delete an interview permanently' })
@@ -195,11 +208,13 @@ export class InterviewsController {
     @ApiResponse({ status: 404, description: 'Interview not found' })
     deleteInterview(
         @Param('companyId', ParseIntPipe) companyId: number,
-        @Param('interviewId') interviewId: string
+        @Param('interviewId') interviewId: string,
+        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.deleteInterview(companyId, interviewId);
+        return this.interviewsService.deleteInterview(companyId, interviewId, user);
     }
 
+    // Endpoint para eliminar una entrevista programada
     @UseGuards(JwtAuthGuard)
     @Delete('/meetings/:meetingId')
     @ApiOperation({ summary: 'Delete meeting', description: 'Delete a meeting permanently' })
@@ -207,8 +222,9 @@ export class InterviewsController {
     @ApiResponse({ status: 404, description: 'Meeting not found' })
     deleteMeeting(
         @Param('companyId', ParseIntPipe) companyId: number,
-        @Param('meetingId') meetingId: string
+        @Param('meetingId') meetingId: string,
+        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.deleteMeeting(companyId, meetingId);
+        return this.interviewsService.deleteMeeting(companyId, meetingId, user);
     }
 }

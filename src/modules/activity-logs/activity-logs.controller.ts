@@ -19,7 +19,7 @@ export class ActivityLogsController {
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async getActivityLogs(
         @Query('originTable') originTable: string,
-        @Query('recordId', ParseIntPipe) recordId: number,
+        @Query('recordId',) recordId: string,
     ) {
         return this.service.getActivityLogs(originTable, recordId);
     }

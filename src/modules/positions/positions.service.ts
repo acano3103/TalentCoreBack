@@ -229,7 +229,7 @@ export class PositionsService {
                         idEmpresa: companyId,
                         accion: 'CREAR',
                         tablaOrigen: 'CatPuestos',
-                        idRegistro: newPositionId,
+                        idRegistro: String(newPositionId),
                         descripcion: `Puesto creado por ${activeUser.first_name} ${activeUser.last_name}`,
                         fechaCreacion: new Date()
                     }
@@ -399,7 +399,7 @@ export class PositionsService {
                         idEmpresa: companyId,
                         accion: 'EDITAR',
                         tablaOrigen: 'CatPuestos',
-                        idRegistro: positionId,
+                        idRegistro: String(positionId),
                         descripcion: `Puesto actualizado por ${activeUser.first_name} ${activeUser.last_name}`,
                         fechaCreacion: new Date()
                     }
@@ -440,7 +440,7 @@ export class PositionsService {
                 idEmpresa: companyId,
                 accion: 'VALIDAR',
                 tablaOrigen: 'CatPuestos',
-                idRegistro: id,
+                idRegistro: String(id),
                 descripcion: `Puesto ${active ? 'activado' : 'desactivado'} por ${activeUser.first_name} ${activeUser.last_name}`,
                 fechaCreacion: new Date()
             }
@@ -549,7 +549,7 @@ export class PositionsService {
                     idEmpresa: companyId,
                     accion: 'VALIDAR',
                     tablaOrigen: 'CatPuestos',
-                    idRegistro: positionId,
+                    idRegistro: String(positionId),
                     descripcion: `Puesto ${action === 'aprobar' ? 'aprobado' : 'rechazado'} por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
@@ -600,7 +600,7 @@ export class PositionsService {
                     idEmpresa: companyId,
                     accion: 'CREAR',
                     tablaOrigen: 'SolicitudPuesto',
-                    idRegistro: request.id,
+                    idRegistro: String(request.id),
                     descripcion: `Solicitud de puesto creada por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
@@ -760,7 +760,7 @@ export class PositionsService {
                     idEmpresa: companyId,
                     accion: 'ELIMINAR',
                     tablaOrigen: 'SolicitudPuesto',
-                    idRegistro: requestId,
+                    idRegistro: String(requestId),
                     descripcion: `Solicitud de puesto eliminada por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: new Date()
                 }
@@ -825,7 +825,7 @@ export class PositionsService {
                         idEmpresa: companyId,
                         accion: action === 'aprobar' ? 'APROBAR' : 'RECHAZAR',
                         tablaOrigen: 'SolicitudPuesto',
-                        idRegistro: requestId,
+                        idRegistro: String(requestId),
                         descripcion: `Solicitud de puesto ${action === 'aprobar' ? 'aprobada' : 'rechazada'} por ${activeUser.first_name} ${activeUser.last_name}`,
                         fechaCreacion: new Date()
                     }

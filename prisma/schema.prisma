@@ -511,7 +511,6 @@ model EntrevistaCriteriosEvaluacion {
 model Entrevistas {
   id                     String                     @id @default(dbgenerated("(uuid())")) @db.Char(36)
   company_id             Int
-  area_id                Int
   idVacante              Int?
   provider_id            Int
   agent_id               String?                    @db.Char(36)
@@ -1254,7 +1253,7 @@ model HistoricoMovimientos {
   idEmpresa     Int
   accion        String    @db.VarChar(50)
   tablaOrigen   String    @db.VarChar(100)
-  idRegistro    Int
+  idRegistro    String    @db.VarChar(36)
   descripcion   String    @db.Text
   detalles_json Json?
   fechaCreacion DateTime? @default(now()) @db.Timestamp(0)

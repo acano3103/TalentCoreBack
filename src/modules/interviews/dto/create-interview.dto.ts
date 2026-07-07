@@ -62,10 +62,6 @@ export class CreateInterviewDto {
     providerId: number;
 
     @ApiProperty()
-    @IsNumber()
-    areaId: number;
-
-    @ApiProperty()
     @IsString()
     @IsOptional()
     agentId?: string;
