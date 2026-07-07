@@ -172,6 +172,7 @@ export class VacanciesController {
         return this.vacanciesService.deleteRequisition(companyId, requisitionId, activeUser);
     }
 
+    // Endpoint para aprovar o rechazar una requisición como manager o rh
     @Patch('requisitions/:requisitionId')
     @ApiOperation({ summary: 'Evaluate a requisition', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requisition evaluated successfully' })
@@ -180,9 +181,9 @@ export class VacanciesController {
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('requisitionId', ParseIntPipe) requisitionId: number,
-        @Body('action', new DefaultValuePipe('aprobar')) action: 'aprobar' | 'rechazar',
+        @Body() { action, recruiterId }: { action: 'aprobar' | 'rechazar', recruiterId?: number }
     ) {
-        return this.vacanciesService.evaluateRequisition(companyId, requisitionId, action, activeUser);
+        return this.vacanciesService.evaluateRequisition(companyId, requisitionId, action, recruiterId, activeUser);
     }
 
     @Put('requisitions/:id')

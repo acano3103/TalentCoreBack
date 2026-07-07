@@ -477,15 +477,15 @@ export class VacanciesService {
             if (creadorUser) {
                 // Buscamos mediante queryRaw quién es el jefe inmediato real de la persona que CREÓ la vacante
                 const bossResult = await this.prisma.$queryRaw<any[]>`
-                SELECT u.uuid
-                FROM Empleados creador
-                JOIN Empleados jefe ON creador.idJefeInmediato = jefe.idEmpleado
-                JOIN auth_user u ON jefe.idUsuario = u.uuid
-                WHERE creador.idUsuario = ${creadorUser.uuid}
-                    AND creador.idEmpresa = ${companyId}
-                    AND jefe.activo = 1
-                    AND u.is_active = 1
-            `;
+                    SELECT u.uuid
+                    FROM Empleados creador
+                    JOIN Empleados jefe ON creador.idJefeInmediato = jefe.idEmpleado
+                    JOIN auth_user u ON jefe.idUsuario = u.uuid
+                    WHERE creador.idUsuario = ${creadorUser.uuid}
+                        AND creador.idEmpresa = ${companyId}
+                        AND jefe.activo = 1
+                        AND u.is_active = 1
+                `;
 
                 // Si el usuario logueado (activeUser.uuid) coincide con el jefe del creador
                 if (bossResult && bossResult.length > 0 && bossResult[0].uuid === activeUser.uuid) {
@@ -510,12 +510,28 @@ export class VacanciesService {
             }
         }
 
+        const recluiters = await this.prisma.$queryRaw<any[]> `
+            SELECT e.idEmpleado, CONCAT(e.nombre,' ', e.primerApellido,' ', e.segundoApellido) AS nombre, cp.NombrePuesto
+            FROM Empleados e
+            JOIN auth_user u ON e.idUsuario = u.uuid
+            JOIN RelUsuarioRol rur ON u.id = rur.idUsuario
+            JOIN CatPuestos cp ON cp.idPuesto = e.idPuesto
+            WHERE e.activo = 1
+            AND u.is_active = 1
+            AND rur.activo = 1
+            AND cp.aprobada = true
+            AND cp.pendiente = false
+            AND rur.idRol = 4
+            AND e.idEmpresa = ${companyId}
+        `;
+
         return {
             requisition,
             permissions: {
                 canApproveOrReject,
                 userContextRole
-            }
+            },
+            recluiters: recluiters
         };
     }
 
@@ -840,7 +856,7 @@ export class VacanciesService {
         });
     }
 
-    async evaluateRequisition(companyId: number, requisitionId: number, action: 'aprobar' | 'rechazar', activeUser: ActiveUserDto) {
+    async evaluateRequisition(companyId: number, requisitionId: number, action: 'aprobar' | 'rechazar', recruiterId: number | undefined, activeUser: ActiveUserDto) {
 
         const { requisition, permissions } = await this.findRequisitionById(companyId, requisitionId, activeUser);
 
@@ -986,7 +1002,7 @@ export class VacanciesService {
                     // Cierre definitivo del flujo: Pasa a Publicada
                     tx.vacantes.update({
                         where: { idVacante: requisitionId },
-                        data: { idEstatusVacante: 5, links }
+                        data: { idEstatusVacante: 5, links, idReclutadorAsignado: recruiterId }
                     }),
                     tx.historicoMovimientos.create({
                         data: {
