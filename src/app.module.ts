@@ -24,6 +24,7 @@ import { RolesModule } from './modules/roles/roles.module';
 import { VacanciesController } from './modules/vacancies/vacancies.controller';
 import { VacanciesModule } from './modules/vacancies/vacancies.module';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
+import { DigitalFilesModule } from './modules/digital-files/digital-files.module';
 
 @Module({
   imports: [
@@ -59,7 +60,8 @@ import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module
     HeadcountModule,
     RolesModule,
     VacanciesModule,
-    ActivityLogsModule
+    ActivityLogsModule,
+    DigitalFilesModule
   ],
   controllers: [],
   providers: [AreasService],

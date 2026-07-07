@@ -361,6 +361,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 15, Descripcion: 'Bolsa de trabajo', Codigo: 'job-board', idPadre: 13, Activo: true },
             { idModulo: 16, Descripcion: 'Vacantes', Codigo: 'vacancies', idPadre: 13, Activo: true },
             { idModulo: 17, Descripcion: 'Entrevistas', Codigo: 'interviews', idPadre: 13, Activo: true },
+            { idModulo: 18, Descripcion: 'Expedientes digitales', Codigo: 'digital-files', idPadre: null, Activo: true },
+            { idModulo: 19, Descripcion: 'Expedientes', Codigo: 'case-files', idPadre: 18, Activo: true }
         ]
 
         for (const module of modules) {
@@ -595,6 +597,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 1, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Bolsa de trabajo
             { idRol: 1, idModulo: 16, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Vacantes
             { idRol: 1, idModulo: 17, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Entrevistas
+            { idRol: 1, idModulo: 18, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 1, idModulo: 19, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes
 
             // =========================================================================
             // ROL: RH (idRol: 2)
@@ -616,6 +620,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 2, idModulo: 15, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
             { idRol: 2, idModulo: 16, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
             { idRol: 2, idModulo: 17, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 2, idModulo: 18, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 2, idModulo: 19, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes
 
             // =========================================================================
             // ROL: FINANZAS (idRol: 3)
@@ -637,6 +643,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 3, idModulo: 15, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
             { idRol: 3, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
             { idRol: 3, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 3, idModulo: 18, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 3, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
 
             // =========================================================================
             // ROL: RECLUTADOR (idRol: 4)
@@ -658,6 +666,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 4, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Bolsa de trabajo
             { idRol: 4, idModulo: 16, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Vacantes
             { idRol: 4, idModulo: 17, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Entrevistas
+            { idRol: 4, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 4, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
 
             // =========================================================================
             // ROL: MANAGER (idRol: 5)
@@ -679,6 +689,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 5, idModulo: 15, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
             { idRol: 5, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
             { idRol: 5, idModulo: 17, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 5, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 5, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes
 
             // =========================================================================
             // ROL: EMPLEADO (idRol: 6)
@@ -699,7 +711,9 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 6, idModulo: 14, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Requisiciones
             { idRol: 6, idModulo: 15, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
             { idRol: 6, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
-            { idRol: 6, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }  // Entrevistas
+            { idRol: 6, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 6, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 6, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }  // Expedientes
         ];
 
         for (const permiso of permisos) {
