@@ -96,26 +96,26 @@ export class DigitalFilesController {
     return this.digitalFilesService.getDocumentsByPosition(positionId);
   }
 
-  // // Endpoint para registrar un nuevo empleado y subir sus documentos en una sola petición
-  // @UseGuards(JwtAuthGuard)
-  // @Post('employee')
-  // @UseInterceptors(AnyFilesInterceptor())
-  // @ApiConsumes('multipart/form-data')
-  // @ApiOperation({
-  //   summary: 'Registra un nuevo empleado y sube sus documentos en una sola petición',
-  //   description: 'Recibe multipart/form-data y delega todo el procesamiento, parseo y validaciones al servicio.'
-  // })
-  // @ApiResponse({ status: 200, description: 'Empleado registrado correctamente' })
-  // @ApiResponse({ status: 400, description: 'Datos inválidos o faltantes' })
-  // @ApiResponse({ status: 422, description: 'Documentos rechazados por Nubarium' })
-  // @ApiResponse({ status: 500, description: 'Error interno del servidor' })
-  // async insertEmployeeWithFiles(
-  //   @Body('empleado_json') empleadoJsonRaw: string,
-  //   @Body('documento_map') documentoMapRaw: string,
-  //   @Body('id_campania') idCampania: string,
-  //   @UploadedFiles() files: Array<Express.Multer.File>,
-  //   @GetActiveUser() activeUser: ActiveUserDto
-  // ) {
-  //   return await this.digitalFilesService.insertEmployeeWithFiles(empleadoJsonRaw, documentoMapRaw, idCampania, files, activeUser);
-  // }
+  // Endpoint para registrar un nuevo empleado y subir sus documentos en una sola petición
+  @UseGuards(JwtAuthGuard)
+  @Post('employee')
+  @UseInterceptors(AnyFilesInterceptor())
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Registra un nuevo empleado y sube sus documentos en una sola petición',
+    description: 'Recibe multipart/form-data y delega todo el procesamiento, parseo y validaciones al servicio.'
+  })
+  @ApiResponse({ status: 200, description: 'Empleado registrado correctamente' })
+  @ApiResponse({ status: 400, description: 'Datos inválidos o faltantes' })
+  @ApiResponse({ status: 422, description: 'Documentos rechazados por Nubarium' })
+  @ApiResponse({ status: 500, description: 'Error interno del servidor' })
+  async insertEmployeeWithFiles(
+    @Body('empleado_json') empleadoJsonRaw: string,
+    @Body('documento_map') documentoMapRaw: string,
+    @Body('id_campania') idCampania: string,
+    @UploadedFiles() files: Array<Express.Multer.File>,
+    @GetActiveUser() activeUser: ActiveUserDto
+  ) {
+    return await this.digitalFilesService.insertEmployeeWithFiles(empleadoJsonRaw, documentoMapRaw, idCampania, files, activeUser);
+  }
 }
