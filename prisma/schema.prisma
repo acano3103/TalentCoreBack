@@ -44,7 +44,7 @@ model AgentesCriterios {
 
 model Beneficiarios {
   idBeneficiario  Int       @id @default(autoincrement())
-  idCandidato     Int?
+  idEmpleado      Int?
   nombre          String?   @db.VarChar(100)
   primerApellido  String?   @db.VarChar(100)
   segundoApellido String?   @db.VarChar(100)
@@ -421,18 +421,9 @@ model CriterioPreguntas {
 
 model DatosBancarios {
   idDatoBancario Int     @id @default(autoincrement())
-  idCandidato    Int?    @unique(map: "uk_idCandidato")
+  idEmpleado     Int?    @unique(map: "uk_idCandidato")
   banco          String? @db.VarChar(100)
   cuentaBancaria String? @db.VarChar(50)
-}
-
-model DocumentosCandidato {
-  idDocumentoCandidato Int       @id @default(autoincrement())
-  idCandidato          Int?
-  IdDocumento          Int?
-  idEstatusDocumento   Int?      @default(1)
-  rutaArchivo          String?   @db.Text
-  fechaCarga           DateTime? @default(now()) @db.Timestamp(0)
 }
 
 model DocumentosEmpresa {
@@ -463,18 +454,6 @@ model DocumentosPuesto {
   idPuesto      Int
   idDocumento   Int
   esObligatorio Boolean? @default(true)
-}
-
-model DomicilioCandidato {
-  idDomicilio    Int     @id @default(autoincrement())
-  idCandidato    Int?    @unique(map: "uk_idCandidato")
-  codigoPostal   String? @db.VarChar(5)
-  calle          String? @db.VarChar(100)
-  numeroExterior String? @db.VarChar(20)
-  numeroInterior String? @db.VarChar(20)
-  idColonia      Int?
-  municipio      String? @db.VarChar(250)
-  estado         String? @db.VarChar(250)
 }
 
 model DomicilioEmpresas {
@@ -659,7 +638,7 @@ model Integraciones {
 
 model LugarNacimiento {
   idLugarNacimiento Int     @id @default(autoincrement())
-  idCandidato       Int?    @unique(map: "uk_idCandidato")
+  idEmpleado        Int?    @unique(map: "uk_idCandidato")
   lugar             String? @db.VarChar(100)
   pais              String? @db.VarChar(100)
   nacionalidad      String? @db.VarChar(100)
@@ -1265,6 +1244,27 @@ model HistoricoMovimientos {
   @@index([fechaCreacion], map: "idx_creado_at")
   @@index([tablaOrigen, idRegistro], map: "idx_polimorfico")
   @@index([idUsuario], map: "idx_usuario")
+}
+
+model DomicilioEmpleado {
+  idDomicilio    Int     @id @default(autoincrement())
+  idEmpleado     Int?    @unique(map: "uk_idCandidato")
+  codigoPostal   String? @db.VarChar(5)
+  calle          String? @db.VarChar(100)
+  numeroExterior String? @db.VarChar(20)
+  numeroInterior String? @db.VarChar(20)
+  colonia        String? @db.VarChar(250)
+  municipio      String? @db.VarChar(250)
+  estado         String? @db.VarChar(250)
+}
+
+model DocumentosEmpleado {
+  idDocumentoEmpleado Int       @id @default(autoincrement())
+  idEmpleado          Int?
+  IdDocumento         Int?
+  idEstatusDocumento  Int?      @default(1)
+  rutaArchivo         String?   @db.Text
+  fechaCarga          DateTime? @default(now()) @db.Timestamp(0)
 }
 
 enum Entrevistas_interview_type {

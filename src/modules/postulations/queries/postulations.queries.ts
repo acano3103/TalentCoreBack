@@ -64,7 +64,7 @@ export async function createEmployee(
     await tx.$executeRaw`
       INSERT INTO Empleados (
         idEmpresa, idPuesto, idJefeInmediato, idSite, nombre, primerApellido, segundoApellido, idCampania,
-        rfc, correo, telefonoMovil, FechaRegistro, usuarioRegistro
+        curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro
       ) VALUES (
         ${idEmpresa},
         ${idPuesto},
