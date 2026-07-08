@@ -7,6 +7,7 @@ import { DigitalFilesQueries } from './queries/digital-files.queries';
 import * as path from 'path';
 import * as fs from 'fs-extra';
 import { DocumentoAceptado, DocumentoRechazado } from './interfaces/digital-files.interface';
+import { NubariumService } from './services/nubarium.service';
 
 @Injectable()
 export class DigitalFilesService {
@@ -15,7 +16,8 @@ export class DigitalFilesService {
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly nubariumService: NubariumService
   ) { }
 
   async listExpedientes(companyId: number, page: number, limit: number, search: string) {
@@ -505,8 +507,17 @@ export class DigitalFilesService {
         // Guardar archivo en carpeta temporal
         await fs.writeFile(rutaTemp, file.buffer);
 
-        // Validación simulada de Nubarium ---- QUitar cuando se implemente Nubarium
-        const resultadoNubarium = { validado: true, error_infraestructura: false, score: 0.95, motivo_rechazo: null, http_status: 200 };
+        // Validación de documentos con Nubarium
+        const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
+          this.prisma,
+          file.buffer,                 // El buffer/archivo de multer
+          campoNormalizado,     // 'identificacion', 'comprobante_domicilio', etc.
+          idEmpleado,           // El ID del empleado
+          idDocumento,          // El ID numérico de la BD
+          nombreArchivo,        // Ej: identificacion_CURP.pdf
+          rutaRelativaBd,       // string de la ruta guardada
+          usuarioRegistro,
+        );
 
         const esRechazoReal = !resultadoNubarium.validado && !resultadoNubarium.error_infraestructura;
 
