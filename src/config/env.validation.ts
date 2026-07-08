@@ -29,5 +29,18 @@ export const envValidationSchema = Joi.object({
     NUBARIUM_PASSWORD: Joi.string().required(),
     NUBARIUM_TIMEOUT: Joi.number().required(),
     NUBARIUM_FIRMA_URL: Joi.string().required(),
-    NUBARIUM_FIRMA_UBICACION: Joi.array().items(Joi.number()).required(),
+    NUBARIUM_FIRMA_UBICACION: Joi.any()
+        .custom((value, helpers) => {
+            try {
+                if (Array.isArray(value)) return value;
+                const parsed = JSON.parse(value);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+                return helpers.error('any.invalid');
+            } catch (e) {
+                return helpers.error('any.invalid');
+            }
+        }, 'JSON Array Parser')
+        .required(),
 });

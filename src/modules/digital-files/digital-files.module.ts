@@ -3,6 +3,7 @@ import { DigitalFilesController } from './digital-files.controller';
 import { DigitalFilesService } from './digital-files.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { NubariumService } from './services/nubarium.service';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { ConfigService } from '@nestjs/config';
     }),
   ],
   controllers: [DigitalFilesController],
-  providers: [DigitalFilesService]
+  providers: [DigitalFilesService, NubariumService]
 })
 export class DigitalFilesModule { }
