@@ -1176,6 +1176,68 @@ model Vacantes {
   @@index([idUsuarioCreador], map: "fk_vacante_usuario_creador")
 }
 
+model PlantillasDocumentos {
+  id              Int       @id @default(autoincrement())
+  uuid            String    @unique @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  nombre          String    @db.VarChar(200)
+  descripcion     String?   @db.Text
+  archivoOriginal String    @db.VarChar(500)
+  archivoHtml     String?   @db.LongText
+  idEmpresa       Int
+  idModulo        String?   @db.VarChar(100)
+  activa          Boolean   @default(true)
+  fechaCreacion   DateTime? @default(now()) @db.Timestamp(0)
+  fechaActualiz   DateTime? @default(now()) @db.Timestamp(0)
+  idUsuarioCreador Int
+
+  campos             CamposPlantilla[]
+  documentosGenerados DocumentosGenerados[]
+
+  @@index([idEmpresa], map: "idx_plantilla_empresa")
+  @@index([activa], map: "idx_plantilla_activa")
+}
+
+model CamposPlantilla {
+  id            Int       @id @default(autoincrement())
+  idPlantilla   Int
+  identificador String    @db.VarChar(100)
+  nombreCampo   String    @db.VarChar(200)
+  tipoDato      String    @default("texto") @db.VarChar(50)
+  requerido     Boolean   @default(true)
+  orden         Int       @default(0)
+  valorDefault  String?   @db.VarChar(500)
+  textoOriginal String?   @db.Text
+  pagina        Int?      @map("pagina")
+  posicionX     Float?    @map("posicionX")
+  posicionY     Float?    @map("posicionY")
+  ancho         Float?    @map("ancho")
+  alto          Float?    @map("alto")
+
+  plantilla PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Cascade, map: "fk_campo_plantilla")
+
+  @@unique([idPlantilla, identificador], map: "uk_plantilla_identificador")
+  @@index([idPlantilla], map: "idx_campo_plantilla")
+}
+
+model DocumentosGenerados {
+  id              Int       @id @default(autoincrement())
+  uuid            String    @unique @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  idPlantilla     Int
+  idVacante       Int?
+  idCandidato     Int?
+  datosJson       Json?
+  archivoGenerado String?   @db.VarChar(500)
+  estatus         String    @default("pendiente") @db.VarChar(50)
+  fechaGeneracion DateTime? @default(now()) @db.Timestamp(0)
+  idUsuarioGenero Int
+
+  plantilla PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Restrict, map: "fk_docgen_plantilla")
+
+  @@index([idPlantilla], map: "idx_docgen_plantilla")
+  @@index([idVacante], map: "idx_docgen_vacante")
+  @@index([idCandidato], map: "idx_docgen_candidato")
+}
+
 model CatEstatusPostulacion {
   idEstatusPostulacion Int     @id @default(autoincrement())
   descripcion          String  @db.VarChar(45)
