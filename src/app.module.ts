@@ -32,16 +32,16 @@ import { DigitalFilesModule } from './modules/digital-files/digital-files.module
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
-    ServeStaticModule.forRoot(
-      {
-        rootPath: join(__dirname, '..', 'public'),
-        serveRoot: '/public',
-      },
-      {
-        rootPath: join(__dirname, '..', 'media'),
-        serveRoot: '/media',
-      }
-    ),
+   ServeStaticModule.forRoot(
+  {
+    rootPath: join(process.cwd(), 'public'),
+    serveRoot: '/public',
+  },
+  {
+    rootPath: join(process.cwd(), 'media'),
+    serveRoot: '/media',
+  }
+),
     PrismaModule,
     AuthModule,
     PositionsModule,
