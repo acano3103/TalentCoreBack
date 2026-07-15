@@ -26,6 +26,7 @@ import { VacanciesModule } from './modules/vacancies/vacancies.module';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
 import { DigitalFilesModule } from './modules/digital-files/digital-files.module';
 import { DocumentosTemplatesModule } from './modules/documentos-templates/documentos-templates.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
 
 @Module({
   imports: [
@@ -63,7 +64,8 @@ import { DocumentosTemplatesModule } from './modules/documentos-templates/docume
     VacanciesModule,
     ActivityLogsModule,
     DigitalFilesModule,
-    DocumentosTemplatesModule
+    DocumentosTemplatesModule,
+    ContractsModule
   ],
   controllers: [],
   providers: [AreasService],
