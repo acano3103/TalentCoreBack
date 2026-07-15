@@ -254,4 +254,15 @@ export class DocumentosTemplatesController {
     ) {
         return this.service.generate(companyId, id, generateDto, activeUser);
     }
+
+    @Post('generados/:id/compartir')
+    @ApiOperation({ summary: 'Generate sharing link for signature', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Share link generated' })
+    async shareForSignature(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+    ) {
+        return this.service.shareForSignature(companyId, id);
+    }
 }
