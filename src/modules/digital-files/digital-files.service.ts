@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException, UnauthorizedException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { DigitalFilesQueries } from './queries/digital-files.queries';
@@ -8,6 +9,9 @@ import * as path from 'path';
 import * as fs from 'fs-extra';
 import { DocumentoAceptado, DocumentoRechazado } from './interfaces/digital-files.interface';
 import { NubariumService } from './services/nubarium.service';
+import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
+import { generateEmployeeAndLink } from '../postulations/services/credentials.service';
+import JSZip = require('jszip');
 
 @Injectable()
 export class DigitalFilesService {
@@ -17,9 +21,10 @@ export class DigitalFilesService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
-    private readonly nubariumService: NubariumService
+    private readonly nubariumService: NubariumService,
+    private readonly configService: ConfigService,
+    private readonly notifications: NotificationDispatcher,
   ) { }
-
   async listExpedientes(companyId: number, page: number, limit: number, search: string) {
     const where = {
       idEmpresa: companyId,
@@ -80,6 +85,7 @@ export class DigitalFilesService {
 
     const empleado = await this.prisma.empleados.findUnique({
       where: { idEmpleado: employeeId },
+      include: { CatPuestos: { select: { NombrePuesto: true } } },
     });
 
     if (!empleado) {
@@ -113,6 +119,7 @@ export class DigitalFilesService {
       infoEmpleado,
       catalogos,
       idPuesto,
+      puesto: empleado.CatPuestos?.NombrePuesto ?? null,
       estatusExpediente,
       idCampania: infoEmpleado.personales?.idCampania ?? null,
       idEmpleado: employeeId,
@@ -243,9 +250,10 @@ export class DigitalFilesService {
       });
 
       return { documentos };
-    } catch (error) {
-      this.logger.error(error);
-      throw new InternalServerErrorException({ message: error.message || 'Error interno del servidor al obtener documentos' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error interno del servidor al obtener documentos';
+      this.logger.error(message);
+      throw new InternalServerErrorException({ message });
     }
   }
 
@@ -271,7 +279,7 @@ export class DigitalFilesService {
 
     const documentosSubidos: Record<
       number,
-      { archivos: { estatus: number | null; ruta: string; nombre: string }[]; habilitado: boolean }
+      { archivos: { idDocumentoEmpleado: number; estatus: number | null; ruta: string; nombre: string; fecha: string }[]; habilitado: boolean }
     > = {};
 
     for (const doc of docsEmpleado) {
@@ -281,10 +289,12 @@ export class DigitalFilesService {
         documentosSubidos[doc.IdDocumento] = { archivos: [], habilitado: false };
       }
 
-      documentosSubidos[doc.IdDocumento].archivos.push({
+     documentosSubidos[doc.IdDocumento].archivos.push({
+        idDocumentoEmpleado: doc.idDocumentoEmpleado,
         estatus: doc.idEstatusDocumento,
         ruta: this.normalizarRutaDocumento(doc.rutaArchivo),
         nombre: catMap.get(doc.IdDocumento)?.Descripcion ?? '',
+        fecha: doc.fechaCarga ? doc.fechaCarga.toISOString().slice(0, 16).replace('T', ' ') : '',
       });
 
       if (doc.idEstatusDocumento === 1 || doc.idEstatusDocumento === 5) {
@@ -296,7 +306,7 @@ export class DigitalFilesService {
   }
 
 
-  private normalizarRutaDocumento(ruta: string | null): string {
+private normalizarRutaDocumento(ruta: string | null): string {
     if (!ruta) return '';
     let rutaRelativa = ruta;
 
@@ -306,7 +316,8 @@ export class DigitalFilesService {
       rutaRelativa = rutaRelativa.replace(/^(\/RR-HH)?\/media\//, '');
     }
 
-    return rutaRelativa.replace(/\\/g, '/').replace(/^\/+/, '');
+    rutaRelativa = rutaRelativa.replace(/\\/g, '/').replace(/^\/+/, '');
+    return `/media/${rutaRelativa}`;
   }
 
 
@@ -444,42 +455,27 @@ export class DigitalFilesService {
     };
   }
 
-  async insertEmployeeWithFiles(
-    empleadoJsonRaw: string,
-    documentoMapRaw: string,
-    idCampaniaRaw: string,
+  // ─────────────────────────────────────────────────────────────
+  // Lógica compartida de guardado: recibe el idEmpleado YA resuelto
+  // (por CURP en el flujo privado, o por token en el flujo público)
+  // y hace todo el trabajo pesado: guardar archivos, validar con
+  // Nubarium, y correr la transacción de Prisma.
+  // ─────────────────────────────────────────────────────────────
+  private async processEmployeeDocuments(
+    idEmpleado: number,
+    empleadoData: any,
+    documentoMap: Record<string, number>,
+    idCampania: number | null,
     files: Array<Express.Multer.File>,
-    user?: ActiveUserDto
+    usuarioRegistro: string,
   ) {
-
-    if (!empleadoJsonRaw) throw new BadRequestException('Falta la información del empleado');
-
-    let empleadoData: any;
-    let documentoMap: Record<string, number>;
-
-    try {
-      empleadoData = JSON.parse(empleadoJsonRaw);
-      documentoMap = documentoMapRaw ? JSON.parse(documentoMapRaw) : {};
-    } catch (e) {
-      throw new BadRequestException('Formato JSON inválido en empleado_json o documento_map');
-    }
-
-    const idCampania = idCampaniaRaw ? parseInt(idCampaniaRaw, 10) : null;
-    const usuarioRegistro = user?.username || 'sistema';
     const curp = empleadoData.curp?.toUpperCase().trim();
-
     if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
-
-    // Identificar ID del Empleado utilizando la clase de Queries estática
-    const idEmpleado = await DigitalFilesQueries.findIdByCURP(this.prisma, curp);
-    if (!idEmpleado) throw new BadRequestException('Empleado no encontrado por el CURP proporcionado');
 
     // Preparar carpetas y estructuras de control para los archivos
     const contadorPorTipo: Record<string, number> = {};
     const aceptados: DocumentoAceptado[] = [];
     const rechazados: DocumentoRechazado[] = [];
-
-    // Guardaremos temporalmente los metadatos de los archivos aprobados para procesar sus queries dentro de la transacción
     const documentosAProcesar: Array<{ idDocumento: number; rutaRelativa: string }> = [];
 
     const carpetaTemp = path.join(this.mediaRoot, 'temp', curp);
@@ -504,18 +500,16 @@ export class DigitalFilesService {
         const rutaFinal = path.join(carpetaFinal, nombreArchivo);
         const rutaRelativaBd = `${curp}/${nombreArchivo}`;
 
-        // Guardar archivo en carpeta temporal
         await fs.writeFile(rutaTemp, file.buffer);
 
-        // Validación de documentos con Nubarium
         const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
           this.prisma,
-          file.buffer,                 // El buffer/archivo de multer
-          campoNormalizado,     // 'identificacion', 'comprobante_domicilio', etc.
-          idEmpleado,           // El ID del empleado
-          idDocumento,          // El ID numérico de la BD
-          nombreArchivo,        // Ej: identificacion_CURP.pdf
-          rutaRelativaBd,       // string de la ruta guardada
+          file.buffer,
+          campoNormalizado,
+          idEmpleado,
+          idDocumento,
+          nombreArchivo,
+          rutaRelativaBd,
           usuarioRegistro,
         );
 
@@ -537,7 +531,6 @@ export class DigitalFilesService {
           continue;
         }
 
-        // Mover a la ruta final si pasó con éxito
         await fs.copy(rutaTemp, rutaFinal);
 
         documentosAProcesar.push({
@@ -559,7 +552,6 @@ export class DigitalFilesService {
       }
     }
 
-    // Romper el flujo devolviendo un errror si hay documentos inválidos legítimos
     if (rechazados.length > 0) {
       throw new BadRequestException({
         success: false,
@@ -570,11 +562,8 @@ export class DigitalFilesService {
       });
     }
 
-    // Ejecutar la transacción compartiendo el contexto `tx`
     try {
       await this.prisma.$transaction(async (tx) => {
-
-        // Ejecución de la actualización de datos básicos mediante el ORM
         await tx.empleados.update({
           where: { idEmpleado: idEmpleado },
           data: {
@@ -593,21 +582,22 @@ export class DigitalFilesService {
           }
         });
 
-        // Inyección de queries complejas delegadas de actualización inicial
         await DigitalFilesQueries.upsertLugarNacimiento(tx, idEmpleado, empleadoData);
         await DigitalFilesQueries.upsertDomicilio(tx, idEmpleado, empleadoData);
         await DigitalFilesQueries.upsertDatosBancarios(tx, idEmpleado, empleadoData.banco, empleadoData.cuenta_bancaria);
 
-        // Procesar de forma secuencial la lógica del segundo SP para cada archivo aprobado
         for (const doc of documentosAProcesar) {
           await DigitalFilesQueries.subirDocumentoEmpleado(
-            tx,
+         tx,
             idEmpleado,
             doc.idDocumento,
             doc.rutaRelativa,
             usuarioRegistro
           );
         }
+      }, {
+        maxWait: 5000,
+        timeout: 25000
       });
 
       return {
@@ -617,9 +607,381 @@ export class DigitalFilesService {
         aceptados,
       };
 
-    } catch (error) {
-      this.logger.error('Error procesando la transacción de base de datos de empleados', error.stack);
-      throw new InternalServerErrorException({ success: false, message: error.message || 'Error en transacciones Prisma' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error en transacciones Prisma';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error('Error procesando la transacción de base de datos de empleados', stack);
+      throw new InternalServerErrorException({ success: false, message });
     }
   }
+
+ // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/employee
+  // Flujo PRIVADO (RH logueado): resuelve el idEmpleado por CURP
+  // ─────────────────────────────────────────────────────────────
+  async insertEmployeeWithFiles(
+    empleadoJsonRaw: string,
+    documentoMapRaw: string,
+    idCampaniaRaw: string,
+    files: Array<Express.Multer.File>,
+    user?: ActiveUserDto
+  ) {
+    if (!empleadoJsonRaw) throw new BadRequestException('Falta la información del empleado');
+
+    let empleadoData: any;
+    let documentoMap: Record<string, number>;
+
+    try {
+      empleadoData = JSON.parse(empleadoJsonRaw);
+      documentoMap = documentoMapRaw ? JSON.parse(documentoMapRaw) : {};
+    } catch (e) {
+      throw new BadRequestException('Formato JSON inválido en empleado_json o documento_map');
+    }
+
+    const idCampania = idCampaniaRaw ? parseInt(idCampaniaRaw, 10) : null;
+    const usuarioRegistro = user?.username || 'sistema';
+    const curp = empleadoData.curp?.toUpperCase().trim();
+
+    if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
+
+    const idEmpleado = await DigitalFilesQueries.findIdByCURP(this.prisma, curp);
+    if (!idEmpleado) throw new BadRequestException('Empleado no encontrado por el CURP proporcionado');
+
+    return this.processEmployeeDocuments(idEmpleado, empleadoData, documentoMap, idCampania, files, usuarioRegistro);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/:token/public
+  // Flujo PÚBLICO (candidato sin sesión): resuelve el idEmpleado
+  // verificando el JWT del token, igual que initExpediente.
+  // ─────────────────────────────────────────────────────────────
+  async insertEmployeeWithFilesPublic(
+    token: string,
+    empleadoJsonRaw: string,
+    documentoMapRaw: string,
+    idCampaniaRaw: string,
+    files: Array<Express.Multer.File>,
+  ) {
+    let employeeId: number;
+    try {
+      const payload = await this.jwtService.verifyAsync(token);
+      employeeId = Number(payload.employee_id);
+      if (!employeeId) throw new UnauthorizedException('El token no contiene un ID de empleado válido');
+    } catch (error) {
+      throw new UnauthorizedException('El enlace no es válido o ya ha expirado.');
+    }
+
+    if (!empleadoJsonRaw) throw new BadRequestException('Falta la información del empleado');
+
+    let empleadoData: any;
+    let documentoMap: Record<string, number>;
+
+    try {
+      empleadoData = JSON.parse(empleadoJsonRaw);
+      documentoMap = documentoMapRaw ? JSON.parse(documentoMapRaw) : {};
+    } catch (e) {
+      throw new BadRequestException('Formato JSON inválido en empleado_json o documento_map');
+    }
+
+    const idCampania = idCampaniaRaw ? parseInt(idCampaniaRaw, 10) : null;
+
+    return this.processEmployeeDocuments(employeeId, empleadoData, documentoMap, idCampania, files, 'candidato');
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GET .../digital-files/:employeeId/status-history
+  // Estatus actual + catálogo + historial de cambios
+  // ─────────────────────────────────────────────────────────────
+  async getStatusHistory(employeeId: number) {
+    const expediente = await this.prisma.expedientes.findFirst({
+      where: { idEmpleado: employeeId },
+      orderBy: { idExpediente: 'desc' },
+    });
+
+    if (!expediente) {
+      throw new NotFoundException('Expediente no encontrado.');
+    }
+
+    const [estatusActualCat, catalogo, historialRaw] = await Promise.all([
+      expediente.idEstatus
+        ? this.prisma.catEstatusExpedientes.findUnique({ where: { IdEstatus: expediente.idEstatus } })
+        : null,
+      this.prisma.catEstatusExpedientes.findMany({ where: { Activo: true } }),
+      this.prisma.historialExpediente.findMany({
+        where: { idExpediente: expediente.idExpediente },
+        orderBy: { fechaCambio: 'desc' },
+      }),
+    ]);
+
+    // Resolver nombres de estatus anterior/nuevo para cada fila del historial
+    const idsEstatus = [
+      ...new Set(
+        historialRaw.flatMap((h) => [h.idEstatusAnterior, h.idEstatusNuevo]).filter((id): id is number => id != null),
+      ),
+    ];
+    const estatusMap = new Map(
+      (await this.prisma.catEstatusExpedientes.findMany({ where: { IdEstatus: { in: idsEstatus } } })).map((e) => [
+        e.IdEstatus,
+        e.Descripcion,
+      ]),
+    );
+
+    const historial = historialRaw.map((h) => ({
+      fecha: h.fechaCambio,
+      estatusAnterior: h.idEstatusAnterior != null ? estatusMap.get(h.idEstatusAnterior) || 'N/A' : 'N/A',
+      estatusNuevo: h.idEstatusNuevo != null ? estatusMap.get(h.idEstatusNuevo) || 'N/A' : 'N/A',
+      comentario: h.comentario || '',
+      usuario: h.usuario || '',
+    }));
+
+    return {
+      success: true,
+      estatusActual: estatusActualCat?.Descripcion ?? null,
+      idEstatusActual: expediente.idEstatus,
+      estatusCatalogo: catalogo.map((c) => ({ id: c.IdEstatus, descripcion: c.Descripcion })),
+      historial,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/:employeeId/status
+  // Cambiar estatus del expediente + registrar en historial
+  // ─────────────────────────────────────────────────────────────
+  async updateExpedienteStatus(employeeId: number, nuevoEstatus: number, comentario: string, usuario: string) {
+    const expediente = await this.prisma.expedientes.findFirst({
+      where: { idEmpleado: employeeId },
+      orderBy: { idExpediente: 'desc' },
+    });
+
+    if (!expediente) {
+      throw new NotFoundException('Expediente no encontrado.');
+    }
+
+    const idEstatusAnterior = expediente.idEstatus;
+
+    await this.prisma.$transaction([
+      this.prisma.expedientes.update({
+        where: { idExpediente: expediente.idExpediente },
+        data: {
+          idEstatus: nuevoEstatus,
+          fechaActualizacion: new Date(),
+          usuarioActualizacion: usuario,
+        },
+      }),
+      this.prisma.historialExpediente.create({
+        data: {
+          idExpediente: expediente.idExpediente,
+          idEstatusAnterior,
+          idEstatusNuevo: nuevoEstatus,
+          fechaCambio: new Date(),
+          usuario,
+          comentario,
+        },
+      }),
+    ]);
+
+    return { success: true, message: 'Estatus del expediente actualizado correctamente.' };
+  }
+
+
+  // ─────────────────────────────────────────────────────────────
+  // GET .../digital-files/document-status-catalog
+  // ─────────────────────────────────────────────────────────────
+  async getDocumentStatusCatalog() {
+    const estatuses = await this.prisma.catEstatusDocumentos.findMany();
+    return estatuses.map((e) => ({ id: e.idEstatusDocumento, descripcion: e.Descripcion }));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/documents/:idDocumentoEmpleado/status
+  // Actualiza el estatus de UN documento específico + historial.
+  // Si todos los documentos del empleado quedan en estatus 4 (Aceptado),
+  // marca el expediente completo automáticamente (igual que el sistema antiguo).
+  // ─────────────────────────────────────────────────────────────
+  async updateDocumentStatus(
+    idDocumentoEmpleado: number,
+    nuevoEstatus: number,
+    comentario: string,
+    usuario: string,
+  ) {
+    const doc = await this.prisma.documentosEmpleado.findUnique({ where: { idDocumentoEmpleado } });
+    if (!doc) throw new NotFoundException('Documento no encontrado.');
+
+    const estatusAnterior = doc.idEstatusDocumento;
+
+    await this.prisma.documentosEmpleado.update({
+      where: { idDocumentoEmpleado },
+      data: { idEstatusDocumento: nuevoEstatus },
+    });
+
+    await this.prisma.$executeRaw`
+      INSERT INTO HistorialDocumentosCandidato (idDocumentoCandidato, rutaArchivo, usuario, comentario, estatusAnterior, estatusActual)
+      VALUES (${idDocumentoEmpleado}, ${doc.rutaArchivo}, ${usuario}, ${comentario}, ${estatusAnterior}, ${nuevoEstatus});
+    `;
+
+    if (doc.idEmpleado) {
+      const pendientes = await this.prisma.documentosEmpleado.count({
+        where: { idEmpleado: doc.idEmpleado, idEstatusDocumento: { not: 4 } },
+      });
+
+      if (pendientes === 0) {
+        const expediente = await this.prisma.expedientes.findFirst({
+          where: { idEmpleado: doc.idEmpleado },
+          orderBy: { idExpediente: 'desc' },
+        });
+
+        if (expediente && expediente.idEstatus !== 4) {
+          await this.prisma.$transaction([
+            this.prisma.expedientes.update({
+              where: { idExpediente: expediente.idExpediente },
+              data: { idEstatus: 4, fechaActualizacion: new Date(), usuarioActualizacion: usuario },
+            }),
+            this.prisma.historialExpediente.create({
+              data: {
+                idExpediente: expediente.idExpediente,
+                idEstatusAnterior: expediente.idEstatus,
+                idEstatusNuevo: 4,
+                fechaCambio: new Date(),
+                usuario,
+                comentario: 'Cambio automático: todos los documentos fueron aceptados',
+              },
+            }),
+          ]);
+        }
+      }
+    }
+
+    return { success: true, message: 'Estatus del documento actualizado correctamente.' };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GET .../digital-files/:employeeId/download-history
+  // ─────────────────────────────────────────────────────────────
+  async getDownloadHistory(employeeId: number) {
+    const historial = await this.prisma.$queryRaw <
+      { idDescarga: number; usuario: string; motivo: string; fecha: Date }[]
+    >`
+      SELECT idDescarga, usuarioRegistro AS usuario, motivo, fechaDescarga AS fecha
+      FROM HistorialDescargasExpediente
+      WHERE idCandidato = ${employeeId}
+      ORDER BY fechaDescarga DESC;
+    `;
+
+    return {
+      success: true,
+      historial: historial.map((h) => ({
+        idDescarga: h.idDescarga,
+        usuario: h.usuario,
+        motivo: h.motivo,
+        fecha: h.fecha ? h.fecha.toISOString().slice(0, 16).replace('T', ' ') : '',
+      })),
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/:employeeId/download-zip
+  // Genera y regresa el ZIP con todos los documentos del empleado.
+  // Solo permitido si el expediente está completo (idEstatus = 4).
+  // ─────────────────────────────────────────────────────────────
+  async downloadExpedienteZip(employeeId: number, motivo: string, usuario: string): Promise<Buffer> {
+    if (!motivo || !motivo.trim()) {
+      throw new BadRequestException('Debes ingresar un motivo de descarga.');
+    }
+
+    const expediente = await this.prisma.expedientes.findFirst({
+      where: { idEmpleado: employeeId },
+      orderBy: { idExpediente: 'desc' },
+    });
+
+    if (!expediente || expediente.idEstatus !== 4) {
+      throw new ForbiddenException('El expediente no está completo, no se puede descargar todavía.');
+    }
+
+    await this.prisma.$executeRaw`
+      INSERT INTO HistorialDescargasExpediente (idCandidato, usuarioRegistro, motivo)
+      VALUES (${employeeId}, ${usuario}, ${motivo});
+    `;
+
+    const documentos = await this.prisma.documentosEmpleado.findMany({
+      where: { idEmpleado: employeeId },
+      select: { rutaArchivo: true },
+    });
+
+    if (documentos.length === 0) {
+      throw new NotFoundException('No hay documentos para este empleado.');
+    }
+
+    const zip = new JSZip();
+    for (const doc of documentos) {
+      if (!doc.rutaArchivo) continue;
+      const rutaRelativa = doc.rutaArchivo.replace('/media/', '').replace(/\\/g, '/');
+      const rutaAbsoluta = path.join(this.mediaRoot, rutaRelativa);
+      if (fs.existsSync(rutaAbsoluta)) {
+        zip.file(path.basename(rutaAbsoluta), fs.readFileSync(rutaAbsoluta));
+      }
+    }
+
+    return zip.generateAsync({ type: 'nodebuffer' });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/employee-link
+  // Da de alta un nuevo empleado directamente (sin pasar por
+  // postulación/vacante) y le envía el link para subir su
+  // documentación e información.
+  // ─────────────────────────────────────────────────────────────
+  async createExpedienteAndLink(
+    expedienteJsonRaw: string,
+    files: Array<Express.Multer.File>,
+    activeUser: ActiveUserDto,
+    companyId: number,
+  ) {
+    if (!expedienteJsonRaw) throw new BadRequestException('Faltan los datos del expediente');
+
+    let data: any;
+    try {
+      data = JSON.parse(expedienteJsonRaw);
+    } catch (e) {
+      throw new BadRequestException('Formato JSON inválido en expediente_json');
+    }
+
+    const requiredFields = [
+      'nombre', 'apellido1', 'curp', 'correo', 'telefono',
+      'idPuesto', 'idJefeInmediato', 'idSite',
+    ];
+    const faltantes = requiredFields.filter((f) => data[f] === undefined || data[f] === null || data[f] === '');
+    if (faltantes.length > 0) {
+      throw new BadRequestException(`Faltan los siguientes campos: ${faltantes.join(', ')}`);
+    }
+
+    const result = await generateEmployeeAndLink(
+      {
+        jwtService: this.jwtService,
+        frontUrl: this.configService.get<string>('FRONT_URL') || '',
+        nombre: data.nombre,
+        apellido1: data.apellido1,
+        apellido2: data.apellido2 || '',
+        curp: data.curp.toUpperCase().trim(),
+        correo: data.correo,
+        telefono: data.telefono,
+        idPuesto: Number(data.idPuesto),
+        idUsuario: activeUser.uuid,
+        idCampania: data.idCampania ? Number(data.idCampania) : null,
+        idEmpresa: companyId,
+        idJefeInmediato: Number(data.idJefeInmediato),
+        idSite: Number(data.idSite),
+      },
+      files ?? [],
+      this.prisma,
+      this.notifications.notify.bind(this.notifications),
+    );
+
+    return {
+      success: true,
+      message: 'Expediente creado correctamente. Se envió el enlace de documentación al empleado.',
+      ...result,
+    };
+  }
+  
 }
+

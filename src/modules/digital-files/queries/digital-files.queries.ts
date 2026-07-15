@@ -27,20 +27,20 @@ export class DigitalFilesQueries {
     }
 
     // Inserta o actualiza el Domicilio
-    static async upsertDomicilio(prisma: any, idEmpleado: number, data: any): Promise<void> {
-        await prisma.$executeRaw`
-      INSERT INTO DomicilioEmpleado (idEmpleado, codigoPostal, calle, numeroExterior, numeroInterior, idColonia, municipio, estado)
+   static async upsertDomicilio(prisma: any, idEmpleado: number, data: any): Promise<void> {
+    await prisma.$executeRaw`
+      INSERT INTO DomicilioEmpleado (idEmpleado, codigoPostal, calle, numeroExterior, numeroInterior, colonia, municipio, estado)
       VALUES (${idEmpleado}, ${data.codigo_postal}, ${data.calle}, ${data.numero_exterior}, ${data.numero_interior}, ${data.colonia}, ${data.municipio}, ${data.estado})
       ON DUPLICATE KEY UPDATE
         codigoPostal = VALUES(codigoPostal),
         calle = VALUES(calle),
         numeroExterior = VALUES(numeroExterior),
         numeroInterior = VALUES(numeroInterior),
-        idColonia = VALUES(idColonia),
+        colonia = VALUES(colonia),
         municipio = VALUES(municipio),
         estado = VALUES(estado);
     `;
-    }
+}
 
     // Inserta o actualiza los Datos Bancarios
     static async upsertDatosBancarios(prisma: any, idEmpleado: number, banco: string, cuentaBancaria: string): Promise<void> {
@@ -116,14 +116,14 @@ export class DigitalFilesQueries {
 
         // 2. Insertar historial del documento cargado
         await prisma.$executeRaw`
-            INSERT INTO HistorialDocumentosEmpleado (idDocumentoEmpleado, rutaArchivo, usuario, comentario, estatusAnterior, estatusActual)
+            INSERT INTO HistorialDocumentosCandidato (idDocumentoCandidato, rutaArchivo, usuario, comentario, estatusAnterior, estatusActual)
             VALUES (${idDocumentoEmpleado}, ${rutaArchivo}, ${usuario}, ${comentario}, ${estatusAnterior}, 2);
         `;
 
-        // 3. Obtener el último expediente asociado al empleado para gestionar su flujo de estados
+       // 3. Obtener el último expediente asociado al empleado para gestionar su flujo de estados
         const expedientes = await prisma.$queryRaw`
             SELECT idExpediente, idEstatus 
-            FROM expedientes
+            FROM Expedientes
             WHERE idEmpleado = ${idEmpleado}
             ORDER BY idExpediente DESC
             LIMIT 1;
@@ -141,7 +141,7 @@ export class DigitalFilesQueries {
                 `;
 
                 await prisma.$executeRaw`
-                    UPDATE expedientes
+                    UPDATE Expedientes
                     SET idEstatus = 3,
                         fechaActualizacion = NOW(),
                         usuarioActualizacion = ${usuario}
