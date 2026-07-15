@@ -629,6 +629,203 @@ export class DocumentosTemplatesService {
     }
 
 
+    async shareForSignature(companyId: number, id: number) {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { id, plantilla: { idEmpresa: companyId } },
+        });
+
+        if (!documento) throw new NotFoundException('Documento generado no encontrado');
+
+        if (!documento.tokenFirma) {
+            const token = crypto.randomUUID();
+            await this.prisma.documentosGenerados.update({
+                where: { id },
+                data: { tokenFirma: token },
+            });
+            return { token, url: `/firmar/${token}` };
+        }
+
+        return { token: documento.tokenFirma, url: `/firmar/${documento.tokenFirma}` };
+    }
+
+    async getForPublicSignature(token: string) {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { tokenFirma: token },
+            include: {
+                plantilla: {
+                    include: { campos: { orderBy: { orden: 'asc' } } }
+                }
+            }
+        });
+
+        if (!documento) throw new NotFoundException('Documento de firma no encontrado');
+
+        const firmaCampos = documento.plantilla.campos.filter(c => c.tipoDato === 'firma');
+
+        let previewUrl: string | null = null;
+        if (documento.archivoGenerado) {
+            const ext = path.extname(documento.archivoGenerado).toLowerCase();
+            if (ext === '.pdf') {
+                const pdfPath = path.join(process.cwd(), documento.archivoGenerado);
+                if (fs.existsSync(pdfPath)) {
+                    previewUrl = `/api/v2/documentos/public/firmar/${token}/pdf`;
+                }
+            }
+        }
+
+        return {
+            id: documento.id,
+            plantillaNombre: documento.plantilla.nombre,
+            firmado: documento.firmado,
+            firmaCampos: firmaCampos.map(c => ({
+                identificador: c.identificador,
+                nombreCampo: c.nombreCampo,
+                pagina: c.pagina,
+                posicionX: c.posicionX,
+                posicionY: c.posicionY,
+                ancho: c.ancho || 150,
+                alto: c.alto || 60,
+            })),
+            previewUrl,
+        };
+    }
+
+    async serveSignaturePdf(token: string, res: any) {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { tokenFirma: token },
+        });
+
+        if (!documento || !documento.archivoGenerado) {
+            throw new NotFoundException('Documento no encontrado');
+        }
+
+        const filePath = path.join(process.cwd(), documento.archivoGenerado);
+        if (!fs.existsSync(filePath)) {
+            throw new NotFoundException('Archivo no encontrado');
+        }
+
+        const ext = path.extname(filePath).toLowerCase();
+
+        if (ext === '.pdf') {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'inline');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.sendFile(filePath);
+        } else {
+            // DOCX → convertir a PDF con mammoth + puppeteer
+            const pdfBuffer = await convertDocxToPdf(filePath);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'inline');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.end(pdfBuffer);
+        }
+    }
+
+    async savePublicSignature(token: string, signatureData: { imagen: string; camposFirmados?: Record<string, string> }) {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { tokenFirma: token },
+            include: {
+                plantilla: {
+                    include: { campos: true }
+                }
+            }
+        });
+
+        if (!documento) throw new NotFoundException('Documento de firma no encontrado');
+        if (documento.firmado) throw new BadRequestException('El documento ya fue firmado');
+
+        if (!documento.archivoGenerado) {
+            throw new BadRequestException('El documento no tiene un archivo generado');
+        }
+
+        const firmaCampos = documento.plantilla.campos.filter(c => c.tipoDato === 'firma');
+        if (firmaCampos.length === 0) {
+            throw new BadRequestException('El documento no tiene campos de firma');
+        }
+
+        const outputPath = path.join(process.cwd(), documento.archivoGenerado);
+        const ext = path.extname(outputPath).toLowerCase();
+
+        const firmaMeta = {
+            fechaFirma: new Date().toISOString(),
+            camposFirmados: signatureData.camposFirmados || {},
+        };
+
+        if (ext === '.pdf') {
+            await this.embedSignatureInPdf(outputPath, firmaCampos, signatureData.imagen);
+
+            return this.prisma.documentosGenerados.update({
+                where: { id: documento.id },
+                data: { firmado: true, datosFirma: firmaMeta },
+            });
+        } else {
+            // DOCX: convertir a PDF, incrustar firma, guardar PDF firmado
+            const pdfBuffer = await convertDocxToPdf(outputPath);
+
+            const outputDir = path.join(process.cwd(), 'media', 'documentos-generados');
+            const pdfFilename = `${crypto.randomUUID()}_firmado.pdf`;
+            const pdfPath = path.join(outputDir, pdfFilename);
+
+            fs.writeFileSync(pdfPath, pdfBuffer);
+
+            // Incrustar firma en el PDF recién generado
+            if (firmaCampos.some(c => c.posicionX != null && c.posicionY != null && c.pagina != null)) {
+                await this.embedSignatureInPdf(pdfPath, firmaCampos, signatureData.imagen);
+            }
+
+            return this.prisma.documentosGenerados.update({
+                where: { id: documento.id },
+                data: {
+                    firmado: true,
+                    datosFirma: firmaMeta,
+                    archivoGenerado: `media/documentos-generados/${pdfFilename}`,
+                },
+            });
+        }
+    }
+
+    private async embedSignatureInPdf(
+        pdfPath: string,
+        firmaCampos: any[],
+        signatureBase64: string,
+    ) {
+        const pdfBytes = fs.readFileSync(pdfPath);
+        const pdfDoc = await PDFDocument.load(pdfBytes);
+
+        const base64Data = signatureBase64.replace(/^data:image\/png;base64,/, '');
+        const imageBytes = Buffer.from(base64Data, 'base64');
+        const signatureImage = await pdfDoc.embedPng(imageBytes);
+
+        for (const campo of firmaCampos) {
+            if (campo.pagina == null || campo.posicionX == null || campo.posicionY == null) continue;
+
+            const pages = pdfDoc.getPages();
+            const page = pages[campo.pagina - 1];
+            if (!page) continue;
+
+            const { height } = page.getSize();
+            const x = campo.posicionX;
+            const y = height - campo.posicionY;
+
+            const ancho = campo.ancho || 150;
+            const alto = campo.alto || 60;
+
+            page.drawImage(signatureImage, {
+                x,
+                y: y - alto,
+                width: ancho,
+                height: alto,
+            });
+        }
+
+        const modifiedPdfBytes = await pdfDoc.save();
+        fs.writeFileSync(pdfPath, modifiedPdfBytes);
+    }
+
     async serveOriginalPdf(companyId: number, id: number): Promise<
         { type: 'pdf'; path: string } | { type: 'html'; content: string }
     > {

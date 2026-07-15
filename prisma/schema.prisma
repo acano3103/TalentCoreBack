@@ -1230,6 +1230,9 @@ model DocumentosGenerados {
   estatus         String    @default("pendiente") @db.VarChar(50)
   fechaGeneracion DateTime? @default(now()) @db.Timestamp(0)
   idUsuarioGenero Int
+  tokenFirma      String?   @unique @db.VarChar(100)
+  firmado         Boolean   @default(false)
+  datosFirma      Json?
 
   plantilla PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Restrict, map: "fk_docgen_plantilla")
 
