@@ -1,0 +1,32 @@
+export interface EmployeeQueryResult {
+    nombre: string;
+    primerApellido: string;
+    segundoApellido: string;
+    curp: string;
+    rfc: string;
+    correo: string;
+    telefonoMovil: string;
+    idPuesto: number;
+    nombrePuesto: string;
+    idTipoPuesto: number;
+    TipoPuesto: string;
+    IdNivelSalario: number;
+    NivelSalarioNombre: string;
+    NivelSalarioDescripcion: string;
+    NivelSalarioSalarioMinimo: number;
+    NivelSalarioSalarioMaximo: number;
+    idEmpresa: number;
+    Empresa: string;
+    idSite: number;
+    Ubicacion: string;
+    idArea: number;
+    Area: string;
+    idSalario: number | null;
+    salarioBruto: number | null;
+    salarioNeto: number | null;
+    fechaInicioSalario: Date | null;
+    idTipoMoneda: number | null;
+    TipoMoneda: string | null;
+    idPeriodicidadPago: number | null;
+    PeriodicidadPago: string | null;
+}

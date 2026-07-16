@@ -1,11 +1,16 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 
-@Controller('employees')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('companies/:companyId/employees')
 export class EmployeesController {
-  constructor(private readonly employeesService: EmployeesService) {}
+  constructor(private readonly employeesService: EmployeesService) { }
 
   @Post()
   create(@Body() createEmployeeDto: CreateEmployeeDto) {
@@ -17,18 +22,25 @@ export class EmployeesController {
     return this.employeesService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.employeesService.findOne(+id);
+  // Endpint para obtener un empleado por su id
+  @Get('/:employeeId')
+  @ApiOperation({ summary: 'Get employee by id', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employee retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  findOne(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Param('companyId', ParseIntPipe) companyId: number
+  ) {
+    return this.employeesService.findOne(companyId, employeeId);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateEmployeeDto: UpdateEmployeeDto) {
-    return this.employeesService.update(+id, updateEmployeeDto);
+  @Patch('/:employeeId')
+  update(@Param('employeeId', ParseIntPipe) employeeId: number, @Body() updateEmployeeDto: UpdateEmployeeDto) {
+    return this.employeesService.update(+employeeId, updateEmployeeDto);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.employeesService.remove(+id);
+  @Delete('/:employeeId')
+  remove(@Param('employeeId', ParseIntPipe) employeeId: number) {
+    return this.employeesService.remove(+employeeId);
   }
 }
