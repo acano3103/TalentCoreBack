@@ -35,6 +35,8 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedRolesPermisos(); /** RelRolPermisos */
             await this.seedEstatusSolicitudPuesto(); /** CatEstatusSolicitudPuesto */
             await this.seedEstatusContratos(); /** CatEstatusContratos */
+            await this.seedTiposMoneda(); /** CatTiposMoneda */
+            await this.seedPeriodicidadesPago(); /** CatPeriodicidadesPago */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -781,6 +783,44 @@ export class CatalogsSeedService implements OnModuleInit {
             ON DUPLICATE KEY UPDATE 
                 descripcion = VALUES(descripcion), 
                 activo = VALUES(activo);
+        `;
+        }
+    }
+
+    // Seeds initial currency types into the database.
+    private async seedTiposMoneda() {
+        const types = [
+            { idTipoMoneda: 1, codigo: 'MXN', descripcion: 'Peso Mexicano' },
+            { idTipoMoneda: 2, codigo: 'USD', descripcion: 'Dólar Americano' },
+            { idTipoMoneda: 3, codigo: 'EUR', descripcion: 'Euro' },
+        ];
+
+        for (const type of types) {
+            await this.prisma.$queryRaw`
+            INSERT INTO CatTiposMoneda (idTipoMoneda, codigo, descripcion)
+            VALUES (${type.idTipoMoneda}, ${type.codigo}, ${type.descripcion})
+            ON DUPLICATE KEY UPDATE 
+                descripcion = VALUES(descripcion), 
+                activo = VALUES(activo);
+        `;
+        }
+    }
+
+    // Seeds initial payment frequencies into the database.
+    private async seedPeriodicidadesPago() {
+        const types = [
+            { idPeriodicidadPago: 1, descripcion: 'Semanal' },
+            { idPeriodicidadPago: 2, descripcion: 'Catorcenal' },
+            { idPeriodicidadPago: 3, descripcion: 'Quincenal' },
+            { idPeriodicidadPago: 4, descripcion: 'Mensual' },
+        ];
+
+        for (const type of types) {
+            await this.prisma.$queryRaw`
+            INSERT INTO CatPeriodicidadesPago (idPeriodicidadPago, descripcion)
+            VALUES (${type.idPeriodicidadPago}, ${type.descripcion})
+            ON DUPLICATE KEY UPDATE 
+                descripcion = VALUES(descripcion);
         `;
         }
     }

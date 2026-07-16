@@ -13,7 +13,9 @@ export type CatalogKey =
   | 'centro-costos'
   | 'registros-patronales'
   | 'tipos-ubicaciones'
-  | 'empleados';
+  | 'empleados'
+  | 'tipos-monedas'
+  | 'periodicidades-pagos';
 
 @Injectable()
 export class CatalogsService {
@@ -141,6 +143,20 @@ export class CatalogsService {
           where: { idEmpresa: companyId, activo: true },
           select: { idEmpleado: true, nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
           orderBy: { nombre: 'asc' },
+        });
+
+      case 'tipos-monedas':
+        return this.prisma.catTiposMoneda.findMany({
+          where: { activo: true },
+          select: { idTipoMoneda: true, codigo: true, descripcion: true },
+          orderBy: { codigo: 'asc' },
+        });
+
+      case 'periodicidades-pagos':
+        return this.prisma.catPeriodicidadesPago.findMany({
+          where: { activo: true },
+          select: { idPeriodicidadPago: true, descripcion: true },
+          orderBy: { descripcion: 'asc' },
         });
 
       default:

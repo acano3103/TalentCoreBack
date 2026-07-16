@@ -25,12 +25,14 @@ export class ContractsService {
           IFNULL(cec.descripcion, 'PENDIENTE DE GENERAR') AS estatusContratoDescripcion,
           IFNULL(c.fechaInicioContrato, 'PENDIENTE') AS fechaContratoInicio,
           IFNULL(c.fechaTerminoContrato, 'PENDIENTE') AS fechaContratoTermino,
+          IFNULL(hs.salarioBruto, null) AS sueldo,
           c.idContrato
         FROM Empleados e
         INNER JOIN Expedientes ex ON e.idEmpleado = ex.idEmpleado
         INNER JOIN CatPuestos p ON e.idPuesto = p.idPuesto
         LEFT JOIN Contratos c ON e.idEmpleado = c.idEmpleado
         LEFT JOIN CatEstatusContratos cec ON c.idEstatusContrato = cec.idEstatusContrato
+        LEFT JOIN HistorialSalarios hs ON hs.idEmpleado = e.idEmpleado
         WHERE e.idEmpresa = ${companyId}
           AND e.activo = 1
           AND ex.idEstatus = 4
