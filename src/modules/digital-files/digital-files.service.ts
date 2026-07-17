@@ -795,10 +795,12 @@ private normalizarRutaDocumento(ruta: string | null): string {
   // ─────────────────────────────────────────────────────────────
   // POST .../digital-files/documents/:idDocumentoEmpleado/status
   // Actualiza el estatus de UN documento específico + historial.
+  // Si el nuevo estatus es Rechazado (5), notifica por correo al
+  // empleado con la lista de documentos rechazados/pendientes.
   // Si todos los documentos del empleado quedan en estatus 4 (Aceptado),
   // marca el expediente completo automáticamente (igual que el sistema antiguo).
   // ─────────────────────────────────────────────────────────────
-  async updateDocumentStatus(
+async updateDocumentStatus(
     idDocumentoEmpleado: number,
     nuevoEstatus: number,
     comentario: string,
@@ -854,6 +856,60 @@ private normalizarRutaDocumento(ruta: string | null): string {
     return { success: true, message: 'Estatus del documento actualizado correctamente.' };
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/:employeeId/notify-rejected
+  // Envía un solo correo al empleado con la lista completa de
+  // documentos actualmente rechazados. Se dispara manualmente
+  // desde el botón "Notificar Rechazados" en el front.
+  // ─────────────────────────────────────────────────────────────
+ async notifyRejectedDocuments(employeeId: number) {
+    const empleado = await this.prisma.empleados.findUnique({
+      where: { idEmpleado: employeeId },
+      select: { nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
+    });
+
+    if (!empleado) throw new NotFoundException('Empleado no encontrado.');
+    if (!empleado.correo) throw new BadRequestException('El empleado no tiene un correo registrado.');
+
+    const documentosRechazados = await this.prisma.$queryRaw<{ nombre: string }[]>`
+      SELECT CD.Descripcion AS nombre
+      FROM DocumentosEmpleado DE
+      INNER JOIN CatDocumentos CD ON CD.IdDocumento = DE.IdDocumento
+      WHERE DE.idEmpleado = ${employeeId} AND DE.idEstatusDocumento = 5;
+    `;
+
+    if (documentosRechazados.length === 0) {
+      throw new BadRequestException('Este empleado no tiene documentos rechazados actualmente.');
+    }
+
+    // Generamos un token fresco (por si el original ya expiró o ya se usó)
+    const frontUrl = this.configService.get<string>('FRONT_URL') || '';
+    const token = this.jwtService.sign({ employee_id: employeeId }, { expiresIn: '30d' });
+    const uploadLink = `${frontUrl}upload-information/${token}`;
+
+    await this.prisma.$executeRaw`
+      UPDATE Empleados
+      SET uploadLink = ${uploadLink}, token = ${token}
+      WHERE idEmpleado = ${employeeId};
+    `;
+
+    await this.notifications.notify({
+      userUuid: String(employeeId),
+      notificationTypeCode: 'DOCUMENT_REJECTED',
+      to: empleado.correo,
+      phone: empleado.telefonoMovil || undefined,
+      subject: 'Documentación Rechazada o Pendiente',
+      context: {
+        nombre_completo: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido]
+          .filter(Boolean)
+          .join(' '),
+        documentos: documentosRechazados.map((d) => d.nombre),
+        liga: uploadLink,
+      },
+    });
+
+    return { success: true, message: 'Notificación enviada correctamente.' };
+  }
   // ─────────────────────────────────────────────────────────────
   // GET .../digital-files/:employeeId/download-history
   // ─────────────────────────────────────────────────────────────
@@ -953,7 +1009,8 @@ private normalizarRutaDocumento(ruta: string | null): string {
     if (faltantes.length > 0) {
       throw new BadRequestException(`Faltan los siguientes campos: ${faltantes.join(', ')}`);
     }
-
+     
+    
     const result = await generateEmployeeAndLink(
       {
         jwtService: this.jwtService,
@@ -981,6 +1038,8 @@ private normalizarRutaDocumento(ruta: string | null): string {
       message: 'Expediente creado correctamente. Se envió el enlace de documentación al empleado.',
       ...result,
     };
+
+
   }
   
 }

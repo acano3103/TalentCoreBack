@@ -11,7 +11,8 @@ export const TEMPLATE_MAP = {
         'REQUISITION_APPROVED_BY_RH': 'requisicion_publicada',
         'INTERVIEW_SCHEDULED_INTERVIEWER': 'email_entrevista_entrevistador',
         'INTERVIEW_RESCHEDULED': 'resend_entrevista',
-        'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador'
+        'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador',
+        'DOCUMENT_REJECTED': 'documentacion-rechazada'
     },
     WHATSAPP: {
         '2FA': 'token_whatsapp',
@@ -20,7 +21,8 @@ export const TEMPLATE_MAP = {
         'LINK_CREATED': 'documentos_requeridos',
         'INTERVIEW_SCHEDULED_INTERVIEWER': 'whatsapp_entrevista_entrevistador',
         'INTERVIEW_RESCHEDULED': 'resend_entrevista',
-        'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador'
+        'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador',
+        'DOCUMENT_REJECTED': 'documentacion-rechazada'
     },
     SOCKETS: {
         'POSITION_STATUS_UPDATE': 'puesto_estado_stream',

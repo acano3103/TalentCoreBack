@@ -95,6 +95,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 11, code: 'INTERVIEW_SCHEDULED_INTERVIEWER', description: 'Notificación de programación de entrevista al entrevistador', activo: true },
             { id: 12, code: 'INTERVIEW_RESCHEDULED', description: 'Notificación de reprogramación de entrevista', activo: true },
             { id: 13, code: 'INTERVIEW_RESCHEDULED_INTERVIEWER', description: 'Notificación de reprogramación de entrevista al entrevistador', activo: true },
+            { id: 14, code: 'DOCUMENT_REJECTED', description: 'Notificación de rechazo de documentación', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -174,6 +175,11 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 50, notification_type_id: 13, channel_id: 2, enabled: true }, // WhatsApp
             { id: 51, notification_type_id: 13, channel_id: 3, enabled: false }, // SMS
             { id: 52, notification_type_id: 13, channel_id: 4, enabled: true }, // Sockets
+            // --- 14. DOCUMENT_REJECTED (Rechazo de documentación) ---
+            { id: 53, notification_type_id: 14, channel_id: 1, enabled: true }, // Email
+            { id: 54, notification_type_id: 14, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 55, notification_type_id: 14, channel_id: 3, enabled: false }, // SMS
+            { id: 56, notification_type_id: 14, channel_id: 4, enabled: false }, // Sockets
         ];
 
         for (const tc of typeChannels) {

@@ -304,6 +304,24 @@ export class DigitalFilesController {
     );
   }
 
+  // Endpoint para notificar al empleado sobre sus documentos rechazados (botón manual del front)
+  @UseGuards(JwtAuthGuard)
+  @Post(':employeeId/notify-rejected')
+  @ApiOperation({
+    summary: 'Notify rejected documents',
+    description: 'Sends a single email to the employee listing all currently rejected documents.',
+  })
+  @ApiResponse({ status: 200, description: 'Notification sent successfully' })
+  @ApiResponse({ status: 400, description: 'Employee has no rejected documents or no email registered' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  notifyRejectedDocuments(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+  ) {
+    return this.digitalFilesService.notifyRejectedDocuments(employeeId);
+  }
+
   // Endpoint para obtener el historial de descargas del expediente
   @UseGuards(JwtAuthGuard)
   @Get(':employeeId/download-history')
