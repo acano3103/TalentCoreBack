@@ -25,6 +25,7 @@ export class DigitalFilesService {
     private readonly configService: ConfigService,
     private readonly notifications: NotificationDispatcher,
   ) { }
+
   async listExpedientes(companyId: number, page: number, limit: number, search: string) {
     const where = {
       idEmpresa: companyId,
@@ -289,7 +290,7 @@ export class DigitalFilesService {
         documentosSubidos[doc.IdDocumento] = { archivos: [], habilitado: false };
       }
 
-     documentosSubidos[doc.IdDocumento].archivos.push({
+      documentosSubidos[doc.IdDocumento].archivos.push({
         idDocumentoEmpleado: doc.idDocumentoEmpleado,
         estatus: doc.idEstatusDocumento,
         ruta: this.normalizarRutaDocumento(doc.rutaArchivo),
@@ -306,7 +307,7 @@ export class DigitalFilesService {
   }
 
 
-private normalizarRutaDocumento(ruta: string | null): string {
+  private normalizarRutaDocumento(ruta: string | null): string {
     if (!ruta) return '';
     let rutaRelativa = ruta;
 
@@ -588,7 +589,7 @@ private normalizarRutaDocumento(ruta: string | null): string {
 
         for (const doc of documentosAProcesar) {
           await DigitalFilesQueries.subirDocumentoEmpleado(
-         tx,
+            tx,
             idEmpleado,
             doc.idDocumento,
             doc.rutaRelativa,
@@ -615,7 +616,7 @@ private normalizarRutaDocumento(ruta: string | null): string {
     }
   }
 
- // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
   // POST .../digital-files/employee
   // Flujo PRIVADO (RH logueado): resuelve el idEmpleado por CURP
   // ─────────────────────────────────────────────────────────────
@@ -982,6 +983,6 @@ private normalizarRutaDocumento(ruta: string | null): string {
       ...result,
     };
   }
-  
+
 }
 

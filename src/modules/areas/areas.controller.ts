@@ -11,6 +11,7 @@ import { UpdateAreaDto } from './dto/update-area.dto';
 export class AreasController {
     constructor(private readonly areasService: AreasService) { }
 
+    // Endpoint que obtiene todas las áreas
     @Get()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get all areas', description: SWAGGER_AUTH_DESCRIPTION })
@@ -27,6 +28,7 @@ export class AreasController {
         return this.areasService.findAll(companyId, page, querySearch, limit);
     }
 
+    // Endpoint que obtiene un área
     @Get('/:areaId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get area', description: SWAGGER_AUTH_DESCRIPTION })
@@ -40,6 +42,7 @@ export class AreasController {
         return this.areasService.findOne(companyId, areaId);
     }
 
+    // Endpoint que crea un área
     @Post()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Create area', description: SWAGGER_AUTH_DESCRIPTION })
@@ -53,6 +56,7 @@ export class AreasController {
         return await this.areasService.create(companyId, createAreaDto);
     }
 
+    // Endpoint que actualiza un área
     @Put(':areaId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Update area', description: SWAGGER_AUTH_DESCRIPTION })
@@ -67,6 +71,7 @@ export class AreasController {
         return await this.areasService.update(companyId, areaId, updateAreaDto);
     }
 
+    // Endpoint que desactiva un área
     @Delete('/:areaId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Disable area', description: SWAGGER_AUTH_DESCRIPTION })
@@ -80,6 +85,7 @@ export class AreasController {
         return this.areasService.changeStatus(companyId, areaId, false);
     }
 
+    // Endpoint que reactiva un área
     @Patch('/:areaId/reactivate')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Reactivate area', description: SWAGGER_AUTH_DESCRIPTION })

@@ -1,5 +1,5 @@
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
-import { ApiBearerAuth, ApiConsumes,ApiBody,ApiOkResponse, ApiOperation,ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiBody, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DigitalFilesService } from './digital-files.service';
 import { DocumentoRequeridoDto, ExpedienteResponseDto } from './dto/expediente-response.dto';
@@ -10,6 +10,7 @@ import { UpdateExpedienteStatusDto } from './dto/update-status.dto';
 import { UpdateDocumentStatusDto } from './dto/update-document-status.dto';
 import { Res } from '@nestjs/common';
 import { Response } from 'express';
+
 @ApiTags('Digital Files')
 @ApiBearerAuth()
 @Controller('companies/:companyId/digital-files')
@@ -37,7 +38,7 @@ export class DigitalFilesController {
     return this.digitalFilesService.listExpedientes(companyId, page, limit, search || '');
   }
 
- // Endpoint para obtener el catálogo de estatus de documento
+  // Endpoint para obtener el catálogo de estatus de documento
   @UseGuards(JwtAuthGuard)
   @Get('document-status-catalog')
   @ApiOperation({
@@ -111,25 +112,25 @@ export class DigitalFilesController {
   })
   @ApiParam({ name: 'companyId', type: Number })
   @ApiBody({
-  schema: {
-    type: 'object',
-    properties: {
-      empleado_json: { type: 'string', description: 'JSON con los datos del empleado' },
-      documento_map: { type: 'string', description: 'JSON: nombre de campo -> idDocumento' },
-      id_campania: { type: 'string' },
-      files: {
-        type: 'array',
-        items: { type: 'string', format: 'binary' },
+    schema: {
+      type: 'object',
+      properties: {
+        empleado_json: { type: 'string', description: 'JSON con los datos del empleado' },
+        documento_map: { type: 'string', description: 'JSON: nombre de campo -> idDocumento' },
+        id_campania: { type: 'string' },
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
       },
     },
-  },
-})
+  })
 
   @ApiResponse({ status: 200, description: 'Empleado registrado correctamente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos o faltantes' })
   @ApiResponse({ status: 422, description: 'Documentos rechazados por Nubarium' })
   @ApiResponse({ status: 500, description: 'Error interno del servidor' })
-  
+
   async insertEmployeeWithFiles(
     @Body('empleado_json') empleadoJsonRaw: string,
     @Body('documento_map') documentoMapRaw: string,
@@ -221,7 +222,7 @@ export class DigitalFilesController {
       companyId,
     );
   }
-  
+
   // Endpoint para obtener el estatus actual, catálogo y el historial de cambios
   @UseGuards(JwtAuthGuard)
   @Get(':employeeId/status-history')
@@ -264,7 +265,7 @@ export class DigitalFilesController {
   }
 
 
-   // Endpoint para obtener los documentos requeridos por puesto
+  // Endpoint para obtener los documentos requeridos por puesto
   @UseGuards(JwtAuthGuard)
   @Get('documents-by-position/:positionId')
   @ApiOperation({
@@ -321,7 +322,7 @@ export class DigitalFilesController {
   }
 
   // Endpoint para descargar el expediente completo como ZIP
- // Endpoint para descargar el expediente completo como ZIP
+  // Endpoint para descargar el expediente completo como ZIP
   @UseGuards(JwtAuthGuard)
   @Post(':employeeId/download-zip')
   @ApiOperation({

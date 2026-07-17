@@ -4,6 +4,8 @@ import { DigitalFilesService } from './digital-files.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { NubariumService } from './services/nubarium.service';
+import { RequiredDocumentsController } from './required-documents/required-documents.controller';
+import { RequiredDocumentsService } from './required-documents/required-documents.service';
 
 @Module({
   imports: [
@@ -15,7 +17,7 @@ import { NubariumService } from './services/nubarium.service';
       inject: [ConfigService],
     }),
   ],
-  controllers: [DigitalFilesController],
-  providers: [DigitalFilesService, NubariumService]
+  controllers: [DigitalFilesController, RequiredDocumentsController],
+  providers: [DigitalFilesService, NubariumService, RequiredDocumentsService]
 })
 export class DigitalFilesModule { }
