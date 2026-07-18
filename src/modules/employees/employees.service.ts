@@ -15,6 +15,7 @@ export class EmployeesService {
   async findOne(companyId: number, employeeId: number) {
     const [employee] = await this.prisma.$queryRaw<EmployeeQueryResult[]>`
       SELECT 
+        ep.idEmpleado,
         ep.nombre,
         ep.primerApellido,
         ep.segundoApellido,
@@ -44,7 +45,11 @@ export class EmployeesService {
         tm.idTipoMoneda,
         tm.codigo as TipoMoneda,
         cpp.idPeriodicidadPago,
-        cpp.descripcion as PeriodicidadPago
+        cpp.descripcion as PeriodicidadPago,
+        jefe.idEmpleado as idJefeDirecto,
+        jefe.nombre as nombreJefeDirecto,
+        jefe.primerApellido as primerApellidoJefeDirecto,
+        jefe.segundoApellido as segundoApellidoJefeDirecto
       FROM Empleados ep
       JOIN CatPuestos p ON ep.idPuesto = p.idPuesto
       JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
@@ -52,6 +57,7 @@ export class EmployeesService {
       JOIN CatAreas a ON a.idArea = p.idArea
       JOIN CatEmpresas emp ON emp.idEmpresa = ep.idEmpresa
       JOIN CatSites s ON s.idSite = ep.idSite
+      LEFT JOIN Empleados jefe ON ep.idJefeInmediato = jefe.idEmpleado
       LEFT JOIN HistorialSalarios hs ON hs.idEmpleado = ep.idEmpleado AND hs.actual = true
       LEFT JOIN CatTiposMoneda tm ON tm.idTipoMoneda = hs.idTipoMoneda
       LEFT JOIN CatPeriodicidadesPago cpp ON cpp.idPeriodicidadPago = hs.idPeriodicidadPago
