@@ -1,4 +1,5 @@
 export interface EmployeeQueryResult {
+    idEmpleado: number;
     nombre: string;
     primerApellido: string;
     segundoApellido: string;
@@ -29,4 +30,8 @@ export interface EmployeeQueryResult {
     TipoMoneda: string | null;
     idPeriodicidadPago: number | null;
     PeriodicidadPago: string | null;
+    idJefeDirecto: number | null;
+    nombreJefeDirecto: string | null;
+    primerApellidoJefeDirecto: string | null;
+    segundoApellidoJefeDirecto: string | null;
 }

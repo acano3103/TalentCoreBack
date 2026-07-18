@@ -5,30 +5,30 @@ export class SaveSalaryDto {
     @ApiProperty({ type: 'number', example: 1 })
     @IsNotEmpty()
     @IsNumber()
-    idEmpleado: number;
+    idEmpleado!: number;
 
     @ApiProperty({ type: 'number', example: 1 })
     @IsNotEmpty()
     @IsNumber()
-    idTipoMoneda: number;
+    idTipoMoneda!: number;
 
     @ApiProperty({ type: 'number', example: 1 })
     @IsNotEmpty()
     @IsNumber()
-    idPeriodicidadPago: number;
+    idPeriodicidadPago!: number;
 
     @ApiProperty({ type: 'number', example: 10000 })
     @IsNotEmpty()
     @IsNumber()
-    salarioBruto: number;
+    salarioBruto!: number;
 
     @ApiProperty({ type: 'number', example: 10000 })
     @IsNotEmpty()
     @IsNumber()
-    salarioNeto: number;
+    salarioNeto!: number;
 
     @ApiProperty({ type: 'string', example: '2022-01-01' })
     @IsNotEmpty()
     @IsString()
-    fechaInicioVigencia: string;
+    fechaInicioVigencia!: string;
 }
