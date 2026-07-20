@@ -389,8 +389,10 @@ export class NubariumService {
         return null;
     }
 
-    /**
-     * Ejecuta el Stored Procedure `SpInsNubariumValidacion` usando queryRaw de Prisma
+   /**
+     * Guarda la bitácora de la validación directo en la tabla,
+     * sin pasar por stored procedure (consistente con el resto
+     * del módulo digital-files).
      */
     private async guardarValidacionDb(
         prisma: PrismaService,
@@ -410,9 +412,21 @@ export class NubariumService {
             const jsonStr = JSON.stringify(respuestaJson);
             const flagValidado = validado ? 1 : 0;
 
-            // Inyección segura llamando al SP mediante el contexto de transacción inyectado tx
-            await prisma.$executeRaw`
-        CALL SpInsNubariumValidacion(
+    await prisma.$executeRaw`
+        INSERT INTO NubariumValidaciones (
+          idCandidato,
+          idDocumento,
+          nombre_archivo,
+          ruta_archivo,
+          endpoint_nubarium,
+          http_status,
+          validado,
+          score,
+          motivo_rechazo,
+          respuesta_json,
+          usuario,
+          fecha_consulta
+        ) VALUES (
           ${idEmpleado},
           ${idDocumento},
           ${nombreArchivo},
@@ -424,7 +438,7 @@ export class NubariumService {
           ${motivoRechazo},
           ${jsonStr},
           ${usuario},
-          @p_idValidacion
+          NOW()
         );
       `;
         } catch (err: any) {
