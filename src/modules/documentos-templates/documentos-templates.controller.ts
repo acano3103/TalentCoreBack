@@ -42,8 +42,9 @@ export class DocumentosTemplatesController {
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query('search') search?: string,
+        @Query('idTipoDocumento') idTipoDocumento?: string,
     ) {
-        return this.service.findAll(companyId, page, limit, search || '');
+        return this.service.findAll(companyId, page, limit, search || '', idTipoDocumento ? Number(idTipoDocumento) : undefined);
     }
 
     @Get('generados')

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, IsNumberString } from 'class-validator';
 
 export class CreatePlantillaDto {
     @IsString()
@@ -14,4 +14,8 @@ export class CreatePlantillaDto {
     @IsString()
     @MaxLength(100)
     idModulo?: string;
+
+    @IsOptional()
+    @IsNumberString()
+    idTipoDocumento?: string;
 }

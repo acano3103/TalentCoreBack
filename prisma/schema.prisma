@@ -1228,6 +1228,7 @@ model DocumentosGenerados {
   idPlantilla     Int
   idVacante       Int?
   idCandidato     Int?
+  idContrato      Int?
   datosJson       Json?
   archivoGenerado String?              @db.VarChar(500)
   estatus         String               @default("pendiente") @db.VarChar(50)
@@ -1237,10 +1238,12 @@ model DocumentosGenerados {
   firmado         Boolean              @default(false)
   datosFirma      Json?
   plantilla       PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], map: "fk_docgen_plantilla")
+  contrato        Contratos?           @relation(fields: [idContrato], references: [idContrato], map: "fk_docgen_contrato")
 
   @@index([idPlantilla], map: "idx_docgen_plantilla")
   @@index([idVacante], map: "idx_docgen_vacante")
   @@index([idCandidato], map: "idx_docgen_candidato")
+  @@index([idContrato], map: "idx_docgen_contrato")
 }
 
 model CatEstatusPostulacion {
@@ -1358,6 +1361,7 @@ model Contratos {
   usuarioRegistro      String?             @db.VarChar(250)
   Empleados            Empleados           @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_Contratos_Empleados")
   CatEstatusContratos  CatEstatusContratos @relation(fields: [idEstatusContrato], references: [idEstatusContrato], map: "FK_Contratos_Estatus")
+  documentosGenerados  DocumentosGenerados[]
 
   @@index([idEmpleado], map: "FK_Contratos_Empleados")
   @@index([idEstatusContrato], map: "FK_Contratos_Estatus")

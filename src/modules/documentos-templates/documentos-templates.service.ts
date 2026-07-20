@@ -228,6 +228,9 @@ export class DocumentosTemplatesService {
                 archivoHtml: archivoHtml ?? undefined,
                 idEmpresa: companyId,
                 idModulo: createPlantillaDto.idModulo,
+                idTipoDocumento: createPlantillaDto.idTipoDocumento
+                    ? Number(createPlantillaDto.idTipoDocumento)
+                    : undefined,
                 idUsuarioCreador: activeUser.id,
             },
         });
@@ -235,7 +238,34 @@ export class DocumentosTemplatesService {
         return plantilla;
     }
 
-    async findAll(companyId: number, page: number, limit: number, search: string) {
+    async findTiposDocumento(companyId: number) {
+        return this.prisma.tiposDocumento.findMany({
+            where: { idEmpresa: companyId, activo: true },
+            orderBy: { nombre: 'asc' },
+        });
+    }
+
+    async createTipoDocumento(companyId: number, nombre: string) {
+        const existente = await this.prisma.tiposDocumento.findFirst({
+            where: { idEmpresa: companyId, nombre },
+        });
+
+        if (existente) {
+            if (!existente.activo) {
+                return this.prisma.tiposDocumento.update({
+                    where: { id: existente.id },
+                    data: { activo: true },
+                });
+            }
+            throw new BadRequestException('Ya existe un tipo de documento con ese nombre');
+        }
+
+        return this.prisma.tiposDocumento.create({
+            data: { nombre, idEmpresa: companyId },
+        });
+    }
+
+    async findAll(companyId: number, page: number, limit: number, search: string, idTipoDocumento?: number) {
         const skip = (page - 1) * limit;
         const where: any = {
             idEmpresa: companyId,
@@ -246,12 +276,17 @@ export class DocumentosTemplatesService {
             where.nombre = { contains: search };
         }
 
+        if (idTipoDocumento) {
+            where.idTipoDocumento = idTipoDocumento;
+        }
+
         const [data, total] = await Promise.all([
             this.prisma.plantillasDocumentos.findMany({
                 where,
                 skip,
                 take: limit,
                 orderBy: { fechaCreacion: 'desc' },
+                include: { TiposDocumento: { select: { id: true, nombre: true } } },
             }),
             this.prisma.plantillasDocumentos.count({ where }),
         ]);
@@ -267,7 +302,10 @@ export class DocumentosTemplatesService {
     async findOne(companyId: number, id: number) {
         const plantilla = await this.prisma.plantillasDocumentos.findFirst({
             where: { id, idEmpresa: companyId, activa: true },
-            include: { campos: { orderBy: { orden: 'asc' } } },
+            include: {
+                campos: { orderBy: { orden: 'asc' } },
+                TiposDocumento: { select: { id: true, nombre: true } },
+            },
         });
 
         if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
@@ -281,10 +319,13 @@ export class DocumentosTemplatesService {
 
         if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
 
+        const { idTipoDocumento, ...rest } = data;
+
         return this.prisma.plantillasDocumentos.update({
             where: { id },
             data: {
-                ...data,
+                ...rest,
+                idTipoDocumento: idTipoDocumento !== undefined ? Number(idTipoDocumento) : undefined,
                 fechaActualiz: new Date(),
             },
         });

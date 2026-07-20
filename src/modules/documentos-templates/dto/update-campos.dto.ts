@@ -6,14 +6,14 @@ export class CampoPlantillaDto {
     @IsInt()
     id?: number;
 
-    @IsString()
-    @MinLength(1)
-    @MaxLength(100)
+    @IsString({ message: "El identificador debe ser texto" })
+    @MinLength(1, { message: "El identificador es obligatorio" })
+    @MaxLength(100, { message: "El identificador no puede exceder 100 caracteres" })
     identificador: string;
 
-    @IsString()
-    @MinLength(1)
-    @MaxLength(200)
+    @IsString({ message: "El nombre del campo debe ser texto" })
+    @MinLength(1, { message: "El nombre del campo es obligatorio" })
+    @MaxLength(200, { message: "El nombre del campo no puede exceder 200 caracteres" })
     nombreCampo: string;
 
     @IsOptional()
