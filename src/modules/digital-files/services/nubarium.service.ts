@@ -119,7 +119,7 @@ export class NubariumService {
     /**
      * 2. Función Principal: Validar Documento en Nubarium (OCR + Lista Nominal)
      */
-    async validarDocumentoNubarium(
+        async validarDocumentoNubarium(
         prisma: PrismaService,
         fileBuffer: Buffer,
         campoNormalizado: string,
@@ -128,6 +128,7 @@ export class NubariumService {
         nombreArchivo: string,
         rutaRelativaBd: string,
         usuario: string,
+        curpEmpleado?: string,
     ): Promise<NubariumStandardResult> {
         const { baseUrl, username, password, timeout } = this.getCredentials();
 
@@ -187,7 +188,20 @@ export class NubariumService {
                     resultado.motivo_rechazo = data?.message || data?.mensaje || data?.error || data?.details || 'Documento no válido según Nubarium';
                 }
 
-                // ── Paso Extra: Si es INE/IFE y pasó el OCR, validar Lista Nominal ──
+               
+                // ── Paso Extra: Si es INE/IFE, comparamos el CURP extraído contra el CURP real del empleado ──
+                if (resultado.validado && this.esCampoIne(campoNormalizado) && curpEmpleado) {
+                    const curpExtraido = (data?.curp || '').trim().toUpperCase();
+                    const curpReal = curpEmpleado.trim().toUpperCase();
+
+                    if (curpExtraido && curpReal && curpExtraido !== curpReal) {
+                        resultado.validado = false;
+                        resultado.motivo_rechazo = `La INE no pertenece al empleado. CURP en la INE: ${curpExtraido}, CURP registrado: ${curpReal}`;
+                        this.logger.warn(`CURP no coincide para '${nombreArchivo}' — OCR: ${curpExtraido} vs Empleado: ${curpReal}`);
+                    }
+                }
+
+                // ── Paso Extra: Si es INE/IFE y pasó el OCR (y el CURP coincide), validar Lista Nominal ──
                 if (resultado.validado && this.esCampoIne(campoNormalizado)) {
                     const payloadNominal = this.construirPayloadValidaIne(data);
                     if (payloadNominal) {
