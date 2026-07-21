@@ -12,17 +12,12 @@ export const TEMPLATE_MAP = {
         'INTERVIEW_SCHEDULED_INTERVIEWER': 'email_entrevista_entrevistador',
         'INTERVIEW_RESCHEDULED': 'resend_entrevista',
         'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador',
-        'DOCUMENT_REJECTED': 'documentacion-rechazada'
+        'DOCUMENT_REJECTED': 'documentacion-rechazada',
+        'CONTRACT_SIGN': 'link_firmar_contrato'
     },
     WHATSAPP: {
-        '2FA': 'token_whatsapp',
-        'POSITION_STATUS_UPDATE': 'puesto_estado',
-        'INTERVIEW_SCHEDULED': 'whatsapp_entrevista',
-        'LINK_CREATED': 'documentos_requeridos',
-        'INTERVIEW_SCHEDULED_INTERVIEWER': 'whatsapp_entrevista_entrevistador',
-        'INTERVIEW_RESCHEDULED': 'resend_entrevista',
-        'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador',
-        'DOCUMENT_REJECTED': 'documentacion-rechazada'
+        'CONTRACT_SIGN': '75d01c5d-7fe9-4709-b838-12bcab8ad68e',
+        'CONTRACT_SIGN_TOKEN': 'ce2b090f-ad9b-4a0b-9cc5-ae70acf99f30'
     },
     SOCKETS: {
         'POSITION_STATUS_UPDATE': 'puesto_estado_stream',
