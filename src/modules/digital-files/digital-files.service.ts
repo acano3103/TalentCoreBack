@@ -504,15 +504,16 @@ export class DigitalFilesService {
         await fs.writeFile(rutaTemp, file.buffer);
 
         const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
-          this.prisma,
-          file.buffer,
-          campoNormalizado,
-          idEmpleado,
-          idDocumento,
-          nombreArchivo,
-          rutaRelativaBd,
-          usuarioRegistro,
-        );
+        this.prisma,
+        file.buffer,
+        campoNormalizado,
+        idEmpleado,
+        idDocumento,
+        nombreArchivo,
+        rutaRelativaBd,
+        usuarioRegistro,
+        curp,
+    );
 
         const esRechazoReal = !resultadoNubarium.validado && !resultadoNubarium.error_infraestructura;
 
