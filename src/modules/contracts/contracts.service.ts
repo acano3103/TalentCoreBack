@@ -1,11 +1,88 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateContractDto } from './dto/create-contract.dto';
 
 @Injectable()
 export class ContractsService {
   private readonly logger = new Logger(ContractsService.name);
 
   constructor(private readonly prisma: PrismaService) { }
+
+  async create(companyId: number, employeeId: number, dto: CreateContractDto, userId: number) {
+    const employee = await this.prisma.empleados.findFirst({
+      where: { idEmpleado: employeeId, idEmpresa: companyId, activo: true },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Empleado no encontrado o no pertenece a esta empresa');
+    }
+
+    const existingContract = await this.prisma.contratos.findFirst({
+      where: { idEmpleado: employeeId },
+    });
+
+    if (existingContract) {
+      throw new BadRequestException('El empleado ya tiene un contrato registrado');
+    }
+
+    const contrato = await this.prisma.contratos.create({
+      data: {
+        idEmpleado: employeeId,
+        idTemplate: dto.idTemplate ?? null,
+        idEstatusContrato: 1,
+        fechaInicioContrato: dto.fechaInicioContrato ? new Date(dto.fechaInicioContrato) : null,
+        fechaTerminoContrato: dto.fechaTerminoContrato ? new Date(dto.fechaTerminoContrato) : null,
+        usuarioRegistro: String(userId),
+      },
+      include: {
+        CatEstatusContratos: { select: { idEstatusContrato: true, descripcion: true } },
+      },
+    });
+
+    if (dto.idDocumentoGenerado) {
+      await this.prisma.documentosGenerados.update({
+        where: { id: dto.idDocumentoGenerado },
+        data: { idContrato: contrato.idContrato },
+      });
+    }
+
+    return contrato;
+  }
+
+  async updateStatus(companyId: number, contractId: number, idEstatusContrato: number) {
+    const contrato = await this.prisma.contratos.findFirst({
+      where: {
+        idContrato: contractId,
+        Empleados: { idEmpresa: companyId },
+      },
+    });
+
+    if (!contrato) {
+      throw new NotFoundException('Contrato no encontrado');
+    }
+
+    const estatus = await this.prisma.catEstatusContratos.findFirst({
+      where: { idEstatusContrato, activo: true },
+    });
+
+    if (!estatus) {
+      throw new BadRequestException('Estatus de contrato no válido');
+    }
+
+    const updateData: any = { idEstatusContrato };
+
+    if (idEstatusContrato === 3) {
+      updateData.fechaFirma = new Date();
+    }
+
+    return this.prisma.contratos.update({
+      where: { idContrato: contractId },
+      data: updateData,
+      include: {
+        CatEstatusContratos: { select: { idEstatusContrato: true, descripcion: true } },
+      },
+    });
+  }
 
   async getReadyToHire(companyId: number, page: number, limit: number, search: string) {
     const offset = (page - 1) * limit;
