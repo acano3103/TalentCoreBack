@@ -28,6 +28,7 @@ import { DigitalFilesModule } from './modules/digital-files/digital-files.module
 import { DocumentosTemplatesModule } from './modules/documentos-templates/documentos-templates.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
+import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 
 @Module({
   imports: [
@@ -67,7 +68,8 @@ import { EmployeesModule } from './modules/employees/employees.module';
     DigitalFilesModule,
     DocumentosTemplatesModule,
     ContractsModule,
-    EmployeesModule
+    EmployeesModule,
+    InternalMovementsModule
   ],
   controllers: [],
   providers: [AreasService],
