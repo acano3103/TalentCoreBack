@@ -109,7 +109,7 @@ export class ContractsService {
         INNER JOIN CatPuestos p ON e.idPuesto = p.idPuesto
         LEFT JOIN Contratos c ON e.idEmpleado = c.idEmpleado
         LEFT JOIN CatEstatusContratos cec ON c.idEstatusContrato = cec.idEstatusContrato
-        LEFT JOIN HistorialSalarios hs ON hs.idEmpleado = e.idEmpleado
+        LEFT JOIN HistorialSalarios hs ON hs.idEmpleado = e.idEmpleado AND hs.actual = true
         WHERE e.idEmpresa = ${companyId}
           AND e.activo = 1
           AND ex.idEstatus = 4
