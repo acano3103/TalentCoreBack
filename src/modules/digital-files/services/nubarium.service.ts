@@ -13,28 +13,34 @@ export class NubariumService {
     private readonly CURP_REGEX = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]{2}$/i;
 
     // Mapas de Configuración heredados de Python
-    private readonly PAYLOAD_FIELD_MAP: Record<string, string> = {
-        ine: 'id',
-        ife: 'id',
-        identificacion: 'id',
-        pasaporte: 'id',
-        __default__: 'document',
-    };
+   private readonly PAYLOAD_FIELD_MAP: Record<string, string> = {
+    ine: 'id',
+    ife: 'id',
+    identificacion: 'id',
+    pasaporte: 'id',
+    comprobante: 'comprobante',
+    domicilio: 'comprobante',
+    __default__: 'document',
+};
 
-    private readonly ENDPOINT_MAP: Record<string, string> = {
-        ine: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        ife: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        identificacion: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        pasaporte: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        curp: '/mx/renapo/curp-pdf',
-        nss: '/mx/imss/nss-pdf',
-        comprobante: '/mx/documents/ocr',
-        domicilio: '/mx/documents/ocr',
-        acta: '/mx/documents/ocr',
-        acta_nacimiento: '/mx/documents/ocr',
-        __default__: '/mx/documents/ocr',
-    };
+private esCampoComprobante(campo: string): boolean {
+    const lower = campo.toLowerCase();
+    return lower.includes('comprobante') || lower.includes('domicilio');
+}
 
+   private readonly ENDPOINT_MAP: Record<string, string> = {
+    ine: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    ife: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    identificacion: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    pasaporte: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    curp: '/mx/renapo/curp-pdf',
+    nss: '/mx/imss/nss-pdf',
+    comprobante: 'https://ocr.nubarium.com/ocr/v2/comprobante_domicilio',
+    domicilio: 'https://ocr.nubarium.com/ocr/v2/comprobante_domicilio',
+    acta: '/mx/documents/ocr',
+    acta_nacimiento: '/mx/documents/ocr',
+    __default__: '/mx/documents/ocr',
+};
     constructor(private readonly configService: ConfigService) { }
 
     /**
@@ -129,6 +135,8 @@ export class NubariumService {
         rutaRelativaBd: string,
         usuario: string,
         curpEmpleado?: string,
+        nssEmpleado?: string,
+        calleEmpleado?: string,
     ): Promise<NubariumStandardResult> {
         const { baseUrl, username, password, timeout } = this.getCredentials();
 
@@ -171,8 +179,11 @@ export class NubariumService {
                     ['success', 'ok', 'valid'].includes(data?.status) ||
                     (typeof data?.result === 'object' && data?.result?.valid);
 
-                // Fallback del script de Python para endpoints que devuelven extracción directa sin flag explícito
-                if (!estatusOk && data && typeof data === 'object' && !data.error && !data.message) {
+                // Fallback SOLO Cuando no hay ningún campo de estatus/error en la respuesta
+                // (como en la INE exitosa, que regresa los datos directo sin flag).
+                // Si Nubarium sí mandó un estatus explícito (aunque sea "ERROR"), respetamos esa decisión.
+                const sinCampoEstatus = !data?.status && !data?.estatus;
+                if (!estatusOk && sinCampoEstatus && data && typeof data === 'object' && !data.error && !data.message && !data.mensaje) {
                     estatusOk = true;
                 }
 
@@ -201,9 +212,22 @@ export class NubariumService {
                     }
                 }
 
+                // ── Paso Extra: Si es comprobante de domicilio, comparamos la calle extraída contra la del formulario ──
+                if (resultado.validado && this.esCampoComprobante(campoNormalizado) && calleEmpleado) {
+                    const calleExtraida = (data?.calle || '').trim().toUpperCase();
+                    const calleReal = calleEmpleado.trim().toUpperCase();
+
+                    if (calleExtraida && calleReal && !calleExtraida.includes(calleReal) && !calleReal.includes(calleExtraida)) {
+                        resultado.validado = false;
+                        resultado.motivo_rechazo = `El comprobante de domicilio no coincide. Calle en el documento: ${calleExtraida}, calle registrada: ${calleReal}`;
+                        this.logger.warn(`Domicilio no coincide para '${nombreArchivo}' — Documento: ${calleExtraida} vs Empleado: ${calleReal}`);
+                    }
+                }
+
                 // ── Paso Extra: Si es INE/IFE y pasó el OCR (y el CURP coincide), validar Lista Nominal ──
                 if (resultado.validado && this.esCampoIne(campoNormalizado)) {
                     const payloadNominal = this.construirPayloadValidaIne(data);
+
                     if (payloadNominal) {
                         const resNominal = await this.validarIneListaNominal(prisma, payloadNominal, idEmpleado, idDocumento, usuario);
 
