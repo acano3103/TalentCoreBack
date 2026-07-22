@@ -105,4 +105,58 @@ export class EmployeesService {
     return { message: 'Salario registrado exitosamente' };
   }
 
+  async findAll(companyId: number) {
+    const employees = await this.prisma.$queryRaw<EmployeeQueryResult[]>`
+      SELECT 
+        ep.idEmpleado,
+        ep.nombre,
+        ep.primerApellido,
+        ep.segundoApellido,
+        ep.curp,
+        ep.rfc,
+        ep.correo,
+        ep.telefonoMovil,
+        p.idPuesto,
+        p.nombrePuesto,
+        tp.idTipoPuesto,
+        tp.Descripcion as TipoPuesto,
+        ns.IdNivelSalario,
+        ns.NombreNivel as NivelSalarioNombre,
+        ns.Descripcion as NivelSalarioDescripcion, 
+        ns.SalarioMinimo as NivelSalarioSalarioMinimo,
+        ns.SalarioMaximo as NivelSalarioSalarioMaximo,
+        emp.idEmpresa,
+        emp.nombre_comercial as Empresa,
+        s.idSite,
+        s.Descripcion as Ubicacion,
+        a.idArea,
+        a.Descripcion as Area,
+        hs.idHistorialSalario as idSalario,
+        hs.salarioBruto,
+        hs.salarioNeto,
+        hs.fechaInicio as fechaInicioSalario,
+        tm.idTipoMoneda,
+        tm.codigo as TipoMoneda,
+        cpp.idPeriodicidadPago,
+        cpp.descripcion as PeriodicidadPago,
+        jefe.idEmpleado as idJefeDirecto,
+        jefe.nombre as nombreJefeDirecto,
+        jefe.primerApellido as primerApellidoJefeDirecto,
+        jefe.segundoApellido as segundoApellidoJefeDirecto
+      FROM Empleados ep
+      JOIN CatPuestos p ON ep.idPuesto = p.idPuesto
+      JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+      JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+      JOIN CatAreas a ON a.idArea = p.idArea
+      JOIN CatEmpresas emp ON emp.idEmpresa = ep.idEmpresa
+      JOIN CatSites s ON s.idSite = ep.idSite
+      LEFT JOIN HistorialSalarios hs ON hs.idEmpleado = ep.idEmpleado AND hs.actual = true
+      LEFT JOIN CatTiposMoneda tm ON tm.idTipoMoneda = hs.idTipoMoneda
+      LEFT JOIN CatPeriodicidadesPago cpp ON cpp.idPeriodicidadPago = hs.idPeriodicidadPago
+      LEFT JOIN Empleados jefe ON ep.idJefeInmediato = jefe.idEmpleado
+      WHERE ep.idEmpresa = ${companyId}
+        AND ep.activo = true;
+    `;
+    return employees;
+  }
 }
