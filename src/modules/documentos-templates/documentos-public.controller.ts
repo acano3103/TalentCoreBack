@@ -22,12 +22,19 @@ export class DocumentosPublicController {
         return this.service.serveSignaturePdf(token, res);
     }
 
+    @Post('firmar/:token/solicitar-codigo')
+    @ApiOperation({ summary: 'Request OTP code for signature validation' })
+    @ApiResponse({ status: 200, description: 'OTP sent via WhatsApp' })
+    async requestOtp(@Param('token') token: string) {
+        return this.service.requestSignatureOtp(token);
+    }
+
     @Post('firmar/:token')
     @ApiOperation({ summary: 'Save signature for document' })
     @ApiResponse({ status: 200, description: 'Signature saved and embedded in PDF' })
     async saveSignature(
         @Param('token') token: string,
-        @Body() body: { imagen: string; camposFirmados?: Record<string, string> },
+        @Body() body: { imagen: string; camposFirmados?: Record<string, string>; otp: string },
     ) {
         return this.service.savePublicSignature(token, body);
     }

@@ -1237,6 +1237,10 @@ model DocumentosGenerados {
   tokenFirma      String?              @unique(map: "tokenFirma") @db.VarChar(100)
   firmado         Boolean              @default(false)
   datosFirma      Json?
+  codigoValidacionNOM151 String?       @db.VarChar(100)
+  hashNOM151      String?              @db.Text
+  archivoNom151   String?              @db.VarChar(500)
+  fechaSellado    DateTime?            @db.Timestamp(0)
   idContrato      Int?
   contrato        Contratos?           @relation(fields: [idContrato], references: [idContrato], map: "fk_docgen_contrato")
   plantilla       PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], map: "fk_docgen_plantilla")

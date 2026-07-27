@@ -18,6 +18,7 @@ import { RequiredDocumentsService } from './required-documents/required-document
     }),
   ],
   controllers: [DigitalFilesController, RequiredDocumentsController],
-  providers: [DigitalFilesService, NubariumService, RequiredDocumentsService]
+  providers: [DigitalFilesService, NubariumService, RequiredDocumentsService],
+  exports: [NubariumService]
 })
 export class DigitalFilesModule { }

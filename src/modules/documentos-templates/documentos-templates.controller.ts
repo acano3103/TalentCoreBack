@@ -266,4 +266,32 @@ export class DocumentosTemplatesController {
     ) {
         return this.service.shareForSignature(companyId, id);
     }
+
+    @Post('generados/:id/sellar')
+    @ApiOperation({ summary: 'Retry NOM-151 sealing for a signed document', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Document sealed' })
+    @ApiResponse({ status: 400, description: 'Document not signed or already sealed' })
+    async sellarManual(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+    ) {
+        return this.service.sellarManual(companyId, id);
+    }
+
+    @Get('generados/:id/nom151')
+    @ApiOperation({ summary: 'Download NOM-151 constancia (.cer, or visual PDF with ?tipo=pdf)', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Constancia file downloaded' })
+    async getNom151File(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+        @Query('tipo') tipo: string,
+        @Res() res: Response,
+    ) {
+        const result = await this.service.getNom151File(companyId, id, tipo === 'pdf' ? 'pdf' : 'cer');
+        res.setHeader('Content-Type', result.contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+        res.sendFile(result.path);
+    }
 }
