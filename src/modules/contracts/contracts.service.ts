@@ -1,12 +1,19 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContractDto } from './dto/create-contract.dto';
+import { NotificationDispatcher } from '../notifications/notification.dispatcher';
+import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class ContractsService {
   private readonly logger = new Logger(ContractsService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationDispatcher,
+    private readonly configService: ConfigService,
+  ) { }
 
   async create(companyId: number, employeeId: number, dto: CreateContractDto, userId: number) {
     const employee = await this.prisma.empleados.findFirst({
@@ -19,10 +26,24 @@ export class ContractsService {
 
     const existingContract = await this.prisma.contratos.findFirst({
       where: { idEmpleado: employeeId },
+      include: { CatEstatusContratos: { select: { idEstatusContrato: true, descripcion: true } } },
     });
 
+    // RENOVAR CONTRATO: si ya existe un contrato, ligar el nuevo documento al contrato existente
     if (existingContract) {
-      throw new BadRequestException('El empleado ya tiene un contrato registrado');
+      if (dto.idDocumentoGenerado) {
+        await this.prisma.documentosGenerados.update({
+          where: { id: dto.idDocumentoGenerado },
+          data: { idContrato: existingContract.idContrato },
+        });
+        // Actualizar estatus del contrato a "Enviado a firma"
+        await this.prisma.contratos.update({
+          where: { idContrato: existingContract.idContrato },
+          data: { idEstatusContrato: 2 },
+        });
+        await this.sendSigningLink(existingContract.idContrato);
+      }
+      return existingContract;
     }
 
     const contrato = await this.prisma.contratos.create({
@@ -46,7 +67,74 @@ export class ContractsService {
       });
     }
 
+    await this.sendSigningLink(contrato.idContrato);
+
     return contrato;
+  }
+
+  private async sendSigningLink(idContrato: number) {
+    try {
+      const contrato = await this.prisma.contratos.findFirst({
+        where: { idContrato },
+        include: {
+          Empleados: {
+            select: {
+              idEmpleado: true,
+              nombre: true,
+              primerApellido: true,
+              correo: true,
+              telefonoMovil: true,
+              idUsuario: true,
+              idEmpresa: true,
+            },
+          },
+          documentosGenerados: { take: 1, orderBy: { id: 'desc' } },
+        },
+      });
+
+      if (!contrato) return;
+      const documento = contrato.documentosGenerados[0];
+      if (!documento) return;
+
+      // Generar token de firma si no existe
+      if (!documento.tokenFirma) {
+        documento.tokenFirma = crypto.randomUUID();
+        await this.prisma.documentosGenerados.update({
+          where: { id: documento.id },
+          data: { tokenFirma: documento.tokenFirma },
+        });
+      }
+
+      const empleado = contrato.Empleados;
+      const empresa = empleado.idEmpresa
+        ? await this.prisma.catEmpresas.findFirst({
+            where: { idEmpresa: empleado.idEmpresa },
+            select: { nombre_comercial: true },
+          })
+        : null;
+
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      const linkFirma = `${frontendUrl}/talentcore/firmar/${documento.tokenFirma}`;
+      const nombreCompleto = `${empleado.nombre} ${empleado.primerApellido}`.trim();
+      const userUuid = empleado.idUsuario || `empleado-${empleado.idEmpleado}`;
+
+      await this.notifications.notify({
+        userUuid,
+        notificationTypeCode: 'CONTRACT_SIGN',
+        to: empleado.correo || undefined,
+        phone: empleado.telefonoMovil || undefined,
+        subject: '✍️ Firma de Contrato Pendiente',
+        context: {
+          nombre: nombreCompleto,
+          empresa: empresa?.nombre_comercial || 'Empresa',
+          linkFirma,
+        },
+      });
+
+      this.logger.log(`Link de firma enviado a ${empleado.correo} / ${empleado.telefonoMovil} para contrato ${idContrato}`);
+    } catch (error) {
+      this.logger.error(`Error enviando link de firma para contrato ${idContrato}: ${error.message}`);
+    }
   }
 
   async updateStatus(companyId: number, contractId: number, idEstatusContrato: number) {

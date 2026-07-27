@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { CurpRenapoResult, NubariumStandardResult } from '../interfaces/nubarium.interface';
+import { CurpRenapoResult, Nom151Result, NubariumStandardResult } from '../interfaces/nubarium.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PrismaClient } from 'generated/prisma/client';
 
@@ -346,6 +346,70 @@ private esCampoComprobante(campo: string): boolean {
     }
 
     // ── MÉTODOS AUXILIARES DE SOPORTE ──────────────────────────────────────────
+
+    /**
+     * Sella un PDF con constancia NOM-151 vía Nubarium (PSC).
+     * Envía solo el PDF (sin firmantes): la firma manuscrita ya viene incrustada.
+     * Lanza Error si Nubarium responde estatus !== 'OK' o hay fallo de conexión.
+     */
+    async sellarNOM151(pdfBuffer: Buffer): Promise<Nom151Result> {
+        const { username, password, timeout } = this.getCredentials();
+        const url = this.configService.get<string>(
+            'NUBARIUM_FIRMA_URL',
+            'https://firma.nubarium.com/nom151/v1/obtener-nom151',
+        );
+
+        const pdfBase64 = pdfBuffer.toString('base64');
+        if (pdfBase64.length > 28_000_000) {
+            this.logger.warn(`PDF grande para NOM-151: ${pdfBuffer.length} bytes (~${pdfBase64.length} base64)`);
+        }
+
+        let data: any;
+        try {
+            const resp = await axios.post(
+                url,
+                { pdf: pdfBase64 },
+                {
+                    auth: { username, password },
+                    timeout: timeout * 1000,
+                },
+            );
+            data = resp.data;
+        } catch (error: any) {
+            const msg = error.response?.data?.mensaje || error.message;
+            this.logger.error(`Error de conexión con Nubarium NOM-151: ${msg}`);
+            throw new Error(`Error de conexión con Nubarium NOM-151: ${msg}`);
+        }
+
+        // Nubarium devuelve HTTP 200 incluso en error; validar el body
+        const estatus = (data?.estatus || '').toUpperCase();
+        const claveMensaje = Number(data?.claveMensaje ?? -1);
+
+        if (estatus !== 'OK' || claveMensaje !== 0) {
+            const CLAVES: Record<number, string> = {
+                1: 'No se encontró el PDF',
+                2: 'No se encontró firmantes',
+                3: 'Error inesperado, favor de validar tus datos',
+                4: 'Hash invalido',
+            };
+            const detalle = CLAVES[claveMensaje] || data?.mensaje || 'Respuesta inválida de Nubarium';
+            this.logger.error(`Nubarium NOM-151 error: estatus=${estatus} claveMensaje=${claveMensaje} (${detalle})`);
+            throw new Error(`Nubarium NOM-151 rechazó el sellado (claveMensaje ${claveMensaje}): ${detalle}`);
+        }
+
+        if (!data?.nom151 || !data?.codigoValidacion) {
+            throw new Error('Nubarium NOM-151 respondió OK pero sin constancia (nom151/codigoValidacion vacíos)');
+        }
+
+        this.logger.log(`NOM-151 generado: codigoValidacion=${data.codigoValidacion}`);
+
+        return {
+            codigoValidacion: data.codigoValidacion,
+            nom151Base64: data.nom151,
+            hash: data.hash || '',
+            representacionVisualBase64: data.representacionVisual || null,
+        };
+    }
 
     private getCredentials() {
         return {
