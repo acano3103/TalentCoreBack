@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { CurpRenapoResult, NubariumStandardResult } from '../interfaces/nubarium.interface';
+import { CurpRenapoResult, Nom151Result, NubariumStandardResult } from '../interfaces/nubarium.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PrismaClient } from 'generated/prisma/client';
 
@@ -13,28 +13,34 @@ export class NubariumService {
     private readonly CURP_REGEX = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]{2}$/i;
 
     // Mapas de Configuración heredados de Python
-    private readonly PAYLOAD_FIELD_MAP: Record<string, string> = {
-        ine: 'id',
-        ife: 'id',
-        identificacion: 'id',
-        pasaporte: 'id',
-        __default__: 'document',
-    };
+   private readonly PAYLOAD_FIELD_MAP: Record<string, string> = {
+    ine: 'id',
+    ife: 'id',
+    identificacion: 'id',
+    pasaporte: 'id',
+    comprobante: 'comprobante',
+    domicilio: 'comprobante',
+    __default__: 'document',
+};
 
-    private readonly ENDPOINT_MAP: Record<string, string> = {
-        ine: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        ife: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        identificacion: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        pasaporte: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
-        curp: '/mx/renapo/curp-pdf',
-        nss: '/mx/imss/nss-pdf',
-        comprobante: '/mx/documents/ocr',
-        domicilio: '/mx/documents/ocr',
-        acta: '/mx/documents/ocr',
-        acta_nacimiento: '/mx/documents/ocr',
-        __default__: '/mx/documents/ocr',
-    };
+private esCampoComprobante(campo: string): boolean {
+    const lower = campo.toLowerCase();
+    return lower.includes('comprobante') || lower.includes('domicilio');
+}
 
+   private readonly ENDPOINT_MAP: Record<string, string> = {
+    ine: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    ife: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    identificacion: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    pasaporte: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
+    curp: '/mx/renapo/curp-pdf',
+    nss: '/mx/imss/nss-pdf',
+    comprobante: 'https://ocr.nubarium.com/ocr/v2/comprobante_domicilio',
+    domicilio: 'https://ocr.nubarium.com/ocr/v2/comprobante_domicilio',
+    acta: '/mx/documents/ocr',
+    acta_nacimiento: '/mx/documents/ocr',
+    __default__: '/mx/documents/ocr',
+};
     constructor(private readonly configService: ConfigService) { }
 
     /**
@@ -129,6 +135,8 @@ export class NubariumService {
         rutaRelativaBd: string,
         usuario: string,
         curpEmpleado?: string,
+        nssEmpleado?: string,
+        calleEmpleado?: string,
     ): Promise<NubariumStandardResult> {
         const { baseUrl, username, password, timeout } = this.getCredentials();
 
@@ -171,8 +179,11 @@ export class NubariumService {
                     ['success', 'ok', 'valid'].includes(data?.status) ||
                     (typeof data?.result === 'object' && data?.result?.valid);
 
-                // Fallback del script de Python para endpoints que devuelven extracción directa sin flag explícito
-                if (!estatusOk && data && typeof data === 'object' && !data.error && !data.message) {
+                // Fallback SOLO Cuando no hay ningún campo de estatus/error en la respuesta
+                // (como en la INE exitosa, que regresa los datos directo sin flag).
+                // Si Nubarium sí mandó un estatus explícito (aunque sea "ERROR"), respetamos esa decisión.
+                const sinCampoEstatus = !data?.status && !data?.estatus;
+                if (!estatusOk && sinCampoEstatus && data && typeof data === 'object' && !data.error && !data.message && !data.mensaje) {
                     estatusOk = true;
                 }
 
@@ -201,9 +212,22 @@ export class NubariumService {
                     }
                 }
 
+                // ── Paso Extra: Si es comprobante de domicilio, comparamos la calle extraída contra la del formulario ──
+                if (resultado.validado && this.esCampoComprobante(campoNormalizado) && calleEmpleado) {
+                    const calleExtraida = (data?.calle || '').trim().toUpperCase();
+                    const calleReal = calleEmpleado.trim().toUpperCase();
+
+                    if (calleExtraida && calleReal && !calleExtraida.includes(calleReal) && !calleReal.includes(calleExtraida)) {
+                        resultado.validado = false;
+                        resultado.motivo_rechazo = `El comprobante de domicilio no coincide. Calle en el documento: ${calleExtraida}, calle registrada: ${calleReal}`;
+                        this.logger.warn(`Domicilio no coincide para '${nombreArchivo}' — Documento: ${calleExtraida} vs Empleado: ${calleReal}`);
+                    }
+                }
+
                 // ── Paso Extra: Si es INE/IFE y pasó el OCR (y el CURP coincide), validar Lista Nominal ──
                 if (resultado.validado && this.esCampoIne(campoNormalizado)) {
                     const payloadNominal = this.construirPayloadValidaIne(data);
+
                     if (payloadNominal) {
                         const resNominal = await this.validarIneListaNominal(prisma, payloadNominal, idEmpleado, idDocumento, usuario);
 
@@ -322,6 +346,70 @@ export class NubariumService {
     }
 
     // ── MÉTODOS AUXILIARES DE SOPORTE ──────────────────────────────────────────
+
+    /**
+     * Sella un PDF con constancia NOM-151 vía Nubarium (PSC).
+     * Envía solo el PDF (sin firmantes): la firma manuscrita ya viene incrustada.
+     * Lanza Error si Nubarium responde estatus !== 'OK' o hay fallo de conexión.
+     */
+    async sellarNOM151(pdfBuffer: Buffer): Promise<Nom151Result> {
+        const { username, password, timeout } = this.getCredentials();
+        const url = this.configService.get<string>(
+            'NUBARIUM_FIRMA_URL',
+            'https://firma.nubarium.com/nom151/v1/obtener-nom151',
+        );
+
+        const pdfBase64 = pdfBuffer.toString('base64');
+        if (pdfBase64.length > 28_000_000) {
+            this.logger.warn(`PDF grande para NOM-151: ${pdfBuffer.length} bytes (~${pdfBase64.length} base64)`);
+        }
+
+        let data: any;
+        try {
+            const resp = await axios.post(
+                url,
+                { pdf: pdfBase64 },
+                {
+                    auth: { username, password },
+                    timeout: timeout * 1000,
+                },
+            );
+            data = resp.data;
+        } catch (error: any) {
+            const msg = error.response?.data?.mensaje || error.message;
+            this.logger.error(`Error de conexión con Nubarium NOM-151: ${msg}`);
+            throw new Error(`Error de conexión con Nubarium NOM-151: ${msg}`);
+        }
+
+        // Nubarium devuelve HTTP 200 incluso en error; validar el body
+        const estatus = (data?.estatus || '').toUpperCase();
+        const claveMensaje = Number(data?.claveMensaje ?? -1);
+
+        if (estatus !== 'OK' || claveMensaje !== 0) {
+            const CLAVES: Record<number, string> = {
+                1: 'No se encontró el PDF',
+                2: 'No se encontró firmantes',
+                3: 'Error inesperado, favor de validar tus datos',
+                4: 'Hash invalido',
+            };
+            const detalle = CLAVES[claveMensaje] || data?.mensaje || 'Respuesta inválida de Nubarium';
+            this.logger.error(`Nubarium NOM-151 error: estatus=${estatus} claveMensaje=${claveMensaje} (${detalle})`);
+            throw new Error(`Nubarium NOM-151 rechazó el sellado (claveMensaje ${claveMensaje}): ${detalle}`);
+        }
+
+        if (!data?.nom151 || !data?.codigoValidacion) {
+            throw new Error('Nubarium NOM-151 respondió OK pero sin constancia (nom151/codigoValidacion vacíos)');
+        }
+
+        this.logger.log(`NOM-151 generado: codigoValidacion=${data.codigoValidacion}`);
+
+        return {
+            codigoValidacion: data.codigoValidacion,
+            nom151Base64: data.nom151,
+            hash: data.hash || '',
+            representacionVisualBase64: data.representacionVisual || null,
+        };
+    }
 
     private getCredentials() {
         return {

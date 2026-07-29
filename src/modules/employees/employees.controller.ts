@@ -41,4 +41,11 @@ export class EmployeesController {
     return this.employeesService.saveSalary(activeUser, companyId, employeeId, salaryData);
   }
 
+  @Get()
+  @ApiOperation({ summary: 'Get all employees enriched', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  findAll(@Param('companyId', ParseIntPipe) companyId: number) {
+    return this.employeesService.findAll(companyId);
+  }
 }
