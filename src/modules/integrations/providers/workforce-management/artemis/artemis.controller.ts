@@ -12,7 +12,7 @@ export class ArtemisController {
     ) { }
 
     @Get('/positions')
-    @ApiOperation({ summary: 'Get all positions by company id' })
+    @ApiOperation({ summary: 'Get all positions from TalentCore to sync with Artemis' })
     @ApiResponse({ status: 200, description: 'Positions obtained successfully.' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
