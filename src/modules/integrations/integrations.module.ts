@@ -8,18 +8,23 @@ import { HumeController } from './providers/ia/hume.controller';
 import { HumeService } from './providers/ia/hume.service';
 import { HttpModule } from '@nestjs/axios';
 import { OpenAiProvider } from './providers/ia/openai.provider';
+import { ArtemisController } from './providers/workforce-management/artemis/artemis.controller';
+import { ArtemisService } from './providers/workforce-management/artemis/artemis.service';
+import { ArtemisMapper } from './providers/workforce-management/artemis/artemis.mapper';
 
 @Module({
     imports: [HttpModule],
-    controllers: [IntegrationsController, HumeController],
+    controllers: [IntegrationsController, HumeController, ArtemisController],
     providers: [
         IntegrationsService,
         IntegrationsFactory,
         ZoomProvider,
         OpenAiProvider,
         EncryptionService,
-        HumeService
+        HumeService,
+        ArtemisService,
+        ArtemisMapper
     ],
-    exports: [IntegrationsService, HumeService, IntegrationsFactory],
+    exports: [IntegrationsService, HumeService, IntegrationsFactory, ArtemisService],
 })
 export class IntegrationsModule { }
