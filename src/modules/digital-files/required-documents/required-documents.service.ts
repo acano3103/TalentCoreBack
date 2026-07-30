@@ -12,7 +12,6 @@ export class RequiredDocumentsService {
 
     constructor(
         private readonly prisma: PrismaService,
-        private readonly notifications: NotificationDispatcher,
     ) { }
 
     async findAll(companyId: number, page: number, limit: number, search?: string) {
@@ -38,19 +37,6 @@ export class RequiredDocumentsService {
             }),
             this.prisma.catDocumentos.count({ where }),
         ]);
-
-        await this.notifications.notify({
-            userUuid: '97322588-7990-4b68-9254-5458c2bbffc5',
-            notificationTypeCode: 'CONTRACT_SIGN',
-            to: 'canogarcia06@gmail.com',
-            phone: '5564306193',
-            subject: '✍️ Firma de Contrato Pendiente',
-            context: {
-                nombre: 'Emmanuel',
-                empresa: 'El Truco',
-                linkFirma: 'https://google.com',
-            }
-        });
 
         // Formatear la respuesta con la metadata de paginación
         return {
