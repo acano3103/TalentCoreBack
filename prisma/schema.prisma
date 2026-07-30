@@ -134,13 +134,16 @@ model CatDescripcionesPuesto {
 }
 
 model CatDocumentos {
-  IdDocumento     Int       @id @default(autoincrement())
-  idEmpresa       Int?
-  Descripcion     String?   @db.VarChar(100)
-  EsRequeridoBase Boolean   @default(false)
-  FechaRegistro   DateTime? @db.DateTime(0)
-  UsuarioRegistro String?   @db.VarChar(45)
-  Activo          Boolean?  @default(true)
+  IdDocumento         Int       @id @default(autoincrement())
+  idEmpresa           Int?
+  Descripcion         String?   @db.VarChar(100)
+  EsRequeridoBase     Boolean   @default(false)
+  FechaRegistro       DateTime? @db.DateTime(0)
+  UsuarioRegistro     String?   @db.VarChar(45)
+  Activo              Boolean?  @default(true)
+  requiereVencimiento Boolean   @default(false)
+  diasVigenciaDefault Int?
+  diasAlertaPrevio    Int?      @default(30)
 }
 
 model CatEmpresas {
@@ -1336,6 +1339,8 @@ model DocumentosEmpleado {
   idEstatusDocumento  Int?      @default(1)
   rutaArchivo         String?   @db.Text
   fechaCarga          DateTime? @default(now()) @db.Timestamp(0)
+  fechaEmision        DateTime? @db.Date
+  fechaVencimiento    DateTime? @db.Date
 }
 
 model CatEstatusContratos {

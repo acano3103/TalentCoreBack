@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { CurpRenapoResult, NubariumStandardResult } from '../interfaces/nubarium.interface';
+import { CurpRenapoResult, NubariumStandardResult, VigenciaCalculada } from '../interfaces/nubarium.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PrismaClient } from 'generated/prisma/client';
 
@@ -22,6 +22,7 @@ export class NubariumService {
     domicilio: 'comprobante',
     __default__: 'document',
 };
+
 
 private esCampoComprobante(campo: string): boolean {
     const lower = campo.toLowerCase();
@@ -137,6 +138,7 @@ private esCampoComprobante(campo: string): boolean {
         curpEmpleado?: string,
         nssEmpleado?: string,
         calleEmpleado?: string,
+        diasVigenciaDefault?: number | null,
     ): Promise<NubariumStandardResult> {
         const { baseUrl, username, password, timeout } = this.getCredentials();
 
@@ -224,6 +226,13 @@ private esCampoComprobante(campo: string): boolean {
                     }
                 }
 
+
+                // ── Calcular vigencia (fechaEmision/fechaVencimiento) si el documento sigue siendo válido ──
+                if (resultado.validado) {
+                    resultado.vigencia = this.calcularVigencia(campoNormalizado, data, diasVigenciaDefault ?? null);
+                }
+
+
                 // ── Paso Extra: Si es INE/IFE y pasó el OCR (y el CURP coincide), validar Lista Nominal ──
                 if (resultado.validado && this.esCampoIne(campoNormalizado)) {
                     const payloadNominal = this.construirPayloadValidaIne(data);
@@ -276,6 +285,73 @@ private esCampoComprobante(campo: string): boolean {
         return resultado;
     }
 
+    /**
+     * Calcula fechaEmision/fechaVencimiento según el tipo de documento y
+     * lo que Nubarium haya podido extraer. Si no se puede determinar de
+     * forma específica, cae al cálculo genérico (hoy + diasVigenciaDefault).
+     */
+    private calcularVigencia(
+        campoNormalizado: string,
+        data: any,
+        diasVigenciaDefault: number | null,
+    ): VigenciaCalculada {
+        const hoy = new Date();
+
+        // ── Caso INE: solo trae el año de vigencia ──
+        if (this.esCampoIne(campoNormalizado)) {
+            const anioVigencia = parseInt(data?.vigencia, 10);
+            const anioEmision = parseInt(data?.emision, 10);
+            if (!isNaN(anioVigencia)) {
+                return {
+                    fechaEmision: !isNaN(anioEmision) ? new Date(anioEmision, 0, 1) : null,
+                    fechaVencimiento: new Date(anioVigencia, 11, 31),
+                };
+            }
+        }
+
+        // ── Caso Comprobante de Domicilio: fecha tipo "12 SEP 2019" ──
+        if (this.esCampoComprobante(campoNormalizado)) {
+            const fechaParseada = this.parsearFechaTextoEspanol(data?.fecha);
+            if (fechaParseada && diasVigenciaDefault) {
+                const vencimiento = new Date(fechaParseada);
+                vencimiento.setDate(vencimiento.getDate() + diasVigenciaDefault);
+                return { fechaEmision: fechaParseada, fechaVencimiento: vencimiento };
+            }
+        }
+
+        // ── Caso genérico: hoy + diasVigenciaDefault ──
+        if (diasVigenciaDefault) {
+            const vencimiento = new Date(hoy);
+            vencimiento.setDate(vencimiento.getDate() + diasVigenciaDefault);
+            return { fechaEmision: hoy, fechaVencimiento: vencimiento };
+        }
+
+        return { fechaEmision: null, fechaVencimiento: null };
+    }
+
+    /**
+     * Parsea fechas tipo "12 SEP 2019" (formato típico de recibos CFE/Telmex/etc.)
+     */
+  private parsearFechaTextoEspanol(texto: string | undefined): Date | null {
+        if (!texto) return null;
+        const meses: Record<string, number> = {
+            ENE: 0, FEB: 1, MAR: 2, ABR: 3, MAY: 4, JUN: 5,
+            JUL: 6, AGO: 7, SEP: 8, OCT: 9, NOV: 10, DIC: 11,
+        };
+        const match = texto.trim().toUpperCase().match(/(\d{1,2})\s+([A-Z]{3})\s+(\d{2,4})/);
+        if (!match) return null;
+        const [, dia, mesTexto, anioTexto] = match;
+        const mes = meses[mesTexto];
+        if (mes === undefined) return null;
+
+        // Si el año viene con 2 dígitos, asumimos el siglo 2000 (ej. "26" -> 2026)
+        let anio = parseInt(anioTexto, 10);
+        if (anioTexto.length === 2) {
+            anio += 2000;
+        }
+
+        return new Date(anio, mes, parseInt(dia, 10));
+    }
     /**
      * 3. TIPO B: Validar INE contra Lista Nominal
      */
@@ -382,6 +458,7 @@ private esCampoComprobante(campo: string): boolean {
         res.validado = true; // Regla de negocio original: Errores de API externa no bloquean la subida
         res.motivo_rechazo = msg;
     }
+
 
     private construirPayloadValidaIne(dataOcr: any): any | null {
         const subTipo = (dataOcr?.subTipo || '').toUpperCase();
