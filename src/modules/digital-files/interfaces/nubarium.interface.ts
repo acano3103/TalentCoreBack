@@ -24,3 +24,10 @@ export interface CurpRenapoResult {
     respuesta_json: any;
     error: string | null;
 }
+
+export interface Nom151Result {
+    codigoValidacion: string;
+    nom151Base64: string;
+    hash: string;
+    representacionVisualBase64: string | null;
+}

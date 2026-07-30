@@ -1,0 +1,4 @@
+ALTER TABLE DocumentosGenerados ADD COLUMN codigoValidacionNOM151 VARCHAR(100) NULL;
+ALTER TABLE DocumentosGenerados ADD COLUMN hashNOM151 TEXT NULL;
+ALTER TABLE DocumentosGenerados ADD COLUMN archivoNom151 VARCHAR(500) NULL;
+ALTER TABLE DocumentosGenerados ADD COLUMN fechaSellado TIMESTAMP(0) NULL;

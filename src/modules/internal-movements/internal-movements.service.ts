@@ -153,9 +153,50 @@ export class InternalMovementsService {
   }
 
   async findByEmployee(companyId: number, employeeId: number) {
-    return this.prisma.movimientosInternos.findMany({
-      where: { idEmpleado: employeeId, idEmpresa: companyId },
-      orderBy: { fechaEfectiva: 'desc' },
-    });
+    return this.prisma.$queryRaw`
+      SELECT 
+        mi.idMovimiento,
+        mi.idEmpleado,
+        mi.idEmpresa,
+        mi.tipoMovimiento,
+        mi.fechaEfectiva,
+        mi.idPuestoAnterior,
+        mi.idPuestoNuevo,
+        mi.idAreaAnterior,
+        mi.idAreaNueva,
+        mi.idJefeAnterior,
+        mi.idJefeNuevo,
+        mi.idEmpresaAnterior,
+        mi.idEmpresaNueva,
+        mi.idSiteAnterior,
+        mi.idSiteNuevo,
+        mi.salarioBrutoAnterior,
+        mi.salarioBrutoNuevo,
+        mi.salarioNetoAnterior,
+        mi.salarioNetoNuevo,
+        mi.motivo,
+        mi.causaBaja,
+        mi.idUsuarioAutorizo,
+        mi.fechaRegistro,
+        puestoAnt.NombrePuesto as nombrePuestoAnterior,
+        puestoNuevo.NombrePuesto as nombrePuestoNuevo,
+        areaAnt.Descripcion as nombreAreaAnterior,
+        areaNueva.Descripcion as nombreAreaNueva,
+        TRIM(CONCAT_WS(' ', jefeAnt.nombre, jefeAnt.primerApellido, jefeAnt.segundoApellido)) as nombreJefeAnterior,
+        TRIM(CONCAT_WS(' ', jefeNuevo.nombre, jefeNuevo.primerApellido, jefeNuevo.segundoApellido)) as nombreJefeNuevo,
+        siteAnt.Descripcion as nombreSiteAnterior,
+        siteNuevo.Descripcion as nombreSiteNuevo
+      FROM MovimientosInternos mi
+      LEFT JOIN CatPuestos puestoAnt ON puestoAnt.idPuesto = mi.idPuestoAnterior
+      LEFT JOIN CatPuestos puestoNuevo ON puestoNuevo.idPuesto = mi.idPuestoNuevo
+      LEFT JOIN CatAreas areaAnt ON areaAnt.idArea = mi.idAreaAnterior
+      LEFT JOIN CatAreas areaNueva ON areaNueva.idArea = mi.idAreaNueva
+      LEFT JOIN Empleados jefeAnt ON jefeAnt.idEmpleado = mi.idJefeAnterior
+      LEFT JOIN Empleados jefeNuevo ON jefeNuevo.idEmpleado = mi.idJefeNuevo
+      LEFT JOIN CatSites siteAnt ON siteAnt.idSite = mi.idSiteAnterior
+      LEFT JOIN CatSites siteNuevo ON siteNuevo.idSite = mi.idSiteNuevo
+      WHERE mi.idEmpleado = ${employeeId} AND mi.idEmpresa = ${companyId}
+      ORDER BY mi.fechaEfectiva DESC;
+    `;
   }
 }

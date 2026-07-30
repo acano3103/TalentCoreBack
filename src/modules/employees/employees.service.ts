@@ -41,6 +41,7 @@ export class EmployeesService {
         hs.idHistorialSalario as idSalario,
         hs.salarioBruto,
         hs.salarioNeto,
+        hs.bono,
         hs.fechaInicio as fechaInicioSalario,
         tm.idTipoMoneda,
         tm.codigo as TipoMoneda,
@@ -70,8 +71,7 @@ export class EmployeesService {
   }
 
   async saveSalary(user: ActiveUserDto, companyId: number, employeeId: number, salaryData: SaveSalaryDto) {
-
-    const { idEmpleado, idTipoMoneda, idPeriodicidadPago, salarioBruto, salarioNeto, fechaInicioVigencia } = salaryData;
+    const { idEmpleado, idTipoMoneda, idPeriodicidadPago, salarioBruto, salarioNeto, bono, fechaInicioVigencia } = salaryData;
 
     await this.prisma.$transaction(async (tx) => {
       // Registramos el salario del empleado en la db
@@ -82,6 +82,7 @@ export class EmployeesService {
           idPeriodicidadPago,
           salarioBruto,
           salarioNeto,
+          bono: bono ?? 0.00,
           fechaInicio: new Date(fechaInicioVigencia),
           actual: true,
           fechaRegistro: new Date(),
