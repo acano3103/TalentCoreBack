@@ -37,6 +37,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedEstatusContratos(); /** CatEstatusContratos */
             await this.seedTiposMoneda(); /** CatTiposMoneda */
             await this.seedPeriodicidadesPago(); /** CatPeriodicidadesPago */
+            await this.seedPlantillasNotificaciones(); /** PlantillasNotificaciones */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -98,6 +99,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 12, code: 'INTERVIEW_RESCHEDULED', description: 'Notificación de reprogramación de entrevista', activo: true },
             { id: 13, code: 'INTERVIEW_RESCHEDULED_INTERVIEWER', description: 'Notificación de reprogramación de entrevista al entrevistador', activo: true },
             { id: 14, code: 'DOCUMENT_REJECTED', description: 'Notificación de rechazo de documentación', activo: true },
+            { id: 15, code: 'CONTRACT_SIGN', description: 'Notificación que se le envía al empleado para que firme su contrato', activo: true },
+            { id: 16, code: 'CONTRACT_SIGN_TOKEN', description: 'Notificación con token para firmar contrato', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -114,22 +117,22 @@ export class CatalogsSeedService implements OnModuleInit {
         const typeChannels = [
             // --- 1. 2FA (Verificación de dos pasos) ---
             { id: 1, notification_type_id: 1, channel_id: 1, enabled: true }, // Email
-            { id: 2, notification_type_id: 1, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 2, notification_type_id: 1, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 3, notification_type_id: 1, channel_id: 3, enabled: true }, // SMS
             { id: 4, notification_type_id: 1, channel_id: 4, enabled: false }, // Sockets
             // --- 2. POSITION_STATUS_UPDATE (Actualización de vacante) ---
             { id: 5, notification_type_id: 2, channel_id: 1, enabled: true }, // Email
-            { id: 6, notification_type_id: 2, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 6, notification_type_id: 2, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 7, notification_type_id: 2, channel_id: 3, enabled: false }, // SMS
             { id: 8, notification_type_id: 2, channel_id: 4, enabled: true }, // Sockets
             // --- 3. INTERVIEW_SCHEDULED (Programación de entrevista) ---
             { id: 9, notification_type_id: 3, channel_id: 1, enabled: true }, // Email
-            { id: 10, notification_type_id: 3, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 10, notification_type_id: 3, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 11, notification_type_id: 3, channel_id: 3, enabled: false }, // SMS
             { id: 12, notification_type_id: 3, channel_id: 4, enabled: false }, // Sockets
             // --- 4. CREDENTIALS_CREATED (Creación de cuenta/credenciales) ---
             { id: 13, notification_type_id: 4, channel_id: 1, enabled: true }, // Email
-            { id: 14, notification_type_id: 4, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 14, notification_type_id: 4, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 15, notification_type_id: 4, channel_id: 3, enabled: false }, // SMS
             { id: 16, notification_type_id: 4, channel_id: 4, enabled: false }, // Sockets
             // --- 5. POSITION_REQUEST_STATUS_UPDATE (Actualización del estado de la solicitud de posición) ---
@@ -164,24 +167,34 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 40, notification_type_id: 10, channel_id: 4, enabled: true }, // Sockets
             // --- 11. INTERVIEW_SCHEDULED_INTERVIEWER (Programación de entrevista al entrevistador) ---
             { id: 41, notification_type_id: 11, channel_id: 1, enabled: true }, // Email
-            { id: 42, notification_type_id: 11, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 42, notification_type_id: 11, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 43, notification_type_id: 11, channel_id: 3, enabled: false }, // SMS
             { id: 44, notification_type_id: 11, channel_id: 4, enabled: true }, // Sockets
             // --- 12. INTERVIEW_RESCHEDULED (Reprogramación de entrevista) ---
             { id: 45, notification_type_id: 12, channel_id: 1, enabled: true }, // Email
-            { id: 46, notification_type_id: 12, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 46, notification_type_id: 12, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 47, notification_type_id: 12, channel_id: 3, enabled: false }, // SMS
             { id: 48, notification_type_id: 12, channel_id: 4, enabled: false }, // Sockets
             // --- 13. INTERVIEW_RESCHEDULED_INTERVIEWER (Reprogramación de entrevista al entrevistador) ---
             { id: 49, notification_type_id: 13, channel_id: 1, enabled: true }, // Email
-            { id: 50, notification_type_id: 13, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 50, notification_type_id: 13, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 51, notification_type_id: 13, channel_id: 3, enabled: false }, // SMS
             { id: 52, notification_type_id: 13, channel_id: 4, enabled: true }, // Sockets
             // --- 14. DOCUMENT_REJECTED (Rechazo de documentación) ---
             { id: 53, notification_type_id: 14, channel_id: 1, enabled: true }, // Email
-            { id: 54, notification_type_id: 14, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 54, notification_type_id: 14, channel_id: 2, enabled: false }, // WhatsApp (true)
             { id: 55, notification_type_id: 14, channel_id: 3, enabled: false }, // SMS
             { id: 56, notification_type_id: 14, channel_id: 4, enabled: false }, // Sockets
+            // --- 15. CONTRACT_SIGN (Firma de contrato) ---
+            { id: 57, notification_type_id: 15, channel_id: 1, enabled: true }, // Email
+            { id: 58, notification_type_id: 15, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 59, notification_type_id: 15, channel_id: 3, enabled: false }, // SMS
+            { id: 60, notification_type_id: 15, channel_id: 4, enabled: false }, // Sockets
+            // --- 16. CONTRACT_SIGN_TOKEN (Firma de contrato con token) ---
+            { id: 61, notification_type_id: 16, channel_id: 1, enabled: false }, // Email
+            { id: 62, notification_type_id: 16, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 63, notification_type_id: 16, channel_id: 3, enabled: false }, // SMS
+            { id: 64, notification_type_id: 16, channel_id: 4, enabled: false }, // Sockets
         ];
 
         for (const tc of typeChannels) {
@@ -835,6 +848,28 @@ export class CatalogsSeedService implements OnModuleInit {
             VALUES (${type.idPeriodicidadPago}, ${type.descripcion})
             ON DUPLICATE KEY UPDATE 
                 descripcion = VALUES(descripcion);
+        `;
+        }
+    }
+
+    // Seeds initial payment frequencies into the database.
+    private async seedPlantillasNotificaciones() {
+        const types = [
+            { template_id: 1, template_name: 'link_firmar_contrato', type: 'whatsapp', content: `¡Hola {{1}}! 👋\n\nNos da mucho gusto darte la bienvenida a *{{2}}*.\n\nTu contrato laboral ya se encuentra generado y listo para firmar. Por favor, ingresa al siguiente enlace para revisar y firmar tu documento:\n\n🔗 {{3}}\n\nSi tienes alguna duda durante el proceso, comunícate con el equipo de Talent Core.`, status: 'ACTIVE', gupshupId: '75d01c5d-7fe9-4709-b838-12bcab8ad68e', noParams: 3 }, // Variables: {{1}} = Nombre, {{2}} = Nombre de la Empresa / Proceso, {{3}} = Link de firma
+            { template_id: 2, template_name: 'token_firma_contrato_2', type: 'whatsapp', content: `Tu código de verificación es {{1}}. Por tu seguridad, no lo compartas.`, status: 'ACTIVE', gupshupId: 'ce2b090f-ad9b-4a0b-9cc5-ae70acf99f30', noParams: 1 }, // Variables: {{1}} = Token / Código OTP
+        ];
+
+        for (const type of types) {
+            await this.prisma.$queryRaw`
+            INSERT INTO PlantillasNotificaciones (template_id, template_name, type, content, status, gupshupId, noParams )
+            VALUES (${type.template_id}, ${type.template_name}, ${type.type}, ${type.content}, ${type.status}, ${type.gupshupId}, ${type.noParams})
+            ON DUPLICATE KEY UPDATE 
+                template_name = VALUES(template_name),
+                type = VALUES(type),
+                content = VALUES(content),
+                status = VALUES(status),
+                gupshupId = VALUES(gupshupId),
+                noParams = VALUES(noParams);
         `;
         }
     }

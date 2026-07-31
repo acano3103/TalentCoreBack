@@ -4,13 +4,14 @@ import { ActiveUserDto } from "src/modules/auth/dto/active-user.dto";
 import { PrismaService } from "src/prisma/prisma.service";
 import { CreateRequiredDocumentDto } from "./dto/create-required-document.dto";
 import { UpdateRequiredDocumentDto } from "./dto/update-required-document.dto";
+import { NotificationDispatcher } from "src/modules/notifications/notification.dispatcher";
 
 @Injectable()
 export class RequiredDocumentsService {
     private readonly logger = new Logger(RequiredDocumentsService.name);
 
     constructor(
-        private readonly prisma: PrismaService
+        private readonly prisma: PrismaService,
     ) { }
 
     async findAll(companyId: number, page: number, limit: number, search?: string) {

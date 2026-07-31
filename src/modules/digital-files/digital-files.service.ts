@@ -472,7 +472,13 @@ export class DigitalFilesService {
   ) {
     const curp = empleadoData.curp?.toUpperCase().trim();
     if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
-
+// Validar el CURP contra RENAPO antes de continuar
+    const resultadoCurp = await this.nubariumService.consultarCurpRenapo(curp);
+    if (!resultadoCurp.success) {
+      throw new BadRequestException(
+        `El CURP ${curp} no es válido según RENAPO: ${resultadoCurp.error || 'No se pudo verificar'}`
+      );
+    } 
     // Preparar carpetas y estructuras de control para los archivos
     const contadorPorTipo: Record<string, number> = {};
     const aceptados: DocumentoAceptado[] = [];
@@ -503,16 +509,19 @@ export class DigitalFilesService {
 
         await fs.writeFile(rutaTemp, file.buffer);
 
-        const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
-          this.prisma,
-          file.buffer,
-          campoNormalizado,
-          idEmpleado,
-          idDocumento,
-          nombreArchivo,
-          rutaRelativaBd,
-          usuarioRegistro,
-        );
+      const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
+      this.prisma,
+      file.buffer,
+      campoNormalizado,
+      idEmpleado,
+      idDocumento,
+      nombreArchivo,
+      rutaRelativaBd,
+      usuarioRegistro,
+      curp,
+      empleadoData.numeroSeguroSocial,
+      empleadoData.calle,
+    );
 
         const esRechazoReal = !resultadoNubarium.validado && !resultadoNubarium.error_infraestructura;
 

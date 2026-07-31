@@ -43,4 +43,8 @@ export const envValidationSchema = Joi.object({
             }
         }, 'JSON Array Parser')
         .required(),
+    GUPSHUP_API_KEY: Joi.string().required(),
+    GUPSHUP_BASE_URL: Joi.string().required(),
+    GUPSHUP_SOURCE_PHONE: Joi.string().required(),
+    GUPSHUP_APP_NAME: Joi.string().required(),
 });

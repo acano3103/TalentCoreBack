@@ -134,13 +134,16 @@ model CatDescripcionesPuesto {
 }
 
 model CatDocumentos {
-  IdDocumento     Int       @id @default(autoincrement())
-  idEmpresa       Int?
-  Descripcion     String?   @db.VarChar(100)
-  EsRequeridoBase Boolean   @default(false)
-  FechaRegistro   DateTime? @db.DateTime(0)
-  UsuarioRegistro String?   @db.VarChar(45)
-  Activo          Boolean?  @default(true)
+  IdDocumento         Int       @id @default(autoincrement())
+  idEmpresa           Int?
+  Descripcion         String?   @db.VarChar(100)
+  EsRequeridoBase     Boolean   @default(false)
+  FechaRegistro       DateTime? @db.DateTime(0)
+  UsuarioRegistro     String?   @db.VarChar(45)
+  Activo              Boolean?  @default(true)
+  requiereVencimiento Boolean   @default(false)
+  diasVigenciaDefault Int?
+  diasAlertaPrevio    Int?      @default(30)
 }
 
 model CatEmpresas {
@@ -1054,46 +1057,46 @@ model RelAreasUbicaciones {
 }
 
 model Empleados {
-  idEmpleado                                        Int                 @id @default(autoincrement())
-  idUsuario                                         String?             @db.VarChar(36)
+  idEmpleado                                        Int                   @id @default(autoincrement())
+  idUsuario                                         String?               @db.VarChar(36)
   idEmpresa                                         Int?
   idPuesto                                          Int?
   idJefeInmediato                                   Int?
   idSite                                            Int?
-  nombre                                            String?             @db.VarChar(100)
-  primerApellido                                    String?             @db.VarChar(100)
-  segundoApellido                                   String?             @db.VarChar(100)
+  nombre                                            String?               @db.VarChar(100)
+  primerApellido                                    String?               @db.VarChar(100)
+  segundoApellido                                   String?               @db.VarChar(100)
   idCampania                                        Int?
   idTipoSanguineo                                   Int?
-  numeroSeguroSocial                                String?             @db.VarChar(15)
+  numeroSeguroSocial                                String?               @db.VarChar(15)
   idEstadoCivil                                     Int?
-  fechaNacimiento                                   DateTime?           @db.Date
-  curp                                              String?             @db.VarChar(18)
-  rfc                                               String?             @db.VarChar(18)
-  correo                                            String?             @db.VarChar(250)
-  telefonoMovil                                     String?             @db.VarChar(15)
-  telefonoLocal                                     String?             @db.VarChar(15)
+  fechaNacimiento                                   DateTime?             @db.Date
+  curp                                              String?               @db.VarChar(18)
+  rfc                                               String?               @db.VarChar(18)
+  correo                                            String?               @db.VarChar(250)
+  telefonoMovil                                     String?               @db.VarChar(15)
+  telefonoLocal                                     String?               @db.VarChar(15)
   idNivelEstudios                                   Int?
   tieneInfonavit                                    Boolean?
   tieneHijos                                        Boolean?
-  FechaRegistro                                     DateTime?           @default(now()) @db.Timestamp(0)
-  usuarioRegistro                                   String?             @db.VarChar(250)
+  FechaRegistro                                     DateTime?             @default(now()) @db.Timestamp(0)
+  usuarioRegistro                                   String?               @db.VarChar(250)
   idGenero                                          Int?
-  numeroInfonavit                                   String?             @db.VarChar(30)
+  numeroInfonavit                                   String?               @db.VarChar(30)
   numeroHijos                                       Int?
-  imagenFirmaAutografa                              String?             @db.VarChar(500)
-  uploadLink                                        String?             @db.VarChar(100)
-  token                                             String?             @db.VarChar(100)
-  activo                                            Boolean             @default(true)
+  imagenFirmaAutografa                              String?               @db.VarChar(500)
+  uploadLink                                        String?               @db.VarChar(100)
+  token                                             String?               @db.VarChar(100)
+  activo                                            Boolean               @default(true)
   Contratos                                         Contratos[]
-  CatPuestos                                        CatPuestos?         @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
-  Empleados                                         Empleados?          @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
-  other_Empleados                                   Empleados[]         @relation("EmpleadosToEmpleados")
-  auth_user                                         auth_user?          @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  CatPuestos                                        CatPuestos?           @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
+  Empleados                                         Empleados?            @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
+  other_Empleados                                   Empleados[]           @relation("EmpleadosToEmpleados")
+  auth_user                                         auth_user?            @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
   HistorialSalarios                                 HistorialSalarios[]
   MovimientosInternos                               MovimientosInternos[]
   Vacantes                                          Vacantes[]
-  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]          @relation("Vacantes_idReclutadorAsignadoToEmpleados")
+  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]            @relation("Vacantes_idReclutadorAsignadoToEmpleados")
 
   @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
   @@index([idUsuario], map: "FK_Empleados_Usuarios")
@@ -1224,24 +1227,31 @@ model CamposPlantilla {
 }
 
 model DocumentosGenerados {
-  id              Int                  @id @default(autoincrement())
-  uuid            String               @unique @default(dbgenerated("(uuid())")) @db.VarChar(36)
-  idPlantilla     Int
-  idVacante       Int?
-  idCandidato     Int?
-  datosJson       Json?
-  archivoGenerado String?              @db.VarChar(500)
-  estatus         String               @default("pendiente") @db.VarChar(50)
-  fechaGeneracion DateTime?            @default(now()) @db.Timestamp(0)
-  idUsuarioGenero Int
-  tokenFirma      String?              @unique(map: "tokenFirma") @db.VarChar(100)
-  firmado         Boolean              @default(false)
-  datosFirma      Json?
-  plantilla       PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], map: "fk_docgen_plantilla")
+  id                     Int                  @id @default(autoincrement())
+  uuid                   String               @unique @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  idPlantilla            Int
+  idVacante              Int?
+  idCandidato            Int?
+  datosJson              Json?
+  archivoGenerado        String?              @db.VarChar(500)
+  estatus                String               @default("pendiente") @db.VarChar(50)
+  fechaGeneracion        DateTime?            @default(now()) @db.Timestamp(0)
+  idUsuarioGenero        Int
+  tokenFirma             String?              @unique(map: "tokenFirma") @db.VarChar(100)
+  firmado                Boolean              @default(false)
+  datosFirma             Json?
+  idContrato             Int?
+  codigoValidacionNOM151 String?              @db.VarChar(100)
+  hashNOM151             String?              @db.Text
+  archivoNom151          String?              @db.VarChar(500)
+  fechaSellado           DateTime?            @db.Timestamp(0)
+  contrato               Contratos?           @relation(fields: [idContrato], references: [idContrato], map: "fk_docgen_contrato")
+  plantilla              PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], map: "fk_docgen_plantilla")
 
   @@index([idPlantilla], map: "idx_docgen_plantilla")
   @@index([idVacante], map: "idx_docgen_vacante")
   @@index([idCandidato], map: "idx_docgen_candidato")
+  @@index([idContrato], map: "idx_docgen_contrato")
 }
 
 model CatEstatusPostulacion {
@@ -1333,6 +1343,8 @@ model DocumentosEmpleado {
   idEstatusDocumento  Int?      @default(1)
   rutaArchivo         String?   @db.Text
   fechaCarga          DateTime? @default(now()) @db.Timestamp(0)
+  fechaEmision        DateTime? @db.Date
+  fechaVencimiento    DateTime? @db.Date
 }
 
 model CatEstatusContratos {
@@ -1343,22 +1355,23 @@ model CatEstatusContratos {
 }
 
 model Contratos {
-  idContrato           Int                 @id @default(autoincrement())
+  idContrato           Int                   @id @default(autoincrement())
   idEmpleado           Int
   idTemplate           Int?
-  idEstatusContrato    Int                 @default(1)
-  archivoPdfUrl        String?             @db.VarChar(500)
-  archivoPdfFirmadoUrl String?             @db.VarChar(500)
-  archivoXmlNom151Url  String?             @db.VarChar(500)
-  tokenValidacion      String?             @db.VarChar(10)
-  fechaToken           DateTime?           @db.Timestamp(0)
-  fechaFirma           DateTime?           @db.Timestamp(0)
-  fechaRegistro        DateTime?           @default(now()) @db.Timestamp(0)
-  fechaInicioContrato  DateTime?           @db.DateTime(0)
-  fechaTerminoContrato DateTime?           @db.DateTime(0)
-  usuarioRegistro      String?             @db.VarChar(250)
-  Empleados            Empleados           @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_Contratos_Empleados")
-  CatEstatusContratos  CatEstatusContratos @relation(fields: [idEstatusContrato], references: [idEstatusContrato], map: "FK_Contratos_Estatus")
+  idEstatusContrato    Int                   @default(1)
+  archivoPdfUrl        String?               @db.VarChar(500)
+  archivoPdfFirmadoUrl String?               @db.VarChar(500)
+  archivoXmlNom151Url  String?               @db.VarChar(500)
+  tokenValidacion      String?               @db.VarChar(10)
+  fechaToken           DateTime?             @db.Timestamp(0)
+  fechaFirma           DateTime?             @db.Timestamp(0)
+  fechaRegistro        DateTime?             @default(now()) @db.Timestamp(0)
+  fechaInicioContrato  DateTime?             @db.DateTime(0)
+  fechaTerminoContrato DateTime?             @db.DateTime(0)
+  usuarioRegistro      String?               @db.VarChar(250)
+  Empleados            Empleados             @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_Contratos_Empleados")
+  CatEstatusContratos  CatEstatusContratos   @relation(fields: [idEstatusContrato], references: [idEstatusContrato], map: "FK_Contratos_Estatus")
+  documentosGenerados  DocumentosGenerados[]
 
   @@index([idEmpleado], map: "FK_Contratos_Empleados")
   @@index([idEstatusContrato], map: "FK_Contratos_Estatus")
@@ -1386,6 +1399,7 @@ model HistorialSalarios {
   idPeriodicidadPago    Int                   @default(3)
   salarioBruto          Decimal               @db.Decimal(12, 2)
   salarioNeto           Decimal               @db.Decimal(12, 2)
+  bono                  Decimal?              @db.Decimal(12, 2)
   fechaInicio           DateTime              @db.Date
   actual                Boolean               @default(true)
   fechaRegistro         DateTime?             @default(now()) @db.Timestamp(0)
@@ -1411,12 +1425,6 @@ model TiposDocumento {
   @@index([idEmpresa], map: "idx_tipo_doc_empresa")
 }
 
-model CatEstatusMovimiento {
-  idEstatusMovimiento Int                   @id @default(autoincrement())
-  descripcion         String                @db.VarChar(100)
-  activo              Boolean               @default(true)
-  MovimientosInternos MovimientosInternos[]
-}
 
 model MovimientosInternos {
   idMovimiento         Int                  @id @default(autoincrement())
@@ -1434,19 +1442,40 @@ model MovimientosInternos {
   idEmpresaNueva       Int?
   idSiteAnterior       Int?
   idSiteNuevo          Int?
-  salarioBrutoAnterior Decimal?             @db.Decimal(12, 2)
-  salarioBrutoNuevo    Decimal?             @db.Decimal(12, 2)
-  salarioNetoAnterior  Decimal?             @db.Decimal(12, 2)
-  salarioNetoNuevo     Decimal?             @db.Decimal(12, 2)
-  motivo               String?              @db.Text
-  causaBaja            String?              @db.Text
-  idUsuarioAutorizo    String?              @db.VarChar(36)
+  salarioBrutoAnterior Decimal?                        @db.Decimal(12, 2)
+  salarioBrutoNuevo    Decimal?                        @db.Decimal(12, 2)
+  salarioNetoAnterior  Decimal?                        @db.Decimal(12, 2)
+  salarioNetoNuevo     Decimal?                        @db.Decimal(12, 2)
+  motivo               String?                         @db.Text
+  causaBaja            String?                         @db.Text
+  idUsuarioAutorizo    String?                         @db.VarChar(36)
   idEstatusMovimiento  Int                  @default(1)
-  fechaRegistro        DateTime?            @default(now()) @db.Timestamp(0)
-  Empleados            Empleados            @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
+  fechaRegistro        DateTime?                       @default(now()) @db.Timestamp(0)
+  Empleados            Empleados                       @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
   CatEstatusMovimiento CatEstatusMovimiento @relation(fields: [idEstatusMovimiento], references: [idEstatusMovimiento], map: "FK_MovInternos_Estatus")
 
   @@index([idEmpleado], map: "FK_MovInternos_Empleado_idx")
+  @@index([idEstatusMovimiento], map: "FK_MovInternos_Estatus")
+}
+
+model PlantillasNotificaciones {
+  template_id   Int                           @id @default(autoincrement())
+  template_name String                        @unique(map: "template_name") @db.VarChar(50)
+  type          PlantillasNotificaciones_type @default(whatsapp)
+  content       String                        @db.Text
+  status        String?                       @db.VarChar(50)
+  created_at    DateTime?                     @default(now()) @db.Timestamp(0)
+  updated_at    DateTime?                     @default(now()) @db.Timestamp(0)
+  metadata      Json?
+  gupshupId     String?                       @db.VarChar(50)
+  noParams      Int?                          @default(0)
+}
+
+model CatEstatusMovimiento {
+  idEstatusMovimiento Int                   @id @default(autoincrement())
+  descripcion         String                @db.VarChar(100)
+  activo              Boolean               @default(true)
+  MovimientosInternos MovimientosInternos[]
   @@index([idEstatusMovimiento], map: "FK_MovInternos_Estatus_idx")
 }
 
@@ -1458,4 +1487,10 @@ enum Entrevistas_interview_type {
 enum Entrevistas_modality {
   ONLINE
   PRESENCIAL
+}
+
+enum PlantillasNotificaciones_type {
+  whatsapp
+  email
+  sms
 }

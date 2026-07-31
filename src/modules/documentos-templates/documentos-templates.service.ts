@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { NotificationDispatcher } from '../notifications/notification.dispatcher';
+import { NubariumService } from '../digital-files/services/nubarium.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreatePlantillaDto } from './dto/create-plantilla.dto';
 import { UpdateCamposDto } from './dto/update-campos.dto';
@@ -187,7 +189,11 @@ async function convertDocxToPdf(docxPath: string): Promise<Buffer> {
 export class DocumentosTemplatesService {
     private readonly logger = new Logger(DocumentosTemplatesService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly notifications: NotificationDispatcher,
+        private readonly nubarium: NubariumService,
+    ) { }
 
     async create(
         companyId: number,
@@ -228,6 +234,9 @@ export class DocumentosTemplatesService {
                 archivoHtml: archivoHtml ?? undefined,
                 idEmpresa: companyId,
                 idModulo: createPlantillaDto.idModulo,
+                idTipoDocumento: createPlantillaDto.idTipoDocumento
+                    ? Number(createPlantillaDto.idTipoDocumento)
+                    : undefined,
                 idUsuarioCreador: activeUser.id,
             },
         });
@@ -235,7 +244,34 @@ export class DocumentosTemplatesService {
         return plantilla;
     }
 
-    async findAll(companyId: number, page: number, limit: number, search: string) {
+    async findTiposDocumento(companyId: number) {
+        return this.prisma.tiposDocumento.findMany({
+            where: { idEmpresa: companyId, activo: true },
+            orderBy: { nombre: 'asc' },
+        });
+    }
+
+    async createTipoDocumento(companyId: number, nombre: string) {
+        const existente = await this.prisma.tiposDocumento.findFirst({
+            where: { idEmpresa: companyId, nombre },
+        });
+
+        if (existente) {
+            if (!existente.activo) {
+                return this.prisma.tiposDocumento.update({
+                    where: { id: existente.id },
+                    data: { activo: true },
+                });
+            }
+            throw new BadRequestException('Ya existe un tipo de documento con ese nombre');
+        }
+
+        return this.prisma.tiposDocumento.create({
+            data: { nombre, idEmpresa: companyId },
+        });
+    }
+
+    async findAll(companyId: number, page: number, limit: number, search: string, idTipoDocumento?: number) {
         const skip = (page - 1) * limit;
         const where: any = {
             idEmpresa: companyId,
@@ -246,12 +282,17 @@ export class DocumentosTemplatesService {
             where.nombre = { contains: search };
         }
 
+        if (idTipoDocumento) {
+            where.idTipoDocumento = idTipoDocumento;
+        }
+
         const [data, total] = await Promise.all([
             this.prisma.plantillasDocumentos.findMany({
                 where,
                 skip,
                 take: limit,
                 orderBy: { fechaCreacion: 'desc' },
+                include: { TiposDocumento: { select: { id: true, nombre: true } } },
             }),
             this.prisma.plantillasDocumentos.count({ where }),
         ]);
@@ -267,7 +308,10 @@ export class DocumentosTemplatesService {
     async findOne(companyId: number, id: number) {
         const plantilla = await this.prisma.plantillasDocumentos.findFirst({
             where: { id, idEmpresa: companyId, activa: true },
-            include: { campos: { orderBy: { orden: 'asc' } } },
+            include: {
+                campos: { orderBy: { orden: 'asc' } },
+                TiposDocumento: { select: { id: true, nombre: true } },
+            },
         });
 
         if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
@@ -281,10 +325,13 @@ export class DocumentosTemplatesService {
 
         if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
 
+        const { idTipoDocumento, ...rest } = data;
+
         return this.prisma.plantillasDocumentos.update({
             where: { id },
             data: {
-                ...data,
+                ...rest,
+                idTipoDocumento: idTipoDocumento !== undefined ? Number(idTipoDocumento) : undefined,
                 fechaActualiz: new Date(),
             },
         });
@@ -648,6 +695,97 @@ export class DocumentosTemplatesService {
         return { token: documento.tokenFirma, url: `/firmar/${documento.tokenFirma}` };
     }
 
+    async requestSignatureOtp(token: string) {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { tokenFirma: token },
+            include: {
+                contrato: {
+                    include: {
+                        Empleados: {
+                            select: {
+                                idEmpleado: true,
+                                nombre: true,
+                                primerApellido: true,
+                                correo: true,
+                                telefonoMovil: true,
+                                idUsuario: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!documento) throw new NotFoundException('Documento de firma no encontrado');
+        if (documento.firmado) throw new BadRequestException('El documento ya fue firmado');
+        if (!documento.contrato) throw new BadRequestException('El documento no está ligado a un contrato');
+
+        const contrato = documento.contrato;
+        const empleado = contrato.Empleados;
+
+        if (!empleado.telefonoMovil) {
+            throw new BadRequestException('El empleado no tiene un teléfono registrado');
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        await this.prisma.contratos.update({
+            where: { idContrato: contrato.idContrato },
+            data: {
+                tokenValidacion: otp,
+                fechaToken: new Date(),
+            },
+        });
+
+        const nombreCompleto = `${empleado.nombre} ${empleado.primerApellido}`.trim();
+        const userUuid = empleado.idUsuario || `empleado-${empleado.idEmpleado}`;
+
+        await this.notifications.notify({
+            userUuid,
+            notificationTypeCode: 'CONTRACT_SIGN_TOKEN',
+            to: empleado.correo || undefined,
+            phone: empleado.telefonoMovil,
+            subject: 'Código de Validación',
+            context: { otp },
+        });
+
+        this.logger.log(`OTP de firma enviado a ${empleado.telefonoMovil} para contrato ${contrato.idContrato}`);
+
+        return { sent: true, phone: `***${empleado.telefonoMovil.slice(-4)}` };
+    }
+
+    private async verifySignatureOtp(documentoId: number, otp: string) {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { id: documentoId },
+            include: { contrato: true },
+        });
+
+        if (!documento?.contrato) {
+            throw new BadRequestException('Documento sin contrato asociado');
+        }
+
+        const contrato = documento.contrato;
+
+        if (!contrato.tokenValidacion || !contrato.fechaToken) {
+            throw new UnauthorizedException('No se ha solicitado un código de validación');
+        }
+
+        const elapsed = Date.now() - new Date(contrato.fechaToken).getTime();
+        if (elapsed > 10 * 60 * 1000) {
+            throw new UnauthorizedException('El código ha expirado. Solicita uno nuevo.');
+        }
+
+        if (contrato.tokenValidacion !== otp) {
+            throw new UnauthorizedException('Código incorrecto');
+        }
+
+        // Invalidar token (single-use)
+        await this.prisma.contratos.update({
+            where: { idContrato: contrato.idContrato },
+            data: { tokenValidacion: null, fechaToken: null },
+        });
+    }
+
     async getForPublicSignature(token: string) {
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: { tokenFirma: token },
@@ -677,6 +815,8 @@ export class DocumentosTemplatesService {
             id: documento.id,
             plantillaNombre: documento.plantilla.nombre,
             firmado: documento.firmado,
+            sellado: documento.estatus === 'sellado',
+            codigoValidacion: documento.codigoValidacionNOM151 || null,
             firmaCampos: firmaCampos.map(c => ({
                 identificador: c.identificador,
                 nombreCampo: c.nombreCampo,
@@ -725,7 +865,11 @@ export class DocumentosTemplatesService {
         }
     }
 
-    async savePublicSignature(token: string, signatureData: { imagen: string; camposFirmados?: Record<string, string> }) {
+    async savePublicSignature(token: string, signatureData: { imagen: string; camposFirmados?: Record<string, string>; otp: string }) {
+        if (!signatureData.otp) {
+            throw new BadRequestException('El código de validación es requerido');
+        }
+
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: { tokenFirma: token },
             include: {
@@ -737,6 +881,8 @@ export class DocumentosTemplatesService {
 
         if (!documento) throw new NotFoundException('Documento de firma no encontrado');
         if (documento.firmado) throw new BadRequestException('El documento ya fue firmado');
+
+        await this.verifySignatureOtp(documento.id, signatureData.otp);
 
         if (!documento.archivoGenerado) {
             throw new BadRequestException('El documento no tiene un archivo generado');
@@ -758,9 +904,9 @@ export class DocumentosTemplatesService {
         if (ext === '.pdf') {
             await this.embedSignatureInPdf(outputPath, firmaCampos, signatureData.imagen);
 
-            return this.prisma.documentosGenerados.update({
+            await this.prisma.documentosGenerados.update({
                 where: { id: documento.id },
-                data: { firmado: true, datosFirma: firmaMeta },
+                data: { firmado: true, estatus: 'firmado', datosFirma: firmaMeta },
             });
         } else {
             // DOCX: convertir a PDF, incrustar firma, guardar PDF firmado
@@ -777,15 +923,153 @@ export class DocumentosTemplatesService {
                 await this.embedSignatureInPdf(pdfPath, firmaCampos, signatureData.imagen);
             }
 
-            return this.prisma.documentosGenerados.update({
+            await this.prisma.documentosGenerados.update({
                 where: { id: documento.id },
                 data: {
                     firmado: true,
+                    estatus: 'firmado',
                     datosFirma: firmaMeta,
                     archivoGenerado: `media/documentos-generados/${pdfFilename}`,
                 },
             });
         }
+
+        // Sellado NOM-151 síncrono: si falla, el documento queda 'firmado' sin sello
+        const sellado = await this.sellarConNOM151(documento.id);
+
+        const actualizado = await this.prisma.documentosGenerados.findUnique({
+            where: { id: documento.id },
+        });
+
+        return { ...actualizado, sellado };
+    }
+
+    /**
+     * Sella el PDF firmado con constancia NOM-151 vía Nubarium.
+     * Éxito → estatus 'sellado' + campos NOM-151 + constancia en disco.
+     * Fallo → estatus queda 'firmado', error en log y en datosFirma.selladoError.
+     * Nunca lanza excepción (devuelve false).
+     */
+    private async sellarConNOM151(documentoId: number): Promise<boolean> {
+        try {
+            const documento = await this.prisma.documentosGenerados.findUnique({
+                where: { id: documentoId },
+            });
+
+            if (!documento?.archivoGenerado) {
+                throw new Error('El documento no tiene archivo generado');
+            }
+
+            const pdfPath = path.join(process.cwd(), documento.archivoGenerado);
+            if (!fs.existsSync(pdfPath)) {
+                throw new Error(`El archivo firmado no existe: ${documento.archivoGenerado}`);
+            }
+            if (path.extname(pdfPath).toLowerCase() !== '.pdf') {
+                throw new Error('El archivo firmado no es PDF');
+            }
+
+            const pdfBuffer = fs.readFileSync(pdfPath);
+            const sello = await this.nubarium.sellarNOM151(pdfBuffer);
+
+            // Guardar constancia ASN.1 (.cer) y representación visual (PDF) en media
+            const nom151Dir = path.join(process.cwd(), 'media', 'documentos-generados', 'nom151');
+            if (!fs.existsSync(nom151Dir)) {
+                fs.mkdirSync(nom151Dir, { recursive: true });
+            }
+
+            const cerFilename = `${documento.uuid}.cer`;
+            fs.writeFileSync(path.join(nom151Dir, cerFilename), Buffer.from(sello.nom151Base64, 'base64'));
+
+            if (sello.representacionVisualBase64) {
+                fs.writeFileSync(
+                    path.join(nom151Dir, `${documento.uuid}_constancia.pdf`),
+                    Buffer.from(sello.representacionVisualBase64, 'base64'),
+                );
+            }
+
+            await this.prisma.documentosGenerados.update({
+                where: { id: documentoId },
+                data: {
+                    estatus: 'sellado',
+                    codigoValidacionNOM151: sello.codigoValidacion,
+                    hashNOM151: sello.hash,
+                    archivoNom151: `media/documentos-generados/nom151/${cerFilename}`,
+                    fechaSellado: new Date(),
+                },
+            });
+
+            this.logger.log(`Documento ${documentoId} sellado NOM-151: ${sello.codigoValidacion}`);
+            return true;
+        } catch (error: any) {
+            this.logger.error(`Fallo sellado NOM-151 documento ${documentoId}: ${error.message}`);
+            // Registrar el error sin revertir la firma
+            try {
+                const documento = await this.prisma.documentosGenerados.findUnique({
+                    where: { id: documentoId },
+                });
+                const datosFirma = (documento?.datosFirma as Record<string, any>) || {};
+                await this.prisma.documentosGenerados.update({
+                    where: { id: documentoId },
+                    data: { datosFirma: { ...datosFirma, selladoError: error.message } },
+                });
+            } catch (dbErr: any) {
+                this.logger.error(`No se pudo guardar selladoError en documento ${documentoId}: ${dbErr.message}`);
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Reintento manual de sellado NOM-151 (admin). Bloqueante, error visible.
+     */
+    async sellarManual(companyId: number, id: number) {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { id, plantilla: { idEmpresa: companyId } },
+        });
+
+        if (!documento) throw new NotFoundException('Documento generado no encontrado');
+        if (!documento.firmado) throw new BadRequestException('El documento aún no ha sido firmado');
+        if (documento.estatus === 'sellado') throw new BadRequestException('El documento ya está sellado NOM-151');
+
+        const sellado = await this.sellarConNOM151(documento.id);
+        if (!sellado) {
+            const fresco = await this.prisma.documentosGenerados.findUnique({ where: { id: documento.id } });
+            const datosFirma = (fresco?.datosFirma as Record<string, any>) || {};
+            throw new InternalServerErrorException(
+                `No se pudo sellar el documento con NOM-151: ${datosFirma.selladoError || 'error desconocido'}`,
+            );
+        }
+
+        return this.prisma.documentosGenerados.findUnique({ where: { id: documento.id } });
+    }
+
+    /**
+     * Obtiene el archivo de constancia NOM-151 (.cer o representación visual PDF).
+     */
+    async getNom151File(companyId: number, id: number, tipo: 'cer' | 'pdf' = 'cer') {
+        const documento = await this.prisma.documentosGenerados.findFirst({
+            where: { id, plantilla: { idEmpresa: companyId } },
+        });
+
+        if (!documento) throw new NotFoundException('Documento generado no encontrado');
+        if (!documento.archivoNom151) {
+            throw new BadRequestException('El documento no tiene constancia NOM-151');
+        }
+
+        let filePath = path.join(process.cwd(), documento.archivoNom151);
+        if (tipo === 'pdf') {
+            filePath = filePath.replace(/\.cer$/i, '_constancia.pdf');
+        }
+
+        if (!fs.existsSync(filePath)) {
+            throw new NotFoundException('El archivo de constancia no existe en el servidor');
+        }
+
+        return {
+            path: filePath,
+            contentType: tipo === 'pdf' ? 'application/pdf' : 'application/octet-stream',
+            filename: path.basename(filePath),
+        };
     }
 
     private async embedSignatureInPdf(
