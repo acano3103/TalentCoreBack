@@ -65,14 +65,16 @@ export class DigitalFilesQueries {
         return res[0]?.idExpediente ? parseInt(res[0].idExpediente, 10) : null;
     }
 
-    // Guardar documento del empleado
+// Guardar documento del empleado
     static async subirDocumentoEmpleado(
         prisma: any,
         idEmpleado: number,
         idDocumento: number,
         rutaArchivo: string,
         usuario: string,
-        comentario: string = ''
+        comentario: string = '',
+        fechaEmision: Date | null = null,
+        fechaVencimiento: Date | null = null,
     ): Promise<void> {
 
         // Buscar si ya existe el registro del documento del empleado en estatus 1 o 5
@@ -98,14 +100,16 @@ export class DigitalFilesQueries {
                 UPDATE DocumentosEmpleado
                 SET rutaArchivo = ${rutaArchivo},
                     fechaCarga = NOW(),
-                    idEstatusDocumento = 2
+                    idEstatusDocumento = 2,
+                    fechaEmision = ${fechaEmision},
+                    fechaVencimiento = ${fechaVencimiento}
                 WHERE idDocumentoEmpleado = ${idDocumentoEmpleado};
             `;
         } else {
             // Si no existe, insertar un nuevo registro de documento
             await prisma.$executeRaw`
-                INSERT INTO DocumentosEmpleado (idEmpleado, idDocumento, idEstatusDocumento, rutaArchivo, fechaCarga)
-                VALUES (${idEmpleado}, ${idDocumento}, 2, ${rutaArchivo}, NOW());
+                INSERT INTO DocumentosEmpleado (idEmpleado, idDocumento, idEstatusDocumento, rutaArchivo, fechaCarga, fechaEmision, fechaVencimiento)
+                VALUES (${idEmpleado}, ${idDocumento}, 2, ${rutaArchivo}, NOW(), ${fechaEmision}, ${fechaVencimiento});
             `;
 
             // Obtener el ID autogenerado del documento insertado (LAST_INSERT_ID)
@@ -149,5 +153,35 @@ export class DigitalFilesQueries {
                 `;
             }
         }
+    }
+
+    /**
+     * Calcula el estatus de vigencia de un documento comparando su
+     * fechaVencimiento contra hoy + diasAlertaPrevio.
+     * Es una función pura (sin acceso a base de datos), reutilizable
+     * tanto en el expediente actual como en el futuro módulo de
+     * control de vencimientos.
+     */
+    static calcularEstatusVigencia(
+        fechaVencimiento: Date | null,
+        diasAlertaPrevio: number | null,
+    ): 'sin_vigencia' | 'vigente' | 'por_vencer' | 'vencido' {
+        if (!fechaVencimiento) return 'sin_vigencia';
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        const vencimiento = new Date(fechaVencimiento);
+        vencimiento.setHours(0, 0, 0, 0);
+
+        if (hoy > vencimiento) return 'vencido';
+
+        const diasAlerta = diasAlertaPrevio ?? 30;
+        const inicioAlerta = new Date(vencimiento);
+        inicioAlerta.setDate(inicioAlerta.getDate() - diasAlerta);
+
+        if (hoy >= inicioAlerta) return 'por_vencer';
+
+        return 'vigente';
     }
 }

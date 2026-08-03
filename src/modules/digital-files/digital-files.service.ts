@@ -278,10 +278,10 @@ export class DigitalFilesService {
     });
     const catMap = new Map(catDocumentos.map((c) => [c.IdDocumento, c]));
 
-    const documentosSubidos: Record<
-      number,
-      { archivos: { idDocumentoEmpleado: number; estatus: number | null; ruta: string; nombre: string; fecha: string }[]; habilitado: boolean }
-    > = {};
+        const documentosSubidos: Record<
+          number,
+          { archivos: { idDocumentoEmpleado: number; estatus: number | null; ruta: string; nombre: string; fecha: string; fechaEmision: string | null; fechaVencimiento: string | null; estatusVigencia: 'sin_vigencia' | 'vigente' | 'por_vencer' | 'vencido' }[]; habilitado: boolean }
+        > = {};
 
     for (const doc of docsEmpleado) {
       if (doc.IdDocumento == null) continue;
@@ -290,12 +290,20 @@ export class DigitalFilesService {
         documentosSubidos[doc.IdDocumento] = { archivos: [], habilitado: false };
       }
 
+     const catDoc = catMap.get(doc.IdDocumento);
+
       documentosSubidos[doc.IdDocumento].archivos.push({
         idDocumentoEmpleado: doc.idDocumentoEmpleado,
         estatus: doc.idEstatusDocumento,
         ruta: this.normalizarRutaDocumento(doc.rutaArchivo),
-        nombre: catMap.get(doc.IdDocumento)?.Descripcion ?? '',
+        nombre: catDoc?.Descripcion ?? '',
         fecha: doc.fechaCarga ? doc.fechaCarga.toISOString().slice(0, 16).replace('T', ' ') : '',
+        fechaEmision: doc.fechaEmision ? doc.fechaEmision.toISOString().slice(0, 10) : null,
+        fechaVencimiento: doc.fechaVencimiento ? doc.fechaVencimiento.toISOString().slice(0, 10) : null,
+        estatusVigencia: DigitalFilesQueries.calcularEstatusVigencia(
+          doc.fechaVencimiento,
+          catDoc?.diasAlertaPrevio ?? null,
+        ),
       });
 
       if (doc.idEstatusDocumento === 1 || doc.idEstatusDocumento === 5) {
@@ -483,7 +491,12 @@ export class DigitalFilesService {
     const contadorPorTipo: Record<string, number> = {};
     const aceptados: DocumentoAceptado[] = [];
     const rechazados: DocumentoRechazado[] = [];
-    const documentosAProcesar: Array<{ idDocumento: number; rutaRelativa: string }> = [];
+    const documentosAProcesar: Array<{
+      idDocumento: number;
+      rutaRelativa: string;
+      fechaEmision: Date | null;
+      fechaVencimiento: Date | null;
+    }> = [];
 
     const carpetaTemp = path.join(this.mediaRoot, 'temp', curp);
     const carpetaFinal = path.join(this.mediaRoot, curp);
@@ -498,6 +511,12 @@ export class DigitalFilesService {
 
         if (!idDocumento) continue;
 
+        // Obtener configuración de vigencia del catálogo de documentos
+        const catDocumento = await this.prisma.catDocumentos.findUnique({
+          where: { IdDocumento: Number(idDocumento) },
+          select: { requiereVencimiento: true, diasVigenciaDefault: true },
+        });
+
         const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
         contadorPorTipo[key] = (contadorPorTipo[key] || 0) + 1;
         const sufijo = contadorPorTipo[key] === 1 ? '' : String(contadorPorTipo[key]);
@@ -510,18 +529,19 @@ export class DigitalFilesService {
         await fs.writeFile(rutaTemp, file.buffer);
 
       const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
-      this.prisma,
-      file.buffer,
-      campoNormalizado,
-      idEmpleado,
-      idDocumento,
-      nombreArchivo,
-      rutaRelativaBd,
-      usuarioRegistro,
-      curp,
-      empleadoData.numeroSeguroSocial,
-      empleadoData.calle,
-    );
+          this.prisma,
+          file.buffer,
+          campoNormalizado,
+          idEmpleado,
+          idDocumento,
+          nombreArchivo,
+          rutaRelativaBd,
+          usuarioRegistro,
+          curp,
+          empleadoData.numeroSeguroSocial,
+          empleadoData.calle,
+          catDocumento?.diasVigenciaDefault,
+        );
 
         const esRechazoReal = !resultadoNubarium.validado && !resultadoNubarium.error_infraestructura;
 
@@ -541,11 +561,32 @@ export class DigitalFilesService {
           continue;
         }
 
+       // Si el tipo de documento requiere vencimiento pero no se pudo determinar
+        // una fecha (ni por Nubarium ni por el cálculo genérico), se rechaza —
+        // criterio de aceptación: la fecha de vencimiento es obligatoria en ese caso.
+        if (catDocumento?.requiereVencimiento && !resultadoNubarium.vigencia?.fechaVencimiento) {
+          try {
+            await fs.remove(rutaTemp);
+          } catch (err) { }
+
+          rechazados.push({
+            campo: campoNormalizado,
+            archivo: nombreArchivo,
+            motivo: 'No se pudo determinar la fecha de vencimiento requerida para este documento.',
+            http_status: resultadoNubarium.http_status,
+          });
+
+          this.logger.warn(`Documento '${nombreArchivo}' requiere vencimiento pero no se pudo calcular la fecha.`);
+          continue;
+        }
+
         await fs.copy(rutaTemp, rutaFinal);
 
         documentosAProcesar.push({
           idDocumento: Number(idDocumento),
-          rutaRelativa: rutaRelativaBd
+          rutaRelativa: rutaRelativaBd,
+          fechaEmision: resultadoNubarium.vigencia?.fechaEmision ?? null,
+          fechaVencimiento: resultadoNubarium.vigencia?.fechaVencimiento ?? null,
         });
 
         const entry: any = {
@@ -602,7 +643,10 @@ export class DigitalFilesService {
             idEmpleado,
             doc.idDocumento,
             doc.rutaRelativa,
-            usuarioRegistro
+            usuarioRegistro,
+            '',
+            doc.fechaEmision,
+            doc.fechaVencimiento,
           );
         }
       }, {

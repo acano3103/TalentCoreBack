@@ -47,14 +47,17 @@ export class RequiredDocumentsService {
         };
     }
 
-    async create(companyId: number, createDto: CreateRequiredDocumentDto, user: ActiveUserDto) {
-        const { descripcion, esRequeridoBase } = createDto;
+   async create(companyId: number, createDto: CreateRequiredDocumentDto, user: ActiveUserDto) {
+        const { descripcion, esRequeridoBase, requiereVencimiento, diasVigenciaDefault, diasAlertaPrevio } = createDto;
 
         const document = await this.prisma.catDocumentos.create({
             data: {
                 idEmpresa: companyId,
                 Descripcion: descripcion,
                 EsRequeridoBase: esRequeridoBase,
+                requiereVencimiento: requiereVencimiento ?? false,
+                diasVigenciaDefault: diasVigenciaDefault ?? null,
+                diasAlertaPrevio: diasAlertaPrevio ?? 30,
                 FechaRegistro: new Date(),
                 UsuarioRegistro: user.username,
                 Activo: true,
@@ -77,8 +80,8 @@ export class RequiredDocumentsService {
         return { message: "Documento creado correctamente" };
     }
 
-    async update(companyId: number, documentId: number, updateDto: UpdateRequiredDocumentDto, user: ActiveUserDto) {
-        const { descripcion, esRequeridoBase } = updateDto;
+   async update(companyId: number, documentId: number, updateDto: UpdateRequiredDocumentDto, user: ActiveUserDto) {
+        const { descripcion, esRequeridoBase, requiereVencimiento, diasVigenciaDefault, diasAlertaPrevio } = updateDto;
 
         const document = await this.prisma.catDocumentos.findFirst({
             where: {
@@ -95,7 +98,10 @@ export class RequiredDocumentsService {
             where: { IdDocumento: documentId },
             data: {
                 Descripcion: descripcion,
-                EsRequeridoBase: esRequeridoBase
+                EsRequeridoBase: esRequeridoBase,
+                requiereVencimiento: requiereVencimiento ?? document.requiereVencimiento,
+                diasVigenciaDefault: diasVigenciaDefault ?? document.diasVigenciaDefault,
+                diasAlertaPrevio: diasAlertaPrevio ?? document.diasAlertaPrevio,
             },
         });
 
