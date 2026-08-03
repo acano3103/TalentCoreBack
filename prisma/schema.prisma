@@ -1425,6 +1425,7 @@ model TiposDocumento {
   @@index([idEmpresa], map: "idx_tipo_doc_empresa")
 }
 
+
 model MovimientosInternos {
   idMovimiento         Int                  @id @default(autoincrement())
   idEmpleado           Int
@@ -1441,16 +1442,16 @@ model MovimientosInternos {
   idEmpresaNueva       Int?
   idSiteAnterior       Int?
   idSiteNuevo          Int?
-  salarioBrutoAnterior Decimal?             @db.Decimal(12, 2)
-  salarioBrutoNuevo    Decimal?             @db.Decimal(12, 2)
-  salarioNetoAnterior  Decimal?             @db.Decimal(12, 2)
-  salarioNetoNuevo     Decimal?             @db.Decimal(12, 2)
-  motivo               String?              @db.Text
-  causaBaja            String?              @db.Text
-  idUsuarioAutorizo    String?              @db.VarChar(36)
-  fechaRegistro        DateTime?            @default(now()) @db.Timestamp(0)
+  salarioBrutoAnterior Decimal?                        @db.Decimal(12, 2)
+  salarioBrutoNuevo    Decimal?                        @db.Decimal(12, 2)
+  salarioNetoAnterior  Decimal?                        @db.Decimal(12, 2)
+  salarioNetoNuevo     Decimal?                        @db.Decimal(12, 2)
+  motivo               String?                         @db.Text
+  causaBaja            String?                         @db.Text
+  idUsuarioAutorizo    String?                         @db.VarChar(36)
   idEstatusMovimiento  Int                  @default(1)
-  Empleados            Empleados            @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
+  fechaRegistro        DateTime?                       @default(now()) @db.Timestamp(0)
+  Empleados            Empleados                       @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
   CatEstatusMovimiento CatEstatusMovimiento @relation(fields: [idEstatusMovimiento], references: [idEstatusMovimiento], map: "FK_MovInternos_Estatus")
 
   @@index([idEmpleado], map: "FK_MovInternos_Empleado_idx")
@@ -1475,6 +1476,7 @@ model CatEstatusMovimiento {
   descripcion         String                @db.VarChar(100)
   activo              Boolean               @default(true)
   MovimientosInternos MovimientosInternos[]
+  @@index([idEstatusMovimiento], map: "FK_MovInternos_Estatus_idx")
 }
 
 enum Entrevistas_interview_type {
