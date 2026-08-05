@@ -7,6 +7,12 @@ export interface NubariumStandardResult {
     respuesta_json: any;
     endpoint: string;
     error_infraestructura: boolean;
+    vigencia?: VigenciaCalculada;
+}
+
+export interface VigenciaCalculada {
+    fechaEmision: Date | null;
+    fechaVencimiento: Date | null;
 }
 
 export interface CurpRenapoResult {

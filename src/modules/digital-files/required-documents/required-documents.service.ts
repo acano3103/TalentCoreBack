@@ -12,7 +12,6 @@ export class RequiredDocumentsService {
 
     constructor(
         private readonly prisma: PrismaService,
-        private readonly notifications: NotificationDispatcher,
     ) { }
 
     async findAll(companyId: number, page: number, limit: number, search?: string) {
@@ -39,19 +38,6 @@ export class RequiredDocumentsService {
             this.prisma.catDocumentos.count({ where }),
         ]);
 
-        await this.notifications.notify({
-            userUuid: '97322588-7990-4b68-9254-5458c2bbffc5',
-            notificationTypeCode: 'CONTRACT_SIGN',
-            to: 'canogarcia06@gmail.com',
-            phone: '5564306193',
-            subject: '✍️ Firma de Contrato Pendiente',
-            context: {
-                nombre: 'Emmanuel',
-                empresa: 'El Truco',
-                linkFirma: 'https://google.com',
-            }
-        });
-
         // Formatear la respuesta con la metadata de paginación
         return {
             data: documents,
@@ -61,14 +47,17 @@ export class RequiredDocumentsService {
         };
     }
 
-    async create(companyId: number, createDto: CreateRequiredDocumentDto, user: ActiveUserDto) {
-        const { descripcion, esRequeridoBase } = createDto;
+   async create(companyId: number, createDto: CreateRequiredDocumentDto, user: ActiveUserDto) {
+        const { descripcion, esRequeridoBase, requiereVencimiento, diasVigenciaDefault, diasAlertaPrevio } = createDto;
 
         const document = await this.prisma.catDocumentos.create({
             data: {
                 idEmpresa: companyId,
                 Descripcion: descripcion,
                 EsRequeridoBase: esRequeridoBase,
+                requiereVencimiento: requiereVencimiento ?? false,
+                diasVigenciaDefault: diasVigenciaDefault ?? null,
+                diasAlertaPrevio: diasAlertaPrevio ?? 30,
                 FechaRegistro: new Date(),
                 UsuarioRegistro: user.username,
                 Activo: true,
@@ -91,8 +80,8 @@ export class RequiredDocumentsService {
         return { message: "Documento creado correctamente" };
     }
 
-    async update(companyId: number, documentId: number, updateDto: UpdateRequiredDocumentDto, user: ActiveUserDto) {
-        const { descripcion, esRequeridoBase } = updateDto;
+   async update(companyId: number, documentId: number, updateDto: UpdateRequiredDocumentDto, user: ActiveUserDto) {
+        const { descripcion, esRequeridoBase, requiereVencimiento, diasVigenciaDefault, diasAlertaPrevio } = updateDto;
 
         const document = await this.prisma.catDocumentos.findFirst({
             where: {
@@ -109,7 +98,10 @@ export class RequiredDocumentsService {
             where: { IdDocumento: documentId },
             data: {
                 Descripcion: descripcion,
-                EsRequeridoBase: esRequeridoBase
+                EsRequeridoBase: esRequeridoBase,
+                requiereVencimiento: requiereVencimiento ?? document.requiereVencimiento,
+                diasVigenciaDefault: diasVigenciaDefault ?? document.diasVigenciaDefault,
+                diasAlertaPrevio: diasAlertaPrevio ?? document.diasAlertaPrevio,
             },
         });
 
