@@ -200,33 +200,29 @@ export class DigitalFilesService {
         ORDER BY de.fechaEnvio DESC;
       `;
 
-      // Formatear los registros para mantener la estructura exacta que el front espera
+      // Función auxiliar para normalizar rutas y limpiar prefijos
+      const helperBuildUrl = (ruta: string | null): string | null => {
+        if (!ruta) return null;
+        let cleanPath = ruta.replace(/\\/g, '/');
+        cleanPath = cleanPath.replace(/^((\/RR-HH)?\/)?media\//, '');
+        cleanPath = cleanPath.replace(/^\/+/, '');
+        return cleanPath;
+      };
+
+      // Formateador de fechas nativo de JS
+      const formatFecha = (dateInput: any): string | null => {
+        if (!dateInput) return null;
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return '';
+        const pad = (num: number) => String(num).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+
+      // Formatear los registros de DocumentosEmpresa
       const documentos = rows.map((row) => {
-
-        // Función auxiliar para normalizar rutas y limpiar prefijos
-        const helperBuildUrl = (ruta: string | null): string | null => {
-          if (!ruta) return null;
-          let cleanPath = ruta.replace(/\\/g, '/');
-          cleanPath = cleanPath.replace(/^(\/RR-HH)?\/media\//, '');
-          cleanPath = cleanPath.replace(/^\/+/, '');
-
-          return cleanPath;
-        };
-
         const urlOriginal = helperBuildUrl(row.rutaOriginal) || '';
         const urlFirmado = helperBuildUrl(row.rutaFirmado);
         const urlConstancia = helperBuildUrl(row.rutaConstancia);
-
-        // Formateador de fechas nativo de JS
-        const formatFecha = (dateInput: any): string | null => {
-          if (!dateInput) return null;
-          const d = new Date(dateInput);
-          if (isNaN(d.getTime())) return '';
-
-          // Formato: YYYY-MM-DD HH:mm
-          const pad = (num: number) => String(num).padStart(2, '0');
-          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        };
 
         return {
           id: row.idDocumentoEmpresa,
@@ -237,7 +233,6 @@ export class DigitalFilesService {
           rutaFirmado: urlFirmado,
           fechaEnvio: formatFecha(row.fechaEnvio) || '',
           fechaFirmado: formatFecha(row.fechaFirmado),
-          // Bloque anidado NOM-151 
           nom151: {
             certificado: !!row.codigoValidacion,
             codigoValidacion: row.codigoValidacion || null,
@@ -249,6 +244,59 @@ export class DigitalFilesService {
           },
         };
       });
+
+      // Consultar el contrato más reciente del empleado
+      const contratoRows = await this.prisma.$queryRaw<any[]>`
+        SELECT
+          c.idContrato,
+          dg.id AS idDocumentoGenerado,
+          dg.archivoGenerado AS rutaOriginal,
+          dg.firmado,
+          dg.fechaGeneracion,
+          dg.codigoValidacionNOM151 AS codigoValidacion,
+          dg.hashNOM151 AS hash,
+          dg.archivoNom151 AS rutaConstancia,
+          dg.fechaSellado AS fechaObtencion
+        FROM Contratos c
+        INNER JOIN DocumentosGenerados dg ON dg.idContrato = c.idContrato
+        WHERE c.idEmpleado = ${employeeId}
+          AND dg.archivoGenerado IS NOT NULL
+        ORDER BY dg.fechaGeneracion DESC
+        LIMIT 1
+      `;
+
+      if (contratoRows.length > 0) {
+        const row = contratoRows[0];
+        const urlOriginal = helperBuildUrl(row.rutaOriginal) || '';
+
+        let rutaConstancia = row.rutaConstancia;
+        if (rutaConstancia && rutaConstancia.endsWith('.cer')) {
+          rutaConstancia = rutaConstancia.replace(/\.cer$/, '_constancia.pdf');
+        }
+        const urlConstancia = helperBuildUrl(rutaConstancia);
+
+        const contratoDocumento = {
+          id: -(row.idContrato),
+          nombre: 'Contrato Laboral',
+          ruta: urlOriginal,
+          requereFirma: true,
+          firmado: !!row.firmado,
+          rutaFirmado: null,
+          fechaEnvio: formatFecha(row.fechaGeneracion) || '',
+          fechaFirmado: null,
+          nom151: {
+            certificado: !!row.codigoValidacion,
+            codigoValidacion: row.codigoValidacion || null,
+            hash: row.hash || null,
+            urlConstancia: urlConstancia,
+            estatus: row.codigoValidacion ? 'COMPLETADO' : null,
+            claveMensaje: null,
+            fechaObtencion: formatFecha(row.fechaObtencion),
+          },
+        };
+
+        documentos.unshift(contratoDocumento);
+      }
 
       return { documentos };
     } catch (error: unknown) {
