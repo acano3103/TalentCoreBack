@@ -74,6 +74,13 @@ export class DocumentosTemplatesController {
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
             res.sendFile(result.path);
+        } else if (result.type === 'pdfBuffer') {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'inline; filename="documento.pdf"');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.send(result.buffer);
         } else {
             const fullHtml = `<!DOCTYPE html>
 <html lang="es">

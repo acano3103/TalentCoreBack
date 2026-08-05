@@ -539,7 +539,7 @@ export class DocumentosTemplatesService {
     }
 
     async servePdf(companyId: number, id: number): Promise<
-        { type: 'pdf'; path: string } | { type: 'html'; content: string }
+        { type: 'pdf'; path: string } | { type: 'pdfBuffer'; buffer: Buffer } | { type: 'html'; content: string }
     > {
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: { id },
@@ -564,13 +564,20 @@ export class DocumentosTemplatesService {
             return { type: 'pdf', path: originalPath };
         }
 
-        // DOCX: convertir con mammoth en tiempo real (no cacheamos porque cambia con los datos)
+        // DOCX → convertir a PDF (mammoth + puppeteer) para que el visor siempre muestre un PDF
         try {
-            const result = await mammoth.convertToHtml({ path: originalPath });
-            return { type: 'html', content: result.value };
+            const pdfBuffer = await convertDocxToPdf(originalPath);
+            return { type: 'pdfBuffer', buffer: pdfBuffer };
         } catch (err) {
-            this.logger.error(`Error convirtiendo DOCX generado a HTML con mammoth: ${err.message}`);
-            throw new Error('No se pudo generar vista previa del archivo DOCX generado.');
+            this.logger.error(`Error convirtiendo DOCX generado a PDF: ${err.message}`);
+            // Fallback: vista previa HTML si la conversión a PDF falla
+            try {
+                const result = await mammoth.convertToHtml({ path: originalPath });
+                return { type: 'html', content: result.value };
+            } catch (mammothErr) {
+                this.logger.error(`Error convirtiendo DOCX generado a HTML con mammoth: ${mammothErr.message}`);
+                throw new Error('No se pudo generar vista previa del archivo DOCX generado.');
+            }
         }
     }
 
@@ -978,13 +985,17 @@ export class DocumentosTemplatesService {
             }
 
             const cerFilename = `${documento.uuid}.cer`;
+            const pdfConstanciaFilename = `${documento.uuid}_constancia.pdf`;
             fs.writeFileSync(path.join(nom151Dir, cerFilename), Buffer.from(sello.nom151Base64, 'base64'));
+
+            let archivoNom151 = `media/documentos-generados/nom151/${cerFilename}`;
 
             if (sello.representacionVisualBase64) {
                 fs.writeFileSync(
-                    path.join(nom151Dir, `${documento.uuid}_constancia.pdf`),
+                    path.join(nom151Dir, pdfConstanciaFilename),
                     Buffer.from(sello.representacionVisualBase64, 'base64'),
                 );
+                archivoNom151 = `media/documentos-generados/nom151/${pdfConstanciaFilename}`;
             }
 
             await this.prisma.documentosGenerados.update({
@@ -993,7 +1004,7 @@ export class DocumentosTemplatesService {
                     estatus: 'sellado',
                     codigoValidacionNOM151: sello.codigoValidacion,
                     hashNOM151: sello.hash,
-                    archivoNom151: `media/documentos-generados/nom151/${cerFilename}`,
+                    archivoNom151,
                     fechaSellado: new Date(),
                 },
             });
