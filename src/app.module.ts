@@ -29,6 +29,7 @@ import { DocumentosTemplatesModule } from './modules/documentos-templates/docume
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
+import { CoursesModule } from './modules/courses/courses.module';
 
 @Module({
   imports: [
@@ -69,7 +70,8 @@ import { InternalMovementsModule } from './modules/internal-movements/internal-m
     DocumentosTemplatesModule,
     ContractsModule,
     EmployeesModule,
-    InternalMovementsModule
+    InternalMovementsModule,
+    CoursesModule
   ],
   controllers: [],
   providers: [AreasService],

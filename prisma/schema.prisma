@@ -58,6 +58,7 @@ model CatAreas {
   idEmpresa           Int
   Descripcion         String                @db.VarChar(200)
   Activo              Boolean?              @default(true)
+  CatCursos           CatCursos[]
   RelAreasUbicaciones RelAreasUbicaciones[]
 }
 
@@ -115,15 +116,18 @@ model CatCriterios {
 }
 
 model CatCursos {
-  idCursos     Int          @id @default(autoincrement())
-  idEmpresa    Int
-  idTipoCurso  Int          @default(1)
-  Descripcion  String?      @db.VarChar(300)
-  activo       Boolean?     @default(true)
-  idArea       Int?
-  CatTipoCurso CatTipoCurso @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
+  idCursos      Int             @id @default(autoincrement())
+  idEmpresa     Int
+  idTipoCurso   Int             @default(1)
+  Descripcion   String?         @db.VarChar(300)
+  activo        Boolean?        @default(true)
+  idArea        Int?
+  CatAreas      CatAreas?       @relation(fields: [idArea], references: [idArea], map: "FK_Cursos_Area")
+  CatTipoCurso  CatTipoCurso    @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
+  CursoSesiones CursoSesiones[]
 
   @@index([idTipoCurso], map: "FK_Cursos_TipoCurso")
+  @@index([idArea], map: "FK_Cursos_Area")
 }
 
 model CatDescripcionesPuesto {
@@ -1425,7 +1429,6 @@ model TiposDocumento {
   @@index([idEmpresa], map: "idx_tipo_doc_empresa")
 }
 
-
 model MovimientosInternos {
   idMovimiento         Int                  @id @default(autoincrement())
   idEmpleado           Int
@@ -1442,16 +1445,16 @@ model MovimientosInternos {
   idEmpresaNueva       Int?
   idSiteAnterior       Int?
   idSiteNuevo          Int?
-  salarioBrutoAnterior Decimal?                        @db.Decimal(12, 2)
-  salarioBrutoNuevo    Decimal?                        @db.Decimal(12, 2)
-  salarioNetoAnterior  Decimal?                        @db.Decimal(12, 2)
-  salarioNetoNuevo     Decimal?                        @db.Decimal(12, 2)
-  motivo               String?                         @db.Text
-  causaBaja            String?                         @db.Text
-  idUsuarioAutorizo    String?                         @db.VarChar(36)
+  salarioBrutoAnterior Decimal?             @db.Decimal(12, 2)
+  salarioBrutoNuevo    Decimal?             @db.Decimal(12, 2)
+  salarioNetoAnterior  Decimal?             @db.Decimal(12, 2)
+  salarioNetoNuevo     Decimal?             @db.Decimal(12, 2)
+  motivo               String?              @db.Text
+  causaBaja            String?              @db.Text
+  idUsuarioAutorizo    String?              @db.VarChar(36)
+  fechaRegistro        DateTime?            @default(now()) @db.Timestamp(0)
   idEstatusMovimiento  Int                  @default(1)
-  fechaRegistro        DateTime?                       @default(now()) @db.Timestamp(0)
-  Empleados            Empleados                       @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
+  Empleados            Empleados            @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
   CatEstatusMovimiento CatEstatusMovimiento @relation(fields: [idEstatusMovimiento], references: [idEstatusMovimiento], map: "FK_MovInternos_Estatus")
 
   @@index([idEmpleado], map: "FK_MovInternos_Empleado_idx")
@@ -1476,7 +1479,68 @@ model CatEstatusMovimiento {
   descripcion         String                @db.VarChar(100)
   activo              Boolean               @default(true)
   MovimientosInternos MovimientosInternos[]
-  @@index([idEstatusMovimiento], map: "FK_MovInternos_Estatus_idx")
+}
+
+model CursoAsistencias {
+  idAsistencia      Int                              @id @default(autoincrement())
+  idFechaClase      Int
+  idEmpleado        Int
+  fechaHoraRegistro DateTime                         @default(now()) @db.DateTime(0)
+  metodoRegistro    CursoAsistencias_metodoRegistro? @default(qr_autoatendido)
+  ipRegistro        String?                          @db.VarChar(45)
+  CursoFechasClase  CursoFechasClase                 @relation(fields: [idFechaClase], references: [idFechaClase], onDelete: Cascade, onUpdate: NoAction, map: "fk_asist_fechaclase")
+
+  @@unique([idFechaClase, idEmpleado], map: "uk_clase_empleado")
+}
+
+model CursoFechasClase {
+  idFechaClase     Int                       @id @default(autoincrement())
+  idSesion         Int
+  fechaHoraInicio  DateTime                  @db.DateTime(0)
+  fechaHoraFin     DateTime                  @db.DateTime(0)
+  tituloClase      String?                   @db.VarChar(255)
+  estatus          CursoFechasClase_estatus? @default(programada)
+  creadoEn         DateTime?                 @default(now()) @db.Timestamp(0)
+  CursoAsistencias CursoAsistencias[]
+  CursoSesiones    CursoSesiones             @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_fechas_sesion")
+
+  @@index([idSesion], map: "fk_fechas_sesion")
+}
+
+model CursoParticipantes {
+  idParticipante    Int                                   @id @default(autoincrement())
+  idSesion          Int
+  idEmpleado        Int
+  estatusAsignacion CursoParticipantes_estatusAsignacion? @default(inscrito)
+  calificacionFinal Decimal?                              @db.Decimal(5, 2)
+  creadoEn          DateTime?                             @default(now()) @db.Timestamp(0)
+  CursoSesiones     CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
+
+  @@unique([idSesion, idEmpleado], map: "uk_sesion_empleado")
+}
+
+model CursoSesiones {
+  idSesion                   Int                          @id @default(autoincrement())
+  idCurso                    Int
+  idEmpresa                  Int
+  modalidad                  CursoSesiones_modalidad      @default(presencial)
+  tipoInstructor             CursoSesiones_tipoInstructor @default(interno)
+  idEmpleadoInstructor       Int?
+  nombreInstructorExterno    String?                      @db.VarChar(255)
+  empresaInstructorExterno   String?                      @db.VarChar(255)
+  fechaInicioPeriodo         DateTime                     @db.DateTime(0)
+  fechaFinPeriodo            DateTime                     @db.DateTime(0)
+  ubicacionFisica            String?                      @db.VarChar(255)
+  linkReunion                String?                      @db.VarChar(500)
+  minutosToleranciaQr        Int                          @default(15)
+  porcentajeAsistenciaMinimo Decimal?                     @default(80.00) @db.Decimal(5, 2)
+  estatus                    CursoSesiones_estatus        @default(programado)
+  creadoEn                   DateTime?                    @default(now()) @db.Timestamp(0)
+  CursoFechasClase           CursoFechasClase[]
+  CursoParticipantes         CursoParticipantes[]
+  CatCursos                  CatCursos                    @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "fk_sesion_curso")
+
+  @@index([idCurso], map: "fk_sesion_curso")
 }
 
 enum Entrevistas_interview_type {
@@ -1493,4 +1557,41 @@ enum PlantillasNotificaciones_type {
   whatsapp
   email
   sms
+}
+
+enum CursoParticipantes_estatusAsignacion {
+  inscrito
+  completado
+  reprobado
+  no_asistio
+}
+
+enum CursoSesiones_modalidad {
+  presencial
+  online_sincrono
+  online_asincrono
+}
+
+enum CursoAsistencias_metodoRegistro {
+  qr_autoatendido
+  manual_instructor
+  link_web
+}
+
+enum CursoSesiones_tipoInstructor {
+  interno
+  externo
+}
+
+enum CursoFechasClase_estatus {
+  programada
+  completada
+  cancelada
+}
+
+enum CursoSesiones_estatus {
+  programado
+  en_curso
+  finalizado
+  cancelado
 }

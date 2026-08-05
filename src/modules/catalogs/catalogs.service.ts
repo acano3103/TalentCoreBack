@@ -15,7 +15,9 @@ export type CatalogKey =
   | 'tipos-ubicaciones'
   | 'empleados'
   | 'tipos-monedas'
-  | 'periodicidades-pagos';
+  | 'periodicidades-pagos'
+  | 'cursos'
+  | 'tipos-cursos';
 
 @Injectable()
 export class CatalogsService {
@@ -157,6 +159,20 @@ export class CatalogsService {
           where: { activo: true },
           select: { idPeriodicidadPago: true, descripcion: true },
           orderBy: { descripcion: 'asc' },
+        });
+
+      case 'cursos':
+        return this.prisma.catCursos.findMany({
+          where: { idEmpresa: companyId, activo: true },
+          select: { idCursos: true, idEmpresa: true, idTipoCurso: true, Descripcion: true, idArea: true },
+          orderBy: { idCursos: 'asc' },
+        });
+
+      case 'tipos-cursos':
+        return this.prisma.catTipoCurso.findMany({
+          where: { activo: true },
+          select: { idTipoCurso: true, Descripcion: true },
+          orderBy: { Descripcion: 'asc' },
         });
 
       default:
