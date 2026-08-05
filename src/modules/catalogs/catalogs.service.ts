@@ -141,10 +141,42 @@ export class CatalogsService {
         });
 
       case 'empleados':
-        return this.prisma.empleados.findMany({
+        const employees = await this.prisma.empleados.findMany({
           where: { idEmpresa: companyId, activo: true },
-          select: { idEmpleado: true, nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
+          select: {
+            idEmpleado: true,
+            nombre: true,
+            primerApellido: true,
+            segundoApellido: true,
+            correo: true,
+            telefonoMovil: true,
+            idSite: true,
+            idPuesto: true,
+            CatPuestos: {
+              select: {
+                idPuesto: true,
+                idArea: true,
+              },
+            },
+          },
           orderBy: { nombre: 'asc' },
+        });
+
+        // Mapeamos aplanando la respuesta
+        return employees.map((e) => {
+          const area = e.CatPuestos?.idArea
+
+          return {
+            idEmpleado: e.idEmpleado,
+            nombre: e.nombre,
+            primerApellido: e.primerApellido,
+            segundoApellido: e.segundoApellido,
+            correo: e.correo,
+            telefonoMovil: e.telefonoMovil,
+            idSite: e.idSite,
+            idPuesto: e.idPuesto,
+            idArea: e.CatPuestos?.idArea || null
+          };
         });
 
       case 'tipos-monedas':

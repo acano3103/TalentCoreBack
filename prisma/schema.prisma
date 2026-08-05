@@ -138,16 +138,17 @@ model CatDescripcionesPuesto {
 }
 
 model CatDocumentos {
-  IdDocumento         Int       @id @default(autoincrement())
-  idEmpresa           Int?
-  Descripcion         String?   @db.VarChar(100)
-  EsRequeridoBase     Boolean   @default(false)
-  FechaRegistro       DateTime? @db.DateTime(0)
-  UsuarioRegistro     String?   @db.VarChar(45)
-  Activo              Boolean?  @default(true)
-  requiereVencimiento Boolean   @default(false)
-  diasVigenciaDefault Int?
-  diasAlertaPrevio    Int?      @default(30)
+  IdDocumento               Int       @id @default(autoincrement())
+  idEmpresa                 Int?
+  Descripcion               String?   @db.VarChar(100)
+  EsRequeridoBase           Boolean   @default(false)
+  FechaRegistro             DateTime? @db.DateTime(0)
+  UsuarioRegistro           String?   @db.VarChar(45)
+  Activo                    Boolean?  @default(true)
+  requiereVencimiento       Boolean   @default(false)
+  diasVigenciaDefault       Int?
+  diasAlertaPrevio          Int?      @default(30)
+  tieneValidacionAutomatica Boolean   @default(false)
 }
 
 model CatEmpresas {
@@ -1093,6 +1094,7 @@ model Empleados {
   token                                             String?               @db.VarChar(100)
   activo                                            Boolean               @default(true)
   Contratos                                         Contratos[]
+  CursoSesiones                                     CursoSesiones[]
   CatPuestos                                        CatPuestos?           @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
   Empleados                                         Empleados?            @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                   Empleados[]           @relation("EmpleadosToEmpleados")
@@ -1341,14 +1343,15 @@ model DomicilioEmpleado {
 }
 
 model DocumentosEmpleado {
-  idDocumentoEmpleado Int       @id @default(autoincrement())
-  idEmpleado          Int?
-  IdDocumento         Int?
-  idEstatusDocumento  Int?      @default(1)
-  rutaArchivo         String?   @db.Text
-  fechaCarga          DateTime? @default(now()) @db.Timestamp(0)
-  fechaEmision        DateTime? @db.Date
-  fechaVencimiento    DateTime? @db.Date
+  idDocumentoEmpleado                Int       @id @default(autoincrement())
+  idEmpleado                         Int?
+  IdDocumento                        Int?
+  idEstatusDocumento                 Int?      @default(1)
+  rutaArchivo                        String?   @db.Text
+  fechaCarga                         DateTime? @default(now()) @db.Timestamp(0)
+  fechaEmision                       DateTime? @db.Date
+  fechaVencimiento                   DateTime? @db.Date
+  fechaUltimaNotificacionVencimiento DateTime? @db.DateTime(0)
 }
 
 model CatEstatusContratos {
@@ -1539,8 +1542,20 @@ model CursoSesiones {
   CursoFechasClase           CursoFechasClase[]
   CursoParticipantes         CursoParticipantes[]
   CatCursos                  CatCursos                    @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "fk_sesion_curso")
+  Empleados                  Empleados?                   @relation(fields: [idEmpleadoInstructor], references: [idEmpleado], map: "fk_sesion_empleado_instructor")
 
   @@index([idCurso], map: "fk_sesion_curso")
+  @@index([idEmpleadoInstructor], map: "fk_sesion_empleado_instructor")
+}
+
+model HorariosEmpleado {
+  idHorario   Int       @id @default(autoincrement())
+  idEmpleado  Int
+  DiaSemana   String?   @db.VarChar(10)
+  HoraEntrada DateTime? @db.Time(0)
+  HoraSalida  DateTime? @db.Time(0)
+
+  @@index([idEmpleado], map: "idx_idEmpleado")
 }
 
 enum Entrevistas_interview_type {
