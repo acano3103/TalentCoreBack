@@ -26,7 +26,9 @@ export async function generateEmployeeAndLink(
         idCampania: number | null,
         idEmpresa: number,
         idJefeInmediato: number,
-        idSite: number
+        idSite: number,
+        schedules?: { dia: string; horaEntrada: string; horaSalida: string }[],
+        additionalDocuments?: number[]  
     },
     files: Express.Multer.File[] = [],
     prisma: PrismaClient,
@@ -40,6 +42,32 @@ export async function generateEmployeeAndLink(
     // Creamos al empleado en db y generamos su link para subir sus documentos e información
     const result = await createEmployee(data, prisma);
     const { idEmpleado, uploadLink } = result;
+
+    // ── Guardar el horario del empleado (copiado del puesto, o editado por RH) ──
+ if (data.schedules && data.schedules.length > 0) {
+        for (const horario of data.schedules) {
+            await prisma.$executeRaw`
+                INSERT INTO HorariosEmpleado (idEmpleado, DiaSemana, HoraEntrada, HoraSalida)
+                VALUES (
+                    ${idEmpleado},
+                    ${horario.dia},
+                    ${horario.horaEntrada + ':00'},
+                    ${horario.horaSalida + ':00'}
+                );
+            `;
+        }
+    }
+
+     // ── Guardar documentos adicionales marcados por RH para este empleado ──
+    if (data.additionalDocuments && data.additionalDocuments.length > 0) {
+        for (const idDocumento of data.additionalDocuments) {
+            await prisma.$executeRaw`
+                INSERT INTO DocumentosAdicionalesEmpleado (idEmpleado, idDocumento, usuarioRegistro, fechaRegistro)
+                VALUES (${idEmpleado}, ${idDocumento}, ${data.idUsuario}, NOW());
+            `;
+        }
+    }
+
 
     // Obtenemos los documentos que se requieren para el puesto
     const documentosRaw = await prisma.$queryRaw<DocumentoPuestoRow[]>`

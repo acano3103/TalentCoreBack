@@ -1,5 +1,19 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, IsEmail } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, IsEmail, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+
+class HorarioDto {
+  @IsString()
+  @IsNotEmpty()
+  dia: string;
+
+  @IsString()
+  @IsNotEmpty()
+  horaEntrada: string;
+
+  @IsString()
+  @IsNotEmpty()
+  horaSalida: string;
+}
 
 export class CreateExpedienteDto {
   @IsString()
@@ -42,4 +56,10 @@ export class CreateExpedienteDto {
   @Type(() => Number)
   @IsInt()
   idSite: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HorarioDto)
+  schedules?: HorarioDto[];
 }
