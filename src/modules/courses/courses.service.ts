@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -6,12 +6,19 @@ import { Logger } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateCourseSessionDto } from './dto/create-course-session.dto';
 import { AssignParticipantsDto } from './dto/assign-participants.dto';
+import { ConfigService } from '@nestjs/config';
+import { EncryptionService } from 'src/common/utils/encryption.util';
+import { RegisterAttendanceDto } from './dto/register-attendance.dto';
 
 @Injectable()
 export class CoursesService {
   private readonly logger = new Logger(CoursesService.name);
 
-  constructor(private prismaService: PrismaService) { }
+  constructor(
+    private prismaService: PrismaService,
+    private readonly configService: ConfigService,
+    private readonly cryptoService: EncryptionService,
+  ) { }
 
   // Esta función crea un nuevo curso en el catálogo de la empresa
   async create(companyId: number, createCourseDto: CreateCourseDto, user: ActiveUserDto) {
@@ -699,6 +706,178 @@ export class CoursesService {
         totalInscritos: empleadosIds.length,
       };
     });
+  }
+
+  async generateQrTokenByClassId(companyId: number, classId: number) {
+    // Validar que la clase exista y pertenezca a la empresa
+    const clase = await this.prismaService.cursoFechasClase.findFirst({
+      where: {
+        idFechaClase: classId,
+        CursoSesiones: {
+          idEmpresa: companyId,
+        },
+      },
+    });
+
+    if (!clase) {
+      throw new NotFoundException('La fecha de clase especificada no existe.');
+    }
+
+    // Obtener obligatoriamente la URL base del Frontend mediante ConfigService
+    const baseUrl = this.configService.getOrThrow<string>('FRONT_URL');
+
+    // Cifrar el ID de la clase para exponerlo de forma segura en la URL
+    const encryptedClassId = this.cryptoService.encrypt(String(classId));
+
+    // 4. Construir la URL estructurada en inglés
+    // Estructura: https://domain.com/training/attendance/class/:encryptedClassId
+    const qrUrl = `${baseUrl}attendance/class/${encodeURIComponent(encryptedClassId)}`;
+
+    return {
+      message: 'URL de QR de asistencia generada correctamente',
+      data: {
+        qrUrl,
+        classId: encryptedClassId,
+        fechaHoraInicio: clase.fechaHoraInicio,
+        fechaHoraFin: clase.fechaHoraFin,
+      },
+    };
+  }
+
+  async getAttendanceInfo(encryptedClassId: string) {
+    // 1. Descifrar ID de la clase
+    const classId = this.cryptoService.decrypt(encryptedClassId);
+    if (!classId) {
+      throw new NotFoundException('Identificador de clase inválido.');
+    }
+
+    // 2. Consultar clase y sus detalles
+    const clase = await this.prismaService.cursoFechasClase.findUnique({
+      where: { idFechaClase: Number(classId) },
+      include: {
+        CursoAsistencias: true,
+        CursoSesiones: {
+          include: {
+            CatCursos: true,
+            CursoParticipantes: true,
+          },
+        },
+      },
+    });
+
+    if (!clase) {
+      throw new NotFoundException('La clase especificada no existe.');
+    }
+
+    // Extraer los IDs de empleados que ya registraron su asistencia hoy
+    const attendedEmployeeIds = new Set(
+      clase.CursoAsistencias.map((a) => a.idEmpleado)
+    );
+
+    // Obtener los IDs de todos los participantes asignados a la sesión
+    const participantIds = clase.CursoSesiones.CursoParticipantes.map((p) => p.idEmpleado);
+
+    // Consultar los datos de los empleados correspondientes
+    const empleados = await this.prismaService.empleados.findMany({
+      where: {
+        idEmpleado: { in: participantIds },
+      },
+    });
+
+    const empleadosMap = new Map(empleados.map((emp) => [emp.idEmpleado, emp]));
+
+    // Filtrar únicamente a los colaboradores que NO han pasado lista
+    const participantesPendientes = clase.CursoSesiones.CursoParticipantes
+      .filter((p) => !attendedEmployeeIds.has(p.idEmpleado))
+      .map((p) => {
+        const emp = empleadosMap.get(p.idEmpleado);
+        return {
+          idEmpleado: p.idEmpleado,
+          nombreCompleto: emp
+            ? `${emp.nombre} ${emp.primerApellido} ${emp.segundoApellido || ''}`.trim()
+            : `Empleado #${p.idEmpleado}`,
+          numeroEmpleado: emp?.idEmpleado || null,
+          asistio: false,
+        };
+      });
+
+    const now = new Date();
+    const startTime = new Date(clase.fechaHoraInicio);
+    const endTime = new Date(clase.fechaHoraFin);
+
+    // Margen de tolerancia (15 minutos antes por defecto o la tolerancia configurada en la sesión)
+    const toleranceMinutes = clase.CursoSesiones.minutosToleranciaQr || 15;
+    const allowedStartTime = new Date(startTime.getTime() - toleranceMinutes * 60000);
+
+    let status: 'active' | 'not_started' | 'finished' = 'active';
+    let message = 'Pase de lista abierto.';
+
+    if (now < allowedStartTime) {
+      status = 'not_started';
+      message = `El pase de lista estará disponible ${toleranceMinutes} minutos antes del inicio (${startTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}).`;
+    } else if (now > endTime) {
+      status = 'finished';
+      message = `La clase finalizó a las ${endTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}.`;
+    }
+
+    return {
+      status,
+      message,
+      curso: {
+        nombreCurso: clase.CursoSesiones.CatCursos.Descripcion,
+        tituloClase: clase.tituloClase,
+        fechaHoraInicio: clase.fechaHoraInicio,
+        fechaHoraFin: clase.fechaHoraFin,
+        ubicacionFisica: clase.CursoSesiones.ubicacionFisica,
+      },
+      participantesPendientes,
+    };
+  }
+
+  async registerAttendance(data: RegisterAttendanceDto) {
+    const { classId, idEmpleado } = data;
+
+    // Limpiar caracteres codificados de la URL (%3A -> :)
+    const cleanClassId = decodeURIComponent(classId);
+    // Desencriptar la cadena limpia
+
+    const decryptedClassId = this.cryptoService.decrypt(cleanClassId);
+    if (!decryptedClassId) {
+      throw new BadRequestException('Identificador de clase inválido.');
+    }
+
+    const clase = await this.prismaService.cursoFechasClase.findUnique({
+      where: { idFechaClase: Number(decryptedClassId) },
+    });
+
+    if (!clase) {
+      throw new NotFoundException('Clase no encontrada.');
+    }
+
+    // Registrar o actualizar el registro de asistencia usando el índice compuesto de Prisma
+    await this.prismaService.cursoAsistencias.upsert({
+      where: {
+        idFechaClase_idEmpleado: {
+          idFechaClase: Number(decryptedClassId),
+          idEmpleado: Number(idEmpleado),
+        },
+      },
+      update: {
+        fechaHoraRegistro: new Date(),
+        metodoRegistro: 'qr_autoatendido',
+      },
+      create: {
+        idFechaClase: Number(decryptedClassId),
+        idEmpleado: Number(idEmpleado),
+        fechaHoraRegistro: new Date(),
+        metodoRegistro: 'qr_autoatendido',
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Asistencia registrada exitosamente.',
+    };
   }
 
 }

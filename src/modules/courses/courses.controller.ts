@@ -9,8 +9,8 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateCourseSessionDto } from './dto/create-course-session.dto';
 import { AssignParticipantsDto } from './dto/assign-participants.dto';
+import { RegisterAttendanceDto } from './dto/register-attendance.dto';
 
-@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @ApiTags('Courses')
 @Controller('companies/:companyId/courses')
@@ -18,6 +18,7 @@ export class CoursesController {
   constructor(private readonly coursesService: CoursesService) { }
 
   // Endpoint para sincronizar/guardar los participantes inscritos en una sesión
+  @UseGuards(JwtAuthGuard)
   @Post('sessions/:sessionId/participants')
   @ApiOperation({ summary: 'Assign/sync participants for a course session', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Participants updated successfully' })
@@ -32,7 +33,20 @@ export class CoursesController {
     return this.coursesService.assignParticipants(companyId, sessionId, assignParticipantsDto, activeUser);
   }
 
+  // Endpoint para registrar la asistencia de un empleado a una clase
+  @Post('attendance/check-in')
+  @ApiResponse({ status: 200, description: 'Attendance registered successfully' })
+  @ApiResponse({ status: 404, description: 'Class date not found or no longer active' })
+  @ApiResponse({ status: 409, description: 'Employee already attended' })
+  @ApiOperation({ summary: 'Register attendance for an employee' })
+  registerAttendance(
+    @Body() body: RegisterAttendanceDto,
+  ) {
+    return this.coursesService.registerAttendance(body);
+  }
+
   // Endpoint para crear/programar una nueva sesión de curso
+  @UseGuards(JwtAuthGuard)
   @Post('sessions')
   @ApiOperation({ summary: 'Create a new course session/programming', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 201, description: 'Course session created successfully' })
@@ -47,6 +61,7 @@ export class CoursesController {
   }
 
   // Enpoint para crear un nuevo curso en el catalogo
+  @UseGuards(JwtAuthGuard)
   @Post()
   @ApiOperation({ summary: 'Create a new course', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Course created successfully' })
@@ -60,6 +75,7 @@ export class CoursesController {
   }
 
   // Endpoint para obtener todos los cursos paginados de una empresa en especifico
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({ summary: 'Get all courses for a company', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'List of courses for a company' })
@@ -77,6 +93,7 @@ export class CoursesController {
   }
 
   // Endpoint para obtener un curso por id
+  @UseGuards(JwtAuthGuard)
   @Get(':courseId')
   @ApiOperation({ summary: 'Get course by id', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Course found' })
@@ -89,6 +106,7 @@ export class CoursesController {
   }
 
   // Endpoint para obtener el detalle de una sesión por su ID
+  @UseGuards(JwtAuthGuard)
   @Get('sessions/:sessionId')
   @ApiOperation({ summary: 'Get details of a specific course session', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Course session details found' })
@@ -101,7 +119,33 @@ export class CoursesController {
     return this.coursesService.findSessionById(companyId, sessionId);
   }
 
+  // Endpoint para generar el Token/URL de QR para el pase de lista de una clase en específico
+  @UseGuards(JwtAuthGuard)
+  @Get('classes/:classId/qr-token')
+  @ApiOperation({ summary: 'Generate QR attendance token for a specific class date' })
+  @ApiResponse({ status: 200, description: 'QR Token generated successfully' })
+  @ApiResponse({ status: 404, description: 'Class date not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  getQrTokenByClassId(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('classId', ParseIntPipe) classId: number,
+  ) {
+    return this.coursesService.generateQrTokenByClassId(companyId, classId);
+  }
+
+  // Endpoint publico para obtener la info de la clase y los participantes para el pase de lista
+  @Get('attendance/check-in')
+  @ApiOperation({ summary: 'Consult class info and pending participants for public check-in' })
+  @ApiResponse({ status: 200, description: 'Class info and pending participants retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Class or date not found' })
+  getAttendanceInfo(
+    @Query('classId') encryptedClassId: string
+  ) {
+    return this.coursesService.getAttendanceInfo(encryptedClassId);
+  }
+
   // Endpoint para obtener todas las sesiones de un curso en específico (paginado)
+  @UseGuards(JwtAuthGuard)
   @Get(':courseId/sessions')
   @ApiOperation({ summary: 'Get all sessions for a specific course', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'List of sessions for the course' })
@@ -121,6 +165,7 @@ export class CoursesController {
   }
 
   // Endpoint que elimina una sesión programada de un curso
+  @UseGuards(JwtAuthGuard)
   @Delete('sessions/:sessionId')
   @ApiOperation({ summary: 'Delete a scheduled session from a course', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Session deleted successfully' })
@@ -135,6 +180,7 @@ export class CoursesController {
   }
 
   // Endpoint que desactiva un curso
+  @UseGuards(JwtAuthGuard)
   @Delete('/:courseId')
   @ApiOperation({ summary: 'Disable course', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Course disabled successfully' })
@@ -149,6 +195,7 @@ export class CoursesController {
   }
 
   // Endpoint que reactiva un curso
+  @UseGuards(JwtAuthGuard)
   @Patch('/:courseId/reactivate')
   @ApiOperation({ summary: 'Reactivate course', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Course reactivated successfully' })
@@ -163,6 +210,7 @@ export class CoursesController {
   }
 
   // Endpoint para actualizar un curso
+  @UseGuards(JwtAuthGuard)
   @Put(':courseId')
   @ApiOperation({ summary: 'Update course', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Course updated successfully' })
