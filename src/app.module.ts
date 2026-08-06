@@ -29,6 +29,7 @@ import { DocumentosTemplatesModule } from './modules/documentos-templates/docume
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { InternalMovementsModule } from './modules/internal-movements/internal-m
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
+    ScheduleModule.forRoot(),
    ServeStaticModule.forRoot(
   {
     rootPath: join(process.cwd(), 'public'),
@@ -75,4 +77,3 @@ import { InternalMovementsModule } from './modules/internal-movements/internal-m
   providers: [AreasService],
 })
 export class AppModule { }
-

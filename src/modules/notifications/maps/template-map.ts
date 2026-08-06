@@ -13,6 +13,7 @@ export const TEMPLATE_MAP = {
         'INTERVIEW_RESCHEDULED': 'resend_entrevista',
         'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador',
         'DOCUMENT_REJECTED': 'documentacion-rechazada',
+         'DOCUMENT_EXPIRING': 'documentos-por-vencer',
         'CONTRACT_SIGN': 'link_firmar_contrato'
     },
     WHATSAPP: {

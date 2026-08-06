@@ -86,6 +86,54 @@ export class PositionsService {
         }
     }
 
+
+    async getSchedule(positionId: number) {
+    const horarios = await this.prisma.horariosPuesto.findMany({
+        where: { idPuesto: positionId },
+    });
+
+
+    // Formateamos las horas a "HH:mm" (vienen como DateTime con fecha base 1970-01-01)
+    const formatearHora = (fecha: Date | null): string => {
+        if (!fecha) return '';
+        const d = new Date(fecha);
+        const horas = String(d.getUTCHours()).padStart(2, '0');
+        const minutos = String(d.getUTCMinutes()).padStart(2, '0');
+        return `${horas}:${minutos}`;
+    };
+
+    return horarios.map((h) => ({
+        dia: h.DiaSemana,
+        horaEntrada: formatearHora(h.HoraEntrada),
+        horaSalida: formatearHora(h.HoraSalida),
+    }));
+}
+
+async getRequiredDocuments(positionId: number) {
+    const docsPuesto = await this.prisma.documentosPuesto.findMany({
+        where: { idPuesto: positionId },
+    });
+    if (docsPuesto.length === 0) return [];
+
+    const idsDocumento = docsPuesto.map((d) => d.idDocumento);
+    const catDocumentos = await this.prisma.catDocumentos.findMany({
+        where: { IdDocumento: { in: idsDocumento }, Activo: true },
+    });
+    const catMap = new Map(catDocumentos.map((c) => [c.IdDocumento, c]));
+
+    return docsPuesto
+        .filter((d) => catMap.has(d.idDocumento))
+        .map((d) => {
+            const cat = catMap.get(d.idDocumento)!;
+            return {
+                id: cat.IdDocumento,
+                nombre: cat.Descripcion,
+                obligatorio: !!d.esObligatorio,
+            };
+        });
+}
+
+
     async create(companyId: number, activeUser: ActiveUserDto, dto: CreatePositionDto) {
         const user = await this.prisma.auth_user.findFirst({ where: { id: activeUser.id } });
         if (!user) throw new BadRequestException('Tu usuario actual no existe');
