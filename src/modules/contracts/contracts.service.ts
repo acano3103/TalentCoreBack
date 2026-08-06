@@ -191,7 +191,12 @@ export class ContractsService {
           IFNULL(c.fechaInicioContrato, 'PENDIENTE') AS fechaContratoInicio,
           IFNULL(c.fechaTerminoContrato, 'PENDIENTE') AS fechaContratoTermino,
           IFNULL(hs.salarioBruto, null) AS sueldo,
-          c.idContrato
+          c.idContrato,
+          (SELECT dg2.id FROM DocumentosGenerados dg2
+             WHERE dg2.idContrato = c.idContrato
+               AND dg2.archivoGenerado IS NOT NULL
+             ORDER BY dg2.fechaGeneracion DESC
+             LIMIT 1) AS idDocumentoGenerado
         FROM Empleados e
         INNER JOIN Expedientes ex ON e.idEmpleado = ex.idEmpleado
         INNER JOIN CatPuestos p ON e.idPuesto = p.idPuesto
@@ -230,6 +235,7 @@ export class ContractsService {
       ...item,
       idEmpleado: item.idEmpleado ? Number(item.idEmpleado) : null,
       idContrato: item.idContrato ? Number(item.idContrato) : null,
+      idDocumentoGenerado: item.idDocumentoGenerado ? Number(item.idDocumentoGenerado) : null,
       idEstatusContrato: item.idEstatusContrato ? Number(item.idEstatusContrato) : 1,
       idEstatusExpediente: item.idEstatusExpediente ? Number(item.idEstatusExpediente) : null,
     }));

@@ -30,7 +30,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { ScheduleModule } from '@nestjs/schedule';
-
+import { CoursesModule } from './modules/courses/courses.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -71,7 +71,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     DocumentosTemplatesModule,
     ContractsModule,
     EmployeesModule,
-    InternalMovementsModule
+    InternalMovementsModule,
+    CoursesModule
   ],
   controllers: [],
   providers: [AreasService],

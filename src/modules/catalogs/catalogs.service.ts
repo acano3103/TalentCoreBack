@@ -15,7 +15,9 @@ export type CatalogKey =
   | 'tipos-ubicaciones'
   | 'empleados'
   | 'tipos-monedas'
-  | 'periodicidades-pagos';
+  | 'periodicidades-pagos'
+  | 'cursos'
+  | 'tipos-cursos';
 
 @Injectable()
 export class CatalogsService {
@@ -139,10 +141,42 @@ export class CatalogsService {
         });
 
       case 'empleados':
-        return this.prisma.empleados.findMany({
+        const employees = await this.prisma.empleados.findMany({
           where: { idEmpresa: companyId, activo: true },
-          select: { idEmpleado: true, nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
+          select: {
+            idEmpleado: true,
+            nombre: true,
+            primerApellido: true,
+            segundoApellido: true,
+            correo: true,
+            telefonoMovil: true,
+            idSite: true,
+            idPuesto: true,
+            CatPuestos: {
+              select: {
+                idPuesto: true,
+                idArea: true,
+              },
+            },
+          },
           orderBy: { nombre: 'asc' },
+        });
+
+        // Mapeamos aplanando la respuesta
+        return employees.map((e) => {
+          const area = e.CatPuestos?.idArea
+
+          return {
+            idEmpleado: e.idEmpleado,
+            nombre: e.nombre,
+            primerApellido: e.primerApellido,
+            segundoApellido: e.segundoApellido,
+            correo: e.correo,
+            telefonoMovil: e.telefonoMovil,
+            idSite: e.idSite,
+            idPuesto: e.idPuesto,
+            idArea: e.CatPuestos?.idArea || null
+          };
         });
 
       case 'tipos-monedas':
@@ -157,6 +191,20 @@ export class CatalogsService {
           where: { activo: true },
           select: { idPeriodicidadPago: true, descripcion: true },
           orderBy: { descripcion: 'asc' },
+        });
+
+      case 'cursos':
+        return this.prisma.catCursos.findMany({
+          where: { idEmpresa: companyId, activo: true },
+          select: { idCursos: true, idEmpresa: true, idTipoCurso: true, Descripcion: true, idArea: true },
+          orderBy: { idCursos: 'asc' },
+        });
+
+      case 'tipos-cursos':
+        return this.prisma.catTipoCurso.findMany({
+          where: { activo: true },
+          select: { idTipoCurso: true, Descripcion: true },
+          orderBy: { Descripcion: 'asc' },
         });
 
       default:
