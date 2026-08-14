@@ -30,6 +30,8 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { CoursesModule } from './modules/courses/courses.module';
+import { CareerPlanModule } from './modules/career-plan/career-plan.module';
+import { ConfigurationModule } from './modules/configuration/configuration.module';
 
 @Module({
   imports: [
@@ -71,7 +73,9 @@ import { CoursesModule } from './modules/courses/courses.module';
     ContractsModule,
     EmployeesModule,
     InternalMovementsModule,
-    CoursesModule
+    CoursesModule,
+    CareerPlanModule,
+    ConfigurationModule
   ],
   controllers: [],
   providers: [AreasService],

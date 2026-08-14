@@ -2,7 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateInternalMovementDto {
-  @ApiProperty({ description: 'Tipo de movimiento (Promoción, Cambio de Área, Ajuste Salarial, Reubicación)' })
+  @ApiProperty({
+    description:
+      'Tipo de movimiento (Promoción, Cambio de Área, Ajuste Salarial, Reubicación)',
+  })
   @IsString()
   tipoMovimiento: string;
 
@@ -54,4 +57,13 @@ export class CreateInternalMovementDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+
+  @ApiProperty({
+    description:
+      'ID de la postulación de Plan de Carrera vinculada (promoción)',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  idPlanCarrera?: number;
 }
