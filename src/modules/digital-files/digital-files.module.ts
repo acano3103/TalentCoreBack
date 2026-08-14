@@ -6,6 +6,8 @@ import { ConfigService } from '@nestjs/config';
 import { NubariumService } from './services/nubarium.service';
 import { RequiredDocumentsController } from './required-documents/required-documents.controller';
 import { RequiredDocumentsService } from './required-documents/required-documents.service';
+import { VencimientosDashboardService } from './vencimientos-dashboard.service';
+import { VencimientosDashboardController } from './vencimientos-dashboard.controller';
 
 @Module({
   imports: [
@@ -17,8 +19,8 @@ import { RequiredDocumentsService } from './required-documents/required-document
       inject: [ConfigService],
     }),
   ],
-  controllers: [DigitalFilesController, RequiredDocumentsController],
-  providers: [DigitalFilesService, NubariumService, RequiredDocumentsService],
+  controllers: [VencimientosDashboardController, DigitalFilesController, RequiredDocumentsController],
+  providers: [DigitalFilesService, NubariumService, RequiredDocumentsService, VencimientosDashboardService],
   exports: [NubariumService]
 })
 export class DigitalFilesModule { }
