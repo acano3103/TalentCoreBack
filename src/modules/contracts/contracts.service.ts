@@ -108,13 +108,13 @@ export class ContractsService {
       const empleado = contrato.Empleados;
       const empresa = empleado.idEmpresa
         ? await this.prisma.catEmpresas.findFirst({
-            where: { idEmpresa: empleado.idEmpresa },
-            select: { nombre_comercial: true },
-          })
+          where: { idEmpresa: empleado.idEmpresa },
+          select: { nombre_comercial: true },
+        })
         : null;
 
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-      const linkFirma = `${frontendUrl}/talentcore/firmar/${documento.tokenFirma}`;
+      const frontendUrl = this.configService.getOrThrow<string>('FRONT_URL');
+      const linkFirma = `${frontendUrl}firmar/${documento.tokenFirma}`;
       const nombreCompleto = `${empleado.nombre} ${empleado.primerApellido}`.trim();
       const userUuid = empleado.idUsuario || `empleado-${empleado.idEmpleado}`;
 

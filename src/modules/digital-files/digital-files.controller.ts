@@ -323,6 +323,25 @@ export class DigitalFilesController {
     return this.digitalFilesService.notifyRejectedDocuments(employeeId);
   }
 
+  
+// Endpoint para notificar al empleado sobre documentos por vencer/vencidos (botón manual del front)
+@UseGuards(JwtAuthGuard)
+@Post(':employeeId/notify-expiring')
+@ApiOperation({
+  summary: 'Notify expiring documents',
+  description: 'Sends a single email to the employee listing documents that are expiring soon or already expired.',
+})
+@ApiResponse({ status: 200, description: 'Notification sent successfully' })
+@ApiResponse({ status: 400, description: 'Employee has no expiring documents or no email registered' })
+@ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+@ApiResponse({ status: 404, description: 'Employee not found' })
+notifyExpiringDocuments(
+  @Param('companyId', ParseIntPipe) companyId: number,
+  @Param('employeeId', ParseIntPipe) employeeId: number,
+) {
+  return this.digitalFilesService.notifyExpiringDocuments(employeeId);
+}
+
   // Endpoint para obtener el historial de descargas del expediente
   @UseGuards(JwtAuthGuard)
   @Get(':employeeId/download-history')

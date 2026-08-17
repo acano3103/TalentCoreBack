@@ -12,6 +12,8 @@ export class NubariumService {
 
     // Expresión regular para validar CURP
     private readonly CURP_REGEX = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]{2}$/i;
+    // Expresión regular para validar RFC (con o sin homoclave, personas físicas y morales)
+private readonly RFC_REGEX = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i;
 
     // Mapas de Configuración heredados de Python
    private readonly PAYLOAD_FIELD_MAP: Record<string, string> = {
@@ -29,6 +31,14 @@ private esCampoComprobante(campo: string): boolean {
     const lower = campo.toLowerCase();
     return lower.includes('comprobante') || lower.includes('domicilio');
 }
+
+private esCampoConstanciaFiscal(campo: string): boolean {
+    const lower = campo.toLowerCase();
+    return lower.includes('fiscal') || lower.includes('rfc');
+}
+
+
+
 
    private readonly ENDPOINT_MAP: Record<string, string> = {
     ine: 'https://ocr.nubarium.com/ocr/v1/obtener_datos_id',
@@ -124,6 +134,132 @@ private esCampoComprobante(campo: string): boolean {
         return resultado;
     }
 
+/**
+ * Consulta RFC en el SAT vía Nubarium (Solo texto)
+ */
+async consultarRfcSat(rfc: string): Promise<CurpRenapoResult> {
+    const rfcLimpio = (rfc || '').trim().toUpperCase();
+
+    const resultado: CurpRenapoResult = {
+        success: false,
+        nombre: '',
+        primerApellido: '',
+        segundoApellido: '',
+        http_status: 0,
+        respuesta_json: {},
+        error: null,
+    };
+
+    if (!this.RFC_REGEX.test(rfcLimpio)) {
+        resultado.error = 'RFC con formato inválido.';
+        return resultado;
+    }
+
+    const { username, password, timeout } = this.getCredentials();
+    const url = 'https://rfc.nubarium.com/sat/valida_rfc';
+
+    try {
+        const resp = await axios.post(
+            url,
+            { rfc: rfcLimpio },
+            {
+                auth: { username, password },
+                timeout: timeout * 1000,
+            },
+        );
+
+        resultado.http_status = resp.status;
+        const data = resp.data;
+        resultado.respuesta_json = data;
+
+        if (resp.status === 200) {
+            const estatus = (data?.estatus || '').toUpperCase();
+
+            if (estatus === 'OK') {
+                resultado.success = true;
+                // El SAT no regresa nombre/razón social en este endpoint —
+                // solo confirma validez, tipo de persona (F/M) y un código de validación.
+            } else {
+                resultado.error = data?.mensaje || 'RFC no válido según el SAT.';
+            }
+        } else {
+            resultado.error = data?.mensaje || `Error HTTP ${resp.status} al consultar RFC.`;
+        }
+    } catch (error: any) {
+        resultado.http_status = error.response?.status || 503;
+        resultado.respuesta_json = error.response?.data || { error: error.message };
+        resultado.error = error.response?.data?.mensaje || `Error de conexión con Nubarium RFC: ${error.message}`;
+        this.logger.error(`Error conexión Nubarium RFC: ${error.message}`);
+    }
+
+    return resultado;
+}
+
+
+/**
+ * Extrae y valida los datos de la Constancia de Situación Fiscal / CIF
+ * a partir del documento (PDF o imagen) que sube el empleado.
+ */
+async consultarCsfCif(
+    documentoBase64: string,
+    tipo: 'pdf' | 'imagen',
+): Promise<{
+    success: boolean;
+    rfc: string;
+    curp: string;
+    nombreCompleto: string;
+    error: string | null;
+    http_status: number;
+    respuesta_json: any;
+}> {
+    const { username, password, timeout } = this.getCredentials();
+    const url = 'https://api.nubarium.com/sat/v1/consultar_cif';
+
+    const resultado = {
+        success: false,
+        rfc: '',
+        curp: '',
+        nombreCompleto: '',
+        error: null as string | null,
+        http_status: 0,
+        respuesta_json: {} as any,
+    };
+
+    try {
+        const resp = await axios.post(
+            url,
+            { tipo, documento: documentoBase64 },
+            {
+                auth: { username, password },
+                timeout: timeout * 1000,
+            },
+        );
+
+        resultado.http_status = resp.status;
+        const data = resp.data;
+        resultado.respuesta_json = data;
+
+        if (resp.status === 200 && (data?.estatus || '').toUpperCase() === 'OK') {
+            resultado.success = true;
+            resultado.rfc = (data?.rfc || '').trim().toUpperCase();
+            resultado.curp = (data?.datosIdentificacion?.curp || '').trim().toUpperCase();
+            const nombres = data?.datosIdentificacion?.nombres || '';
+            const apPaterno = data?.datosIdentificacion?.apellidoPaterno || '';
+            const apMaterno = data?.datosIdentificacion?.apellidoMaterno || '';
+            resultado.nombreCompleto = `${nombres} ${apPaterno} ${apMaterno}`.trim().toUpperCase();
+        } else {
+            resultado.error = data?.mensaje || 'No se pudo extraer la información fiscal del documento.';
+        }
+    } catch (error: any) {
+        resultado.http_status = error.response?.status || 503;
+        resultado.respuesta_json = error.response?.data || { error: error.message };
+        resultado.error = error.response?.data?.mensaje || `Error de conexión con Nubarium CIF: ${error.message}`;
+        this.logger.error(`Error conexión Nubarium CSF/CIF: ${error.message}`);
+    }
+
+    return resultado;
+}
+
     /**
      * 2. Función Principal: Validar Documento en Nubarium (OCR + Lista Nominal)
      */
@@ -144,9 +280,18 @@ private esCampoComprobante(campo: string): boolean {
         const { baseUrl, username, password, timeout } = this.getCredentials();
 
         const endpoint = this.getEndpoint(campoNormalizado);
-        const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https://')
-            ? endpoint
-            : `${baseUrl}${endpoint}`;
+
+// ── Caso especial: Constancia de Situación Fiscal / CIF ──
+// Este documento no sigue el patrón genérico {document: base64};
+// Nubarium requiere un payload distinto con el campo "tipo".
+if (this.esCampoConstanciaFiscal(campoNormalizado)) {
+    return this.validarConstanciaFiscal(fileBuffer, nombreArchivo, rutaRelativaBd, idEmpleado, idDocumento, usuario, prisma);
+}
+
+const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https://')
+    ? endpoint
+    : `${baseUrl}${endpoint}`;
+
 
         const resultado: NubariumStandardResult = {
             validado: false,
@@ -419,8 +564,54 @@ private esCampoComprobante(campo: string): boolean {
             );
         }
 
+     return resultado;
+    }
+
+    private async validarConstanciaFiscal(
+        fileBuffer: Buffer,
+        nombreArchivo: string,
+        rutaRelativaBd: string,
+        idEmpleado: number,
+        idDocumento: number,
+        usuario: string,
+        prisma: PrismaService,
+    ): Promise<NubariumStandardResult> {
+        const url = 'https://api.nubarium.com/sat/v1/consultar_cif';
+        const b64Contenido = fileBuffer.toString('base64');
+        const extension = nombreArchivo.split('.').pop()?.toLowerCase();
+        const tipo = extension === 'pdf' ? 'pdf' : 'imagen';
+        const resultado: NubariumStandardResult = {
+            validado: false,
+            score: null,
+            motivo_rechazo: null,
+            http_status: 0,
+            respuesta_json: {},
+            endpoint: url,
+            error_infraestructura: false,
+        };
+        try {
+            const csfResult = await this.consultarCsfCif(b64Contenido, tipo);
+            resultado.http_status = csfResult.http_status;
+            resultado.respuesta_json = csfResult.respuesta_json;
+            resultado.validado = csfResult.success;
+            if (!csfResult.success) {
+                resultado.motivo_rechazo = csfResult.error || 'No se pudo validar la Constancia de Situación Fiscal.';
+            }
+        } catch (error: any) {
+            this.setInfraestructuraError(resultado, 503, `[INFRA] Error de conexión con Nubarium CSF/CIF: ${error.message}`);
+        } finally {
+            await this.guardarValidacionDb(
+                prisma, idEmpleado, idDocumento, nombreArchivo, rutaRelativaBd,
+                resultado.endpoint, resultado.http_status, resultado.validado,
+                resultado.score, resultado.motivo_rechazo, resultado.respuesta_json, usuario,
+            );
+        }
         return resultado;
     }
+
+
+
+    
 
     // ── MÉTODOS AUXILIARES DE SOPORTE ──────────────────────────────────────────
 
@@ -516,7 +707,12 @@ private esCampoComprobante(campo: string): boolean {
     private esCampoIne(campo: string): boolean {
         const lower = campo.toLowerCase();
         return ['ine', 'ife', 'identificacion'].some((k) => lower.includes(k));
+       
     }
+
+  
+
+
 
     private setInfraestructuraError(res: NubariumStandardResult, status: number, msg: string) {
         res.error_infraestructura = true;

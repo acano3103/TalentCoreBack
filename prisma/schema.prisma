@@ -138,16 +138,17 @@ model CatDescripcionesPuesto {
 }
 
 model CatDocumentos {
-  IdDocumento         Int       @id @default(autoincrement())
-  idEmpresa           Int?
-  Descripcion         String?   @db.VarChar(100)
-  EsRequeridoBase     Boolean   @default(false)
-  FechaRegistro       DateTime? @db.DateTime(0)
-  UsuarioRegistro     String?   @db.VarChar(45)
-  Activo              Boolean?  @default(true)
-  requiereVencimiento Boolean   @default(false)
-  diasVigenciaDefault Int?
-  diasAlertaPrevio    Int?      @default(30)
+  IdDocumento               Int       @id @default(autoincrement())
+  idEmpresa                 Int?
+  Descripcion               String?   @db.VarChar(100)
+  EsRequeridoBase           Boolean   @default(false)
+  FechaRegistro             DateTime? @db.DateTime(0)
+  UsuarioRegistro           String?   @db.VarChar(45)
+  Activo                    Boolean?  @default(true)
+  requiereVencimiento       Boolean   @default(false)
+  diasVigenciaDefault       Int?
+  diasAlertaPrevio          Int?      @default(30)
+  tieneValidacionAutomatica Boolean   @default(false)
 }
 
 model CatEmpresas {
@@ -1093,6 +1094,8 @@ model Empleados {
   token                                             String?               @db.VarChar(100)
   activo                                            Boolean               @default(true)
   Contratos                                         Contratos[]
+  CursoParticipantes                                CursoParticipantes[]
+  CursoSesiones                                     CursoSesiones[]
   CatPuestos                                        CatPuestos?           @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
   Empleados                                         Empleados?            @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                   Empleados[]           @relation("EmpleadosToEmpleados")
@@ -1341,14 +1344,15 @@ model DomicilioEmpleado {
 }
 
 model DocumentosEmpleado {
-  idDocumentoEmpleado Int       @id @default(autoincrement())
-  idEmpleado          Int?
-  IdDocumento         Int?
-  idEstatusDocumento  Int?      @default(1)
-  rutaArchivo         String?   @db.Text
-  fechaCarga          DateTime? @default(now()) @db.Timestamp(0)
-  fechaEmision        DateTime? @db.Date
-  fechaVencimiento    DateTime? @db.Date
+  idDocumentoEmpleado                Int       @id @default(autoincrement())
+  idEmpleado                         Int?
+  IdDocumento                        Int?
+  idEstatusDocumento                 Int?      @default(1)
+  rutaArchivo                        String?   @db.Text
+  fechaCarga                         DateTime? @default(now()) @db.Timestamp(0)
+  fechaEmision                       DateTime? @db.Date
+  fechaVencimiento                   DateTime? @db.Date
+  fechaUltimaNotificacionVencimiento DateTime? @db.DateTime(0)
 }
 
 model CatEstatusContratos {
@@ -1430,33 +1434,33 @@ model TiposDocumento {
 }
 
 model MovimientosInternos {
-  idMovimiento         Int                  @id @default(autoincrement())
-  idEmpleado           Int
-  idEmpresa            Int
-  tipoMovimiento       String               @db.VarChar(50)
-  fechaEfectiva        DateTime?            @db.Date
-  idPuestoAnterior     Int?
-  idPuestoNuevo        Int?
-  idAreaAnterior       Int?
-  idAreaNueva          Int?
-  idJefeAnterior       Int?
-  idJefeNuevo          Int?
-  idEmpresaAnterior    Int?
-  idEmpresaNueva       Int?
-  idSiteAnterior       Int?
-  idSiteNuevo          Int?
-  salarioBrutoAnterior Decimal?             @db.Decimal(12, 2)
-  salarioBrutoNuevo    Decimal?             @db.Decimal(12, 2)
-  salarioNetoAnterior  Decimal?             @db.Decimal(12, 2)
-  salarioNetoNuevo     Decimal?             @db.Decimal(12, 2)
-  motivo               String?              @db.Text
-  causaBaja            String?              @db.Text
-  idUsuarioAutorizo    String?              @db.VarChar(36)
-  fechaRegistro        DateTime?            @default(now()) @db.Timestamp(0)
-  idEstatusMovimiento  Int                  @default(1)
-  idPlanCarrera        Int?
-  Empleados            Empleados            @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
-  CatEstatusMovimiento CatEstatusMovimiento @relation(fields: [idEstatusMovimiento], references: [idEstatusMovimiento], map: "FK_MovInternos_Estatus")
+  idMovimiento              Int                         @id @default(autoincrement())
+  idEmpleado                Int
+  idEmpresa                 Int
+  tipoMovimiento            String                      @db.VarChar(50)
+  fechaEfectiva             DateTime?                   @db.Date
+  idPuestoAnterior          Int?
+  idPuestoNuevo             Int?
+  idAreaAnterior            Int?
+  idAreaNueva               Int?
+  idJefeAnterior            Int?
+  idJefeNuevo               Int?
+  idEmpresaAnterior         Int?
+  idEmpresaNueva            Int?
+  idSiteAnterior            Int?
+  idSiteNuevo               Int?
+  salarioBrutoAnterior      Decimal?                    @db.Decimal(12, 2)
+  salarioBrutoNuevo         Decimal?                    @db.Decimal(12, 2)
+  salarioNetoAnterior       Decimal?                    @db.Decimal(12, 2)
+  salarioNetoNuevo          Decimal?                    @db.Decimal(12, 2)
+  motivo                    String?                     @db.Text
+  causaBaja                 String?                     @db.Text
+  idUsuarioAutorizo         String?                     @db.VarChar(36)
+  fechaRegistro             DateTime?                   @default(now()) @db.Timestamp(0)
+  idEstatusMovimiento       Int                         @default(1)
+  Empleados                 Empleados                   @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
+  CatEstatusMovimiento      CatEstatusMovimiento        @relation(fields: [idEstatusMovimiento], references: [idEstatusMovimiento], map: "FK_MovInternos_Estatus")
+  PasosAprobacionMovimiento PasosAprobacionMovimiento[]
 
   @@index([idEmpleado], map: "FK_MovInternos_Empleado_idx")
   @@index([idEstatusMovimiento], map: "FK_MovInternos_Estatus")
@@ -1517,10 +1521,11 @@ model PlantillasNotificaciones {
 }
 
 model CatEstatusMovimiento {
-  idEstatusMovimiento Int                   @id @default(autoincrement())
-  descripcion         String                @db.VarChar(100)
-  activo              Boolean               @default(true)
-  MovimientosInternos MovimientosInternos[]
+  idEstatusMovimiento       Int                         @id @default(autoincrement())
+  descripcion               String                      @db.VarChar(100)
+  activo                    Boolean                     @default(true)
+  MovimientosInternos       MovimientosInternos[]
+  PasosAprobacionMovimiento PasosAprobacionMovimiento[]
 }
 
 model CursoAsistencias {
@@ -1556,9 +1561,11 @@ model CursoParticipantes {
   estatusAsignacion CursoParticipantes_estatusAsignacion? @default(inscrito)
   calificacionFinal Decimal?                              @db.Decimal(5, 2)
   creadoEn          DateTime?                             @default(now()) @db.Timestamp(0)
+  Empleados         Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
   CursoSesiones     CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
 
   @@unique([idSesion, idEmpleado], map: "uk_sesion_empleado")
+  @@index([idEmpleado], map: "idx_curso_participantes_empleado")
 }
 
 model CursoSesiones {
@@ -1581,8 +1588,81 @@ model CursoSesiones {
   CursoFechasClase           CursoFechasClase[]
   CursoParticipantes         CursoParticipantes[]
   CatCursos                  CatCursos                    @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "fk_sesion_curso")
+  Empleados                  Empleados?                   @relation(fields: [idEmpleadoInstructor], references: [idEmpleado], map: "fk_sesion_empleado_instructor")
 
   @@index([idCurso], map: "fk_sesion_curso")
+  @@index([idEmpleadoInstructor], map: "fk_sesion_empleado_instructor")
+}
+
+model HorariosEmpleado {
+  idHorario   Int       @id @default(autoincrement())
+  idEmpleado  Int
+  DiaSemana   String?   @db.VarChar(10)
+  HoraEntrada DateTime? @db.Time(0)
+  HoraSalida  DateTime? @db.Time(0)
+
+  @@index([idEmpleado], map: "idx_idEmpleado")
+}
+
+model CatRolAprobador {
+  idRolAprobador               Int                            @id @default(autoincrement())
+  codigo                       String                         @unique(map: "uk_CatRolAprobador_codigo") @db.VarChar(50)
+  nombre                       String                         @db.VarChar(100)
+  ConfiguracionPasosAprobacion ConfiguracionPasosAprobacion[]
+  PasosAprobacionMovimiento    PasosAprobacionMovimiento[]
+}
+
+model CatTipoMovimiento {
+  idTipoMovimiento             Int                            @id @default(autoincrement())
+  codigo                       String                         @unique(map: "uk_CatTipoMovimiento_codigo") @db.VarChar(50)
+  nombre                       String                         @db.VarChar(100)
+  ConfiguracionPasosAprobacion ConfiguracionPasosAprobacion[]
+}
+
+model ConfiguracionPasosAprobacion {
+  idConfiguracionPasos Int               @id @default(autoincrement())
+  idTipoMovimiento     Int
+  idRolAprobador       Int
+  paso                 Int
+  esOpcional           Boolean           @default(false)
+  condicion            String?           @db.VarChar(255)
+  activo               Boolean           @default(true)
+  CatRolAprobador      CatRolAprobador   @relation(fields: [idRolAprobador], references: [idRolAprobador], map: "FK_ConfigPasosAprobacion_RolAprobador")
+  CatTipoMovimiento    CatTipoMovimiento @relation(fields: [idTipoMovimiento], references: [idTipoMovimiento], map: "FK_ConfigPasosAprobacion_TipoMovimiento")
+
+  @@unique([idTipoMovimiento, paso], map: "uk_ConfigPasosAprobacion_TipoMovimiento_paso")
+  @@index([idRolAprobador], map: "idx_ConfigPasosAprobacion_RolAprobador")
+  @@index([idTipoMovimiento], map: "idx_ConfigPasosAprobacion_TipoMovimiento")
+}
+
+model PasosAprobacionMovimiento {
+  idPasoAprobacion     Int                  @id @default(autoincrement())
+  idMovimiento         Int
+  idRolAprobador       Int
+  paso                 Int
+  idEstatus            Int                  @default(1)
+  comentarios          String?              @db.Text
+  idUsuarioAprobador   String?              @db.VarChar(36)
+  fechaActualizacion   DateTime?            @db.Timestamp(0)
+  fechaCreacion        DateTime             @default(now()) @db.Timestamp(0)
+  CatEstatusMovimiento CatEstatusMovimiento @relation(fields: [idEstatus], references: [idEstatusMovimiento], map: "FK_PasosAprobacionMov_Estatus")
+  MovimientosInternos  MovimientosInternos  @relation(fields: [idMovimiento], references: [idMovimiento], map: "FK_PasosAprobacionMov_Movimiento")
+  CatRolAprobador      CatRolAprobador      @relation(fields: [idRolAprobador], references: [idRolAprobador], map: "FK_PasosAprobacionMov_RolAprobador")
+
+  @@unique([idMovimiento, paso], map: "uk_PasosAprobacionMov_Movimiento_paso")
+  @@index([idEstatus], map: "idx_PasosAprobacionMov_Estatus")
+  @@index([idMovimiento], map: "idx_PasosAprobacionMov_Movimiento")
+  @@index([idRolAprobador], map: "idx_PasosAprobacionMov_RolAprobador")
+}
+
+model DocumentosAdicionalesEmpleado {
+  id              Int       @id @default(autoincrement())
+  idEmpleado      Int
+  idDocumento     Int
+  usuarioRegistro String?   @db.VarChar(100)
+  fechaRegistro   DateTime? @db.DateTime(0)
+
+  @@index([idEmpleado], map: "idx_idEmpleado")
 }
 
 enum Entrevistas_interview_type {
