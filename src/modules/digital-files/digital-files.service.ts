@@ -1222,6 +1222,87 @@ export class DigitalFilesService {
     this.logger.log('Revisión diaria de documentos por vencer finalizada.');
   }
 
+async getVencimientosDashboard(
+  companyId: number,
+  filtros: {
+    estado?: 'vigente' | 'por_vencer' | 'vencido';
+    idArea?: number;
+    idSite?: number;
+    idPuesto?: number;
+    fechaDesde?: string;
+    fechaHasta?: string;
+  },
+) {
+  const rows = await this.prisma.$queryRaw<any[]>`
+    SELECT
+      DE.idDocumentoEmpleado,
+      E.idEmpleado,
+      E.nombre, E.primerApellido, E.segundoApellido,
+      E.idPuesto, P.NombrePuesto,
+      P.idArea, A.Descripcion AS areaNombre,
+      E.idSite, S.Descripcion AS siteNombre,
+      CD.IdDocumento, CD.Descripcion AS documentoNombre,
+      DE.fechaVencimiento, DE.fechaEmision,
+      CD.diasAlertaPrevio
+    FROM DocumentosEmpleado DE
+    INNER JOIN Empleados E ON E.idEmpleado = DE.idEmpleado
+    INNER JOIN CatDocumentos CD ON CD.IdDocumento = DE.IdDocumento
+    LEFT JOIN CatPuestos P ON P.idPuesto = E.idPuesto
+    LEFT JOIN CatAreas A ON A.idArea = P.idArea
+    LEFT JOIN CatSites S ON S.idSite = E.idSite
+    WHERE E.idEmpresa = ${companyId}
+      AND E.activo = 1
+      AND CD.requiereVencimiento = 1
+      AND DE.fechaVencimiento IS NOT NULL
+  `;
+
+  let resultado = rows.map((r) => ({
+    idDocumentoEmpleado: r.idDocumentoEmpleado,
+    idEmpleado: r.idEmpleado,
+    nombreCompleto: [r.nombre, r.primerApellido, r.segundoApellido].filter(Boolean).join(' '),
+    puesto: r.NombrePuesto,
+    idPuesto: r.idPuesto,
+    area: r.areaNombre,
+    idArea: r.idArea,
+    site: r.siteNombre,
+    idSite: r.idSite,
+    documento: r.documentoNombre,
+    fechaVencimiento: r.fechaVencimiento,
+    fechaEmision: r.fechaEmision,
+    estatusVigencia: DigitalFilesQueries.calcularEstatusVigencia(r.fechaVencimiento, r.diasAlertaPrevio),
+  }));
+
+  if (filtros.idArea) {
+    resultado = resultado.filter((d) => d.idArea === filtros.idArea);
+  }
+  if (filtros.idSite) {
+    resultado = resultado.filter((d) => d.idSite === filtros.idSite);
+  }
+  if (filtros.idPuesto) {
+    resultado = resultado.filter((d) => d.idPuesto === filtros.idPuesto);
+  }
+  if (filtros.fechaDesde) {
+    resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) >= new Date(filtros.fechaDesde!));
+  }
+  if (filtros.fechaHasta) {
+    resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) <= new Date(filtros.fechaHasta!));
+  }
+
+  // KPIs sobre el resultado ya filtrado (área/site/puesto/fecha), pero antes del filtro de estado
+  const kpis = {
+    vigente: resultado.filter((d) => d.estatusVigencia === 'vigente').length,
+    por_vencer: resultado.filter((d) => d.estatusVigencia === 'por_vencer').length,
+    vencido: resultado.filter((d) => d.estatusVigencia === 'vencido').length,
+  };
+
+  if (filtros.estado) {
+    resultado = resultado.filter((d) => d.estatusVigencia === filtros.estado);
+  }
+
+  return { data: resultado, kpis };
+}
+
+
   // ─────────────────────────────────────────────────────────────
   // GET .../digital-files/:employeeId/download-history
   // ─────────────────────────────────────────────────────────────
@@ -1357,4 +1438,5 @@ export class DigitalFilesService {
   }
 
 }
+
 
