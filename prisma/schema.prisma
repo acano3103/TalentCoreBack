@@ -116,15 +116,16 @@ model CatCriterios {
 }
 
 model CatCursos {
-  idCursos      Int             @id @default(autoincrement())
-  idEmpresa     Int
-  idTipoCurso   Int             @default(1)
-  Descripcion   String?         @db.VarChar(300)
-  activo        Boolean?        @default(true)
-  idArea        Int?
-  CatAreas      CatAreas?       @relation(fields: [idArea], references: [idArea], map: "FK_Cursos_Area")
-  CatTipoCurso  CatTipoCurso    @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
-  CursoSesiones CursoSesiones[]
+  idCursos                Int             @id @default(autoincrement())
+  idEmpresa               Int
+  idTipoCurso             Int             @default(1)
+  Descripcion             String?         @db.VarChar(300)
+  activo                  Boolean?        @default(true)
+  idArea                  Int?
+  calificacionAprobatoria Int?
+  CatAreas                CatAreas?       @relation(fields: [idArea], references: [idArea], map: "FK_Cursos_Area")
+  CatTipoCurso            CatTipoCurso    @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
+  CursoSesiones           CursoSesiones[]
 
   @@index([idTipoCurso], map: "FK_Cursos_TipoCurso")
   @@index([idArea], map: "FK_Cursos_Area")
@@ -1458,6 +1459,7 @@ model MovimientosInternos {
   idUsuarioAutorizo         String?                     @db.VarChar(36)
   fechaRegistro             DateTime?                   @default(now()) @db.Timestamp(0)
   idEstatusMovimiento       Int                         @default(1)
+  idPlanCarrera             Int?
   Empleados                 Empleados                   @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
   CatEstatusMovimiento      CatEstatusMovimiento        @relation(fields: [idEstatusMovimiento], references: [idEstatusMovimiento], map: "FK_MovInternos_Estatus")
   PasosAprobacionMovimiento PasosAprobacionMovimiento[]
@@ -1468,12 +1470,12 @@ model MovimientosInternos {
 
 model RelPuestoRuta {
   idRuta          Int       @id @default(autoincrement())
-  idEmpresa       Int
   idPuestoOrigen  Int
   idPuestoDestino Int
   activo          Boolean?  @default(true)
   fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
   usuarioRegistro String?   @db.VarChar(45)
+  idEmpresa       Int
 
   @@unique([idEmpresa, idPuestoOrigen, idPuestoDestino], map: "unique_ruta_origen_destino")
   @@index([idPuestoDestino], map: "idx_ruta_destino")
