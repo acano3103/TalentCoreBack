@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateInternalMovementDto } from './dto/create-internal-movement.dto';
@@ -12,7 +16,12 @@ export class InternalMovementsService {
     private readonly notifications: NotificationDispatcher,
   ) {}
 
-  async create(user: ActiveUserDto, companyId: number, employeeId: number, dto: CreateInternalMovementDto) {
+  async create(
+    user: ActiveUserDto,
+    companyId: number,
+    employeeId: number,
+    dto: CreateInternalMovementDto,
+  ) {
     if (dto.tipoMovimiento === 'Promoción') {
       return this.createMovementRequest(user, companyId, employeeId, dto);
     }
@@ -21,11 +30,13 @@ export class InternalMovementsService {
       // 1. Lee estado actual
       const empleadoActual = await tx.empleados.findUnique({
         where: { idEmpleado: employeeId },
-        include: { CatPuestos: true }
+        include: { CatPuestos: true },
       });
-      
+
       if (!empleadoActual) {
-        throw new NotFoundException(`Empleado con id ${employeeId} no encontrado`);
+        throw new NotFoundException(
+          `Empleado con id ${employeeId} no encontrado`,
+        );
       }
 
       const idPuestoAnterior = empleadoActual.idPuesto;
@@ -36,7 +47,7 @@ export class InternalMovementsService {
 
       // 2. Lee salario actual
       const salarioActual = await tx.historialSalarios.findFirst({
-        where: { idEmpleado: employeeId, actual: true }
+        where: { idEmpleado: employeeId, actual: true },
       });
 
       // 3. Update en Empleados
@@ -47,22 +58,29 @@ export class InternalMovementsService {
           ...(dto.idJefeNuevo && { idJefeInmediato: dto.idJefeNuevo }),
           ...(dto.idEmpresaNueva && { idEmpresa: dto.idEmpresaNueva }),
           ...(dto.idSiteNuevo && { idSite: dto.idSiteNuevo }),
-        }
+        },
       });
 
       // Resolve area nueva if puesto changed
       let idAreaNueva: number | null | undefined = undefined;
       if (dto.idPuestoNuevo) {
-        const puestoNuevo = await tx.catPuestos.findUnique({ where: { idPuesto: dto.idPuestoNuevo } });
+        const puestoNuevo = await tx.catPuestos.findUnique({
+          where: { idPuesto: dto.idPuestoNuevo },
+        });
         idAreaNueva = puestoNuevo?.idArea;
       }
 
       // 4. Salario
-      if (dto.salarioBrutoNuevo && dto.salarioNetoNuevo && dto.idTipoMoneda && dto.idPeriodicidadPago) {
+      if (
+        dto.salarioBrutoNuevo &&
+        dto.salarioNetoNuevo &&
+        dto.idTipoMoneda &&
+        dto.idPeriodicidadPago
+      ) {
         if (salarioActual) {
           await tx.historialSalarios.update({
             where: { idHistorialSalario: salarioActual.idHistorialSalario },
-            data: { actual: false }
+            data: { actual: false },
           });
         }
         await tx.historialSalarios.create({
@@ -72,11 +90,13 @@ export class InternalMovementsService {
             idPeriodicidadPago: dto.idPeriodicidadPago,
             salarioBruto: dto.salarioBrutoNuevo,
             salarioNeto: dto.salarioNetoNuevo,
-            fechaInicio: dto.fechaEfectiva ? new Date(dto.fechaEfectiva) : new Date(),
+            fechaInicio: dto.fechaEfectiva
+              ? new Date(dto.fechaEfectiva)
+              : new Date(),
             actual: true,
             fechaRegistro: new Date(),
-            usuarioRegistro: user.uuid
-          }
+            usuarioRegistro: user.uuid,
+          },
         });
       }
 
@@ -86,7 +106,9 @@ export class InternalMovementsService {
           idEmpleado: employeeId,
           idEmpresa: companyId,
           tipoMovimiento: dto.tipoMovimiento,
-          fechaEfectiva: dto.fechaEfectiva ? new Date(dto.fechaEfectiva) : new Date(),
+          fechaEfectiva: dto.fechaEfectiva
+            ? new Date(dto.fechaEfectiva)
+            : new Date(),
           idPuestoAnterior,
           idPuestoNuevo: dto.idPuestoNuevo,
           idAreaAnterior,
@@ -102,9 +124,10 @@ export class InternalMovementsService {
           salarioNetoAnterior: salarioActual?.salarioNeto,
           salarioNetoNuevo: dto.salarioNetoNuevo,
           motivo: dto.motivo,
+          idPlanCarrera: dto.idPlanCarrera,
           idEstatusMovimiento: 6, // APROBADO directo
           idUsuarioAutorizo: user.uuid,
-        }
+        },
       });
 
       // 6. HistoricoMovimientos
@@ -116,24 +139,31 @@ export class InternalMovementsService {
           tablaOrigen: 'Empleados',
           idRegistro: String(employeeId),
           descripcion: `${user.first_name} ${user.last_name} autorizó un/a ${dto.tipoMovimiento} para el empleado ${employeeId}`,
-          fechaCreacion: new Date()
-        }
+          fechaCreacion: new Date(),
+        },
       });
 
       return movimiento;
     });
   }
 
-  async createMovementRequest(user: ActiveUserDto, companyId: number, employeeId: number, dto: CreateInternalMovementDto) {
+  async createMovementRequest(
+    user: ActiveUserDto,
+    companyId: number,
+    employeeId: number,
+    dto: CreateInternalMovementDto,
+  ) {
     return await this.prisma.$transaction(async (tx) => {
       // 1. Lee estado actual
       const empleadoActual = await tx.empleados.findUnique({
         where: { idEmpleado: employeeId },
-        include: { CatPuestos: true }
+        include: { CatPuestos: true },
       });
-      
+
       if (!empleadoActual) {
-        throw new NotFoundException(`Empleado con id ${employeeId} no encontrado`);
+        throw new NotFoundException(
+          `Empleado con id ${employeeId} no encontrado`,
+        );
       }
 
       const idPuestoAnterior = empleadoActual.idPuesto;
@@ -144,13 +174,15 @@ export class InternalMovementsService {
 
       // 2. Lee salario actual
       const salarioActual = await tx.historialSalarios.findFirst({
-        where: { idEmpleado: employeeId, actual: true }
+        where: { idEmpleado: employeeId, actual: true },
       });
 
       // Resolve area nueva if puesto changed
       let idAreaNueva: number | null | undefined = undefined;
       if (dto.idPuestoNuevo) {
-        const puestoNuevo = await tx.catPuestos.findUnique({ where: { idPuesto: dto.idPuestoNuevo } });
+        const puestoNuevo = await tx.catPuestos.findUnique({
+          where: { idPuesto: dto.idPuestoNuevo },
+        });
         idAreaNueva = puestoNuevo?.idArea;
       }
 
@@ -176,9 +208,10 @@ export class InternalMovementsService {
           salarioNetoAnterior: salarioActual?.salarioNeto,
           salarioNetoNuevo: dto.salarioNetoNuevo,
           motivo: dto.motivo,
+          idPlanCarrera: dto.idPlanCarrera,
           idEstatusMovimiento: 1, // PENDIENTE_MANAGER
           idUsuarioAutorizo: null,
-        }
+        },
       });
 
       // 4. INSERT en HistoricoMovimientos
@@ -190,13 +223,21 @@ export class InternalMovementsService {
           tablaOrigen: 'Empleados',
           idRegistro: String(employeeId),
           descripcion: `${user.first_name} ${user.last_name} solicitó una Promoción para el empleado ${employeeId}`,
-          fechaCreacion: new Date()
-        }
+          fechaCreacion: new Date(),
+        },
       });
 
       // Notificación al Manager
       try {
-        const bossResult = await tx.$queryRaw<Array<{ uuid: string; email: string; phone: string; first_name: string; last_name: string }>>`
+        const bossResult = await tx.$queryRaw<
+          Array<{
+            uuid: string;
+            email: string;
+            phone: string;
+            first_name: string;
+            last_name: string;
+          }>
+        >`
           SELECT u.uuid, u.email, u.phone, u.first_name, u.last_name
           FROM Empleados ep
           JOIN Empleados jefe ON ep.idJefeInmediato = jefe.idEmpleado
@@ -219,8 +260,8 @@ export class InternalMovementsService {
               name: `${boss.first_name} ${boss.last_name}`,
               requestingUser: `${user.first_name} ${user.last_name}`,
               employeeId: employeeId,
-              date: new Date()
-            }
+              date: new Date(),
+            },
           });
         }
       } catch (err) {
@@ -231,26 +272,32 @@ export class InternalMovementsService {
     });
   }
 
-  async findMovementById(companyId: number, movementId: number, activeUser: ActiveUserDto) {
+  async findMovementById(
+    companyId: number,
+    movementId: number,
+    activeUser: ActiveUserDto,
+  ) {
     const movement = await this.prisma.movimientosInternos.findFirst({
       where: {
         idMovimiento: movementId,
-        idEmpresa: companyId
-      }
+        idEmpresa: companyId,
+      },
     });
 
     if (!movement) {
-      throw new NotFoundException(`El movimiento interno ${movementId} no existe o no pertenece a tu empresa`);
+      throw new NotFoundException(
+        `El movimiento interno ${movementId} no existe o no pertenece a tu empresa`,
+      );
     }
 
     const userRoles = await this.prisma.relUsuarioRol.findMany({
       where: {
         idUsuario: activeUser.id,
-        activo: true
-      }
+        activo: true,
+      },
     });
 
-    const roleIds = userRoles.map(r => r.idRol);
+    const roleIds = userRoles.map((r) => r.idRol);
 
     let canApproveOrReject = false;
     let userContextRole = 'VIEWER';
@@ -271,8 +318,11 @@ export class InternalMovementsService {
       `;
 
       if (
-        (bossResult && bossResult.length > 0 && bossResult[0].uuid === activeUser.uuid) ||
-        roleIds.includes(1) || roleIds.includes(5)
+        (bossResult &&
+          bossResult.length > 0 &&
+          bossResult[0].uuid === activeUser.uuid) ||
+        roleIds.includes(1) ||
+        roleIds.includes(5)
       ) {
         canApproveOrReject = true;
         userContextRole = 'JEFE_INMEDIATO';
@@ -311,22 +361,33 @@ export class InternalMovementsService {
       movement,
       permissions: {
         canApproveOrReject,
-        userContextRole
-      }
+        userContextRole,
+      },
     };
   }
 
-  async evaluateMovement(companyId: number, movementId: number, action: 'aprobar' | 'rechazar', activeUser: ActiveUserDto) {
-    const { movement, permissions } = await this.findMovementById(companyId, movementId, activeUser);
+  async evaluateMovement(
+    companyId: number,
+    movementId: number,
+    action: 'aprobar' | 'rechazar',
+    activeUser: ActiveUserDto,
+  ) {
+    const { movement, permissions } = await this.findMovementById(
+      companyId,
+      movementId,
+      activeUser,
+    );
 
     if (!permissions.canApproveOrReject) {
-      throw new ForbiddenException('No tienes privilegios para dictaminar este movimiento en su estatus actual.');
+      throw new ForbiddenException(
+        'No tienes privilegios para dictaminar este movimiento en su estatus actual.',
+      );
     }
 
     if (action === 'rechazar') {
       await this.prisma.movimientosInternos.update({
         where: { idMovimiento: movementId },
-        data: { idEstatusMovimiento: 7 } // 7 = RECHAZADO
+        data: { idEstatusMovimiento: 7 }, // 7 = RECHAZADO
       });
 
       await this.prisma.historicoMovimientos.create({
@@ -337,8 +398,8 @@ export class InternalMovementsService {
           tablaOrigen: 'Empleados',
           idRegistro: String(movement.idEmpleado),
           descripcion: `Solicitud de movimiento de promoción rechazada por ${activeUser.first_name} ${activeUser.last_name}`,
-          fechaCreacion: new Date()
-        }
+          fechaCreacion: new Date(),
+        },
       });
 
       return { message: 'Movimiento rechazado exitosamente.' };
@@ -356,22 +417,26 @@ export class InternalMovementsService {
           where: { idEmpleado: movement.idEmpleado },
           data: {
             ...(movement.idPuestoNuevo && { idPuesto: movement.idPuestoNuevo }),
-            ...(movement.idJefeNuevo && { idJefeInmediato: movement.idJefeNuevo }),
-            ...(movement.idEmpresaNueva && { idEmpresa: movement.idEmpresaNueva }),
+            ...(movement.idJefeNuevo && {
+              idJefeInmediato: movement.idJefeNuevo,
+            }),
+            ...(movement.idEmpresaNueva && {
+              idEmpresa: movement.idEmpresaNueva,
+            }),
             ...(movement.idSiteNuevo && { idSite: movement.idSiteNuevo }),
-          }
+          },
         });
 
         // 2. Salario
         if (movement.salarioBrutoNuevo && movement.salarioNetoNuevo) {
           const salarioActual = await tx.historialSalarios.findFirst({
-            where: { idEmpleado: movement.idEmpleado, actual: true }
+            where: { idEmpleado: movement.idEmpleado, actual: true },
           });
 
           if (salarioActual) {
             await tx.historialSalarios.update({
               where: { idHistorialSalario: salarioActual.idHistorialSalario },
-              data: { actual: false }
+              data: { actual: false },
             });
           }
 
@@ -385,8 +450,8 @@ export class InternalMovementsService {
               fechaInicio: movement.fechaEfectiva ?? new Date(),
               actual: true,
               fechaRegistro: new Date(),
-              usuarioRegistro: activeUser.uuid
-            }
+              usuarioRegistro: activeUser.uuid,
+            },
           });
         }
 
@@ -395,14 +460,22 @@ export class InternalMovementsService {
           where: { idMovimiento: movementId },
           data: {
             idEstatusMovimiento: 6,
-            idUsuarioAutorizo: activeUser.uuid
-          }
+            idUsuarioAutorizo: activeUser.uuid,
+          },
         });
+
+        // 4. Si el movimiento proviene de Plan de Carrera, marcar la postulación como promovida
+        if (movement.idPlanCarrera != null) {
+          await tx.planCarreraColaborador.update({
+            where: { idPlanCarrera: movement.idPlanCarrera },
+            data: { estatus: 'promovido', fechaPromocion: new Date() },
+          });
+        }
       } else {
         // Avance de estatus intermedio
         await tx.movimientosInternos.update({
           where: { idMovimiento: movementId },
-          data: { idEstatusMovimiento: nextStatus }
+          data: { idEstatusMovimiento: nextStatus },
         });
       }
 
@@ -414,27 +487,34 @@ export class InternalMovementsService {
           accion: nextStatus === 6 ? 'APROBAR_FINAL' : 'APROBAR',
           tablaOrigen: 'Empleados',
           idRegistro: String(movement.idEmpleado),
-          descripcion: nextStatus === 6 
-            ? `Promoción aprobada y aplicada exitosamente por ${activeUser.first_name} ${activeUser.last_name}`
-            : `Solicitud de promoción avanzada al estatus ${nextStatus} por ${activeUser.first_name} ${activeUser.last_name}`,
-          fechaCreacion: new Date()
-        }
+          descripcion:
+            nextStatus === 6
+              ? `Promoción aprobada y aplicada exitosamente por ${activeUser.first_name} ${activeUser.last_name}`
+              : `Solicitud de promoción avanzada al estatus ${nextStatus} por ${activeUser.first_name} ${activeUser.last_name}`,
+          fechaCreacion: new Date(),
+        },
       });
 
       return {
-        message: nextStatus === 6
-          ? 'Movimiento aprobado y aplicado exitosamente.'
-          : 'Movimiento avanzado al siguiente estatus de aprobación.'
+        message:
+          nextStatus === 6
+            ? 'Movimiento aprobado y aplicado exitosamente.'
+            : 'Movimiento avanzado al siguiente estatus de aprobación.',
       };
     });
   }
 
-  async createBaja(user: ActiveUserDto, companyId: number, employeeId: number, dto: CreateBajaDto) {
+  async createBaja(
+    user: ActiveUserDto,
+    companyId: number,
+    employeeId: number,
+    dto: CreateBajaDto,
+  ) {
     return await this.prisma.$transaction(async (tx) => {
       // 1. UPDATE en Empleados: activo = false.
       await tx.empleados.update({
         where: { idEmpleado: employeeId },
-        data: { activo: false }
+        data: { activo: false },
       });
 
       // 2. INSERT en MovimientosInternos
@@ -447,7 +527,7 @@ export class InternalMovementsService {
           causaBaja: dto.causaBaja,
           idUsuarioAutorizo: user.uuid,
           idEstatusMovimiento: 6, // Aprobación directa para bajas
-        }
+        },
       });
 
       // 3. INSERT en HistoricoMovimientos
@@ -459,8 +539,8 @@ export class InternalMovementsService {
           tablaOrigen: 'Empleados',
           idRegistro: String(employeeId),
           descripcion: `${user.first_name} ${user.last_name} autorizó la baja para el empleado ${employeeId}`,
-          fechaCreacion: new Date()
-        }
+          fechaCreacion: new Date(),
+        },
       });
 
       return movimiento;
@@ -540,14 +620,21 @@ export class InternalMovementsService {
     return requests;
   }
 
-  async getPendingRequestsForUser(companyId: number, activeUser: ActiveUserDto) {
+  async getPendingRequestsForUser(
+    companyId: number,
+    activeUser: ActiveUserDto,
+  ) {
     const allRequests = await this.getMovementRequests(companyId);
     const pendingForUser: any[] = [];
 
     for (const req of allRequests) {
       if (req.estatusId >= 1 && req.estatusId <= 5) {
         try {
-          const { permissions } = await this.findMovementById(companyId, req.idMovimiento, activeUser);
+          const { permissions } = await this.findMovementById(
+            companyId,
+            req.idMovimiento,
+            activeUser,
+          );
           if (permissions.canApproveOrReject) {
             pendingForUser.push(req);
           }
@@ -563,4 +650,3 @@ export class InternalMovementsService {
     };
   }
 }
-
