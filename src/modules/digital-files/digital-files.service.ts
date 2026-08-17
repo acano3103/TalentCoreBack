@@ -181,7 +181,7 @@ export class DigitalFilesService {
       employeeId = Number(payload.employee_id);
       if (!employeeId) throw new UnauthorizedException('El token no contiene un ID de empleado válido');
     } catch (error) {
-      throw new UnauthorizedException('El enlace no es válido o ya ha expirado.');
+      throw new UnauthorizedException('El enlace no es válido o ya ha expirado. Por favor contacte al reclutador para obtener un nuevo enlace.');
     }
 
     // Buscamos al empleado para extraer su companyId (idEmpresa)
@@ -1222,18 +1222,18 @@ export class DigitalFilesService {
     this.logger.log('Revisión diaria de documentos por vencer finalizada.');
   }
 
-async getVencimientosDashboard(
-  companyId: number,
-  filtros: {
-    estado?: 'vigente' | 'por_vencer' | 'vencido';
-    idArea?: number;
-    idSite?: number;
-    idPuesto?: number;
-    fechaDesde?: string;
-    fechaHasta?: string;
-  },
-) {
-  const rows = await this.prisma.$queryRaw<any[]>`
+  async getVencimientosDashboard(
+    companyId: number,
+    filtros: {
+      estado?: 'vigente' | 'por_vencer' | 'vencido';
+      idArea?: number;
+      idSite?: number;
+      idPuesto?: number;
+      fechaDesde?: string;
+      fechaHasta?: string;
+    },
+  ) {
+    const rows = await this.prisma.$queryRaw<any[]>`
     SELECT
       DE.idDocumentoEmpleado,
       E.idEmpleado,
@@ -1256,51 +1256,51 @@ async getVencimientosDashboard(
       AND DE.fechaVencimiento IS NOT NULL
   `;
 
-  let resultado = rows.map((r) => ({
-    idDocumentoEmpleado: r.idDocumentoEmpleado,
-    idEmpleado: r.idEmpleado,
-    nombreCompleto: [r.nombre, r.primerApellido, r.segundoApellido].filter(Boolean).join(' '),
-    puesto: r.NombrePuesto,
-    idPuesto: r.idPuesto,
-    area: r.areaNombre,
-    idArea: r.idArea,
-    site: r.siteNombre,
-    idSite: r.idSite,
-    documento: r.documentoNombre,
-    fechaVencimiento: r.fechaVencimiento,
-    fechaEmision: r.fechaEmision,
-    estatusVigencia: DigitalFilesQueries.calcularEstatusVigencia(r.fechaVencimiento, r.diasAlertaPrevio),
-  }));
+    let resultado = rows.map((r) => ({
+      idDocumentoEmpleado: r.idDocumentoEmpleado,
+      idEmpleado: r.idEmpleado,
+      nombreCompleto: [r.nombre, r.primerApellido, r.segundoApellido].filter(Boolean).join(' '),
+      puesto: r.NombrePuesto,
+      idPuesto: r.idPuesto,
+      area: r.areaNombre,
+      idArea: r.idArea,
+      site: r.siteNombre,
+      idSite: r.idSite,
+      documento: r.documentoNombre,
+      fechaVencimiento: r.fechaVencimiento,
+      fechaEmision: r.fechaEmision,
+      estatusVigencia: DigitalFilesQueries.calcularEstatusVigencia(r.fechaVencimiento, r.diasAlertaPrevio),
+    }));
 
-  if (filtros.idArea) {
-    resultado = resultado.filter((d) => d.idArea === filtros.idArea);
-  }
-  if (filtros.idSite) {
-    resultado = resultado.filter((d) => d.idSite === filtros.idSite);
-  }
-  if (filtros.idPuesto) {
-    resultado = resultado.filter((d) => d.idPuesto === filtros.idPuesto);
-  }
-  if (filtros.fechaDesde) {
-    resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) >= new Date(filtros.fechaDesde!));
-  }
-  if (filtros.fechaHasta) {
-    resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) <= new Date(filtros.fechaHasta!));
-  }
+    if (filtros.idArea) {
+      resultado = resultado.filter((d) => d.idArea === filtros.idArea);
+    }
+    if (filtros.idSite) {
+      resultado = resultado.filter((d) => d.idSite === filtros.idSite);
+    }
+    if (filtros.idPuesto) {
+      resultado = resultado.filter((d) => d.idPuesto === filtros.idPuesto);
+    }
+    if (filtros.fechaDesde) {
+      resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) >= new Date(filtros.fechaDesde!));
+    }
+    if (filtros.fechaHasta) {
+      resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) <= new Date(filtros.fechaHasta!));
+    }
 
-  // KPIs sobre el resultado ya filtrado (área/site/puesto/fecha), pero antes del filtro de estado
-  const kpis = {
-    vigente: resultado.filter((d) => d.estatusVigencia === 'vigente').length,
-    por_vencer: resultado.filter((d) => d.estatusVigencia === 'por_vencer').length,
-    vencido: resultado.filter((d) => d.estatusVigencia === 'vencido').length,
-  };
+    // KPIs sobre el resultado ya filtrado (área/site/puesto/fecha), pero antes del filtro de estado
+    const kpis = {
+      vigente: resultado.filter((d) => d.estatusVigencia === 'vigente').length,
+      por_vencer: resultado.filter((d) => d.estatusVigencia === 'por_vencer').length,
+      vencido: resultado.filter((d) => d.estatusVigencia === 'vencido').length,
+    };
 
-  if (filtros.estado) {
-    resultado = resultado.filter((d) => d.estatusVigencia === filtros.estado);
+    if (filtros.estado) {
+      resultado = resultado.filter((d) => d.estatusVigencia === filtros.estado);
+    }
+
+    return { data: resultado, kpis };
   }
-
-  return { data: resultado, kpis };
-}
 
 
   // ─────────────────────────────────────────────────────────────
