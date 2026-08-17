@@ -1466,6 +1466,47 @@ model MovimientosInternos {
   @@index([idEstatusMovimiento], map: "FK_MovInternos_Estatus")
 }
 
+model RelPuestoRuta {
+  idRuta          Int       @id @default(autoincrement())
+  idEmpresa       Int
+  idPuestoOrigen  Int
+  idPuestoDestino Int
+  activo          Boolean?  @default(true)
+  fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
+  usuarioRegistro String?   @db.VarChar(45)
+
+  @@unique([idEmpresa, idPuestoOrigen, idPuestoDestino], map: "unique_ruta_origen_destino")
+  @@index([idPuestoDestino], map: "idx_ruta_destino")
+}
+
+model PlanCarreraColaborador {
+  idPlanCarrera    Int                @id @default(autoincrement())
+  idEmpleado       Int
+  idRuta           Int
+  idPuestoActual   Int
+  idPuestoObjetivo Int
+  estatus          PlanCarreraEstatus @default(en_preparacion)
+  fechaInscripcion DateTime?          @default(now()) @db.Timestamp(0)
+  fechaPromocion   DateTime?          @db.Timestamp(0)
+  usuarioRegistro  String?            @db.VarChar(45)
+
+  @@unique([idEmpleado, idRuta], map: "unique_empleado_ruta")
+  @@index([idRuta], map: "idx_plan_ruta")
+}
+
+model ConfiguracionEmpresa {
+  idConfiguracion Int       @id @default(autoincrement())
+  idEmpresa       Int
+  clave           String    @db.VarChar(100)
+  valor           String?   @db.VarChar(255)
+  activo          Boolean?  @default(true)
+  fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
+  usuarioRegistro String?   @db.VarChar(45)
+
+  @@unique([idEmpresa, clave], map: "unique_empresa_clave")
+  @@index([idEmpresa], map: "idx_config_empresa")
+}
+
 model PlantillasNotificaciones {
   template_id   Int                           @id @default(autoincrement())
   template_name String                        @unique(map: "template_name") @db.VarChar(50)
@@ -1675,4 +1716,10 @@ enum CursoSesiones_estatus {
   en_curso
   finalizado
   cancelado
+}
+
+enum PlanCarreraEstatus {
+  en_preparacion
+  listo_para_ascenso
+  promovido
 }
