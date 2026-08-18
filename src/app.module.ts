@@ -30,6 +30,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { CoursesModule } from './modules/courses/courses.module';
+import { ApprovalAssignmentsModule } from './modules/approval-assignments/approval-assignments.module';
 
 @Module({
   imports: [
@@ -71,7 +72,8 @@ import { CoursesModule } from './modules/courses/courses.module';
     ContractsModule,
     EmployeesModule,
     InternalMovementsModule,
-    CoursesModule
+    CoursesModule,
+    ApprovalAssignmentsModule
   ],
   controllers: [],
   providers: [AreasService],

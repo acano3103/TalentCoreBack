@@ -13,9 +13,22 @@ export class InternalMovementsService {
   ) {}
 
   async create(user: ActiveUserDto, companyId: number, employeeId: number, dto: CreateInternalMovementDto) {
-    if (dto.tipoMovimiento === 'Promoción') {
+    // Decisión dinámica: si el tipo de movimiento tiene pasos de aprobación configurados,
+    // pasa por el flujo de solicitud/aprobación. De lo contrario, se aplica directamente.
+    const tipoMov = await this.prisma.catTipoMovimiento.findUnique({
+      where: { codigo: dto.tipoMovimiento }
+    });
+
+    const tieneConfiguracion = tipoMov
+      ? (await this.prisma.configuracionPasosAprobacion.count({
+          where: { idTipoMovimiento: tipoMov.idTipoMovimiento, activo: true }
+        })) > 0
+      : false;
+
+    if (tieneConfiguracion) {
       return this.createMovementRequest(user, companyId, employeeId, dto);
     }
+
 
     return await this.prisma.$transaction(async (tx) => {
       // 1. Lee estado actual
@@ -131,9 +144,27 @@ export class InternalMovementsService {
         where: { idEmpleado: employeeId },
         include: { CatPuestos: true }
       });
-      
+
       if (!empleadoActual) {
         throw new NotFoundException(`Empleado con id ${employeeId} no encontrado`);
+      }
+
+      // 2. Cargar configuración dinámica de pasos de aprobación
+      const tipoMov = await tx.catTipoMovimiento.findUnique({
+        where: { codigo: dto.tipoMovimiento }
+      });
+
+      if (!tipoMov) {
+        throw new NotFoundException(`Tipo de movimiento no configurado para aprobación: ${dto.tipoMovimiento}`);
+      }
+
+      const configuracionPasos = await tx.configuracionPasosAprobacion.findMany({
+        where: { idTipoMovimiento: tipoMov.idTipoMovimiento, activo: true },
+        orderBy: { paso: 'asc' }
+      });
+
+      if (configuracionPasos.length === 0) {
+        throw new NotFoundException(`No hay pasos de aprobación activos para ${dto.tipoMovimiento}`);
       }
 
       const idPuestoAnterior = empleadoActual.idPuesto;
@@ -142,19 +173,20 @@ export class InternalMovementsService {
       const idEmpresaAnterior = empleadoActual.idEmpresa;
       const idSiteAnterior = empleadoActual.idSite;
 
-      // 2. Lee salario actual
+      // 3. Lee salario actual
       const salarioActual = await tx.historialSalarios.findFirst({
         where: { idEmpleado: employeeId, actual: true }
       });
 
-      // Resolve area nueva if puesto changed
+      // Resolve area nueva si cambió el puesto
       let idAreaNueva: number | null | undefined = undefined;
       if (dto.idPuestoNuevo) {
         const puestoNuevo = await tx.catPuestos.findUnique({ where: { idPuesto: dto.idPuestoNuevo } });
         idAreaNueva = puestoNuevo?.idArea;
       }
 
-      // 3. INSERT en MovimientosInternos con estatus 1 (PENDIENTE_MANAGER) y sin ejecutar UPDATE en Empleados todavía
+      // 4. INSERT en MovimientosInternos con estatus 1 (PENDIENTE global),
+      //    creando en cascada los pasos de aprobación individuales
       const movimiento = await tx.movimientosInternos.create({
         data: {
           idEmpleado: employeeId,
@@ -176,12 +208,19 @@ export class InternalMovementsService {
           salarioNetoAnterior: salarioActual?.salarioNeto,
           salarioNetoNuevo: dto.salarioNetoNuevo,
           motivo: dto.motivo,
-          idEstatusMovimiento: 1, // PENDIENTE_MANAGER
+          idEstatusMovimiento: 1, // 1 = PENDIENTE global
           idUsuarioAutorizo: null,
+          PasosAprobacionMovimiento: {
+            create: configuracionPasos.map(c => ({
+              idRolAprobador: c.idRolAprobador,
+              paso: c.paso,
+              idEstatus: 1, // 1 = Pendiente por cada paso
+            }))
+          }
         }
       });
 
-      // 4. INSERT en HistoricoMovimientos
+      // 5. INSERT en HistoricoMovimientos
       await tx.historicoMovimientos.create({
         data: {
           idUsuario: user.id,
@@ -189,12 +228,12 @@ export class InternalMovementsService {
           accion: 'SOLICITUD_MOVIMIENTO',
           tablaOrigen: 'Empleados',
           idRegistro: String(employeeId),
-          descripcion: `${user.first_name} ${user.last_name} solicitó una Promoción para el empleado ${employeeId}`,
+          descripcion: `${user.first_name} ${user.last_name} solicitó un(a) ${dto.tipoMovimiento} para el empleado ${employeeId}`,
           fechaCreacion: new Date()
         }
       });
 
-      // Notificación al Manager
+      // 6. Notificación al primer aprobador (Jefe Inmediato para paso 1)
       try {
         const bossResult = await tx.$queryRaw<Array<{ uuid: string; email: string; phone: string; first_name: string; last_name: string }>>`
           SELECT u.uuid, u.email, u.phone, u.first_name, u.last_name
@@ -214,7 +253,7 @@ export class InternalMovementsService {
             notificationTypeCode: 'MOVEMENT_REQUEST_CREATED',
             to: boss.email,
             phone: boss.phone,
-            subject: 'Nueva solicitud de promoción para colaborador',
+            subject: `Nueva solicitud de ${dto.tipoMovimiento} para colaborador`,
             context: {
               name: `${boss.first_name} ${boss.last_name}`,
               requestingUser: `${user.first_name} ${user.last_name}`,
@@ -232,10 +271,17 @@ export class InternalMovementsService {
   }
 
   async findMovementById(companyId: number, movementId: number, activeUser: ActiveUserDto) {
+    // Incluimos los pasos de aprobación y sus roles para tomar decisiones dinámicas
     const movement = await this.prisma.movimientosInternos.findFirst({
       where: {
         idMovimiento: movementId,
         idEmpresa: companyId
+      },
+      include: {
+        PasosAprobacionMovimiento: {
+          include: { CatRolAprobador: true },
+          orderBy: { paso: 'asc' }
+        }
       }
     });
 
@@ -244,66 +290,95 @@ export class InternalMovementsService {
     }
 
     const userRoles = await this.prisma.relUsuarioRol.findMany({
-      where: {
-        idUsuario: activeUser.id,
-        activo: true
-      }
+      where: { idUsuario: activeUser.id, activo: true }
     });
 
     const roleIds = userRoles.map(r => r.idRol);
 
+    // Constantes nombradas para los IDs de CatRoles en BD
+    // Confirmados: 1=Admin, 2=RH, 3=Finanzas, 4=Reclutador, 5=Manager, 6=Empleado
+    const ROLE_ADMIN = 1;
+    const ROLE_RH = 2;
+    const ROLE_FINANZAS = 3;
+    const ROLE_MANAGER = 5;
+    // PENDIENTE PM: CatRoles aún no tiene un idRol para DIRECTOR_AREA, DIRECCION_GENERAL ni LEGAL.
+    // Hasta que el negocio defina sus IDs en CatRoles, solo Admin (ROLE_ADMIN = 1) puede dictaminar esos pasos.
+
     let canApproveOrReject = false;
     let userContextRole = 'VIEWER';
 
-    const status = movement.idEstatusMovimiento;
+    // Solo se puede dictaminar si el movimiento está globalmente PENDIENTE (estatus 1)
+    if (movement.idEstatusMovimiento === 1) {
+      // Encontrar el primer paso que sigue pendiente (idEstatus = 1)
+      const activeStep = movement.PasosAprobacionMovimiento.find(p => p.idEstatus === 1);
 
-    // 1 = PENDIENTE_MANAGER
-    if (status === 1) {
-      const bossResult = await this.prisma.$queryRaw<any[]>`
-        SELECT u.uuid
-        FROM Empleados emp
-        JOIN Empleados jefe ON emp.idJefeInmediato = jefe.idEmpleado
-        JOIN auth_user u ON jefe.idUsuario = u.uuid
-        WHERE emp.idEmpleado = ${movement.idEmpleado}
-          AND emp.idEmpresa = ${companyId}
-          AND jefe.activo = 1
-          AND u.is_active = 1
-      `;
+      if (activeStep) {
+        const roleCode = activeStep.CatRolAprobador.codigo;
+        userContextRole = roleCode;
 
-      if (
-        (bossResult && bossResult.length > 0 && bossResult[0].uuid === activeUser.uuid) ||
-        roleIds.includes(1) || roleIds.includes(5)
-      ) {
-        canApproveOrReject = true;
-        userContextRole = 'JEFE_INMEDIATO';
-      }
-    }
-    // 2 = APROBADO_MANAGER -> Pendiente RH (idRol = 2)
-    else if (status === 2) {
-      if (roleIds.includes(2) || roleIds.includes(1)) {
-        canApproveOrReject = true;
-        userContextRole = 'RECURSOS_HUMANOS';
-      }
-    }
-    // 3 = APROBADO_RH -> Pendiente Finanzas (idRol = 3)
-    else if (status === 3) {
-      if (roleIds.includes(3) || roleIds.includes(1)) {
-        canApproveOrReject = true;
-        userContextRole = 'FINANZAS';
-      }
-    }
-    // 4 = APROBADO_FINANZAS -> Pendiente Director de Área (idRol = 5 o 1)
-    else if (status === 4) {
-      if (roleIds.includes(5) || roleIds.includes(1)) {
-        canApproveOrReject = true;
-        userContextRole = 'DIRECTOR_AREA';
-      }
-    }
-    // 5 = APROBADO_DIRECTOR_AREA -> Pendiente Dirección General (idRol = 1)
-    else if (status === 5) {
-      if (roleIds.includes(1)) {
-        canApproveOrReject = true;
-        userContextRole = 'DIRECCION_GENERAL';
+        if (roleCode === 'JEFE_INMEDIATO') {
+          // El jefe directo se identifica por jerarquía en BD. Admin y Manager pueden actuar como sustitutos.
+          const bossResult = await this.prisma.$queryRaw<any[]>`
+            SELECT u.uuid
+            FROM Empleados emp
+            JOIN Empleados jefe ON emp.idJefeInmediato = jefe.idEmpleado
+            JOIN auth_user u ON jefe.idUsuario = u.uuid
+            WHERE emp.idEmpleado = ${movement.idEmpleado}
+              AND emp.idEmpresa = ${companyId}
+              AND jefe.activo = 1
+              AND u.is_active = 1
+          `;
+          if (
+            (bossResult && bossResult.length > 0 && bossResult[0].uuid === activeUser.uuid) ||
+            roleIds.includes(ROLE_ADMIN) || roleIds.includes(ROLE_MANAGER)
+          ) {
+            canApproveOrReject = true;
+          }
+        } else if (roleCode === 'NUEVO_JEFE') {
+          // El nuevo jefe destino se identifica por idJefeNuevo del movimiento. Admin y Manager pueden actuar como sustitutos.
+          if (movement.idJefeNuevo) {
+            const newBossResult = await this.prisma.$queryRaw<any[]>`
+              SELECT u.uuid
+              FROM Empleados jefe
+              JOIN auth_user u ON jefe.idUsuario = u.uuid
+              WHERE jefe.idEmpleado = ${movement.idJefeNuevo}
+                AND jefe.activo = 1
+                AND u.is_active = 1
+            `;
+            if (
+              (newBossResult && newBossResult.length > 0 && newBossResult[0].uuid === activeUser.uuid) ||
+              roleIds.includes(ROLE_ADMIN) || roleIds.includes(ROLE_MANAGER)
+            ) {
+              canApproveOrReject = true;
+            }
+          } else if (roleIds.includes(ROLE_ADMIN) || roleIds.includes(ROLE_MANAGER)) {
+            // Si no hay idJefeNuevo definido en el movimiento, solo admins/managers pueden aprobar
+            canApproveOrReject = true;
+          }
+        } else {
+          // Para todos los demás roles de aprobación (RECURSOS_HUMANOS, FINANZAS, DIRECTOR_AREA, DIRECCION_GENERAL, LEGAL, etc.):
+          // 1. Admin (ROLE_ADMIN = 1) puede sustituir en cualquier paso
+          if (roleIds.includes(ROLE_ADMIN)) {
+            canApproveOrReject = true;
+          } else {
+            // 2. Consultar AsignacionAprobador por idRolAprobador (y coincidencia de área si el rol lo requiere)
+            const movementAreaId = movement.idAreaNueva ?? movement.idAreaAnterior ?? null;
+            const assignments = await this.prisma.asignacionAprobador.findMany({
+              where: {
+                idRolAprobador: activeStep.idRolAprobador,
+                activo: true,
+                OR: [
+                  { idArea: null },
+                  ...(movementAreaId ? [{ idArea: movementAreaId }] : [])
+                ]
+              }
+            });
+
+            if (assignments.some(a => a.idUsuario === activeUser.id)) {
+              canApproveOrReject = true;
+            }
+          }
+        }
       }
     }
 
@@ -324,33 +399,61 @@ export class InternalMovementsService {
     }
 
     if (action === 'rechazar') {
-      await this.prisma.movimientosInternos.update({
-        where: { idMovimiento: movementId },
-        data: { idEstatusMovimiento: 7 } // 7 = RECHAZADO
-      });
-
-      await this.prisma.historicoMovimientos.create({
-        data: {
-          idUsuario: activeUser.id,
-          idEmpresa: companyId,
-          accion: 'RECHAZAR',
-          tablaOrigen: 'Empleados',
-          idRegistro: String(movement.idEmpleado),
-          descripcion: `Solicitud de movimiento de promoción rechazada por ${activeUser.first_name} ${activeUser.last_name}`,
-          fechaCreacion: new Date()
+      return await this.prisma.$transaction(async (tx) => {
+        // Marcar el paso activo como rechazado
+        const activeStep = movement.PasosAprobacionMovimiento.find(p => p.idEstatus === 1);
+        if (activeStep) {
+          await tx.pasosAprobacionMovimiento.update({
+            where: { idPasoAprobacion: activeStep.idPasoAprobacion },
+            data: { idEstatus: 7, idUsuarioAprobador: activeUser.uuid } // 7 = RECHAZADO
+          });
         }
-      });
 
-      return { message: 'Movimiento rechazado exitosamente.' };
+        // Marcar el movimiento global como rechazado
+        await tx.movimientosInternos.update({
+          where: { idMovimiento: movementId },
+          data: { idEstatusMovimiento: 7 }
+        });
+
+        await tx.historicoMovimientos.create({
+          data: {
+            idUsuario: activeUser.id,
+            idEmpresa: companyId,
+            accion: 'RECHAZAR',
+            tablaOrigen: 'Empleados',
+            idRegistro: String(movement.idEmpleado),
+            descripcion: `Solicitud de movimiento rechazada en paso ${activeStep?.paso ?? ''} por ${activeUser.first_name} ${activeUser.last_name}`,
+            fechaCreacion: new Date()
+          }
+        });
+
+        return { message: 'Movimiento rechazado exitosamente.' };
+      });
     }
 
     // APROBACIÓN
-    const currentStatus = movement.idEstatusMovimiento;
-    const nextStatus = currentStatus + 1; // Avance secuencial: 1->2, 2->3, 3->4, 4->5, 5->6
-
     return await this.prisma.$transaction(async (tx) => {
-      // Si llegamos a Estatus 6 (APROBADO final), aplicamos los cambios reales al empleado
-      if (nextStatus === 6) {
+      const activeStep = movement.PasosAprobacionMovimiento.find(p => p.idEstatus === 1);
+
+      if (!activeStep) {
+        throw new Error('No hay paso activo pendiente para aprobar.');
+      }
+
+      // Marcar paso actual como aprobado
+      await tx.pasosAprobacionMovimiento.update({
+        where: { idPasoAprobacion: activeStep.idPasoAprobacion },
+        data: { idEstatus: 6, idUsuarioAprobador: activeUser.uuid } // 6 = APROBADO
+      });
+
+      // ¿Quedan pasos pendientes?
+      const remainingSteps = movement.PasosAprobacionMovimiento.filter(
+        p => p.idEstatus === 1 && p.idPasoAprobacion !== activeStep.idPasoAprobacion
+      );
+      const isLastStep = remainingSteps.length === 0;
+
+      if (isLastStep) {
+        // ÚLTIMO PASO: aplicar los cambios reales al empleado
+
         // 1. UPDATE en Empleados
         await tx.empleados.update({
           where: { idEmpleado: movement.idEmpleado },
@@ -362,7 +465,7 @@ export class InternalMovementsService {
           }
         });
 
-        // 2. Salario
+        // 2. Actualizar salario si se proporcionó uno nuevo
         if (movement.salarioBrutoNuevo && movement.salarioNetoNuevo) {
           const salarioActual = await tx.historialSalarios.findFirst({
             where: { idEmpleado: movement.idEmpleado, actual: true }
@@ -390,42 +493,41 @@ export class InternalMovementsService {
           });
         }
 
-        // 3. Actualizar movimiento con estatus final y autorizador
+        // 3. Marcar movimiento global como APROBADO FINAL
         await tx.movimientosInternos.update({
           where: { idMovimiento: movementId },
+          data: { idEstatusMovimiento: 6, idUsuarioAutorizo: activeUser.uuid }
+        });
+
+        await tx.historicoMovimientos.create({
           data: {
-            idEstatusMovimiento: 6,
-            idUsuarioAutorizo: activeUser.uuid
+            idUsuario: activeUser.id,
+            idEmpresa: companyId,
+            accion: 'APROBAR_FINAL',
+            tablaOrigen: 'Empleados',
+            idRegistro: String(movement.idEmpleado),
+            descripcion: `Movimiento aprobado completamente y aplicado por ${activeUser.first_name} ${activeUser.last_name}`,
+            fechaCreacion: new Date()
           }
         });
+
+        return { message: 'Movimiento aprobado y aplicado exitosamente.' };
       } else {
-        // Avance de estatus intermedio
-        await tx.movimientosInternos.update({
-          where: { idMovimiento: movementId },
-          data: { idEstatusMovimiento: nextStatus }
+        // Pasos intermedios: el estatus global sigue siendo PENDIENTE (1)
+        await tx.historicoMovimientos.create({
+          data: {
+            idUsuario: activeUser.id,
+            idEmpresa: companyId,
+            accion: 'APROBAR',
+            tablaOrigen: 'Empleados',
+            idRegistro: String(movement.idEmpleado),
+            descripcion: `Paso ${activeStep.paso} aprobado por ${activeUser.first_name} ${activeUser.last_name}`,
+            fechaCreacion: new Date()
+          }
         });
+
+        return { message: 'Movimiento avanzado al siguiente paso de aprobación.' };
       }
-
-      // Registro en HistoricoMovimientos
-      await tx.historicoMovimientos.create({
-        data: {
-          idUsuario: activeUser.id,
-          idEmpresa: companyId,
-          accion: nextStatus === 6 ? 'APROBAR_FINAL' : 'APROBAR',
-          tablaOrigen: 'Empleados',
-          idRegistro: String(movement.idEmpleado),
-          descripcion: nextStatus === 6 
-            ? `Promoción aprobada y aplicada exitosamente por ${activeUser.first_name} ${activeUser.last_name}`
-            : `Solicitud de promoción avanzada al estatus ${nextStatus} por ${activeUser.first_name} ${activeUser.last_name}`,
-          fechaCreacion: new Date()
-        }
-      });
-
-      return {
-        message: nextStatus === 6
-          ? 'Movimiento aprobado y aplicado exitosamente.'
-          : 'Movimiento avanzado al siguiente estatus de aprobación.'
-      };
     });
   }
 
@@ -545,7 +647,7 @@ export class InternalMovementsService {
     const pendingForUser: any[] = [];
 
     for (const req of allRequests) {
-      if (req.estatusId >= 1 && req.estatusId <= 5) {
+      if (req.estatusId === 1) { // 1 = PENDIENTE global (tiene pasos activos)
         try {
           const { permissions } = await this.findMovementById(companyId, req.idMovimiento, activeUser);
           if (permissions.canApproveOrReject) {
