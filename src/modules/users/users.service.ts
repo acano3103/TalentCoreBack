@@ -1,8 +1,9 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { DjangoPasswordHasher } from 'src/common/utils/django-password.util';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { AssignRoleDto } from './dto/assign-role.dto';
 import { AuthUserRow } from './interfaces/auth-user.interface';
 import { UsersQueries } from './queries/users.queries';
 import { randomUUID } from 'crypto';
@@ -385,5 +386,104 @@ export class UsersService {
     return {
       message: active ? 'Usuario activado correctamente' : 'Usuario desactivado correctamente'
     };
+  }
+
+  async getUserRoles(userId: number) {
+    const user = await this.prisma.auth_user.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Usuario con id ${userId} no encontrado.`);
+    }
+
+    const roles = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        rur.iRel,
+        rur.idUsuario,
+        rur.idRol,
+        rur.activo,
+        cr.descripcion as rolDescripcion
+      FROM RelUsuarioRol rur
+      JOIN CatRoles cr ON cr.idRol = rur.idRol
+      WHERE rur.idUsuario = ${userId} AND rur.activo = 1
+    `;
+
+    return roles;
+  }
+
+  async assignRole(userId: number, dto: AssignRoleDto, activeUser: ActiveUserDto) {
+    const activeUserRoles = await this.prisma.relUsuarioRol.findMany({
+      where: { idUsuario: activeUser.id, activo: true }
+    });
+    const isAdmin = activeUserRoles.some(r => r.idRol === 1);
+    if (!isAdmin) {
+      throw new ForbiddenException('Solo un usuario Administrador puede asignar roles.');
+    }
+
+    const targetUser = await this.prisma.auth_user.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    });
+    if (!targetUser) {
+      throw new NotFoundException(`Usuario con id ${userId} no encontrado.`);
+    }
+
+    const roleExists = await this.prisma.catRoles.findUnique({
+      where: { idRol: dto.idRol }
+    });
+    if (!roleExists) {
+      throw new NotFoundException(`Rol con id ${dto.idRol} no existe en CatRoles.`);
+    }
+
+    const existingRel = await this.prisma.relUsuarioRol.findFirst({
+      where: { idUsuario: userId, idRol: dto.idRol }
+    });
+
+    if (existingRel) {
+      if (!existingRel.activo) {
+        await this.prisma.relUsuarioRol.update({
+          where: { iRel: existingRel.iRel },
+          data: { activo: true }
+        });
+      }
+      return { message: `Rol '${roleExists.descripcion}' asignado correctamente al usuario ${userId}.` };
+    }
+
+    await this.prisma.relUsuarioRol.create({
+      data: {
+        idUsuario: userId,
+        idRol: dto.idRol,
+        activo: true
+      }
+    });
+
+    return { message: `Rol '${roleExists.descripcion}' asignado correctamente al usuario ${userId}.` };
+  }
+
+  async removeRole(userId: number, idRol: number, activeUser: ActiveUserDto) {
+    const activeUserRoles = await this.prisma.relUsuarioRol.findMany({
+      where: { idUsuario: activeUser.id, activo: true }
+    });
+    const isAdmin = activeUserRoles.some(r => r.idRol === 1);
+    if (!isAdmin) {
+      throw new ForbiddenException('Solo un usuario Administrador puede desasignar roles.');
+    }
+
+    const existingRel = await this.prisma.relUsuarioRol.findFirst({
+      where: { idUsuario: userId, idRol, activo: true }
+    });
+
+    if (!existingRel) {
+      throw new NotFoundException(`Asignación de rol activa no encontrada para el usuario ${userId} y rol ${idRol}.`);
+    }
+
+    await this.prisma.relUsuarioRol.update({
+      where: { iRel: existingRel.iRel },
+      data: { activo: false }
+    });
+
+    return { message: `Rol ${idRol} desactivado correctamente para el usuario ${userId}.` };
   }
 }

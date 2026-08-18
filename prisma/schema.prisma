@@ -60,6 +60,7 @@ model CatAreas {
   Activo              Boolean?              @default(true)
   CatCursos           CatCursos[]
   RelAreasUbicaciones RelAreasUbicaciones[]
+  AsignacionAprobador AsignacionAprobador[]
 }
 
 model CatCampa_a {
@@ -898,6 +899,7 @@ model auth_user {
   auth_user_user_permissions        auth_user_user_permissions[]
   django_admin_log                  django_admin_log[]
   tokenUsuario                      tokenUsuario[]
+  AsignacionAprobador               AsignacionAprobador[]
 }
 
 model auth_user_groups {
