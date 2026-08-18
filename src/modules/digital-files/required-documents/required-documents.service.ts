@@ -14,38 +14,39 @@ export class RequiredDocumentsService {
         private readonly prisma: PrismaService,
     ) { }
 
-    async findAll(companyId: number, page: number, limit: number, search?: string) {
-        // Definir el objeto de condiciones (Where) dinámico
-        const where = {
-            idEmpresa: companyId,
-            ...(search
-                ? {
-                    OR: [
-                        { Descripcion: { contains: search } },
-                    ],
-                }
-                : {}),
-        };
+async findAll(companyId: number, page: number, limit: number, search?: string, soloConValidacion?: boolean) {
+    // Definir el objeto de condiciones (Where) dinámico
+    const where = {
+        idEmpresa: companyId,
+        ...(search
+            ? {
+                OR: [
+                    { Descripcion: { contains: search } },
+                ],
+            }
+            : {}),
+        ...(soloConValidacion ? { tieneValidacionAutomatica: true } : {}),
+    };
 
-        // Ejecutar de manera concurrente la consulta paginada y el conteo total para optimizar tiempos
-        const [documents, total] = await Promise.all([
-            this.prisma.catDocumentos.findMany({
-                where,
-                skip: (page - 1) * limit,
-                take: limit,
-                orderBy: { IdDocumento: 'asc' },
-            }),
-            this.prisma.catDocumentos.count({ where }),
-        ]);
+    // Ejecutar de manera concurrente la consulta paginada y el conteo total para optimizar tiempos
+    const [documents, total] = await Promise.all([
+        this.prisma.catDocumentos.findMany({
+            where,
+            skip: (page - 1) * limit,
+            take: limit,
+            orderBy: { IdDocumento: 'asc' },
+        }),
+        this.prisma.catDocumentos.count({ where }),
+    ]);
 
-        // Formatear la respuesta con la metadata de paginación
-        return {
-            data: documents,
-            total,
-            currentPage: page,
-            totalPages: Math.ceil(total / limit) || 1,
-        };
-    }
+    // Formatear la respuesta con la metadata de paginación
+    return {
+        data: documents,
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit) || 1,
+    };
+}
 
    async create(companyId: number, createDto: CreateRequiredDocumentDto, user: ActiveUserDto) {
         const { descripcion, esRequeridoBase, requiereVencimiento, diasVigenciaDefault, diasAlertaPrevio } = createDto;

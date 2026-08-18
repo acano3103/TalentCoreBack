@@ -145,6 +145,39 @@ export class PositionsController {
         return this.service.update(companyId, positionId, activeUser, data);
     }
 
+
+
+
+    @Get(':positionId/schedule')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get schedule (horarios) for a position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position schedule obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getSchedule(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('positionId', ParseIntPipe) positionId: number,
+    ) {
+        return this.service.getSchedule(positionId);
+    }
+
+
+
+    @Get(':positionId/required-documents')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get required documents for a position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position required documents obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getRequiredDocuments(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('positionId', ParseIntPipe) positionId: number,
+    ) {
+        return this.service.getRequiredDocuments(positionId);
+    }
+
+
+
     @Post(':positionId/generate-ai-description')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Generate AI description for a vacanci', description: SWAGGER_AUTH_DESCRIPTION })

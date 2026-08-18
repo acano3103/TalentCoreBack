@@ -51,13 +51,15 @@ export class RequiredDocumentsController {
     @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
     @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page' })
     @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by name or RFC' })
+    @ApiQuery({ name: 'soloConValidacion', required: false, type: Boolean, description: 'Filtrar solo documentos con validación automática (Nubarium)' })
     findAll(
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query('search') search?: string,
+        @Query('soloConValidacion') soloConValidacion?: string,
     ) {
-        return this.requiredDocsService.findAll(companyId, page, limit, search);
+        return this.requiredDocsService.findAll(companyId, page, limit, search, soloConValidacion === 'true');
     }
 
     // Endpoint que desactiva un documento

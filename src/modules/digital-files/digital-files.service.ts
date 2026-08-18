@@ -10,6 +10,7 @@ import * as fs from 'fs-extra';
 import { DocumentoAceptado, DocumentoRechazado } from './interfaces/digital-files.interface';
 import { NubariumService } from './services/nubarium.service';
 import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
+import { Cron } from '@nestjs/schedule';
 import { generateEmployeeAndLink } from '../postulations/services/credentials.service';
 import JSZip = require('jszip');
 
@@ -81,7 +82,6 @@ export class DigitalFilesService {
     };
   }
 
-
   async getExpediente(companyId: number, employeeId: number) {
 
     const empleado = await this.prisma.empleados.findUnique({
@@ -104,13 +104,13 @@ export class DigitalFilesService {
 
     const idPuesto = expediente?.idPuesto ?? null;
     const estatusExpediente = expediente?.idEstatus ?? null;
-
-    const [documentosRequeridos, documentosSubidos, infoEmpleado, catalogos] =
+    const [documentosRequeridos, documentosSubidos, infoEmpleado, catalogos, horarioEmpleado] =
       await Promise.all([
-        idPuesto ? this.getDocumentsByPosition(idPuesto) : Promise.resolve([]),
+        idPuesto ? this.getDocumentsByPosition(idPuesto, employeeId) : Promise.resolve([]),
         this.getEmployeeDocuments(employeeId),
         this.getEmployeeInfo(empleado),
         this.getCatalogs(),
+        this.getEmployeeSchedule(employeeId),
       ]);
 
     return {
@@ -119,6 +119,7 @@ export class DigitalFilesService {
       documentosSubidos,
       infoEmpleado,
       catalogos,
+      horarioEmpleado,
       idPuesto,
       puesto: empleado.CatPuestos?.NombrePuesto ?? null,
       estatusExpediente,
@@ -128,26 +129,44 @@ export class DigitalFilesService {
   }
 
 
-  async getDocumentsByPosition(idPuesto: number) {
+  async getDocumentsByPosition(idPuesto: number, idEmpleado?: number) {
     const docsPuesto = await this.prisma.documentosPuesto.findMany({
       where: { idPuesto },
     });
-    if (docsPuesto.length === 0) return [];
 
-    const idsDocumento = docsPuesto.map((d) => d.idDocumento);
+    // Documentos adicionales marcados específicamente para este empleado
+    const docsAdicionales = idEmpleado
+      ? await this.prisma.$queryRaw<{ idDocumento: number }[]>`
+          SELECT idDocumento FROM DocumentosAdicionalesEmpleado WHERE idEmpleado = ${idEmpleado};
+        `
+      : [];
+
+    const idsDocumento = [
+      ...new Set([
+        ...docsPuesto.map((d) => d.idDocumento),
+        ...docsAdicionales.map((d) => d.idDocumento),
+      ]),
+    ];
+
+    if (idsDocumento.length === 0) return [];
+
     const catDocumentos = await this.prisma.catDocumentos.findMany({
       where: { IdDocumento: { in: idsDocumento }, Activo: true },
     });
     const catMap = new Map(catDocumentos.map((c) => [c.IdDocumento, c]));
 
-    return docsPuesto
-      .filter((d) => catMap.has(d.idDocumento))
-      .map((d) => {
-        const cat = catMap.get(d.idDocumento)!;
+    const idsObligatorios = new Set(docsPuesto.filter((d) => d.esObligatorio).map((d) => d.idDocumento));
+    const idsAdicionales = new Set(docsAdicionales.map((d) => d.idDocumento));
+
+    return idsDocumento
+      .filter((id) => catMap.has(id))
+      .map((id) => {
+        const cat = catMap.get(id)!;
         return {
           id: cat.IdDocumento,
           nombre: cat.Descripcion,
-          obligatorio: !!d.esObligatorio,
+          // Obligatorio si el puesto lo marca así, o si es un adicional (siempre se pide como obligatorio para ese empleado)
+          obligatorio: idsObligatorios.has(id) || idsAdicionales.has(id),
         };
       });
   }
@@ -162,7 +181,7 @@ export class DigitalFilesService {
       employeeId = Number(payload.employee_id);
       if (!employeeId) throw new UnauthorizedException('El token no contiene un ID de empleado válido');
     } catch (error) {
-      throw new UnauthorizedException('El enlace no es válido o ya ha expirado.');
+      throw new UnauthorizedException('El enlace no es válido o ya ha expirado. Por favor contacte al reclutador para obtener un nuevo enlace.');
     }
 
     // Buscamos al empleado para extraer su companyId (idEmpresa)
@@ -306,6 +325,30 @@ export class DigitalFilesService {
     }
   }
 
+  private async getEmployeeSchedule(employeeId: number) {
+    const horarios = await this.prisma.$queryRaw<
+      { DiaSemana: string | null; HoraEntrada: Date | null; HoraSalida: Date | null }[]
+    >`
+      SELECT DiaSemana, HoraEntrada, HoraSalida
+      FROM HorariosEmpleado
+      WHERE idEmpleado = ${employeeId};
+    `;
+
+    const formatearHora = (fecha: Date | null): string => {
+      if (!fecha) return '';
+      const d = new Date(fecha);
+      const horas = String(d.getUTCHours()).padStart(2, '0');
+      const minutos = String(d.getUTCMinutes()).padStart(2, '0');
+      return `${horas}:${minutos}`;
+    };
+
+    return horarios.map((h) => ({
+      dia: h.DiaSemana ?? '',
+      horaEntrada: formatearHora(h.HoraEntrada),
+      horaSalida: formatearHora(h.HoraSalida),
+    }));
+  }
+
 
   private async getEmployeeDocuments(employeeId: number) {
     const docsEmpleado = await this.prisma.documentosEmpleado.findMany({
@@ -326,10 +369,10 @@ export class DigitalFilesService {
     });
     const catMap = new Map(catDocumentos.map((c) => [c.IdDocumento, c]));
 
-        const documentosSubidos: Record<
-          number,
-          { archivos: { idDocumentoEmpleado: number; estatus: number | null; ruta: string; nombre: string; fecha: string; fechaEmision: string | null; fechaVencimiento: string | null; estatusVigencia: 'sin_vigencia' | 'vigente' | 'por_vencer' | 'vencido' }[]; habilitado: boolean }
-        > = {};
+    const documentosSubidos: Record<
+      number,
+      { archivos: { idDocumentoEmpleado: number; estatus: number | null; ruta: string; nombre: string; fecha: string; fechaEmision: string | null; fechaVencimiento: string | null; estatusVigencia: 'sin_vigencia' | 'vigente' | 'por_vencer' | 'vencido' }[]; habilitado: boolean }
+    > = {};
 
     for (const doc of docsEmpleado) {
       if (doc.IdDocumento == null) continue;
@@ -338,7 +381,7 @@ export class DigitalFilesService {
         documentosSubidos[doc.IdDocumento] = { archivos: [], habilitado: false };
       }
 
-     const catDoc = catMap.get(doc.IdDocumento);
+      const catDoc = catMap.get(doc.IdDocumento);
 
       documentosSubidos[doc.IdDocumento].archivos.push({
         idDocumentoEmpleado: doc.idDocumentoEmpleado,
@@ -361,6 +404,8 @@ export class DigitalFilesService {
 
     return documentosSubidos;
   }
+
+
 
 
   private normalizarRutaDocumento(ruta: string | null): string {
@@ -528,13 +573,24 @@ export class DigitalFilesService {
   ) {
     const curp = empleadoData.curp?.toUpperCase().trim();
     if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
-// Validar el CURP contra RENAPO antes de continuar
+    // Validar el CURP contra RENAPO antes de continuar
     const resultadoCurp = await this.nubariumService.consultarCurpRenapo(curp);
     if (!resultadoCurp.success) {
       throw new BadRequestException(
         `El CURP ${curp} no es válido según RENAPO: ${resultadoCurp.error || 'No se pudo verificar'}`
       );
-    } 
+    }
+
+    // Validar el RFC contra el SAT antes de continuar (solo si el empleado lo capturó)
+    const rfc = empleadoData.rfc?.toUpperCase().trim();
+    if (rfc) {
+      const resultadoRfc = await this.nubariumService.consultarRfcSat(rfc);
+      if (!resultadoRfc.success) {
+        throw new BadRequestException(
+          `El RFC ${rfc} no es válido según el SAT: ${resultadoRfc.error || 'No se pudo verificar'}`
+        );
+      }
+    }
     // Preparar carpetas y estructuras de control para los archivos
     const contadorPorTipo: Record<string, number> = {};
     const aceptados: DocumentoAceptado[] = [];
@@ -576,7 +632,7 @@ export class DigitalFilesService {
 
         await fs.writeFile(rutaTemp, file.buffer);
 
-      const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
+        const resultadoNubarium = await this.nubariumService.validarDocumentoNubarium(
           this.prisma,
           file.buffer,
           campoNormalizado,
@@ -609,7 +665,7 @@ export class DigitalFilesService {
           continue;
         }
 
-       // Si el tipo de documento requiere vencimiento pero no se pudo determinar
+        // Si el tipo de documento requiere vencimiento pero no se pudo determinar
         // una fecha (ni por Nubarium ni por el cálculo genérico), se rechaza —
         // criterio de aceptación: la fecha de vencimiento es obligatoria en ese caso.
         if (catDocumento?.requiereVencimiento && !resultadoNubarium.vigencia?.fechaVencimiento) {
@@ -674,6 +730,7 @@ export class DigitalFilesService {
             idEstadoCivil: empleadoData.idEstadoCivil ? parseInt(empleadoData.idEstadoCivil, 10) : undefined,
             fechaNacimiento: empleadoData.fechaNacimiento ? new Date(empleadoData.fechaNacimiento) : undefined,
             correo: empleadoData.correo,
+            rfc: empleadoData.rfc,
             telefonoMovil: empleadoData.telefonoMovil,
             telefonoLocal: empleadoData.telefonoLocal,
             idNivelEstudios: empleadoData.idNivelEstudios ? parseInt(empleadoData.idNivelEstudios, 10) : undefined,
@@ -696,6 +753,23 @@ export class DigitalFilesService {
             doc.fechaEmision,
             doc.fechaVencimiento,
           );
+        }
+
+        // ── Actualizar horario del empleado (si se envió) ──
+        if (empleadoData.schedules && Array.isArray(empleadoData.schedules) && empleadoData.schedules.length > 0) {
+          await tx.$executeRaw`DELETE FROM HorariosEmpleado WHERE idEmpleado = ${idEmpleado};`;
+
+          for (const horario of empleadoData.schedules) {
+            await tx.$executeRaw`
+              INSERT INTO HorariosEmpleado (idEmpleado, DiaSemana, HoraEntrada, HoraSalida)
+              VALUES (
+                ${idEmpleado},
+                ${horario.dia},
+                ${horario.horaEntrada + ':00'},
+                ${horario.horaSalida + ':00'}
+              );
+            `;
+          }
         }
       }, {
         maxWait: 5000,
@@ -751,6 +825,9 @@ export class DigitalFilesService {
 
     return this.processEmployeeDocuments(idEmpleado, empleadoData, documentoMap, idCampania, files, usuarioRegistro);
   }
+
+
+
 
   // ─────────────────────────────────────────────────────────────
   // POST .../digital-files/:token/public
@@ -902,7 +979,7 @@ export class DigitalFilesService {
   // Si todos los documentos del empleado quedan en estatus 4 (Aceptado),
   // marca el expediente completo automáticamente (igual que el sistema antiguo).
   // ─────────────────────────────────────────────────────────────
-async updateDocumentStatus(
+  async updateDocumentStatus(
     idDocumentoEmpleado: number,
     nuevoEstatus: number,
     comentario: string,
@@ -964,7 +1041,7 @@ async updateDocumentStatus(
   // documentos actualmente rechazados. Se dispara manualmente
   // desde el botón "Notificar Rechazados" en el front.
   // ─────────────────────────────────────────────────────────────
- async notifyRejectedDocuments(employeeId: number) {
+  async notifyRejectedDocuments(employeeId: number) {
     const empleado = await this.prisma.empleados.findUnique({
       where: { idEmpleado: employeeId },
       select: { nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
@@ -1012,6 +1089,220 @@ async updateDocumentStatus(
 
     return { success: true, message: 'Notificación enviada correctamente.' };
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // POST .../digital-files/:employeeId/notify-expiring
+  // Envía un solo correo al empleado con la lista de documentos
+  // próximos a vencer o ya vencidos. Se dispara manualmente desde
+  // el botón "Notificar Vencimientos" en el front, o de forma
+  // automática desde el cron semanal.
+  // ─────────────────────────────────────────────────────────────
+  async notifyExpiringDocuments(employeeId: number) {
+    const empleado = await this.prisma.empleados.findUnique({
+      where: { idEmpleado: employeeId },
+      select: { nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
+    });
+
+    if (!empleado) throw new NotFoundException('Empleado no encontrado.');
+    if (!empleado.correo) throw new BadRequestException('El empleado no tiene un correo registrado.');
+
+    const documentosConVigencia = await this.prisma.$queryRaw <
+      { nombre: string; fechaVencimiento: Date; diasAlertaPrevio: number }[]
+    >`
+
+      SELECT CD.Descripcion AS nombre, DE.fechaVencimiento, CD.diasAlertaPrevio
+      FROM DocumentosEmpleado DE
+      INNER JOIN CatDocumentos CD ON CD.IdDocumento = DE.IdDocumento
+      WHERE DE.idEmpleado = ${employeeId}
+        AND CD.requiereVencimiento = 1
+        AND DE.fechaVencimiento IS NOT NULL;
+    `;
+
+
+    // Reutilizamos el mismo cálculo de semáforo que ya usa el expediente,
+    // para no duplicar la lógica de "por_vencer"/"vencido" en dos lugares.
+    const documentosPorNotificar = documentosConVigencia
+      .map((doc) => ({
+        nombre: doc.nombre,
+        fechaVencimiento: doc.fechaVencimiento,
+        estatusVigencia: DigitalFilesQueries.calcularEstatusVigencia(doc.fechaVencimiento, doc.diasAlertaPrevio),
+      }))
+      .filter((doc) => doc.estatusVigencia === 'por_vencer' || doc.estatusVigencia === 'vencido');
+
+    if (documentosPorNotificar.length === 0) {
+      throw new BadRequestException('Este empleado no tiene documentos por vencer o vencidos actualmente.');
+    }
+
+    const frontUrl = this.configService.get<string>('FRONT_URL') || '';
+    const token = this.jwtService.sign({ employee_id: employeeId }, { expiresIn: '30d' });
+    const uploadLink = `${frontUrl}upload-information/${token}`;
+
+    await this.prisma.$executeRaw`
+      UPDATE Empleados
+      SET uploadLink = ${uploadLink}, token = ${token}
+      WHERE idEmpleado = ${employeeId};
+    `;
+
+    await this.notifications.notify({
+      userUuid: String(employeeId),
+      notificationTypeCode: 'DOCUMENT_EXPIRING',
+      to: empleado.correo,
+      phone: empleado.telefonoMovil || undefined,
+      subject: 'Documentos próximos a vencer',
+      context: {
+        nombre_completo: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido]
+          .filter(Boolean)
+          .join(' '),
+        documentos: documentosPorNotificar.map(
+          (d) => `${d.nombre} (vence: ${d.fechaVencimiento.toISOString().split('T')[0]})`,
+        ),
+        liga: uploadLink,
+      },
+    });
+
+    return { success: true, message: 'Notificación de vencimiento enviada correctamente.' };
+  }
+
+  @Cron('0 7 * * *') // todos los días a las 7:00 am
+  async cronNotificarVencimientos() {
+    this.logger.log('Iniciando revisión diaria de documentos por vencer...');
+
+    const documentosConVigencia = await this.prisma.$queryRaw<
+      { idEmpleado: number; fechaVencimiento: Date; diasAlertaPrevio: number }[]
+    >`
+    SELECT DE.idEmpleado, DE.fechaVencimiento, CD.diasAlertaPrevio
+    FROM DocumentosEmpleado DE
+    INNER JOIN CatDocumentos CD ON CD.IdDocumento = DE.IdDocumento
+    WHERE CD.requiereVencimiento = 1
+      AND DE.fechaVencimiento IS NOT NULL
+      AND DE.idEmpleado IS NOT NULL
+      AND (
+        DE.fechaUltimaNotificacionVencimiento IS NULL
+        OR DE.fechaUltimaNotificacionVencimiento < DATE_SUB(NOW(), INTERVAL 7 DAY)
+      );
+  `;
+
+    const idsEmpleadoANotificar = [
+      ...new Set(
+        documentosConVigencia
+          .filter((doc) => {
+            const estatus = DigitalFilesQueries.calcularEstatusVigencia(doc.fechaVencimiento, doc.diasAlertaPrevio);
+            return estatus === 'por_vencer' || estatus === 'vencido';
+          })
+          .map((doc) => doc.idEmpleado),
+      ),
+    ];
+
+    this.logger.log(`Se encontraron ${idsEmpleadoANotificar.length} empleado(s) con documentos por vencer/vencidos.`);
+
+    for (const idEmpleado of idsEmpleadoANotificar) {
+      try {
+        await this.notifyExpiringDocuments(idEmpleado);
+
+        // Marcamos la fecha de notificación SOLO en los documentos de
+        // este empleado que sí calificaron (con vigencia, sin notificar
+        // recientemente), para no resetear el contador de otros documentos
+        // suyos que no aplicaban todavía.
+        await this.prisma.$executeRaw`
+        UPDATE DocumentosEmpleado DE
+        INNER JOIN CatDocumentos CD ON CD.IdDocumento = DE.IdDocumento
+        SET DE.fechaUltimaNotificacionVencimiento = NOW()
+        WHERE DE.idEmpleado = ${idEmpleado}
+          AND CD.requiereVencimiento = 1
+          AND DE.fechaVencimiento IS NOT NULL;
+      `;
+
+        this.logger.log(`Notificación de vencimiento enviada al empleado ${idEmpleado}.`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Error desconocido';
+        this.logger.warn(`No se pudo notificar al empleado ${idEmpleado}: ${message}`);
+      }
+    }
+
+    this.logger.log('Revisión diaria de documentos por vencer finalizada.');
+  }
+
+  async getVencimientosDashboard(
+    companyId: number,
+    filtros: {
+      estado?: 'vigente' | 'por_vencer' | 'vencido';
+      idArea?: number;
+      idSite?: number;
+      idPuesto?: number;
+      fechaDesde?: string;
+      fechaHasta?: string;
+    },
+  ) {
+    const rows = await this.prisma.$queryRaw<any[]>`
+    SELECT
+      DE.idDocumentoEmpleado,
+      E.idEmpleado,
+      E.nombre, E.primerApellido, E.segundoApellido,
+      E.idPuesto, P.NombrePuesto,
+      P.idArea, A.Descripcion AS areaNombre,
+      E.idSite, S.Descripcion AS siteNombre,
+      CD.IdDocumento, CD.Descripcion AS documentoNombre,
+      DE.fechaVencimiento, DE.fechaEmision,
+      CD.diasAlertaPrevio
+    FROM DocumentosEmpleado DE
+    INNER JOIN Empleados E ON E.idEmpleado = DE.idEmpleado
+    INNER JOIN CatDocumentos CD ON CD.IdDocumento = DE.IdDocumento
+    LEFT JOIN CatPuestos P ON P.idPuesto = E.idPuesto
+    LEFT JOIN CatAreas A ON A.idArea = P.idArea
+    LEFT JOIN CatSites S ON S.idSite = E.idSite
+    WHERE E.idEmpresa = ${companyId}
+      AND E.activo = 1
+      AND CD.requiereVencimiento = 1
+      AND DE.fechaVencimiento IS NOT NULL
+  `;
+
+    let resultado = rows.map((r) => ({
+      idDocumentoEmpleado: r.idDocumentoEmpleado,
+      idEmpleado: r.idEmpleado,
+      nombreCompleto: [r.nombre, r.primerApellido, r.segundoApellido].filter(Boolean).join(' '),
+      puesto: r.NombrePuesto,
+      idPuesto: r.idPuesto,
+      area: r.areaNombre,
+      idArea: r.idArea,
+      site: r.siteNombre,
+      idSite: r.idSite,
+      documento: r.documentoNombre,
+      fechaVencimiento: r.fechaVencimiento,
+      fechaEmision: r.fechaEmision,
+      estatusVigencia: DigitalFilesQueries.calcularEstatusVigencia(r.fechaVencimiento, r.diasAlertaPrevio),
+    }));
+
+    if (filtros.idArea) {
+      resultado = resultado.filter((d) => d.idArea === filtros.idArea);
+    }
+    if (filtros.idSite) {
+      resultado = resultado.filter((d) => d.idSite === filtros.idSite);
+    }
+    if (filtros.idPuesto) {
+      resultado = resultado.filter((d) => d.idPuesto === filtros.idPuesto);
+    }
+    if (filtros.fechaDesde) {
+      resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) >= new Date(filtros.fechaDesde!));
+    }
+    if (filtros.fechaHasta) {
+      resultado = resultado.filter((d) => d.fechaVencimiento && new Date(d.fechaVencimiento) <= new Date(filtros.fechaHasta!));
+    }
+
+    // KPIs sobre el resultado ya filtrado (área/site/puesto/fecha), pero antes del filtro de estado
+    const kpis = {
+      vigente: resultado.filter((d) => d.estatusVigencia === 'vigente').length,
+      por_vencer: resultado.filter((d) => d.estatusVigencia === 'por_vencer').length,
+      vencido: resultado.filter((d) => d.estatusVigencia === 'vencido').length,
+    };
+
+    if (filtros.estado) {
+      resultado = resultado.filter((d) => d.estatusVigencia === filtros.estado);
+    }
+
+    return { data: resultado, kpis };
+  }
+
+
   // ─────────────────────────────────────────────────────────────
   // GET .../digital-files/:employeeId/download-history
   // ─────────────────────────────────────────────────────────────
@@ -1111,8 +1402,8 @@ async updateDocumentStatus(
     if (faltantes.length > 0) {
       throw new BadRequestException(`Faltan los siguientes campos: ${faltantes.join(', ')}`);
     }
-     
-    
+
+
     const result = await generateEmployeeAndLink(
       {
         jwtService: this.jwtService,
@@ -1129,6 +1420,8 @@ async updateDocumentStatus(
         idEmpresa: companyId,
         idJefeInmediato: Number(data.idJefeInmediato),
         idSite: Number(data.idSite),
+        schedules: data.schedules ?? [],
+        additionalDocuments: data.additionalDocuments ?? [],
       },
       files ?? [],
       this.prisma,
@@ -1145,4 +1438,5 @@ async updateDocumentStatus(
   }
 
 }
+
 
