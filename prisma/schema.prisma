@@ -58,6 +58,7 @@ model CatAreas {
   idEmpresa           Int
   Descripcion         String                @db.VarChar(200)
   Activo              Boolean?              @default(true)
+  AsignacionAprobador AsignacionAprobador[]
   CatCursos           CatCursos[]
   RelAreasUbicaciones RelAreasUbicaciones[]
 }
@@ -887,6 +888,7 @@ model auth_user {
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
+  AsignacionAprobador               AsignacionAprobador[]
   Empleados                         Empleados[]
   HistoricoMovimientos              HistoricoMovimientos[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
@@ -1610,6 +1612,7 @@ model CatRolAprobador {
   idRolAprobador               Int                            @id @default(autoincrement())
   codigo                       String                         @unique(map: "uk_CatRolAprobador_codigo") @db.VarChar(50)
   nombre                       String                         @db.VarChar(100)
+  AsignacionAprobador          AsignacionAprobador[]
   ConfiguracionPasosAprobacion ConfiguracionPasosAprobacion[]
   PasosAprobacionMovimiento    PasosAprobacionMovimiento[]
 }
@@ -1665,6 +1668,21 @@ model DocumentosAdicionalesEmpleado {
   fechaRegistro   DateTime? @db.DateTime(0)
 
   @@index([idEmpleado], map: "idx_idEmpleado")
+}
+
+model AsignacionAprobador {
+  idAsignacionAprobador Int             @id @default(autoincrement())
+  idRolAprobador        Int
+  idArea                Int?
+  idUsuario             Int
+  activo                Boolean         @default(true)
+  CatAreas              CatAreas?       @relation(fields: [idArea], references: [idArea], map: "FK_AsignacionAprobador_Area")
+  CatRolAprobador       CatRolAprobador @relation(fields: [idRolAprobador], references: [idRolAprobador], map: "FK_AsignacionAprobador_RolAprobador")
+  auth_user             auth_user       @relation(fields: [idUsuario], references: [id], map: "FK_AsignacionAprobador_Usuario")
+
+  @@index([idArea], map: "idx_AsignacionAprobador_Area")
+  @@index([idRolAprobador], map: "idx_AsignacionAprobador_RolAprobador")
+  @@index([idUsuario], map: "idx_AsignacionAprobador_Usuario")
 }
 
 enum Entrevistas_interview_type {
