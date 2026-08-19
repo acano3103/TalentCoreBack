@@ -4,7 +4,6 @@ import { UsersService } from './users.service';
 import { AuthUserRow } from './interfaces/auth-user.interface';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { AssignRoleDto } from './dto/assign-role.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
@@ -95,44 +94,5 @@ export class UsersController {
     @Param('id') id: string,
   ) {
     return this.usersService.changeStatus(id, true);
-  }
-
-  @Get(':userId/roles')
-  @ApiOperation({ summary: 'Get roles assigned to a user', description: SWAGGER_AUTH_DESCRIPTION })
-  @ApiResponse({ status: 200, description: 'Roles retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getUserRoles(
-    @Param('userId', ParseIntPipe) userId: number,
-  ) {
-    return this.usersService.getUserRoles(userId);
-  }
-
-  @Post(':userId/roles')
-  @ApiOperation({ summary: 'Assign a role to a user (idempotent)', description: SWAGGER_AUTH_DESCRIPTION })
-  @ApiResponse({ status: 200, description: 'Role assigned successfully' })
-  @ApiResponse({ status: 403, description: 'Forbidden: Only admins can assign roles' })
-  @ApiResponse({ status: 404, description: 'User or role not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  assignRole(
-    @Param('userId', ParseIntPipe) userId: number,
-    @Body() dto: AssignRoleDto,
-    @GetActiveUser() activeUser: ActiveUserDto,
-  ) {
-    return this.usersService.assignRole(userId, dto, activeUser);
-  }
-
-  @Delete(':userId/roles/:idRol')
-  @ApiOperation({ summary: 'Deactivate a role assignment for a user (soft delete)', description: SWAGGER_AUTH_DESCRIPTION })
-  @ApiResponse({ status: 200, description: 'Role deactivated successfully' })
-  @ApiResponse({ status: 403, description: 'Forbidden: Only admins can remove roles' })
-  @ApiResponse({ status: 404, description: 'Role assignment not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  removeRole(
-    @Param('userId', ParseIntPipe) userId: number,
-    @Param('idRol', ParseIntPipe) idRol: number,
-    @GetActiveUser() activeUser: ActiveUserDto,
-  ) {
-    return this.usersService.removeRole(userId, idRol, activeUser);
   }
 }
