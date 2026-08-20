@@ -323,6 +323,24 @@ export class DigitalFilesController {
     return this.digitalFilesService.notifyRejectedDocuments(employeeId);
   }
 
+   // Endpoint para regenerar el link de acceso y reenviar el correo (cuando el link original ya expiró)
+  @UseGuards(JwtAuthGuard)
+  @Post(':employeeId/resend-credentials')
+  @ApiOperation({
+    summary: 'Resend access credentials',
+    description: 'Regenerates the upload link (fresh JWT) and resends the documentation email to the employee.',
+  })
+  @ApiResponse({ status: 200, description: 'Credentials resent successfully' })
+  @ApiResponse({ status: 400, description: 'Employee has no email registered' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  resendCredentials(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+  ) {
+    return this.digitalFilesService.resendCredentials(employeeId);
+  }
+
   
 // Endpoint para notificar al empleado sobre documentos por vencer/vencidos (botón manual del front)
 @UseGuards(JwtAuthGuard)
@@ -400,6 +418,7 @@ notifyExpiringDocuments(
     res.send(buffer);
   }
 
+  
 }
 
 
