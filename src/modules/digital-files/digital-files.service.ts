@@ -1403,7 +1403,7 @@ export class DigitalFilesService {
       throw new BadRequestException(`Faltan los siguientes campos: ${faltantes.join(', ')}`);
     }
 
-
+    
     const result = await generateEmployeeAndLink(
       {
         jwtService: this.jwtService,
@@ -1436,6 +1436,58 @@ export class DigitalFilesService {
 
 
   }
+
+  // ─────────────────────────────────────────────────────────────
+// POST .../digital-files/:employeeId/resend-credentials
+// Regenera el link de acceso (JWT nuevo de 30 días) y reenvía
+// el correo de documentación al empleado. Se usa cuando el link
+// original ya expiró y el empleado no puede volver a entrar.
+// ─────────────────────────────────────────────────────────────
+async resendCredentials(employeeId: number) {
+  const empleado = await this.prisma.empleados.findUnique({
+    where: { idEmpleado: employeeId },
+    select: { nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true },
+  });
+
+  if (!empleado) throw new NotFoundException('Empleado no encontrado.');
+  if (!empleado.correo) throw new BadRequestException('El empleado no tiene un correo registrado.');
+
+  // Traemos el puesto del empleado para saber qué documentos le corresponden
+  const expediente = await this.prisma.expedientes.findFirst({
+    where: { idEmpleado: employeeId },
+    select: { idPuesto: true },
+  });
+
+  const documentos = expediente?.idPuesto
+    ? await this.getDocumentsByPosition(expediente.idPuesto, employeeId)
+    : [];
+
+  const frontUrl = this.configService.get<string>('FRONT_URL') || '';
+  const token = this.jwtService.sign({ employee_id: employeeId }, { expiresIn: '30d' });
+  const uploadLink = `${frontUrl}upload-information/${token}`;
+
+  await this.prisma.$executeRaw`
+    UPDATE Empleados
+    SET uploadLink = ${uploadLink}, token = ${token}
+    WHERE idEmpleado = ${employeeId};
+  `;
+
+  await this.notifications.notify({
+    userUuid: String(employeeId),
+    notificationTypeCode: 'LINK_CREATED',
+    to: empleado.correo,
+    phone: empleado.telefonoMovil || undefined,
+    subject: '📎 Documentación requerida para tu postulación',
+    context: {
+      nombre: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido].filter(Boolean).join(' '),
+      documentos,
+      link: uploadLink,
+      docs_empresa: [],
+    },
+  });
+
+  return { success: true, message: 'Link de acceso regenerado y correo reenviado correctamente.' };
+}
 
 }
 

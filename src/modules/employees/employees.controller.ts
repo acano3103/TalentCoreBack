@@ -48,4 +48,12 @@ export class EmployeesController {
   findAll(@Param('companyId', ParseIntPipe) companyId: number) {
     return this.employeesService.findAll(companyId);
   }
+
+@Get('/completos/lista')
+@ApiOperation({ summary: 'Get all employees with complete expediente', description: SWAGGER_AUTH_DESCRIPTION })
+@ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
+@ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+findAllWithCompleteFile(@Param('companyId', ParseIntPipe) companyId: number) {
+  return this.employeesService.findAllWithCompleteFile(companyId);
+}
 }

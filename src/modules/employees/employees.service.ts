@@ -160,4 +160,35 @@ export class EmployeesService {
     `;
     return employees;
   }
+
+  async findAllWithCompleteFile(companyId: number) {
+  const employees = await this.prisma.$queryRaw<any[]>`
+    SELECT 
+      ep.idEmpleado,
+      ep.nombre,
+      ep.primerApellido,
+      ep.segundoApellido,
+      ep.correo,
+      ep.telefonoMovil,
+      p.idPuesto,
+      p.nombrePuesto,
+      a.idArea,
+      a.Descripcion AS area,
+      s.idSite,
+      s.Descripcion AS site,
+      ex.idEstatus,
+      ex.fechaActualizacion AS fechaExpedienteCompleto
+    FROM Empleados ep
+    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+    LEFT JOIN CatAreas a ON a.idArea = p.idArea
+    LEFT JOIN CatSites s ON s.idSite = ep.idSite
+    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+    WHERE ep.idEmpresa = ${companyId}
+      AND ep.activo = 1
+      AND ex.idEstatus = 4
+    ORDER BY ep.nombre ASC;
+  `;
+  return employees;
+}
+
 }
