@@ -10,6 +10,7 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 export class IntegrationsController {
     constructor(private readonly service: IntegrationsService) { }
 
+    // Endpoint para obtener todas las integraciones de una empresa
     @UseGuards(JwtAuthGuard)
     @Get()
     @ApiOperation({ summary: 'Get all integrations', description: 'Get all integrations for a company' })
@@ -20,6 +21,7 @@ export class IntegrationsController {
         return this.service.getIntegrations(companyId);
     }
 
+    // Endpoint para conectar una integración por proveedor id
     @UseGuards(JwtAuthGuard)
     @Post(':providerId')
     @ApiOperation({ summary: 'Connect an integration', description: 'Connect an integration to a company' })
@@ -34,6 +36,7 @@ export class IntegrationsController {
         return this.service.connect(companyId, providerId, dto);
     }
 
+    // Endpoint para desconectar una integración por proveedor id
     @UseGuards(JwtAuthGuard)
     @Delete(':providerId')
     @ApiOperation({ summary: 'Disconnect an integration', description: 'Disconnect an integration from a company' })

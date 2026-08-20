@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ZoomProvider } from './communication/zoom.provider';
 import { OpenAiProvider } from './ia/openai.provider';
+import { ArtemisProvider } from './workforce-management/artemis/artemis.provider';
 
 @Injectable()
 export class IntegrationsFactory {
@@ -9,6 +10,7 @@ export class IntegrationsFactory {
         private prisma: PrismaService,
         private zoomProvider: ZoomProvider,
         private openAiProvider: OpenAiProvider,
+        private artemisProvider: ArtemisProvider
     ) { }
 
     async getProvider(providerId: number): Promise<any> {
@@ -29,7 +31,8 @@ export class IntegrationsFactory {
                 return this.openAiProvider;
             case 'GEMINI':
                 throw new BadRequestException('Proveedor Gemini aún no implementado');
-
+            case 'ARTEMIS':
+                return this.artemisProvider;
             default:
                 throw new BadRequestException(`No hay un provider configurado para: ${providerCat.code}`);
         }

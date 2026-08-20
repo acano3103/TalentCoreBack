@@ -10,6 +10,7 @@ export class IntegrationsService {
         private integrationFactory: IntegrationsFactory,
     ) { }
 
+    // Obtener todas las integraciones de una empresa especifica
     async getIntegrations(companyId: number) {
         const providers = await this.prisma.catIntegracionesProvedores.findMany({
             where: {
@@ -40,11 +41,13 @@ export class IntegrationsService {
         return formattedData;
     }
 
+    // Conectar integración con un proveedor
     async connect(companyId: number, providerId: number, dto: ConnectIntegrationDto) {
         const provider = await this.integrationFactory.getProvider(providerId);
         return provider.connect(companyId, providerId, dto);
     }
 
+    // Desconectar integración de un proveedor
     async disconnect(companyId: number, providerId: number) {
         const provider = await this.integrationFactory.getProvider(providerId);
         return provider.disconnect(companyId, providerId);

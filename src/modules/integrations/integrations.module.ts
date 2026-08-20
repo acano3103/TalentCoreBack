@@ -11,6 +11,7 @@ import { OpenAiProvider } from './providers/ia/openai.provider';
 import { ArtemisController } from './providers/workforce-management/artemis/artemis.controller';
 import { ArtemisService } from './providers/workforce-management/artemis/artemis.service';
 import { ArtemisMapper } from './providers/workforce-management/artemis/artemis.mapper';
+import { ArtemisProvider } from './providers/workforce-management/artemis/artemis.provider';
 
 @Module({
     imports: [HttpModule],
@@ -23,7 +24,8 @@ import { ArtemisMapper } from './providers/workforce-management/artemis/artemis.
         EncryptionService,
         HumeService,
         ArtemisService,
-        ArtemisMapper
+        ArtemisMapper,
+        ArtemisProvider
     ],
     exports: [IntegrationsService, HumeService, IntegrationsFactory, ArtemisService],
 })
