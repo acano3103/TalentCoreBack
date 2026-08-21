@@ -226,7 +226,12 @@ export class InterviewsService {
                 });
 
                 return newInterview;
-            });
+            },
+                {
+                    maxWait: 5000, // Tiempo máx. esperando conexión del pool (5s)
+                    timeout: 15000, // Tiempo máx. de ejecución de la transacción (15s)
+                },
+            );
 
             meetingData.interviewId = interview.id;
 
