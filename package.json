@@ -44,6 +44,7 @@
     "class-validator": "^0.15.1",
     "date-fns": "^4.1.0",
     "docxtemplater": "^3.69.0",
+    "fs-extra": "^11.4.0",
     "handlebars": "^4.7.9",
     "ioredis": "^5.10.1",
     "joi": "^18.1.2",
@@ -62,7 +63,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -74,11 +76,13 @@
     "@swc/core": "^1.10.7",
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.0",
+    "@types/fs-extra": "^11.0.4",
     "@types/jest": "^29.5.14",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.7",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
+    "@types/uuid": "^11.0.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
