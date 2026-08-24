@@ -5,6 +5,7 @@ import { PublicCatalogsController } from './public-catalogs.controller';
 import { CatalogsSeedService } from './seeds/catalogs-seed.service';
 import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog.service';
 import { PatronalRecordsService } from './sub-services/patronal-records.service';
+import { OperatingUnitsService } from './sub-services/operating-units.service';
 
 @Module({
   imports: [],
@@ -14,6 +15,7 @@ import { PatronalRecordsService } from './sub-services/patronal-records.service'
     //CatalogsSeedService,
     SalaryLevelsCatalogService,
     PatronalRecordsService,
+    OperatingUnitsService
   ],
   exports: [CatalogsService],
 })

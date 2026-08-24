@@ -166,6 +166,7 @@ model CatEmpresas {
   activo                 Boolean?                 @default(true)
   CatCentroCostos        CatCentroCostos[]
   CatRegistrosPatronales CatRegistrosPatronales[]
+  CatUnidadesOperativas  CatUnidadesOperativas[]
   DomicilioEmpresas      DomicilioEmpresas[]
   Integraciones          Integraciones[]
   RelUsuarioEmpresa      RelUsuarioEmpresa[]
@@ -329,6 +330,7 @@ model CatPuestos {
 model CatSites {
   idSite                Int                     @id @default(autoincrement())
   idEmpresa             Int?
+  idUnidadOperativa     Int?
   idTipoUbicacion       Int                     @default(1)
   Descripcion           String?                 @db.VarChar(200)
   EsPrincipal           Boolean?                @default(false)
@@ -348,12 +350,14 @@ model CatSites {
   FechaRegistro         DateTime?               @db.DateTime(0)
   CatPuestos            CatPuestos[]
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
+  CatUnidadesOperativas CatUnidadesOperativas?  @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
   RelAreasUbicaciones   RelAreasUbicaciones[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
   RelUsuarioSite        RelUsuarioSite[]
   Vacantes              Vacantes[]
 
   @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
+  @@index([idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
 }
 
 model CatSolicitud {
@@ -1096,6 +1100,8 @@ model Empleados {
   uploadLink                                        String?               @db.VarChar(100)
   token                                             String?               @db.VarChar(100)
   activo                                            Boolean               @default(true)
+  artemisUserId                                     String?               @db.VarChar(50)
+  artemisSyncedAt                                   DateTime?             @db.DateTime(0)
   Contratos                                         Contratos[]
   CursoParticipantes                                CursoParticipantes[]
   CursoSesiones                                     CursoSesiones[]
@@ -1683,6 +1689,26 @@ model AsignacionAprobador {
   @@index([idArea], map: "idx_AsignacionAprobador_Area")
   @@index([idRolAprobador], map: "idx_AsignacionAprobador_RolAprobador")
   @@index([idUsuario], map: "idx_AsignacionAprobador_Usuario")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatUnidadesOperativas {
+  idUnidadOperativa   Int         @id @default(autoincrement())
+  idEmpresa           Int
+  Codigo              String?     @db.VarChar(50)
+  Nombre              String      @db.VarChar(200)
+  Descripcion         String?     @db.Text
+  EsExterna           Boolean?    @default(false)
+  ResponsableContacto String?     @db.VarChar(150)
+  TelefonoContacto    String?     @db.VarChar(20)
+  CorreoContacto      String?     @db.VarChar(200)
+  Activo              Boolean?    @default(true)
+  FechaRegistro       DateTime?   @default(now()) @db.DateTime(0)
+  UsuarioRegistro     String?     @db.VarChar(100)
+  CatSites            CatSites[]
+  CatEmpresas         CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, map: "FK_UnidadesOperativas_Empresas")
+
+  @@index([idEmpresa], map: "FK_UnidadesOperativas_Empresas")
 }
 
 enum Entrevistas_interview_type {

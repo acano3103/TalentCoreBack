@@ -548,26 +548,27 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 1, Descripcion: 'Estructura Organizacional', Codigo: 'organizational-structure', idPadre: null, Activo: true },
             { idModulo: 2, Descripcion: 'Empresas', Codigo: 'companies', idPadre: 1, Activo: true },
             { idModulo: 3, Descripcion: 'Ubicaciones', Codigo: 'locations', idPadre: 1, Activo: true },
-            { idModulo: 4, Descripcion: 'Registros Patronales', Codigo: 'patronal-records', idPadre: 1, Activo: true },
-            { idModulo: 5, Descripcion: 'Areas Operativas', Codigo: 'areas', idPadre: 1, Activo: true },
-            { idModulo: 6, Descripcion: 'Centro de Costos', Codigo: 'cost-center', idPadre: 1, Activo: true },
-            { idModulo: 7, Descripcion: 'Puestos', Codigo: 'positions', idPadre: 1, Activo: true },
-            { idModulo: 8, Descripcion: 'Niveles de Salario', Codigo: 'salary-levels', idPadre: 1, Activo: true },
-            { idModulo: 9, Descripcion: 'Validación de Puestos', Codigo: 'validate-positions', idPadre: 1, Activo: true },
-            { idModulo: 10, Descripcion: 'Plazas Operativas', Codigo: 'headcount-ppto', idPadre: 1, Activo: true },
-            { idModulo: 11, Descripcion: 'Organigrama Autorizado', Codigo: 'authorized-organizational-chart', idPadre: 1, Activo: true },
-            { idModulo: 12, Descripcion: 'Organigrama Nominal', Codigo: 'nominal-organization-chart', idPadre: 1, Activo: true },
-            { idModulo: 13, Descripcion: 'Reclutamiento', Codigo: 'recruitment', idPadre: null, Activo: true },
-            { idModulo: 14, Descripcion: 'Requisiciones', Codigo: 'requisitions', idPadre: 13, Activo: true },
-            { idModulo: 15, Descripcion: 'Bolsa de trabajo', Codigo: 'job-board', idPadre: 13, Activo: true },
-            { idModulo: 16, Descripcion: 'Vacantes', Codigo: 'vacancies', idPadre: 13, Activo: true },
-            { idModulo: 17, Descripcion: 'Entrevistas', Codigo: 'interviews', idPadre: 13, Activo: true },
-            { idModulo: 18, Descripcion: 'Expedientes digitales', Codigo: 'digital-files', idPadre: null, Activo: true },
-            { idModulo: 19, Descripcion: 'Documentos requeridos', Codigo: 'required-documents', idPadre: 18, Activo: true },
-            { idModulo: 20, Descripcion: 'Expedientes', Codigo: 'case-files', idPadre: 18, Activo: true },
-            { idModulo: 21, Descripcion: 'Contratos digitales', Codigo: 'digital-contracts', idPadre: 18, Activo: true },
-            { idModulo: 22, Descripcion: 'Mis contratos', Codigo: 'my-contracts', idPadre: 18, Activo: true }
-        ]
+            { idModulo: 4, Descripcion: 'Unidades Operativas', Codigo: 'operating-units', idPadre: 1, Activo: true },
+            { idModulo: 5, Descripcion: 'Registros Patronales', Codigo: 'patronal-records', idPadre: 1, Activo: true },
+            { idModulo: 6, Descripcion: 'Areas Operativas', Codigo: 'areas', idPadre: 1, Activo: true },
+            { idModulo: 7, Descripcion: 'Centro de Costos', Codigo: 'cost-center', idPadre: 1, Activo: true },
+            { idModulo: 8, Descripcion: 'Puestos', Codigo: 'positions', idPadre: 1, Activo: true },
+            { idModulo: 9, Descripcion: 'Niveles de Salario', Codigo: 'salary-levels', idPadre: 1, Activo: true },
+            { idModulo: 10, Descripcion: 'Validación de Puestos', Codigo: 'validate-positions', idPadre: 1, Activo: true },
+            { idModulo: 11, Descripcion: 'Plazas Operativas', Codigo: 'headcount-ppto', idPadre: 1, Activo: true },
+            { idModulo: 12, Descripcion: 'Organigrama Autorizado', Codigo: 'authorized-organizational-chart', idPadre: 1, Activo: true },
+            { idModulo: 13, Descripcion: 'Organigrama Nominal', Codigo: 'nominal-organization-chart', idPadre: 1, Activo: true },
+            { idModulo: 14, Descripcion: 'Reclutamiento', Codigo: 'recruitment', idPadre: null, Activo: true },
+            { idModulo: 15, Descripcion: 'Requisiciones', Codigo: 'requisitions', idPadre: 14, Activo: true },
+            { idModulo: 16, Descripcion: 'Bolsa de trabajo', Codigo: 'job-board', idPadre: 14, Activo: true },
+            { idModulo: 17, Descripcion: 'Vacantes', Codigo: 'vacancies', idPadre: 14, Activo: true },
+            { idModulo: 18, Descripcion: 'Entrevistas', Codigo: 'interviews', idPadre: 14, Activo: true },
+            { idModulo: 19, Descripcion: 'Expedientes digitales', Codigo: 'digital-files', idPadre: null, Activo: true },
+            { idModulo: 20, Descripcion: 'Documentos requeridos', Codigo: 'required-documents', idPadre: 19, Activo: true },
+            { idModulo: 21, Descripcion: 'Expedientes', Codigo: 'case-files', idPadre: 19, Activo: true },
+            { idModulo: 22, Descripcion: 'Contratos digitales', Codigo: 'digital-contracts', idPadre: 19, Activo: true },
+            { idModulo: 23, Descripcion: 'Mis contratos', Codigo: 'my-contracts', idPadre: 19, Activo: true }
+        ];
 
         for (const module of modules) {
             await this.prisma.$queryRaw`
@@ -591,12 +592,12 @@ export class CatalogsSeedService implements OnModuleInit {
 
         for (const rol of roles) {
             await this.prisma.$queryRaw`
-            INSERT INTO CatRoles (idRol, descripcion, activo)
-            VALUES (${rol.idRol}, ${rol.descripcion}, ${rol.activo})
-            ON DUPLICATE KEY UPDATE 
-                descripcion = VALUES(descripcion),
-                activo = VALUES(activo);
-        `;
+                INSERT INTO CatRoles (idRol, descripcion, activo)
+                VALUES (${rol.idRol}, ${rol.descripcion}, ${rol.activo})
+                ON DUPLICATE KEY UPDATE 
+                    descripcion = VALUES(descripcion),
+                    activo = VALUES(activo);
+            `;
         }
     }
 
@@ -609,26 +610,26 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 1, idModulo: 1, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Estructura Organizacional (Padre)
             { idRol: 1, idModulo: 2, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Empresas
             { idRol: 1, idModulo: 3, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Ubicaciones
-            { idRol: 1, idModulo: 4, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Registros Patronales
-            { idRol: 1, idModulo: 5, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Areas Operativas
-            { idRol: 1, idModulo: 6, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Centro de Costos
-            { idRol: 1, idModulo: 7, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Puestos
-            { idRol: 1, idModulo: 8, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Niveles de Salario
-            { idRol: 1, idModulo: 9, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Validación de Puestos
-            { idRol: 1, idModulo: 10, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plazas Operativas
-            { idRol: 1, idModulo: 11, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Organigrama Autorizado
-            { idRol: 1, idModulo: 12, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Organigrama Nominal
-            { idRol: 1, idModulo: 13, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Reclutamiento (Padre)
-            { idRol: 1, idModulo: 14, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Requisiciones
-            { idRol: 1, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Bolsa de trabajo
-            { idRol: 1, idModulo: 16, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Vacantes
-            { idRol: 1, idModulo: 17, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Entrevistas
-            { idRol: 1, idModulo: 18, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes digitales (Padre)
-            { idRol: 1, idModulo: 19, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Documentos requeridos
-            { idRol: 1, idModulo: 20, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes
-            { idRol: 1, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Contratos digitales
-            { idRol: 1, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Mis contratos
-
+            { idRol: 1, idModulo: 4, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Unidades Operativas
+            { idRol: 1, idModulo: 5, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Registros Patronales
+            { idRol: 1, idModulo: 6, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Areas Operativas
+            { idRol: 1, idModulo: 7, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Centro de Costos
+            { idRol: 1, idModulo: 8, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Puestos
+            { idRol: 1, idModulo: 9, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Niveles de Salario
+            { idRol: 1, idModulo: 10, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Validación de Puestos
+            { idRol: 1, idModulo: 11, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plazas Operativas
+            { idRol: 1, idModulo: 12, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Organigrama Autorizado
+            { idRol: 1, idModulo: 13, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Organigrama Nominal
+            { idRol: 1, idModulo: 14, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Reclutamiento (Padre)
+            { idRol: 1, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Requisiciones
+            { idRol: 1, idModulo: 16, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Bolsa de trabajo
+            { idRol: 1, idModulo: 17, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Vacantes
+            { idRol: 1, idModulo: 18, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Entrevistas
+            { idRol: 1, idModulo: 19, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 1, idModulo: 20, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Documentos requeridos
+            { idRol: 1, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes
+            { idRol: 1, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Contratos digitales
+            { idRol: 1, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Mis contratos
 
             // =========================================================================
             // ROL: RH (idRol: 2)
@@ -636,25 +637,26 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 2, idModulo: 1, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Estructura Organizacional (Padre)
             { idRol: 2, idModulo: 2, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Empresas
             { idRol: 2, idModulo: 3, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Ubicaciones
-            { idRol: 2, idModulo: 4, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Registros Patronales
-            { idRol: 2, idModulo: 5, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Areas Operativas
-            { idRol: 2, idModulo: 6, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Centro de Costos
-            { idRol: 2, idModulo: 7, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Puestos
-            { idRol: 2, idModulo: 8, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Niveles de Salario
-            { idRol: 2, idModulo: 9, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Validación de Puestos
-            { idRol: 2, idModulo: 10, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Plazas Operativas
-            { idRol: 2, idModulo: 11, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Organigrama Autorizado
-            { idRol: 2, idModulo: 12, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Organigrama Nominal
-            { idRol: 2, idModulo: 13, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
-            { idRol: 2, idModulo: 14, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Requisiciones
-            { idRol: 2, idModulo: 15, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
-            { idRol: 2, idModulo: 16, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
-            { idRol: 2, idModulo: 17, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
-            { idRol: 2, idModulo: 18, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
-            { idRol: 2, idModulo: 19, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Documentos requeridos
-            { idRol: 2, idModulo: 20, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes
-            { idRol: 2, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Contratos digitales
-            { idRol: 2, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 2, idModulo: 4, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Unidades Operativas
+            { idRol: 2, idModulo: 5, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Registros Patronales
+            { idRol: 2, idModulo: 6, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Areas Operativas
+            { idRol: 2, idModulo: 7, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Centro de Costos
+            { idRol: 2, idModulo: 8, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Puestos
+            { idRol: 2, idModulo: 9, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Niveles de Salario
+            { idRol: 2, idModulo: 10, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Validación de Puestos
+            { idRol: 2, idModulo: 11, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Plazas Operativas
+            { idRol: 2, idModulo: 12, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Organigrama Autorizado
+            { idRol: 2, idModulo: 13, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Organigrama Nominal
+            { idRol: 2, idModulo: 14, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
+            { idRol: 2, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Requisiciones
+            { idRol: 2, idModulo: 16, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
+            { idRol: 2, idModulo: 17, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
+            { idRol: 2, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 2, idModulo: 19, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 2, idModulo: 20, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Documentos requeridos
+            { idRol: 2, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes
+            { idRol: 2, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Contratos digitales
+            { idRol: 2, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Mis contratos
 
             // =========================================================================
             // ROL: FINANZAS (idRol: 3)
@@ -662,25 +664,26 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 3, idModulo: 1, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Estructura Organizacional (Padre)
             { idRol: 3, idModulo: 2, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empresas
             { idRol: 3, idModulo: 3, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Ubicaciones
-            { idRol: 3, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
-            { idRol: 3, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas
-            { idRol: 3, idModulo: 6, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Centro de Costos
-            { idRol: 3, idModulo: 7, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Puestos
-            { idRol: 3, idModulo: 8, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Niveles de Salario
-            { idRol: 3, idModulo: 9, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Validación de Puestos
-            { idRol: 3, idModulo: 10, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
-            { idRol: 3, idModulo: 11, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
-            { idRol: 3, idModulo: 12, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
-            { idRol: 3, idModulo: 13, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
-            { idRol: 3, idModulo: 14, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Requisiciones
-            { idRol: 3, idModulo: 15, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
-            { idRol: 3, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
-            { idRol: 3, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
-            { idRol: 3, idModulo: 18, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
-            { idRol: 3, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
-            { idRol: 3, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
-            { idRol: 3, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Contratos digitales
-            { idRol: 3, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 3, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Unidades Operativas
+            { idRol: 3, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
+            { idRol: 3, idModulo: 6, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas
+            { idRol: 3, idModulo: 7, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Centro de Costos
+            { idRol: 3, idModulo: 8, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Puestos
+            { idRol: 3, idModulo: 9, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Niveles de Salario
+            { idRol: 3, idModulo: 10, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Validación de Puestos
+            { idRol: 3, idModulo: 11, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
+            { idRol: 3, idModulo: 12, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
+            { idRol: 3, idModulo: 13, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
+            { idRol: 3, idModulo: 14, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
+            { idRol: 3, idModulo: 15, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Requisiciones
+            { idRol: 3, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
+            { idRol: 3, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
+            { idRol: 3, idModulo: 18, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 3, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 3, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
+            { idRol: 3, idModulo: 21, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
+            { idRol: 3, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
+            { idRol: 3, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
 
             // =========================================================================
             // ROL: RECLUTADOR (idRol: 4)
@@ -688,25 +691,26 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 4, idModulo: 1, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Estructura Organizacional (Padre)
             { idRol: 4, idModulo: 2, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Empresas
             { idRol: 4, idModulo: 3, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Ubicaciones
-            { idRol: 4, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
-            { idRol: 4, idModulo: 5, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Areas Operativas
-            { idRol: 4, idModulo: 6, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos
-            { idRol: 4, idModulo: 7, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Puestos
-            { idRol: 4, idModulo: 8, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario
-            { idRol: 4, idModulo: 9, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Validación de Puestos
-            { idRol: 4, idModulo: 10, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
-            { idRol: 4, idModulo: 11, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
-            { idRol: 4, idModulo: 12, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
-            { idRol: 4, idModulo: 13, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Reclutamiento (Padre)
-            { idRol: 4, idModulo: 14, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Requisiciones
-            { idRol: 4, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Bolsa de trabajo
-            { idRol: 4, idModulo: 16, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Vacantes
-            { idRol: 4, idModulo: 17, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Entrevistas
-            { idRol: 4, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
-            { idRol: 4, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
-            { idRol: 4, idModulo: 20, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
-            { idRol: 4, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Contratos digitales
-            { idRol: 4, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 4, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Unidades Operativas
+            { idRol: 4, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
+            { idRol: 4, idModulo: 6, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Areas Operativas
+            { idRol: 4, idModulo: 7, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos
+            { idRol: 4, idModulo: 8, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Puestos
+            { idRol: 4, idModulo: 9, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario
+            { idRol: 4, idModulo: 10, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Validación de Puestos
+            { idRol: 4, idModulo: 11, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
+            { idRol: 4, idModulo: 12, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
+            { idRol: 4, idModulo: 13, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
+            { idRol: 4, idModulo: 14, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },   // Reclutamiento (Padre)
+            { idRol: 4, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Requisiciones
+            { idRol: 4, idModulo: 16, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },   // Bolsa de trabajo
+            { idRol: 4, idModulo: 17, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },   // Vacantes
+            { idRol: 4, idModulo: 18, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },   // Entrevistas
+            { idRol: 4, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
+            { idRol: 4, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
+            { idRol: 4, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
+            { idRol: 4, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Contratos digitales
+            { idRol: 4, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Mis contratos
 
             // =========================================================================
             // ROL: MANAGER (idRol: 5)
@@ -714,25 +718,26 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 5, idModulo: 1, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Estructura Organizacional (Padre)
             { idRol: 5, idModulo: 2, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empresas
             { idRol: 5, idModulo: 3, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Ubicaciones
-            { idRol: 5, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
-            { idRol: 5, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas
-            { idRol: 5, idModulo: 6, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos
-            { idRol: 5, idModulo: 7, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Puestos
-            { idRol: 5, idModulo: 8, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario
-            { idRol: 5, idModulo: 9, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Validación de Puestos
-            { idRol: 5, idModulo: 10, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
-            { idRol: 5, idModulo: 11, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
-            { idRol: 5, idModulo: 12, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
-            { idRol: 5, idModulo: 13, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
-            { idRol: 5, idModulo: 14, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },  // Requisiciones
-            { idRol: 5, idModulo: 15, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
-            { idRol: 5, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
-            { idRol: 5, idModulo: 17, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
-            { idRol: 5, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
-            { idRol: 5, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
-            { idRol: 5, idModulo: 20, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
-            { idRol: 5, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Contratos digitales
-            { idRol: 5, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 5, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Unidades Operativas
+            { idRol: 5, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
+            { idRol: 5, idModulo: 6, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas
+            { idRol: 5, idModulo: 7, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos
+            { idRol: 5, idModulo: 8, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },   // Puestos
+            { idRol: 5, idModulo: 9, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario
+            { idRol: 5, idModulo: 10, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Validación de Puestos
+            { idRol: 5, idModulo: 11, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
+            { idRol: 5, idModulo: 12, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
+            { idRol: 5, idModulo: 13, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
+            { idRol: 5, idModulo: 14, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
+            { idRol: 5, idModulo: 15, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true },   // Requisiciones
+            { idRol: 5, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
+            { idRol: 5, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
+            { idRol: 5, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 5, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Expedientes digitales (Padre)
+            { idRol: 5, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
+            { idRol: 5, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
+            { idRol: 5, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
+            { idRol: 5, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
 
             // =========================================================================
             // ROL: EMPLEADO (idRol: 6)
@@ -740,25 +745,26 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 6, idModulo: 1, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Estructura Organizacional (Padre)
             { idRol: 6, idModulo: 2, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empresas
             { idRol: 6, idModulo: 3, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Ubicaciones
-            { idRol: 6, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
-            { idRol: 6, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas
-            { idRol: 6, idModulo: 6, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos
-            { idRol: 6, idModulo: 7, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Puestos
-            { idRol: 6, idModulo: 8, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario
-            { idRol: 6, idModulo: 9, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Validación de Puestos
-            { idRol: 6, idModulo: 10, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
-            { idRol: 6, idModulo: 11, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
-            { idRol: 6, idModulo: 12, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Nominal
-            { idRol: 6, idModulo: 13, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
-            { idRol: 6, idModulo: 14, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Requisiciones
-            { idRol: 6, idModulo: 15, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bolsa de trabajo
-            { idRol: 6, idModulo: 16, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
-            { idRol: 6, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
-            { idRol: 6, idModulo: 18, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
-            { idRol: 6, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
-            { idRol: 6, idModulo: 20, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
-            { idRol: 6, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Contratos digitales
-            { idRol: 6, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 6, idModulo: 4, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Unidades Operativas
+            { idRol: 6, idModulo: 5, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Registros Patronales
+            { idRol: 6, idModulo: 6, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Areas Operativas
+            { idRol: 6, idModulo: 7, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Centro de Costos
+            { idRol: 6, idModulo: 8, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Puestos
+            { idRol: 6, idModulo: 9, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Niveles de Salario
+            { idRol: 6, idModulo: 10, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Validación de Puestos
+            { idRol: 6, idModulo: 11, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plazas Operativas
+            { idRol: 6, idModulo: 12, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Organigrama Autorizado
+            { idRol: 6, idModulo: 13, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Organigrama Nominal
+            { idRol: 6, idModulo: 14, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Reclutamiento (Padre)
+            { idRol: 6, idModulo: 15, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Requisiciones
+            { idRol: 6, idModulo: 16, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Bolsa de trabajo
+            { idRol: 6, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
+            { idRol: 6, idModulo: 18, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
+            { idRol: 6, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes digitales (Padre)
+            { idRol: 6, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
+            { idRol: 6, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes
+            { idRol: 6, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
+            { idRol: 6, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
         ];
 
         for (const permiso of permisos) {

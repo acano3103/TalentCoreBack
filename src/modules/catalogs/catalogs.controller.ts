@@ -1,4 +1,4 @@
-import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, DefaultValuePipe, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CatalogsService, CatalogKey } from './catalogs.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -9,6 +9,11 @@ import { CreateSalaryLevelsCatalogDto } from './dto/create-salary-levels-catalog
 import { PatronalRecordsService } from './sub-services/patronal-records.service';
 import { CreatePatronalRecordDto } from './dto/create-patronal-record.dto';
 import { UpdatePatronalRecordDto } from './dto/update-patronal-record.dto';
+import { OperatingUnitsService } from './sub-services/operating-units.service';
+import { CreateOperatingUnitDto } from './dto/create-operating-unit.dto';
+import { UpdateOperatingUnitDto } from './dto/update-operating-unit.dto';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Catalogs')
@@ -18,8 +23,10 @@ export class CatalogsController {
     private readonly catalogsService: CatalogsService,
     private readonly salaryLevelsCatalogService: SalaryLevelsCatalogService,
     private readonly patronalRecordsService: PatronalRecordsService,
+    private readonly operatingUnitsService: OperatingUnitsService,
   ) { }
 
+  // Obtiene un catálogo genérico
   @Get('catalogs/:nombre')
   @ApiParam({
     name: 'nombre',
@@ -42,9 +49,10 @@ export class CatalogsController {
   }
 
   // ==========================================
-  // ENDPOINTS: Salary levels subservice
+  // ENDPOINTS: Subservicio de niveles salariales
   // ==========================================
 
+  // Obtiene todos los niveles salariales paginados
   @Get('salary-levels')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all salary levels', description: SWAGGER_AUTH_DESCRIPTION })
@@ -61,6 +69,7 @@ export class CatalogsController {
     return this.salaryLevelsCatalogService.findAll(companyId, page, limit, querySearch);
   }
 
+  // Obtiene un nivel salarial por id
   @Get('salary-levels/:salaryLevelId')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get one salary level', description: SWAGGER_AUTH_DESCRIPTION })
@@ -74,6 +83,7 @@ export class CatalogsController {
     return await this.salaryLevelsCatalogService.findOne(companyId, salaryLevelId);
   }
 
+  // Crea un nivel salarial
   @Post('salary-levels')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create salary level', description: SWAGGER_AUTH_DESCRIPTION })
@@ -86,6 +96,7 @@ export class CatalogsController {
     return await this.salaryLevelsCatalogService.create(companyId, createSalaryLevelsCatalogDto);
   }
 
+  // Actualiza un nivel salarial
   @Put('salary-levels/:salaryLevelId')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update salary level', description: SWAGGER_AUTH_DESCRIPTION })
@@ -100,6 +111,7 @@ export class CatalogsController {
     return await this.salaryLevelsCatalogService.update(companyId, salaryLevelId, updateSalaryLevelsCatalogDto);
   }
 
+  // Desactiva un nivel salarial
   @Delete('salary-levels/:salaryLevelId')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable salary level', description: SWAGGER_AUTH_DESCRIPTION })
@@ -113,6 +125,7 @@ export class CatalogsController {
     return this.salaryLevelsCatalogService.changeStatus(companyId, salaryLevelId, false);
   }
 
+  // Reactiva un nivel salarial
   @Patch('salary-levels/:salaryLevelId/reactivate')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Reactivate salary level', description: SWAGGER_AUTH_DESCRIPTION })
@@ -127,9 +140,10 @@ export class CatalogsController {
   }
 
   // ==========================================
-  // ENDPOINTS: Patronal records subservice
+  // ENDPOINTS: Subservicio de registros patronales
   // ==========================================
 
+  // Obtiene todos los registros patronales paginados
   @Get('patronal-records')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all patronal records', description: SWAGGER_AUTH_DESCRIPTION })
@@ -146,6 +160,7 @@ export class CatalogsController {
     return this.patronalRecordsService.findAll(companyId, page, limit, querySearch);
   }
 
+  // Obtiene un registro patronal por id
   @Get('patronal-records/:id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all patronal records', description: SWAGGER_AUTH_DESCRIPTION })
@@ -159,6 +174,7 @@ export class CatalogsController {
     return this.patronalRecordsService.findOne(companyId, id);
   }
 
+  // Crea un registro patronal
   @Post('patronal-records')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create patronal record', description: SWAGGER_AUTH_DESCRIPTION })
@@ -171,6 +187,7 @@ export class CatalogsController {
     return this.patronalRecordsService.create(companyId, createPatronalRecordDto);
   }
 
+  // Actualiza un registro patronal
   @Put('patronal-records/:id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update patronal record', description: SWAGGER_AUTH_DESCRIPTION })
@@ -186,6 +203,7 @@ export class CatalogsController {
     return this.patronalRecordsService.update(companyId, id, updatePatronalRecordDto);
   }
 
+  // Desactiva un registro patronal
   @Delete('patronal-records/:id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable patronal record', description: SWAGGER_AUTH_DESCRIPTION })
@@ -199,6 +217,7 @@ export class CatalogsController {
     return this.patronalRecordsService.changeStatus(companyId, id, false);
   }
 
+  // Reactiva un registro patronal
   @Patch('patronal-records/:id/reactivate')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Reactivate patronal record', description: SWAGGER_AUTH_DESCRIPTION })
@@ -211,4 +230,108 @@ export class CatalogsController {
   ) {
     return this.patronalRecordsService.changeStatus(companyId, id, true);
   }
+
+  // ==========================================
+  // ENDPOINTS: Subservicio de unidades operativas
+  // ==========================================
+
+  @Get('operating-units')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all operating units', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Operating units obtained successfully' })
+  @ApiResponse({ status: 404, description: 'Operating units not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async getOperatingUnits(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+  ) {
+    const querySearch = search || '';
+    return this.operatingUnitsService.findAll(companyId, page, limit, querySearch, user);
+  }
+
+  // Obtiene una unidad operativa por id
+  @Get('operating-units/:id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Obtener una unidad operativa por ID' })
+  @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
+  @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
+  @ApiResponse({ status: 200, description: 'Detalle de la unidad operativa obtenido exitosamente' })
+  @ApiResponse({ status: 404, description: 'Unidad operativa no encontrada' })
+  async getOperatingUnitById(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.operatingUnitsService.findById(companyId, id);
+  }
+
+  // Crea una unidad operativa
+  @Post('operating-units')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Crear una nueva unidad operativa' })
+  @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
+  @ApiResponse({ status: 201, description: 'Unidad operativa creada exitosamente' })
+  @ApiResponse({ status: 400, description: 'Datos de entrada inválidos' })
+  async createOperatingUnit(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() createDto: CreateOperatingUnitDto,
+  ) {
+    return this.operatingUnitsService.create(companyId, createDto, user);
+  }
+
+  // Actualiza una unidad operativa
+  @Put('operating-units/:id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Actualizar una unidad operativa existente' })
+  @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
+  @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
+  @ApiResponse({ status: 200, description: 'Unidad operativa actualizada exitosamente' })
+  @ApiResponse({ status: 404, description: 'Unidad operativa no encontrada' })
+  async updateOperatingUnit(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: UpdateOperatingUnitDto,
+  ) {
+    return this.operatingUnitsService.update(companyId, id, updateDto, user);
+  }
+
+  // Desactivar unidad operativa (Soft Delete)
+  @Delete('operating-units/:id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disable operating unit', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
+  @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
+  @ApiResponse({ status: 200, description: 'Operating unit disabled successfully' })
+  @ApiResponse({ status: 404, description: 'Operating unit not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async disableOperatingUnit(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.operatingUnitsService.changeStatus(companyId, id, false, user);
+  }
+
+  // Reactivar unidad operativa
+  @Patch('operating-units/:id/reactivate')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reactivate operating unit', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
+  @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
+  @ApiResponse({ status: 200, description: 'Operating unit reactivated successfully' })
+  @ApiResponse({ status: 404, description: 'Operating unit not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async reactivateOperatingUnit(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.operatingUnitsService.changeStatus(companyId, id, true, user);
+  }
+
 }
