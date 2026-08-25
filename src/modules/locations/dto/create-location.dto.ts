@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsString, IsNumber, IsOptional, MaxLength, IsIn } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateLocationDto {
     @ApiProperty({ example: 'SUCURSAL CENTRO' })
@@ -12,6 +12,11 @@ export class CreateLocationDto {
     @IsNotEmpty()
     @IsNumber()
     idTipoUbicacion: number;
+
+    @ApiPropertyOptional({ example: 1, description: 'ID de la Unidad Operativa (Opcional)' })
+    @IsOptional()
+    @IsNumber()
+    idUnidadOperativa?: number;
 
     @ApiProperty({ example: 1, description: '1 para verdadero, 0 para falso' })
     @IsNotEmpty()

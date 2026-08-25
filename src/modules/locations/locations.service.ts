@@ -1,7 +1,13 @@
-import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import {
+    Injectable,
+    InternalServerErrorException,
+    Logger,
+    NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateLocationDto } from './dto/create-location.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
+import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 
 @Injectable()
 export class LocationsService {
@@ -9,21 +15,30 @@ export class LocationsService {
 
     constructor(private prismaService: PrismaService) { }
 
-    async findAll(companyId: number, page: number, query: string, limit: number) {
-        const skip = (page - 1) * limit;
+    async findAll(
+        companyId: number,
+        page: number,
+        query: string,
+        limit: number,
+        operatingUnitId?: number | null
+    ) {
+        const pageNumber = Math.max(1, Number(page) || 1);
+        const limitNumber = Math.max(1, Number(limit) || 10);
+        const skip = (pageNumber - 1) * limitNumber;
 
         const whereCondition: any = {
-            idEmpresa: companyId,
+            idEmpresa: Number(companyId),
+            ...(operatingUnitId ? { idUnidadOperativa: Number(operatingUnitId) } : {}),
         };
 
         if (query) {
             whereCondition.OR = [
                 { Descripcion: { contains: query } },
-                { estado: { contains: query } },
-                { municipio: { contains: query } },
-                { colonia: { contains: query } },
-                { calle: { contains: query } },
-                { codigo_postal: { contains: query } }
+                { Estado: { contains: query } },
+                { MunicipioDelegacion: { contains: query } },
+                { Colonia: { contains: query } },
+                { Calle: { contains: query } },
+                { CodigoPostal: { contains: query } },
             ];
         }
 
@@ -31,17 +46,17 @@ export class LocationsService {
             this.prismaService.catSites.findMany({
                 where: whereCondition,
                 skip: skip,
-                take: limit,
+                take: limitNumber,
                 orderBy: { idSite: 'desc' },
             }),
             this.prismaService.catSites.count({ where: whereCondition }),
         ]);
 
-        if ((!sites || sites.length === 0) && page === 1 && !query) {
+        if ((!sites || sites.length === 0) && pageNumber === 1 && !query && !operatingUnitId) {
             return {
                 locations: [],
                 total: 0,
-                currentPage: page,
+                currentPage: pageNumber,
                 totalPages: 1,
             };
         }
@@ -49,47 +64,9 @@ export class LocationsService {
         return {
             locations: sites,
             total,
-            currentPage: page,
-            totalPages: Math.ceil(total / limit) || 1,
+            currentPage: pageNumber,
+            totalPages: Math.ceil(total / limitNumber) || 1,
         };
-    }
-
-    async create(companyId: number, dto: CreateLocationDto) {
-        const companyExists = await this.prismaService.catEmpresas.findUnique({
-            where: { idEmpresa: companyId },
-        });
-        if (!companyExists) throw new NotFoundException('La empresa especificada no existe.');
-
-        try {
-            await this.prismaService.catSites.create({
-                data: {
-                    idEmpresa: companyId,
-                    Descripcion: dto.descripcion,
-                    idTipoUbicacion: dto.idTipoUbicacion,
-                    EsPrincipal: dto.esPrincipal === 1,
-                    CodigoPostal: dto.codigoPostal,
-                    Colonia: dto.colonia,
-                    MunicipioDelegacion: dto.municipio,
-                    Estado: dto.estado,
-                    Calle: dto.calle,
-                    NoExterior: dto.noExt,
-                    NoInterior: dto.noInt || null,
-                    Pais: dto.pais,
-                    Latitud: dto.latitud,
-                    Longitud: dto.longitud,
-                    idRegistroPatronal: dto.idRegistroPatronal || null,
-                    ZonaFronteriza: dto.zonaFronteriza === 1,
-                    Activo: true,
-                    FechaRegistro: new Date(),
-                },
-            });
-
-            return { message: 'Ubicación creada correctamente' };
-
-        } catch (error) {
-            this.logger.error(`Error al crear la ubicación: ${error}`);
-            throw new InternalServerErrorException('Error interno al registrar la ubicación.');
-        }
     }
 
     async getLocationById(companyId: number, locationId: number) {
@@ -105,7 +82,83 @@ export class LocationsService {
         return location;
     }
 
-    async update(companyId: number, locationId: number, dto: UpdateLocationDto) {
+    async create(companyId: number, dto: CreateLocationDto, user: ActiveUserDto) {
+        const companyExists = await this.prismaService.catEmpresas.findUnique({
+            where: { idEmpresa: companyId },
+        });
+        if (!companyExists) throw new NotFoundException('La empresa especificada no existe.');
+
+        // Si enviaron unidad operativa, validamos que exista y pertenezca a la empresa
+        if (dto.idUnidadOperativa) {
+            const operatingUnitExists = await this.prismaService.catUnidadesOperativas.findFirst({
+                where: {
+                    idUnidadOperativa: dto.idUnidadOperativa,
+                    idEmpresa: companyId,
+                },
+            });
+            if (!operatingUnitExists) {
+                throw new NotFoundException('La unidad operativa especificada no existe para esta empresa.');
+            }
+        }
+
+        try {
+            const newSite = await this.prismaService.$transaction(async (tx: any) => {
+                const site = await tx.catSites.create({
+                    data: {
+                        idEmpresa: companyId,
+                        idTipoUbicacion: dto.idTipoUbicacion,
+                        idUnidadOperativa: dto.idUnidadOperativa || null,
+                        Descripcion: dto.descripcion,
+                        EsPrincipal: dto.esPrincipal === 1,
+                        CodigoPostal: dto.codigoPostal,
+                        Colonia: dto.colonia,
+                        MunicipioDelegacion: dto.municipio,
+                        Estado: dto.estado,
+                        Calle: dto.calle,
+                        NoExterior: dto.noExt,
+                        NoInterior: dto.noInt || null,
+                        Pais: dto.pais,
+                        Latitud: dto.latitud,
+                        Longitud: dto.longitud,
+                        idRegistroPatronal: dto.idRegistroPatronal || null,
+                        ZonaFronteriza: dto.zonaFronteriza === 1,
+                        Activo: true,
+                        FechaRegistro: new Date(),
+                    },
+                });
+
+                const userFullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || `Usuario #${user.id}`;
+                const historyModel = tx.historicoMovimientos || tx.HistoricoMovimientos;
+
+                if (historyModel) {
+                    await historyModel.create({
+                        data: {
+                            idUsuario: user.id,
+                            idEmpresa: companyId,
+                            accion: 'CREAR',
+                            tablaOrigen: 'CatSites',
+                            idRegistro: String(site.idSite),
+                            descripcion: `Ubicación "${site.Descripcion}" creada por ${userFullName}`,
+                            fechaCreacion: new Date(),
+                        },
+                    });
+                }
+
+                return site;
+            });
+
+            return {
+                success: true,
+                message: 'Ubicación creada correctamente',
+                data: newSite,
+            };
+        } catch (error) {
+            this.logger.error(`Error al crear la ubicación: ${error.message}`, error.stack);
+            throw new InternalServerErrorException('Error interno al registrar la ubicación.');
+        }
+    }
+
+    async update(companyId: number, locationId: number, dto: UpdateLocationDto, user: ActiveUserDto) {
         const locationExists = await this.prismaService.catSites.findFirst({
             where: {
                 idSite: locationId,
@@ -113,49 +166,124 @@ export class LocationsService {
             },
         });
 
-        if (!locationExists) throw new NotFoundException('La ubicación especificada no existe para esta empresa.');
+        if (!locationExists) {
+            throw new NotFoundException('La ubicación especificada no existe para esta empresa.');
+        }
 
-        try {
-            await this.prismaService.catSites.update({
-                where: { idSite: locationId },
-                data: {
-                    Descripcion: dto.descripcion,
-                    idTipoUbicacion: dto.idTipoUbicacion,
-                    EsPrincipal: dto.esPrincipal === 1,
-                    CodigoPostal: dto.codigoPostal,
-                    Estado: dto.estado,
-                    MunicipioDelegacion: dto.municipio,
-                    Colonia: dto.colonia,
-                    Calle: dto.calle,
-                    NoExterior: dto.noExt,
-                    NoInterior: dto.noInt || null,
-                    Pais: dto.pais,
-                    Latitud: dto.latitud,
-                    Longitud: dto.longitud,
-                    idRegistroPatronal: dto.idRegistroPatronal || null,
-                    ZonaFronteriza: dto.zonaFronteriza === 1,
+        // Si enviaron unidad operativa (y no es nulo/cero), validamos que exista y pertenezca a la empresa
+        if (dto.idUnidadOperativa) {
+            const operatingUnitExists = await this.prismaService.catUnidadesOperativas.findFirst({
+                where: {
+                    idUnidadOperativa: dto.idUnidadOperativa,
+                    idEmpresa: companyId,
                 },
             });
+            if (!operatingUnitExists) {
+                throw new NotFoundException('La unidad operativa especificada no existe para esta empresa.');
+            }
+        }
 
-            return { success: true, message: 'Ubicación actualizada correctamente' };
+        try {
+            const updatedSite = await this.prismaService.$transaction(async (tx: any) => {
+                const site = await tx.catSites.update({
+                    where: { idSite: locationId },
+                    data: {
+                        Descripcion: dto.descripcion,
+                        idTipoUbicacion: dto.idTipoUbicacion,
+                        idUnidadOperativa: dto.idUnidadOperativa !== undefined ? (dto.idUnidadOperativa || null) : undefined,
+                        EsPrincipal: dto.esPrincipal !== undefined ? dto.esPrincipal === 1 : undefined,
+                        CodigoPostal: dto.codigoPostal,
+                        Estado: dto.estado,
+                        MunicipioDelegacion: dto.municipio,
+                        Colonia: dto.colonia,
+                        Calle: dto.calle,
+                        NoExterior: dto.noExt,
+                        NoInterior: dto.noInt || null,
+                        Pais: dto.pais,
+                        Latitud: dto.latitud,
+                        Longitud: dto.longitud,
+                        idRegistroPatronal: dto.idRegistroPatronal !== undefined ? (dto.idRegistroPatronal || null) : undefined,
+                        ZonaFronteriza: dto.zonaFronteriza !== undefined ? dto.zonaFronteriza === 1 : undefined,
+                    },
+                });
 
+                const userFullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || `Usuario #${user.id}`;
+                const historyModel = tx.historicoMovimientos || tx.HistoricoMovimientos;
+
+                if (historyModel) {
+                    await historyModel.create({
+                        data: {
+                            idUsuario: user.id,
+                            idEmpresa: companyId,
+                            accion: 'EDITAR',
+                            tablaOrigen: 'CatSites',
+                            idRegistro: String(locationId),
+                            descripcion: `Ubicación "${site.Descripcion}" actualizada por ${userFullName}`,
+                            fechaCreacion: new Date(),
+                        },
+                    });
+                }
+
+                return site;
+            });
+
+            return {
+                success: true,
+                message: 'Ubicación actualizada correctamente',
+                data: updatedSite,
+            };
         } catch (error) {
-            this.logger.error(`Error al actualizar la ubicación ${locationId}: ${error.message}`);
+            this.logger.error(`Error al actualizar la ubicación ${locationId}: ${error.message}`, error.stack);
             throw new InternalServerErrorException('Error interno al intentar guardar los cambios de la ubicación.');
         }
     }
 
-    async changeStatus(companyId: number, id: number, active: boolean) {
-
-        await this.prismaService.catSites.update({
-            where: { idSite: id, idEmpresa: companyId },
-            data: {
-                Activo: active
+    async changeStatus(companyId: number, id: number, active: boolean, user: ActiveUserDto) {
+        const locationExists = await this.prismaService.catSites.findFirst({
+            where: {
+                idSite: id,
+                idEmpresa: companyId,
             },
         });
 
-        return {
-            message: active ? 'Ubicación activada correctamente' : 'Ubicación desactivada correctamente'
-        };
+        if (!locationExists) {
+            throw new NotFoundException('La ubicación especificada no existe para esta empresa.');
+        }
+
+        try {
+            await this.prismaService.$transaction(async (tx: any) => {
+                await tx.catSites.update({
+                    where: { idSite: id, idEmpresa: companyId },
+                    data: {
+                        Activo: active,
+                    },
+                });
+
+                const userFullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || `Usuario #${user.id}`;
+                const historyModel = tx.historicoMovimientos || tx.HistoricoMovimientos;
+
+                if (historyModel) {
+                    await historyModel.create({
+                        data: {
+                            idUsuario: user.id,
+                            idEmpresa: companyId,
+                            accion: active ? 'REACTIVAR' : 'DESACTIVAR',
+                            tablaOrigen: 'CatSites',
+                            idRegistro: String(id),
+                            descripcion: `Ubicación "${locationExists.Descripcion}" ${active ? 'reactivada' : 'desactivada'} por ${userFullName}`,
+                            fechaCreacion: new Date(),
+                        },
+                    });
+                }
+            });
+
+            return {
+                success: true,
+                message: active ? 'Ubicación activada correctamente' : 'Ubicación desactivada correctamente',
+            };
+        } catch (error) {
+            this.logger.error(`Error al cambiar estatus de la ubicación ${id}: ${error.message}`, error.stack);
+            throw new InternalServerErrorException('Error al actualizar el estatus de la ubicación');
+        }
     }
 }
