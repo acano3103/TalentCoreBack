@@ -567,7 +567,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 20, Descripcion: 'Documentos requeridos', Codigo: 'required-documents', idPadre: 19, Activo: true },
             { idModulo: 21, Descripcion: 'Expedientes', Codigo: 'case-files', idPadre: 19, Activo: true },
             { idModulo: 22, Descripcion: 'Contratos digitales', Codigo: 'digital-contracts', idPadre: 19, Activo: true },
-            { idModulo: 23, Descripcion: 'Mis contratos', Codigo: 'my-contracts', idPadre: 19, Activo: true }
+            { idModulo: 23, Descripcion: 'Control de vencimientos', Codigo: 'due-date-tracking', idPadre: 19, Activo: true }
         ];
 
         for (const module of modules) {
