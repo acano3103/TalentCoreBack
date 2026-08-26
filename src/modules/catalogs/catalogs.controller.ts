@@ -43,9 +43,10 @@ export class CatalogsController {
   @ApiResponse({ status: 400, description: 'Catálogo no reconocido.' })
   getCatalog(
     @Param('companyId', ParseIntPipe) companyId: number,
-    @Param('nombre') nombre: string
+    @Param('nombre') nombre: string,
+    @GetActiveUser() user: ActiveUserDto,
   ) {
-    return this.catalogsService.getCatalog(companyId, nombre as CatalogKey);
+    return this.catalogsService.getCatalog(user, companyId, nombre as CatalogKey);
   }
 
   // ==========================================

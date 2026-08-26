@@ -33,6 +33,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CoursesModule } from './modules/courses/courses.module';
 import { CareerPlanModule } from './modules/career-plan/career-plan.module';
 import { ConfigurationModule } from './modules/configuration/configuration.module';
+import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 
 @Module({
   imports: [
@@ -77,7 +78,8 @@ import { ConfigurationModule } from './modules/configuration/configuration.modul
     InternalMovementsModule,
     CoursesModule,
     CareerPlanModule,
-    ConfigurationModule
+    ConfigurationModule,
+    SuperAdminModule
   ],
   controllers: [],
   providers: [AreasService],

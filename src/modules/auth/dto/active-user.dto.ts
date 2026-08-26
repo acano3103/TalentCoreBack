@@ -31,6 +31,10 @@ export class ActiveUserDto {
     @IsString()
     uuid: string
 
+    @ApiProperty({ description: 'ID único del tenant (auth_user o usuarios)' })
+    @IsNumber()
+    idTenant: number
+
     @ApiProperty({ description: 'Nombre de usuario del empleado o candidato' })
     @IsString()
     username: string

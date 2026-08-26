@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 /** Catálogos disponibles vía el endpoint genérico */
 export type CatalogKey =
@@ -24,7 +25,7 @@ export type CatalogKey =
 export class CatalogsService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async getCatalog(companyId: number, nombre: CatalogKey) {
+  async getCatalog(user: ActiveUserDto, companyId: number, nombre: CatalogKey) {
     switch (nombre) {
 
       case 'roles':
@@ -36,7 +37,7 @@ export class CatalogsService {
 
       case 'empresas':
         return this.prisma.catEmpresas.findMany({
-          where: { activo: true },
+          where: { activo: true, idTenant: user.idTenant },
           select: { idEmpresa: true, nombre_comercial: true, activo: true },
           orderBy: { nombre_comercial: 'asc' },
         });

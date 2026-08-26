@@ -1,6 +1,7 @@
 import { PrismaService } from "src/prisma/prisma.service";
 import { AuthUserRow } from "../interfaces/auth-user.interface";
 import { Prisma } from "generated/prisma/client";
+import { ActiveUserDto } from "src/modules/auth/dto/active-user.dto";
 
 export class UsersQueries {
   static async getUsername(prisma: PrismaService, userId: number) {
@@ -60,7 +61,7 @@ export class UsersQueries {
         `;
   }
 
-  static async findAllPaginated(prisma: PrismaService, limit: number, offset: number, search?: string): Promise<AuthUserRow[]> {
+  static async findAllPaginated(prisma: PrismaService, idTenant: number, limit: number, offset: number, search?: string): Promise<AuthUserRow[]> {
     const searchFilter = search
       ? Prisma.sql`WHERE 
           u.username LIKE ${`%${search}%`} OR 
@@ -81,13 +82,14 @@ export class UsersQueries {
       LEFT JOIN CatRoles c ON c.idRol = r.idRol AND c.activo = 1
       LEFT JOIN Empleados e ON e.idUsuario = u.uuid AND e.activo = 1
       LEFT JOIN CatPuestos p ON p.idPuesto = e.idPuesto AND p.Activo = 1
+      WHERE u.idTenant = ${idTenant}
       ${searchFilter}
       ORDER BY u.id ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
   }
 
-  static async countAll(prisma: PrismaService, search?: string): Promise<number> {
+  static async countAll(prisma: PrismaService, idTenant: number, search?: string): Promise<number> {
     const searchFilter = search
       ? Prisma.sql`WHERE 
           u.username LIKE ${`%${search}%`} OR 
@@ -99,6 +101,7 @@ export class UsersQueries {
     const countResult = await prisma.$queryRaw<{ count: bigint }[]>`
       SELECT COUNT(*) as count 
       FROM auth_user u
+      WHERE u.idTenant = ${idTenant}
       ${searchFilter}
     `;
 

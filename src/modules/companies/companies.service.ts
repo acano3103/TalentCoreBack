@@ -12,7 +12,7 @@ export class CompaniesService {
 
     private readonly logger = new Logger(CompaniesService.name);
 
-    async findAll(page: number, query: string, limit: number) {
+    async findAll(page: number, query: string, limit: number, user: ActiveUserDto) {
         const skip = (page - 1) * limit;
 
         const whereCondition: any = {};
@@ -22,6 +22,9 @@ export class CompaniesService {
                 { nombre_comercial: { contains: query } },
                 { rfc: { contains: query } },
             ];
+            whereCondition.idTenant = user.idTenant;
+        } else {
+            whereCondition.idTenant = user.idTenant;
         }
 
         const [companies, total] = await Promise.all([
@@ -51,9 +54,9 @@ export class CompaniesService {
         };
     }
 
-    async findOne(id: string) {
+    async findOne(id: string, user: ActiveUserDto) {
         const company = await this.prismaService.catEmpresas.findUnique({
-            where: { idEmpresa: Number(id) },
+            where: { idEmpresa: Number(id), idTenant: user.idTenant },
             include: {
                 DomicilioEmpresas: true,
             },
@@ -108,6 +111,7 @@ export class CompaniesService {
             await this.prismaService.$transaction(async (tx) => {
                 const nuevaEmpresa = await tx.catEmpresas.create({
                     data: {
+                        idTenant: user.idTenant,
                         razon_social: dto.razon_social,
                         nombre_comercial: dto.nombre_comercial,
                         correo: dto.correo,

@@ -23,13 +23,14 @@ export class CompaniesController {
     @ApiResponse({ status: 404, description: 'Companies not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     findAll(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Query('page') page: string = '1',
         @Query('search') search: string = '',
         @Query('limit') limit: string = '10'
     ) {
         const pageNumber = parseInt(page, 10) || 1;
         const limitNumber = parseInt(limit, 10) || 10;
-        return this.companiesService.findAll(pageNumber, search, limitNumber);
+        return this.companiesService.findAll(pageNumber, search, limitNumber, activeUser);
     }
 
     // (GET) /companies/{id}
@@ -41,9 +42,10 @@ export class CompaniesController {
     @ApiResponse({ status: 404, description: 'Company not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     findOne(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('id') id: string,
     ) {
-        return this.companiesService.findOne(id);
+        return this.companiesService.findOne(id, activeUser);
     }
 
     // (POST) /companies

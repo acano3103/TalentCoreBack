@@ -47,107 +47,53 @@ export class AuthService {
         const allowConcurrentEnv = this.configService.get('ALLOW_CONCURRENT_SESSIONS', 'true');
         const allowConcurrent = allowConcurrentEnv === true || allowConcurrentEnv === 'true';
 
-        // 1. System users (Staff)
+        // 1. System users (Staff / auth_user)
         const userSystem = await this.dataService.getUserSystem(username);
-        if (userSystem) {
-            if (!userSystem.is_active) throw new UnauthorizedException('El usuario no está activo');
+        if (!userSystem) {
+            throw new UnauthorizedException('El usuario no existe o las credenciales son inválidas');
+        }
 
-            const isPasswordValid = DjangoPasswordHasher.verify(password, userSystem.password);
-            if (!isPasswordValid) throw new UnauthorizedException('La contraseña es incorrecta');
+        if (!userSystem.is_active) throw new UnauthorizedException('El usuario no está activo');
 
-            // AGREGADO: CONTROL DE SESIÓN CONCURRENTE (STAFF)
-            if (!allowConcurrent) {
-                const sessionCheck = await this.handleSessionControl(userSystem.uuid, !!forceLogin);
-                if (sessionCheck.conflict) {
-                    return {
-                        sessionConflict: true,
-                        message: 'Ya tienes una sesión activa en otro dispositivo o navegador. ¿Deseas cerrarla para iniciar aquí?'
-                    };
+        const isPasswordValid = DjangoPasswordHasher.verify(password, userSystem.password);
+        if (!isPasswordValid) throw new UnauthorizedException('La contraseña es incorrecta');
+
+        // AGREGADO: CONTROL DE SESIÓN CONCURRENTE (STAFF)
+        if (!allowConcurrent) {
+            const sessionCheck = await this.handleSessionControl(userSystem.uuid, !!forceLogin);
+            if (sessionCheck.conflict) {
+                return {
+                    sessionConflict: true,
+                    message: 'Ya tienes una sesión activa en otro dispositivo o navegador. ¿Deseas cerrarla para iniciar aquí?'
+                };
+            }
+        }
+
+        if (useToken2FA) {
+            await this.prisma.tokenUsuario.create({
+                data: { idUsuario: userSystem.id, token: token2fa, fechaGeneracion: new Date() }
+            });
+            await this.notifications.notify({
+                userUuid: userSystem.uuid,
+                notificationTypeCode: '2FA',
+                to: userSystem.email,
+                phone: userSystem.phone,
+                subject: 'Código de Verificación - Talent Core',
+                context: {
+                    name: `${userSystem.first_name} ${userSystem.last_name}`,
+                    token: token2fa
                 }
-            }
+            });
 
-            if (useToken2FA) {
-                await this.prisma.tokenUsuario.create({
-                    data: { idUsuario: userSystem.id, token: token2fa, fechaGeneracion: new Date() }
-                });
-                await this.notifications.notify({
-                    userUuid: userSystem.uuid,
-                    notificationTypeCode: '2FA',
-                    to: userSystem.email,
-                    phone: userSystem.phone,
-                    subject: 'Código de Verificación - Talent Core',
-                    context: {
-                        name: `${userSystem.first_name} ${userSystem.last_name}`,
-                        token: token2fa
-                    }
-                })
-
-                // Se asienta la sesión activa en DB vinculada al proceso intermedio
-                await this.registerSessionInDb(userSystem.uuid, browser || 'Unknown Browser');
-
-                return { requires2FA: true, idUsuario: userSystem.id, userType: 'staff', message: `Código enviado a: ${this.ofuscarCorreo(userSystem.email)}` };
-            }
-
-            // Registro directo de sesión si no usa 2FA
+            // Se asienta la sesión activa en DB vinculada al proceso intermedio
             await this.registerSessionInDb(userSystem.uuid, browser || 'Unknown Browser');
-            return this.generateAuthResponse(userSystem.id, 'staff');
+
+            return { requires2FA: true, idUsuario: userSystem.id, userType: 'staff', message: `Código enviado a: ${this.ofuscarCorreo(userSystem.email)}` };
         }
 
-        // 2. Recruitment users (Candidates)
-        const userRec = await this.prisma.usuarios.findFirst({ where: { claveUsuario: username } });
-        if (userRec) {
-            if (!userRec.activo) throw new UnauthorizedException('El usuario no está activo');
-            if (!userRec.password) throw new UnauthorizedException('El usuario no tiene contraseña');
-            if (!userRec.idCandidato) throw new UnauthorizedException('El usuario no tiene un candidato asociado');
-
-            let isPasswordValid = false;
-            if (password === userRec.password) { isPasswordValid = true; }
-
-            if (!isPasswordValid) throw new UnauthorizedException('La contraseña es incorrecta');
-
-            // --- AGREGADO: CONTROL DE SESIÓN CONCURRENTE (CANDIDATO) ---
-            if (!allowConcurrent) {
-                const sessionCheck = await this.handleSessionControl(userRec.uuid, !!forceLogin);
-                if (sessionCheck.conflict) {
-                    return {
-                        sessionConflict: true,
-                        message: 'Ya tienes una sesión activa en otro dispositivo u navegador. ¿Deseas cerrarla para iniciar aquí?'
-                    };
-                }
-            }
-
-            if (useToken2FA) {
-                await this.prisma.usuarios.update({
-                    where: { idUsuario: userRec.idUsuario },
-                    data: { token: token2fa }
-                });
-                const candidate = await this.prisma.postulaciones.findFirst({ where: { idPostulacion: userRec.idCandidato } });
-                if (!candidate?.telefono) throw new BadRequestException('El candidato no tiene telefono registrado');
-
-                await this.notifications.notify({
-                    userUuid: userRec.uuid,
-                    notificationTypeCode: '2FA',
-                    to: candidate.correo || '',
-                    phone: candidate.telefono || undefined,
-                    subject: 'Código de Verificación - Talent Core',
-                    context: {
-                        name: `${candidate.nombre} ${candidate.primerApellido || ''}`,
-                        token: token2fa
-                    }
-                })
-
-                // Se asienta la sesión activa en DB vinculada al proceso intermedio
-                await this.registerSessionInDb(userRec.uuid, browser || 'Unknown Browser');
-
-                return { requires2FA: true, idUsuario: userRec.idUsuario, userType: 'candidato', message: `Código enviado a: ${this.ofuscarCorreo(candidate.correo || '')}` };
-            }
-
-            // Registro directo de sesión si no usa 2FA
-            await this.registerSessionInDb(userRec.uuid, browser || 'Unknown Browser');
-            return this.generateAuthResponse(userRec.idUsuario, 'candidato', userRec.idCandidato);
-        }
-
-        throw new UnauthorizedException('El usuario no existe');
+        // Registro directo de sesión si no usa 2FA
+        await this.registerSessionInDb(userSystem.uuid, browser || 'Unknown Browser');
+        return this.generateAuthResponse(userSystem.id, 'staff');
     }
 
     async logout(activeUser: ActiveUserDto) {
@@ -155,7 +101,7 @@ export class AuthService {
             throw new UnauthorizedException('No se encontraron credenciales de usuario activas.');
         }
 
-        const user: UserFullInfoDto = await this.userSerrvice.getUserFullInfo(activeUser.id)
+        const user: UserFullInfoDto = await this.userSerrvice.getUserFullInfo(activeUser.id);
 
         const userId = activeUser.id;
         const userType = user.roles && user.roles.length > 0 ? 'staff' : 'candidato';
@@ -252,7 +198,7 @@ export class AuthService {
                     name: `${userSystem.first_name} ${userSystem.last_name}`,
                     token: token2fa
                 }
-            })
+            });
 
             return {
                 requires2FA: true,
@@ -284,7 +230,7 @@ export class AuthService {
                     name: `${candidate.nombre} ${candidate.primerApellido}`,
                     token: token2fa
                 }
-            })
+            });
 
             return {
                 requires2FA: true,
@@ -298,14 +244,23 @@ export class AuthService {
     }
 
     private async generateAuthResponse(userId: number, type: 'staff' | 'candidato', idCandidato?: number): Promise<AuthSuccessResponse> {
-        let userData;
+        let userData: any;
         let userUuid = '';
+        let isSuperuser = false;
+        let idTenant: number | null = null;
 
         if (type === 'staff') {
             const user = await this.prisma.auth_user.findUnique({ where: { id: userId } });
             const fullName = `${user?.first_name} ${user?.last_name}`;
             userUuid = user?.uuid || '';
+            isSuperuser = Boolean(user?.is_superuser);
+            idTenant = (user as any)?.idTenant || null;
+
             userData = await this.dataService.getStaffData(userId, fullName);
+
+            // Inyectamos is_superuser e idTenant al objeto de respuesta para el front
+            userData.is_superuser = isSuperuser;
+            userData.idTenant = idTenant;
         } else {
             const user = await this.prisma.usuarios.findFirst({ where: { idUsuario: userId } });
             userUuid = user?.uuid || '';
@@ -320,7 +275,9 @@ export class AuthService {
         const payload = {
             user_id: userId,
             roles: userData.roles,
-            session_id: currentSession?.identificador || null
+            session_id: currentSession?.identificador || null,
+            is_superuser: isSuperuser,
+            idTenant: idTenant
         };
 
         return {
