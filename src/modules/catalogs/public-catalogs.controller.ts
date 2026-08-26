@@ -1,11 +1,11 @@
-import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
-import { CatalogsService, CatalogKey } from './catalogs.service';
+import { PublicCatalogsService, CatalogKey } from './public-catalogs.service';
 
 @ApiTags('Public Catalogs')
 @Controller('job-board/companies/:companyId/')
 export class PublicCatalogsController {
-  constructor(private readonly catalogsService: CatalogsService) {}
+  constructor(private readonly publicCatalogsService: PublicCatalogsService) { }
 
   @Get('catalogs/:nombre')
   @ApiParam({
@@ -27,8 +27,8 @@ export class PublicCatalogsController {
   ) {
     const allowedPublicCatalogs: CatalogKey[] = ['empresas', 'sites', 'areas'];
     if (!allowedPublicCatalogs.includes(nombre as CatalogKey)) {
-      throw new Error(`El catálogo "${nombre}" no está disponible públicamente.`);
+      throw new BadRequestException(`El catálogo "${nombre}" no está disponible públicamente.`);
     }
-    return this.catalogsService.getCatalog(companyId, nombre as CatalogKey);
+    return this.publicCatalogsService.getCatalog(companyId, nombre as CatalogKey);
   }
 }

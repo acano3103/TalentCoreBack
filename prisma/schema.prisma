@@ -155,6 +155,7 @@ model CatDocumentos {
 
 model CatEmpresas {
   idEmpresa              Int                      @id @default(autoincrement())
+  idTenant               Int?
   razon_social           String                   @db.VarChar(200)
   nombre_comercial       String                   @db.VarChar(200)
   correo                 String?                  @db.VarChar(200)
@@ -892,6 +893,7 @@ model auth_user {
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
+  idTenant                          Int?
   AsignacionAprobador               AsignacionAprobador[]
   Empleados                         Empleados[]
   HistoricoMovimientos              HistoricoMovimientos[]
@@ -900,10 +902,13 @@ model auth_user {
   RelUsuarioSite                    RelUsuarioSite[]
   SolicitudPuesto                   SolicitudPuesto[]
   Vacantes                          Vacantes[]
+  CatTenants                        CatTenants?                         @relation(fields: [idTenant], references: [idTenant], onDelete: Restrict, map: "fk_auth_user_tenant")
   auth_user_groups                  auth_user_groups[]
   auth_user_user_permissions        auth_user_user_permissions[]
   django_admin_log                  django_admin_log[]
   tokenUsuario                      tokenUsuario[]
+
+  @@index([idTenant], map: "idx_auth_user_tenant")
 }
 
 model auth_user_groups {
@@ -1709,6 +1714,17 @@ model CatUnidadesOperativas {
   CatEmpresas         CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, map: "FK_UnidadesOperativas_Empresas")
 
   @@index([idEmpresa], map: "FK_UnidadesOperativas_Empresas")
+}
+
+model CatTenants {
+  idTenant            Int         @id @default(autoincrement())
+  uuid                String      @unique(map: "uq_tenant_uuid") @db.VarChar(36)
+  nombre              String      @db.VarChar(150)
+  slug                String      @unique(map: "uq_tenant_slug") @db.VarChar(100)
+  activo              Boolean     @default(true)
+  fecha_creacion      DateTime    @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime?   @db.DateTime(0)
+  auth_user           auth_user[]
 }
 
 enum Entrevistas_interview_type {

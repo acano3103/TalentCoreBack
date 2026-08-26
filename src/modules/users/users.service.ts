@@ -14,8 +14,8 @@ export class UsersService {
 
   async getUserBasicInfo(userID: number) {
     return await this.prisma.auth_user.findUnique({
-      where: { id: userID },
-      select: { id: true, uuid: true, username: true, first_name: true, last_name: true, email: true, phone: true },
+      where: { id: userID, is_active: true },
+      select: { id: true, uuid: true, idTenant: true, username: true, first_name: true, last_name: true, email: true, phone: true, is_superuser: true, is_active: true },
     });
   }
 
@@ -45,12 +45,12 @@ export class UsersService {
   }
 
   /** GET all users — password never returned, includes role via relUsuarioRol JOIN */
-  async findAll(page: number, limit: number, search?: string) {
+  async findAll(user: ActiveUserDto, page: number, limit: number, search?: string) {
     const offset = (page - 1) * limit;
 
     const [data, total] = await Promise.all([
-      UsersQueries.findAllPaginated(this.prisma, limit, offset, search),
-      UsersQueries.countAll(this.prisma, search),
+      UsersQueries.findAllPaginated(this.prisma, user.idTenant, limit, offset, search),
+      UsersQueries.countAll(this.prisma, user.idTenant, search),
     ]);
 
     return {

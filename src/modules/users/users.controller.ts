@@ -22,11 +22,12 @@ export class UsersController {
   })
   @ApiResponse({ status: 200, description: 'List of users successfully retrieved.' })
   findAll(
+    @GetActiveUser() user: ActiveUserDto,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
   ) {
-    return this.usersService.findAll(page, limit, search);
+    return this.usersService.findAll(user, page, limit, search);
   }
 
   @Get(':id')
