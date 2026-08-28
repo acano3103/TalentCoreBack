@@ -104,8 +104,11 @@ export class CompaniesService {
             }
         }
 
-        const user = await this.prismaService.auth_user.findUnique({ where: { id: activeUser.id } });
+       const user = await this.prismaService.auth_user.findUnique({ where: { id: activeUser.id } });
         if (!user) throw new NotFoundException('No se encontró el usuario');
+        if (!user.idTenant) throw new BadRequestException('El usuario no tiene un tenant asignado');
+        const idTenant = user.idTenant;
+      
 
         try {
             await this.prismaService.$transaction(async (tx) => {
@@ -125,6 +128,7 @@ export class CompaniesService {
                 await tx.domicilioEmpresas.create({
                     data: {
                         idEmpresa: nuevaEmpresa.idEmpresa,
+                       idTenant: idTenant,
                         codigo_postal: dto.codigo_postal_empresa,
                         idColonia: dto.colonia_empresa,
                         colonia: dto.colonia_empresa_text || '',
@@ -144,110 +148,119 @@ export class CompaniesService {
         }
     }
 
-    async update(id: string, dto: UpdateCompanyDto, file: Express.Multer.File, activeUser: ActiveUserDto) {
-        const user = await this.prismaService.auth_user.findUnique({ where: { id: activeUser.id } });
-        if (!user) throw new NotFoundException('No se encontró el usuario');
+async update(id: string, dto: UpdateCompanyDto, file: Express.Multer.File, activeUser: ActiveUserDto) {
+    const user = await this.prismaService.auth_user.findUnique({ where: { id: activeUser.id } });
+    if (!user) throw new NotFoundException('No se encontró el usuario');
+    if (!user.idTenant) throw new BadRequestException('El usuario no tiene un tenant asignado');
 
-        const idEmpresa = Number(id);
-        const companyExists = await this.prismaService.catEmpresas.findUnique({
-            where: { idEmpresa },
-        });
-        if (!companyExists) throw new NotFoundException('No se encontró la empresa especificada');
+    const idTenant = user.idTenant; 
 
-        const rfcLimpio = dto.rfc.replace(/[\s-]/g, '').toUpperCase();
-        if (rfcLimpio.length > 13) throw new BadRequestException('El RFC no puede superar los 13 caracteres.');
-        let logoPath: string | null = null;
+    const idEmpresa = Number(id);
+    const companyExists = await this.prismaService.catEmpresas.findUnique({
+        where: { idEmpresa, idTenant: user.idTenant },
+    });
+    if (!companyExists) throw new NotFoundException('No se encontró la empresa especificada');
 
-        if (file) {
-            try {
-                const safeCommercialName = dto.nombre_comercial.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
-                const folderName = safeCommercialName || 'default_company';
-                const fileExtension = path.extname(file.originalname).toLowerCase();
-                const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
-                const logoName = `logo_${folderName}_${timestamp}${fileExtension}`;
+    const rfcLimpio = dto.rfc.replace(/[\s-]/g, '').toUpperCase();
+    if (rfcLimpio.length > 13) throw new BadRequestException('El RFC no puede superar los 13 caracteres.');
+    let logoPath: string | null = null;
 
-                const baseMediaFolder = path.resolve(process.cwd(), 'media');
-                const absoluteFolder = path.join(baseMediaFolder, folderName, 'logo');
-                const absolutePath = path.join(absoluteFolder, logoName);
-
-                if (!absolutePath.startsWith(baseMediaFolder)) throw new BadRequestException('Intento de Path Injection detectado.');
-
-                fs.mkdirSync(absoluteFolder, { recursive: true });
-                fs.writeFileSync(absolutePath, file.buffer);
-                logoPath = `/media/${folderName}/logo/${logoName}`;
-            } catch (fileError) {
-                if (fileError instanceof BadRequestException) throw fileError;
-                throw new InternalServerErrorException(`Failed to save logo file: ${fileError.message}`);
-            }
-        }
-
+    if (file) {
         try {
-            await this.prismaService.$transaction(async (tx) => {
-                await tx.catEmpresas.update({
-                    where: { idEmpresa },
-                    data: {
-                        razon_social: dto.razon_social,
-                        nombre_comercial: dto.nombre_comercial,
-                        correo: dto.correo,
-                        telefono: dto.telefono,
-                        rfc: rfcLimpio,
-                        ...(logoPath && { logo_empresa: logoPath }),
-                        usuarioRegistro: user?.uuid,
-                    },
-                });
+            const safeCommercialName = dto.nombre_comercial.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+            const folderName = safeCommercialName || 'default_company';
+            const fileExtension = path.extname(file.originalname).toLowerCase();
+            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
+            const logoName = `logo_${folderName}_${timestamp}${fileExtension}`;
 
-                const domicilioExistente = await tx.domicilioEmpresas.findFirst({
-                    where: { idEmpresa }
-                });
+            const baseMediaFolder = path.resolve(process.cwd(), 'media');
+            const absoluteFolder = path.join(baseMediaFolder, folderName, 'logo');
+            const absolutePath = path.join(absoluteFolder, logoName);
 
-                const datosDomicilio = {
-                    codigo_postal: dto.codigo_postal,
-                    idColonia: dto.colonia,
-                    colonia: dto.colonia_text || '',
-                    municipio: dto.municipio,
-                    estado: dto.estado,
-                    calle: dto.calle,
-                    numero_exterior: dto.numero_exterior || '',
-                    numero_interior: dto.numero_interior || '',
-                    usuarioRegistro: user?.uuid,
-                };
+            if (!absolutePath.startsWith(baseMediaFolder)) throw new BadRequestException('Intento de Path Injection detectado.');
 
-                if (domicilioExistente) {
-                    await tx.domicilioEmpresas.update({
-                        where: { idDomicilioEmpresa: domicilioExistente.idDomicilioEmpresa },
-                        data: datosDomicilio,
-                    });
-                } else {
-                    await tx.domicilioEmpresas.create({
-                        data: {
-                            idEmpresa,
-                            ...datosDomicilio,
-                        },
-                    });
-                }
-            });
-            return { message: 'Empresa actualizada correctamente' };
-        } catch (dbError) {
-            this.logger.error(`Error al actualizar la empresa: ${dbError.message}`);
-            throw new InternalServerErrorException(`Error al actualizar la empresa`);
+            fs.mkdirSync(absoluteFolder, { recursive: true });
+            fs.writeFileSync(absolutePath, file.buffer);
+            logoPath = `/media/${folderName}/logo/${logoName}`;
+        } catch (fileError) {
+            if (fileError instanceof BadRequestException) throw fileError;
+            throw new InternalServerErrorException(`Failed to save logo file: ${fileError.message}`);
         }
     }
 
-    async changeStatus(id: string, active: boolean, user: ActiveUserDto) {
-        const userRecord = await this.prismaService.auth_user.findUnique({ where: { id: user.id } });
-        if (!userRecord) throw new NotFoundException('No se encontró el usuario');
+    try {
+        await this.prismaService.$transaction(async (tx) => {
+            await tx.catEmpresas.update({
+                where: { idEmpresa, idTenant: user.idTenant },
+                data: {
+                    razon_social: dto.razon_social,
+                    nombre_comercial: dto.nombre_comercial,
+                    correo: dto.correo,
+                    telefono: dto.telefono,
+                    rfc: rfcLimpio,
+                    ...(logoPath && { logo_empresa: logoPath }),
+                    usuarioRegistro: user?.uuid,
+                },
+            });
 
-        const idEmpresa = Number(id);
+            const domicilioExistente = await tx.domicilioEmpresas.findFirst({
+                where: { idEmpresa }
+            });
+
+            const datosDomicilio = {
+                codigo_postal: dto.codigo_postal,
+                idColonia: dto.colonia,
+                colonia: dto.colonia_text || '',
+                municipio: dto.municipio,
+                estado: dto.estado,
+                calle: dto.calle,
+                numero_exterior: dto.numero_exterior || '',
+                numero_interior: dto.numero_interior || '',
+                usuarioRegistro: user?.uuid,
+            };
+
+            if (domicilioExistente) {
+                await tx.domicilioEmpresas.update({
+                    where: { idDomicilioEmpresa: domicilioExistente.idDomicilioEmpresa },
+                    data: datosDomicilio,
+                });
+            } else {
+                await tx.domicilioEmpresas.create({
+                    data: {
+                        idEmpresa,
+                        idTenant: idTenant,
+                        ...datosDomicilio,
+                    },
+                });
+            }
+        });
+        return { message: 'Empresa actualizada correctamente' };
+    } catch (dbError: any) {
+        this.logger.error(`Error al actualizar la empresa: ${dbError.message}`);
+        throw new InternalServerErrorException(`Error al actualizar la empresa`);
+    }
+}
+
+async changeStatus(id: string, active: boolean, user: ActiveUserDto) {
+    const userRecord = await this.prismaService.auth_user.findUnique({ where: { id: user.id } });
+    if (!userRecord) throw new NotFoundException('No se encontró el usuario');
+
+    const idEmpresa = Number(id);
+
+    try {
         await this.prismaService.catEmpresas.update({
-            where: { idEmpresa },
+            where: { idEmpresa, idTenant: userRecord.idTenant },
             data: {
                 activo: active,
                 usuarioRegistro: userRecord.uuid
             },
         });
-
-        return {
-            message: active ? 'Empresa activada correctamente' : 'Empresa desactivada correctamente'
-        };
+    } catch (dbError: any) {
+        throw new NotFoundException('No se encontró la empresa especificada');
     }
+
+    return {
+        message: active ? 'Empresa activada correctamente' : 'Empresa desactivada correctamente'
+    };
+}
 }

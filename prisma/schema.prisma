@@ -474,6 +474,7 @@ model DocumentosPuesto {
 model DomicilioEmpresas {
   idDomicilioEmpresa Int         @id @default(autoincrement())
   idEmpresa          Int
+  idTenant           Int
   codigo_postal      String      @db.VarChar(10)
   idColonia          Int
   colonia            String      @db.VarChar(150)
