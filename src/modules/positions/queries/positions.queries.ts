@@ -1,7 +1,7 @@
 import { PrismaService } from 'src/prisma/prisma.service';
 
 export class PositionQueries {
-  static async findAll(prisma: PrismaService, companyId: number, search: string, page: number, limit: number, aprobada: number) {
+  static async findAll(prisma: PrismaService, idTenant: number, companyId: number, search: string, page: number, limit: number, aprobada: number) {
     const skip = (page - 1) * limit;
     const searchQuery = search ? `%${search}%` : '%';
 
@@ -31,6 +31,7 @@ export class PositionQueries {
         LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
         LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
         WHERE a.idEmpresa = ${companyId}
+          AND p.idTenant = ${idTenant}
           AND p.aprobada = ${aprobada}
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
         ORDER BY p.idPuesto DESC
@@ -42,6 +43,7 @@ export class PositionQueries {
         FROM CatPuestos p
         LEFT JOIN CatAreas a ON a.idArea = p.idArea
         WHERE a.idEmpresa = ${companyId}
+          AND p.idTenant = ${idTenant}
           AND p.aprobada = ${aprobada}
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery});
       ` as Promise<[{ total: bigint | number }]>
@@ -134,7 +136,7 @@ export class PositionQueries {
     return { maestro: maestro || null, idiomas, documentos, cursos, funciones, competencias, habilidades, horarios };
   }
 
-  static async getPositionInfo(prisma: PrismaService, positionId: number) {
+  static async getPositionInfo(prisma: PrismaService, positionId: number, idTenant: number, idEmpresa: number) {
     const result = await prisma.$queryRaw<any[]>`
             SELECT 
                 p.NombrePuesto AS positionName, 
@@ -144,7 +146,9 @@ export class PositionQueries {
                 CONCAT(u.first_name, ' ', u.last_name) AS name
             FROM CatPuestos p
             JOIN auth_user u ON u.uuid = p.idUsuarioRegistro COLLATE utf8mb4_unicode_ci
-            WHERE p.idPuesto = ${positionId}
+            WHERE p.idEmpresa = ${idEmpresa}
+            AND p.idTenant = ${idTenant}
+            AND p.idPuesto = ${positionId}
             LIMIT 1
         `;
     return result[0] ?? null;

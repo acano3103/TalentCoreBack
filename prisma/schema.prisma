@@ -55,6 +55,7 @@ model Beneficiarios {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model CatAreas {
   idArea              Int                   @id @default(autoincrement())
+  idTenant            Int?
   idEmpresa           Int
   Descripcion         String                @db.VarChar(200)
   Activo              Boolean?              @default(true)
@@ -118,6 +119,7 @@ model CatCriterios {
 
 model CatCursos {
   idCursos                Int             @id @default(autoincrement())
+  idTenant                Int?
   idEmpresa               Int
   idTipoCurso             Int             @default(1)
   Descripcion             String?         @db.VarChar(300)
@@ -141,6 +143,7 @@ model CatDescripcionesPuesto {
 
 model CatDocumentos {
   IdDocumento               Int       @id @default(autoincrement())
+  idTenant                  Int?
   idEmpresa                 Int?
   Descripcion               String?   @db.VarChar(100)
   EsRequeridoBase           Boolean   @default(false)
@@ -297,6 +300,7 @@ model CatPlataforma {
 
 model CatPuestos {
   idPuesto              Int                     @id @default(autoincrement())
+  idTenant              Int?
   idEmpresa             Int                     @default(1)
   NombrePuesto          String                  @db.VarChar(200)
   idTipoPuesto          Int?
@@ -349,6 +353,7 @@ model CatSites {
   ZonaFronteriza        Boolean?                @default(false)
   Activo                Boolean?                @default(true)
   FechaRegistro         DateTime?               @db.DateTime(0)
+  idTenant              Int                     @default(0)
   CatPuestos            CatPuestos[]
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   CatUnidadesOperativas CatUnidadesOperativas?  @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
@@ -474,7 +479,6 @@ model DocumentosPuesto {
 model DomicilioEmpresas {
   idDomicilioEmpresa Int         @id @default(autoincrement())
   idEmpresa          Int
-  idTenant           Int
   codigo_postal      String      @db.VarChar(10)
   idColonia          Int
   colonia            String      @db.VarChar(150)
@@ -485,6 +489,7 @@ model DomicilioEmpresas {
   numero_interior    String?     @db.VarChar(20)
   fechaRegistro      DateTime?   @default(now()) @db.DateTime(0)
   usuarioRegistro    String?     @db.VarChar(100)
+  idTenant           Int
   CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "DomicilioEmpresas_ibfk_1")
 
   @@index([idEmpresa], map: "idEmpresa")
@@ -1150,6 +1155,7 @@ model RelPuestosUbicaciones {
 
 model RelRolPermisos {
   id              Int        @id @default(autoincrement())
+  idTenant        Int?
   idRol           Int
   idModulo        Int
   puedeVer        Boolean    @default(false)
@@ -1291,6 +1297,7 @@ model CatTiposPublicacion {
 
 model CatRoles {
   idRol          Int              @id @default(autoincrement())
+  idTenant       Int?
   descripcion    String           @db.VarChar(100)
   activo         Boolean          @default(true)
   RelRolPermisos RelRolPermisos[]
@@ -1313,6 +1320,7 @@ model CatEstatusSolicitudPuesto {
 
 model SolicitudPuesto {
   id                        Int                       @id @default(autoincrement())
+  idTenant                  Int?
   idEmpresa                 Int
   idUsuarioSolicita         Int
   descripcion               String                    @db.Text

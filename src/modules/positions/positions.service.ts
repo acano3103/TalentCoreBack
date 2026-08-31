@@ -30,8 +30,8 @@ export class PositionsService {
 
     private readonly logger = new Logger(PositionsService.name);
 
-    async findAll(companyId: number, page: number, search: string, limit: number, aprobada: number) {
-        const { positions, total } = await PositionQueries.findAll(this.prisma, companyId, search, page, limit, aprobada);
+    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number, aprobada: number) {
+        const { positions, total } = await PositionQueries.findAll(this.prisma, activeUser.idTenant, companyId, search, page, limit, aprobada);
 
         if ((!positions || positions.length === 0) && page === 1 && !search) {
             return {
@@ -50,16 +50,16 @@ export class PositionsService {
         };
     }
 
-    async findOne(companyId: number, positionId: number, specific: number) {
+    async findOne(activeUser: ActiveUserDto, companyId: number, positionId: number, specific: number) {
+        const position = await this.prisma.catPuestos.findFirst({
+            where: { idTenant: activeUser.idTenant, idEmpresa: companyId, idPuesto: positionId },
+        });
+        if (!position) throw new NotFoundException('El puesto no se encontro o no existe.');
+
         if (specific === 1) {
             const validationData = await PositionQueries.findValidationDetails(this.prisma, positionId);
             return { validationData };
         } else {
-            const position = await this.prisma.catPuestos.findFirst({
-                where: { idEmpresa: companyId, idPuesto: positionId },
-            });
-            if (!position) throw new NotFoundException('Puesto no encontrado');
-
             const languages = await this.prisma.idiomasPuesto.findMany({
                 where: { idPuesto: positionId },
             });
@@ -87,54 +87,63 @@ export class PositionsService {
     }
 
 
-    async getSchedule(positionId: number) {
-    const horarios = await this.prisma.horariosPuesto.findMany({
-        where: { idPuesto: positionId },
-    });
-
-
-    // Formateamos las horas a "HH:mm" (vienen como DateTime con fecha base 1970-01-01)
-    const formatearHora = (fecha: Date | null): string => {
-        if (!fecha) return '';
-        const d = new Date(fecha);
-        const horas = String(d.getUTCHours()).padStart(2, '0');
-        const minutos = String(d.getUTCMinutes()).padStart(2, '0');
-        return `${horas}:${minutos}`;
-    };
-
-    return horarios.map((h) => ({
-        dia: h.DiaSemana,
-        horaEntrada: formatearHora(h.HoraEntrada),
-        horaSalida: formatearHora(h.HoraSalida),
-    }));
-}
-
-async getRequiredDocuments(positionId: number) {
-    const docsPuesto = await this.prisma.documentosPuesto.findMany({
-        where: { idPuesto: positionId },
-    });
-    if (docsPuesto.length === 0) return [];
-
-    const idsDocumento = docsPuesto.map((d) => d.idDocumento);
-    const catDocumentos = await this.prisma.catDocumentos.findMany({
-        where: { IdDocumento: { in: idsDocumento }, Activo: true },
-    });
-    const catMap = new Map(catDocumentos.map((c) => [c.IdDocumento, c]));
-
-    return docsPuesto
-        .filter((d) => catMap.has(d.idDocumento))
-        .map((d) => {
-            const cat = catMap.get(d.idDocumento)!;
-            return {
-                id: cat.IdDocumento,
-                nombre: cat.Descripcion,
-                obligatorio: !!d.esObligatorio,
-            };
+    async getSchedule(activeUser: ActiveUserDto, companyId: number, positionId: number) {
+        const position = await this.prisma.catPuestos.findFirst({
+            where: { idTenant: activeUser.idTenant, idEmpresa: companyId, idPuesto: positionId },
         });
-}
+        if (!position) throw new NotFoundException('El puesto no se encontro o no existe.');
+
+        const horarios = await this.prisma.horariosPuesto.findMany({
+            where: { idPuesto: positionId },
+        });
+
+        // Formateamos las horas a "HH:mm" (vienen como DateTime con fecha base 1970-01-01)
+        const formatearHora = (fecha: Date | null): string => {
+            if (!fecha) return '';
+            const d = new Date(fecha);
+            const horas = String(d.getUTCHours()).padStart(2, '0');
+            const minutos = String(d.getUTCMinutes()).padStart(2, '0');
+            return `${horas}:${minutos}`;
+        };
+
+        return horarios.map((h) => ({
+            dia: h.DiaSemana,
+            horaEntrada: formatearHora(h.HoraEntrada),
+            horaSalida: formatearHora(h.HoraSalida),
+        }));
+    }
+
+    async getRequiredDocuments(activeUser: ActiveUserDto, companyId: number, positionId: number) {
+        const position = await this.prisma.catPuestos.findFirst({
+            where: { idTenant: activeUser.idTenant, idEmpresa: companyId, idPuesto: positionId },
+        });
+        if (!position) throw new NotFoundException('El puesto no se encontro o no existe.');
+
+        const docsPuesto = await this.prisma.documentosPuesto.findMany({
+            where: { idPuesto: positionId },
+        });
+        if (docsPuesto.length === 0) return [];
+
+        const idsDocumento = docsPuesto.map((d) => d.idDocumento);
+        const catDocumentos = await this.prisma.catDocumentos.findMany({
+            where: { IdDocumento: { in: idsDocumento }, Activo: true },
+        });
+        const catMap = new Map(catDocumentos.map((c) => [c.IdDocumento, c]));
+
+        return docsPuesto
+            .filter((d) => catMap.has(d.idDocumento))
+            .map((d) => {
+                const cat = catMap.get(d.idDocumento)!;
+                return {
+                    id: cat.IdDocumento,
+                    nombre: cat.Descripcion,
+                    obligatorio: !!d.esObligatorio,
+                };
+            });
+    }
 
 
-    async create(companyId: number, activeUser: ActiveUserDto, dto: CreatePositionDto) {
+    async create(activeUser: ActiveUserDto, companyId: number, dto: CreatePositionDto) {
         const user = await this.prisma.auth_user.findFirst({ where: { id: activeUser.id } });
         if (!user) throw new BadRequestException('Tu usuario actual no existe');
 
@@ -145,6 +154,7 @@ async getRequiredDocuments(positionId: number) {
             // Creamos el puesto padre de forma secuencial (Obligatorio para obtener el ID)
             const nuevoPuesto = await tx.catPuestos.create({
                 data: {
+                    idTenant: activeUser.idTenant,
                     idEmpresa: companyId,
                     NombrePuesto: generalInfo.nombrePuesto.trim(),
                     idTipoPuesto: Number(generalInfo.idTipoPuesto),
@@ -294,14 +304,14 @@ async getRequiredDocuments(positionId: number) {
         });
     }
 
-    async update(companyId: number, positionId: number, activeUser: ActiveUserDto, data: CreatePositionDto) {
+    async update(activeUser: ActiveUserDto, companyId: number, positionId: number, data: CreatePositionDto) {
         const user = await this.prisma.auth_user.findFirst({ where: { id: activeUser.id } });
         if (!user) throw new BadRequestException('Tu usuario actual no existe');
 
         return await this.prisma.$transaction(async (tx) => {
             const { generalInfo, languages } = data;
 
-            const puestoExistente = await tx.catPuestos.findFirst({ where: { idPuesto: positionId, idEmpresa: companyId } });
+            const puestoExistente = await tx.catPuestos.findFirst({ where: { idPuesto: positionId, idTenant: activeUser.idTenant, idEmpresa: companyId } });
             if (!puestoExistente) throw new NotFoundException('El puesto solicitado no existe en esta empresa');
 
             // =========================================================================
@@ -464,10 +474,11 @@ async getRequiredDocuments(positionId: number) {
         });
     }
 
-    async changeStatus(companyId: number, id: number, active: boolean, activeUser: ActiveUserDto) {
+    async changeStatus(activeUser: ActiveUserDto, companyId: number, id: number, active: boolean) {
         const positionExists = await this.prisma.catPuestos.findFirst({
             where: {
                 idPuesto: id,
+                idTenant: activeUser.idTenant,
                 idEmpresa: companyId,
             },
         });
@@ -497,8 +508,8 @@ async getRequiredDocuments(positionId: number) {
         return { message: active ? 'Puesto activado correctamente' : 'Puesto desactivado correctamente' };
     }
 
-    async generateAIPositionDescription(companyId: number, positionId: number, activeUser: ActiveUserDto) {
-        const position = await this.findOne(companyId, positionId, 1);
+    async generateAIPositionDescription(activeUser: ActiveUserDto, companyId: number, positionId: number) {
+        const position = await this.findOne(activeUser, companyId, positionId, 1);
 
         const activeAiIntegration = await this.prisma.integraciones.findFirst({
             where: {
@@ -525,9 +536,9 @@ async getRequiredDocuments(positionId: number) {
         return { description: aiGeneratedDescription };
     }
 
-    async getCatalogs(companyId: number) {
+    async getCatalogs(activeUser: ActiveUserDto, companyId: number) {
         const areas = await this.prisma.catAreas.findMany({
-            where: { Activo: true },
+            where: { Activo: true, idTenant: activeUser.idTenant, idEmpresa: companyId },
         });
 
         const positionTypes = await this.prisma.catTipoPuesto.findMany({
@@ -555,12 +566,12 @@ async getRequiredDocuments(positionId: number) {
         });
 
         const positions = await this.prisma.catPuestos.findMany({
-            where: { Activo: true, aprobada: true },
+            where: { Activo: true, aprobada: true, idTenant: activeUser.idTenant, idEmpresa: companyId },
             select: { idPuesto: true, NombrePuesto: true, DescripcionPuesto: true }
         });
 
         const documents = await this.prisma.catDocumentos.findMany({
-            where: { Activo: true },
+            where: { Activo: true, idTenant: activeUser.idTenant, idEmpresa: companyId },
         });
 
         const courseTypes = await this.prisma.catTipoCurso.findMany({
@@ -568,15 +579,15 @@ async getRequiredDocuments(positionId: number) {
         });
 
         const courses = await this.prisma.catCursos.findMany({
-            where: { activo: true },
+            where: { activo: true, idTenant: activeUser.idTenant, idEmpresa: companyId },
         });
 
         return { areas, positionTypes, modalities, educationLevels, hiringTypes, salaryLevels, languages, positions, documents, courseTypes, courses };
     }
 
-    async approveOrReject(companyId: number, positionId: number, dto: ValidatePositionDto, activeUser: ActiveUserDto) {
+    async approveOrReject(activeUser: ActiveUserDto, companyId: number, positionId: number, dto: ValidatePositionDto) {
         try {
-            const position = await PositionQueries.getPositionInfo(this.prisma, positionId);
+            const position = await PositionQueries.getPositionInfo(this.prisma, positionId, activeUser.idTenant, companyId);
             if (!position) throw new NotFoundException('No se encontró el puesto');
 
             const { positionName, email, phone, userUuid, name } = position;
@@ -632,6 +643,7 @@ async getRequiredDocuments(positionId: number) {
             // @ts-ignore
             const request = await tx.solicitudPuesto.create({
                 data: {
+                    idTenant: activeUser.idTenant,
                     idEmpresa: companyId,
                     idUsuarioSolicita: activeUser.id,
                     descripcion: dto.description,
@@ -726,6 +738,7 @@ async getRequiredDocuments(positionId: number) {
 
         const whereConditions: any = {
             idEmpresa: companyId,
+            idTenant: activeUser.idTenant
         };
 
         if (filterByUser === true) {
@@ -797,7 +810,7 @@ async getRequiredDocuments(positionId: number) {
         await this.prisma.$transaction(async (tx) => {
             // @ts-ignore
             const request = await tx.solicitudPuesto.findUnique({
-                where: { id: requestId, idUsuarioSolicita: activeUser.id },
+                where: { id: requestId, idTenant: activeUser.idTenant, idEmpresa: companyId, idUsuarioSolicita: activeUser.id },
             });
             if (!request) throw new NotFoundException('No se encontró la solicitud');
 
@@ -826,7 +839,7 @@ async getRequiredDocuments(positionId: number) {
         try {
             // @ts-ignore
             const request = await this.prisma.solicitudPuesto.findUnique({
-                where: { id: requestId, idEmpresa: companyId },
+                where: { id: requestId, idTenant: activeUser.idTenant, idEmpresa: companyId },
             });
             if (!request) throw new NotFoundException('No se encontró la solicitud de creación de puesto');
 
