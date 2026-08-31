@@ -2,15 +2,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateSalaryLevelsCatalogDto } from '../dto/update-salary-levels-catalog.dto';
 import { CreateSalaryLevelsCatalogDto } from '../dto/create-salary-levels-catalog.dto';
+import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 
 @Injectable()
 export class SalaryLevelsCatalogService {
     constructor(private readonly prismaService: PrismaService) { }
 
-    async findAll(companyId: number, page: number, limit: number, query: string,) {
+    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, limit: number, query: string,) {
         const skip = (page - 1) * limit;
 
         const whereCondition: any = {
+            idTenant: activeUser.idTenant,
             IdEmpresa: companyId,
         };
 
@@ -61,10 +63,11 @@ export class SalaryLevelsCatalogService {
         };
     }
 
-    async findOne(companyId: number, id: number) {
+    async findOne(activeUser: ActiveUserDto, companyId: number, id: number) {
         const salaryLevel = await this.prismaService.catNivelesSalario.findUnique({
             where: {
                 IdNivelSalario: id,
+                idTenant: activeUser.idTenant,
                 IdEmpresa: companyId,
             },
             include: {
@@ -98,25 +101,27 @@ export class SalaryLevelsCatalogService {
         };
     }
 
-    async create(companyId: number, data: CreateSalaryLevelsCatalogDto) {
+    async create(activeUser: ActiveUserDto, companyId: number, data: CreateSalaryLevelsCatalogDto) {
         await this.prismaService.catNivelesSalario.create({
             data: {
+                idTenant: activeUser.idTenant,
+                IdEmpresa: companyId,
                 NombreNivel: data.NombreNivel,
                 Descripcion: data.Descripcion,
                 SalarioMinimo: data.SalarioMinimo,
                 SalarioMaximo: data.SalarioMaximo,
                 Activo: data.Activo ? true : false,
-                IdEmpresa: companyId,
             },
         });
 
         return { message: 'Nivel salarial creado correctamente' };
     }
 
-    async update(companyId: number, id: number, data: UpdateSalaryLevelsCatalogDto) {
+    async update(activeUser: ActiveUserDto, companyId: number, id: number, data: UpdateSalaryLevelsCatalogDto) {
         const salaryLevel = await this.prismaService.catNivelesSalario.findUnique({
             where: {
                 IdNivelSalario: id,
+                idTenant: activeUser.idTenant,
                 IdEmpresa: companyId,
             },
         });
@@ -136,10 +141,10 @@ export class SalaryLevelsCatalogService {
         return { message: 'Nivel salarial actualizado correctamente' };
     }
 
-    async changeStatus(companyId: number, id: number, active: boolean) {
+    async changeStatus(activeUser: ActiveUserDto, companyId: number, id: number, active: boolean) {
 
         await this.prismaService.catNivelesSalario.update({
-            where: { IdNivelSalario: id, IdEmpresa: companyId },
+            where: { IdNivelSalario: id, idTenant: activeUser.idTenant, IdEmpresa: companyId },
             data: {
                 Activo: active
             },

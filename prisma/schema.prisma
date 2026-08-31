@@ -277,10 +277,11 @@ model CatNivel {
 
 model CatNivelesSalario {
   IdNivelSalario Int          @id @default(autoincrement())
+  idTenant       Int?
+  IdEmpresa      Int          @default(1)
   NombreNivel    String       @db.VarChar(50)
   Descripcion    String?      @db.Text
   Activo         Boolean?     @default(true)
-  IdEmpresa      Int          @default(1)
   SalarioMinimo  Decimal?     @db.Decimal(10, 2)
   SalarioMaximo  Decimal?     @db.Decimal(10, 2)
   CatPuestos     CatPuestos[]
