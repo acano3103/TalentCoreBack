@@ -1,15 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OrganizationChartQueries } from './queries/organization-chart.queries';
+import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 
 @Injectable()
 export class OrganizationChartService {
     constructor(private readonly prisma: PrismaService) { }
 
-    async getAuthorizedChart(companyId: number, siteId?: number, areaId?: number) {
+    async getAuthorizedChart(activeUser: ActiveUserDto, companyId: number, siteId?: number, areaId?: number) {
         const [companyName, chartData] = await Promise.all([
-            OrganizationChartQueries.getCompanyName(this.prisma, companyId),
-            OrganizationChartQueries.getAuthorizedChartData(this.prisma, companyId, siteId, areaId),
+            OrganizationChartQueries.getCompanyName(this.prisma, activeUser.idTenant, companyId),
+            OrganizationChartQueries.getAuthorizedChartData(this.prisma, activeUser.idTenant, companyId, siteId, areaId),
         ]);
 
         // 1. Paleta de colores dinámicos
@@ -88,15 +89,15 @@ export class OrganizationChartService {
         };
     }
 
-    async getRealChart(companyId: number, siteId?: number, areaId?: number) {
+    async getRealChart(activeUser: ActiveUserDto, companyId: number, siteId?: number, areaId?: number) {
         // Convertimos los undefined en null para pasarlos de forma segura a $queryRaw
         const filterSiteId = siteId ?? null;
         const filterAreaId = areaId ?? null;
 
         const [companyName, employees, vacancies] = await Promise.all([
-            OrganizationChartQueries.getCompanyName(this.prisma, companyId),
-            OrganizationChartQueries.getRealEmployeesData(this.prisma, companyId, filterSiteId, filterAreaId),
-            OrganizationChartQueries.getRealVacanciesData(this.prisma, companyId, filterSiteId, filterAreaId),
+            OrganizationChartQueries.getCompanyName(this.prisma, activeUser.idTenant, companyId),
+            OrganizationChartQueries.getRealEmployeesData(this.prisma, activeUser.idTenant, companyId, filterSiteId, filterAreaId),
+            OrganizationChartQueries.getRealVacanciesData(this.prisma, activeUser.idTenant, companyId, filterSiteId, filterAreaId),
         ]);
 
         const paletaColores = [

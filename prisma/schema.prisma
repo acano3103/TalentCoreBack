@@ -1082,8 +1082,9 @@ model RelAreasUbicaciones {
 
 model Empleados {
   idEmpleado                                        Int                   @id @default(autoincrement())
-  idUsuario                                         String?               @db.VarChar(36)
+  idTenant                                          Int?
   idEmpresa                                         Int?
+  idUsuario                                         String?               @db.VarChar(36)
   idPuesto                                          Int?
   idJefeInmediato                                   Int?
   idSite                                            Int?
@@ -1173,8 +1174,9 @@ model RelRolPermisos {
 
 model Vacantes {
   idVacante                                          Int                  @id @default(autoincrement())
-  idUsuarioCreador                                   Int
+  idTenant                                           Int?
   idEmpresa                                          Int
+  idUsuarioCreador                                   Int
   idPuesto                                           Int
   idSite                                             Int
   idJefeInmediato                                    Int

@@ -17,6 +17,10 @@ import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 export class PositionsController {
     constructor(private readonly service: PositionsService) { }
 
+    // ==========================================
+    // ENDPOINTS: Subservicio de solicitudes de puesto
+    // ==========================================
+
     // Obtiene todas las solicitudes de puesto
     @Get('requests')
     @ApiOperation({ summary: 'Get all position requests for the administration panel', description: SWAGGER_AUTH_DESCRIPTION })
@@ -89,6 +93,10 @@ export class PositionsController {
     ) {
         return this.service.deleteRequest(companyId, requestId, activeUser);
     }
+
+    // ==========================================
+    // ENDPOINTS: Subservicio de puestos
+    // ==========================================
 
     // Obtener todos los puestos páginados
     @Get()

@@ -3,15 +3,24 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class OrganizationChartQueries {
-    static async getCompanyName(prisma: PrismaService, companyId: number): Promise<string> {
+    static async getCompanyName(
+        prisma: PrismaService,
+        idTenant: number,
+        companyId: number
+    ): Promise<string> {
         const result = await prisma.$queryRaw<[{ nombre_comercial: string }]>`
-          SELECT nombre_comercial FROM CatEmpresas WHERE idEmpresa = ${companyId} LIMIT 1
+          SELECT nombre_comercial 
+          FROM CatEmpresas 
+          WHERE idEmpresa = ${companyId} 
+          AND idTenant = ${idTenant}
+          LIMIT 1
         `;
         return result[0]?.nombre_comercial || 'Empresa';
     }
 
     static async getAuthorizedChartData(
         prisma: PrismaService,
+        idTenant: number,
         companyId: number,
         siteId?: number,
         areaId?: number
@@ -33,6 +42,8 @@ export class OrganizationChartQueries {
                 ROW_NUMBER() OVER (PARTITION BY idPuesto, idSite ORDER BY idEmpleado) AS rn
             FROM Empleados
             WHERE activo = 1
+            AND idTenant = ${idTenant}
+            AND idEmpresa = ${companyId}
         )
         SELECT 
             CONCAT(p.idPuesto, '_', rpu.idSite, '_', sg.seq) AS uid,       
@@ -58,6 +69,7 @@ export class OrganizationChartQueries {
         LEFT JOIN PlazasOcupadas emp ON emp.idPuesto = p.idPuesto AND emp.idSite = rpu.idSite AND emp.rn = sg.seq
         -- Evaluamos de forma segura los filtros opcionales en el WHERE
         WHERE e.idEmpresa = ${companyId} 
+          AND e.idTenant = ${idTenant}
           AND p.Activo = 1
           AND (${filterSiteId} IS NULL OR s.idSite = ${filterSiteId})
           AND (${filterAreaId} IS NULL OR a.idArea = ${filterAreaId});
@@ -66,6 +78,7 @@ export class OrganizationChartQueries {
 
     static async getRealEmployeesData(
         prisma: PrismaService,
+        idTenant: number,
         companyId: number,
         siteId: number | null,
         areaId: number | null
@@ -91,6 +104,8 @@ export class OrganizationChartQueries {
             JOIN CatAreas a ON a.idArea = p.idArea AND a.Activo = 1
             JOIN CatSites s ON s.idSite = e.idSite AND s.idEmpresa = ${companyId}
             WHERE e.activo = 1
+              AND e.idTenant = ${idTenant}
+              AND e.idEmpresa = ${companyId}
               AND (${siteId} IS NULL OR s.idSite = ${siteId})
               AND (${areaId} IS NULL OR p.idArea = ${areaId});
         `;
@@ -98,6 +113,7 @@ export class OrganizationChartQueries {
 
     static async getRealVacanciesData(
         prisma: PrismaService,
+        idTenant: number,
         companyId: number,
         siteId: number | null,
         areaId: number | null
@@ -120,6 +136,8 @@ export class OrganizationChartQueries {
             JOIN CatSites s ON s.idSite = v.idSite AND s.idEmpresa = ${companyId}
             JOIN CatEstatusVacante ev ON ev.idEstatusVacante = v.idEstatusVacante
             WHERE v.idEstatusVacante = 5
+              AND v.idTenant = ${idTenant}
+              AND v.idEmpresa = ${companyId}
               AND (${siteId} IS NULL OR s.idSite = ${siteId})
               AND (${areaId} IS NULL OR p.idArea = ${areaId});
         `;
