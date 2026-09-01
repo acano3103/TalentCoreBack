@@ -511,6 +511,7 @@ model EntrevistaCriteriosEvaluacion {
 
 model Entrevistas {
   id                     String                     @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  tenant_id              Int?
   company_id             Int
   idVacante              Int?
   provider_id            Int
@@ -550,6 +551,7 @@ model EntrevistasCriterios {
 
 model EntrevistasPostulantes {
   id                            String                          @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  tenant_id                     Int?
   candidate_uuid                String                          @db.Char(36)
   interview_id                  String                          @db.Char(36)
   scheduled_at                  DateTime?                       @db.DateTime(0)
@@ -1044,6 +1046,7 @@ model CatRegistrosPatronales {
   ClaseRiesgo        String      @db.VarChar(10)
   PrimaRiesgo        Decimal     @default(0.50000) @db.Decimal(7, 5)
   Activo             Boolean?    @default(true)
+  idTenant           Int         @default(0)
   CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, onUpdate: NoAction, map: "FK_RegPatronal_Empresa")
 
   @@index([idEmpresa], map: "FK_RegPatronal_Empresa")
@@ -1722,6 +1725,7 @@ model CatUnidadesOperativas {
   Activo              Boolean?    @default(true)
   FechaRegistro       DateTime?   @default(now()) @db.DateTime(0)
   UsuarioRegistro     String?     @db.VarChar(100)
+  idTenant            Int         @default(0)
   CatSites            CatSites[]
   CatEmpresas         CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, map: "FK_UnidadesOperativas_Empresas")
 

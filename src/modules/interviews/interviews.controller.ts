@@ -29,6 +29,7 @@ export class InterviewsController {
     @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page' })
     @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by title or vacancy name' })
     findAll(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('vacancyId') vacancyId?: string,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
@@ -36,6 +37,7 @@ export class InterviewsController {
         @Query('search') search?: string
     ) {
         return this.interviewsService.findAll(
+            activeUser,
             companyId,
             vacancyId ? Number(vacancyId) : undefined,
             page ?? 1,
@@ -51,8 +53,11 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'List of active vacancies for a company' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No active vacancies found for this company' })
-    findActiveVacancies(@Param('companyId', ParseIntPipe) companyId: number) {
-        return this.interviewsService.findActiveVacancies(companyId);
+    findActiveVacancies(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number
+    ) {
+        return this.interviewsService.findActiveVacancies(activeUser, companyId);
     }
 
     // Endpoint para obtener el catalogo de estatus de entrevistas
@@ -72,10 +77,11 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'Interview data obtained successfully' })
     @ApiResponse({ status: 404, description: 'Interview not found' })
     findOne(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string
     ) {
-        return this.interviewsService.findOne(companyId, interviewId);
+        return this.interviewsService.findOne(activeUser, companyId, interviewId);
     }
 
     // Endpoint para obtener todas las entrevistas de un postulante (Perfil del postulante)
@@ -86,23 +92,26 @@ export class InterviewsController {
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this postulante' })
     findAllByPostulant(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('postulantId', ParseIntPipe) postulantId: number
     ) {
-        return this.interviewsService.findAllByPostulant(companyId, postulantId);
+        return this.interviewsService.findAllByPostulant(activeUser, companyId, postulantId);
     }
 
     // Endpoint para obtener el detalle de una entrevista programada específica
+    @UseGuards(JwtAuthGuard)
     @Get('/meetings/:meetingId')
     @ApiOperation({ summary: 'Get meeting detail', description: 'Get meeting detail' })
     @ApiResponse({ status: 200, description: 'Meeting detail' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
     getMeetingDetail(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string
     ) {
-        return this.interviewsService.getMeetingDetail(companyId, meetingId);
+        return this.interviewsService.getMeetingDetail(activeUser, companyId, meetingId);
     }
 
     // Endpoint para obtener todas las entrevistas programadas por id de entrevista catalogo
@@ -113,10 +122,11 @@ export class InterviewsController {
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No interviews found for this company' })
     findProgrammedInterviews(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string
     ) {
-        return this.interviewsService.findProgrammedInterviews(companyId, interviewId);
+        return this.interviewsService.findProgrammedInterviews(activeUser, companyId, interviewId);
     }
 
     // Crear una entrevista como catalogo disponible para ser programada en una o varias vacantes
@@ -127,11 +137,11 @@ export class InterviewsController {
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
     create(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
-        @Body() dto: CreateInterviewDto,
-        @GetActiveUser() user: ActiveUserDto
+        @Body() dto: CreateInterviewDto
     ) {
-        return this.interviewsService.create(companyId, dto, user);
+        return this.interviewsService.create(user, companyId, dto);
     }
 
     // Programar una entrevista ya creada como catalogo para un postulante
@@ -142,12 +152,12 @@ export class InterviewsController {
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
     programInterview(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string,
-        @Body() dto: ProgramInterviewDto,
-        @GetActiveUser() user: ActiveUserDto
+        @Body() dto: ProgramInterviewDto
     ) {
-        return this.interviewsService.programInterview(companyId, interviewId, dto, user);
+        return this.interviewsService.programInterview(user, companyId, interviewId, dto);
     }
 
     // ─── PATCHs ──────────────────────────────────────────────────────
@@ -159,12 +169,12 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'Interview updated successfully' })
     @ApiResponse({ status: 404, description: 'Interview not found' })
     updateInterview(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string,
-        @Body() dto: UpdateInterviewDto,
-        @GetActiveUser() user: ActiveUserDto
+        @Body() dto: UpdateInterviewDto
     ) {
-        return this.interviewsService.updateInterview(companyId, interviewId, dto, user);
+        return this.interviewsService.updateInterview(user, companyId, interviewId, dto);
     }
 
     // Endpoint que actualiza una entrevista programada
@@ -175,12 +185,12 @@ export class InterviewsController {
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
     updateMeeting(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string,
-        @Body() dto: UpdateMeetingDto,
-        @GetActiveUser() user: ActiveUserDto
+        @Body() dto: UpdateMeetingDto
     ) {
-        return this.interviewsService.updateMeeting(companyId, meetingId, dto, user);
+        return this.interviewsService.updateMeeting(user, companyId, meetingId, dto);
     }
 
     // Endpoint para reprogramar una entrevista
@@ -190,12 +200,12 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'Meeting rescheduled successfully' })
     @ApiResponse({ status: 404, description: 'Meeting not found' })
     rescheduleInterview(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string,
-        @Body() dto: RescheduleInterviewDto,
-        @GetActiveUser() user: ActiveUserDto
+        @Body() dto: RescheduleInterviewDto
     ) {
-        return this.interviewsService.rescheduleInterview(companyId, meetingId, dto, user);
+        return this.interviewsService.rescheduleInterview(user, companyId, meetingId, dto);
     }
 
     // ─── DELETE ──────────────────────────────────────────────────────
@@ -207,11 +217,11 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'Interview deleted successfully' })
     @ApiResponse({ status: 404, description: 'Interview not found' })
     deleteInterview(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('interviewId') interviewId: string,
-        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.deleteInterview(companyId, interviewId, user);
+        return this.interviewsService.deleteInterview(user, companyId, interviewId);
     }
 
     // Endpoint para eliminar una entrevista programada
@@ -221,10 +231,10 @@ export class InterviewsController {
     @ApiResponse({ status: 200, description: 'Meeting deleted successfully' })
     @ApiResponse({ status: 404, description: 'Meeting not found' })
     deleteMeeting(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string,
-        @GetActiveUser() user: ActiveUserDto
     ) {
-        return this.interviewsService.deleteMeeting(companyId, meetingId, user);
+        return this.interviewsService.deleteMeeting(user, companyId, meetingId);
     }
 }

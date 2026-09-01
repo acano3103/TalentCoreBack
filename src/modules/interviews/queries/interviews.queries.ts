@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from "generated/prisma/client";
 const VACANCY_APPROVED_STATUS = 5; // APROBADO RH
 
 export async function findAllInterviews(
+  tenantId: number,
   companyId: number,
   vacancyId: number | undefined,
   search: string,
@@ -46,6 +47,7 @@ export async function findAllInterviews(
         ON emp.idEmpleado = e.interviewer_id
     WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
     AND e.active = true
+    AND e.tenant_id = ${tenantId}
     AND v.idEmpresa = ${companyId}
     ${vacancyFilter}
     ${searchFilter}
@@ -64,6 +66,7 @@ export async function findAllInterviews(
 }
 
 export async function countInterviews(
+  tenantId: number,
   companyId: number,
   vacancyId: number | undefined,
   search: string,
@@ -91,6 +94,7 @@ export async function countInterviews(
         ON v.idPuesto = p.idPuesto
     WHERE v.idEstatusVacante = ${VACANCY_APPROVED_STATUS}
     AND e.active = true
+    AND e.tenant_id = ${tenantId}
     AND v.idEmpresa = ${companyId}
     ${vacancyFilter}
     ${searchFilter}
@@ -99,7 +103,7 @@ export async function countInterviews(
   return Number(result[0].total);
 }
 
-export async function findAllInterviewsByPostulant(postulantUuid: string, prisma: PrismaClient) {
+export async function findAllInterviewsByPostulant(tenantId: number, postulantUuid: string, prisma: PrismaClient) {
   return prisma.$queryRaw`
     SELECT 
       ep.id,
@@ -130,11 +134,12 @@ export async function findAllInterviewsByPostulant(postulantUuid: string, prisma
     LEFT JOIN Empleados emp
       ON emp.idEmpleado = e.interviewer_id
     WHERE ep.candidate_uuid = ${postulantUuid}
+    AND e.tenant_id = ${tenantId}
     ORDER BY ep.scheduled_at DESC
   `;
 }
 
-export async function findInterviewDetail(interviewPostulantId: string, prisma: PrismaClient) {
+export async function findInterviewDetail(tenantId: number, interviewPostulantId: string, prisma: PrismaClient) {
   return prisma.$queryRaw`
     SELECT 
       ep.id,
@@ -216,10 +221,11 @@ export async function findInterviewDetail(interviewPostulantId: string, prisma: 
     LEFT JOIN Empleados emp
       ON emp.idEmpleado = e.interviewer_id
     WHERE ep.id = ${interviewPostulantId}
+    AND e.tenant_id = ${tenantId}
   `;
 }
 
-export async function findProgrammedInterviews(companyId: number, mainInterviewId: string, prisma: PrismaClient) {
+export async function findProgrammedInterviews(tenantId: number, companyId: number, mainInterviewId: string, prisma: PrismaClient) {
   const rows: any[] = await prisma.$queryRaw`
         SELECT 
             e.id,
@@ -273,7 +279,8 @@ export async function findProgrammedInterviews(companyId: number, mainInterviewI
             ON emp.idEmpleado = e.interviewer_id
 
         WHERE 
-            e.company_id = ${companyId}
+            e.tenant_id = ${tenantId}
+            AND e.company_id = ${companyId}
             AND e.id = ${mainInterviewId}
             AND e.active = true;
     `;
