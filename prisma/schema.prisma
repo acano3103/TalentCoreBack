@@ -335,6 +335,7 @@ model CatPuestos {
 
 model CatSites {
   idSite                Int                     @id @default(autoincrement())
+  idTenant              Int                     @default(0)
   idEmpresa             Int?
   idUnidadOperativa     Int?
   idTipoUbicacion       Int                     @default(1)
@@ -354,7 +355,6 @@ model CatSites {
   ZonaFronteriza        Boolean?                @default(false)
   Activo                Boolean?                @default(true)
   FechaRegistro         DateTime?               @db.DateTime(0)
-  idTenant              Int                     @default(0)
   CatPuestos            CatPuestos[]
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   CatUnidadesOperativas CatUnidadesOperativas?  @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")

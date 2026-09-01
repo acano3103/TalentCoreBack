@@ -5,6 +5,7 @@ export class VacanciesQueries {
 
     static async getPaginatedActiveVacancies(
         prisma: PrismaService,
+        idTenant: number,
         companyId: number,
         skip: number,
         limit: number,
@@ -61,7 +62,8 @@ export class VacanciesQueries {
             LEFT JOIN PerfilPostulante perf ON post.idPostulacion = perf.idPostulacion
             GROUP BY post.idVacante
         ) counts ON counts.idVacante = v.idVacante
-        WHERE v.idEmpresa = ${companyId} 
+        WHERE v.idTenant = ${idTenant}
+            AND v.idEmpresa = ${companyId} 
             AND v.idEstatusVacante = 5 
             AND p.Activo = 1
             ${searchFilter}
@@ -74,9 +76,10 @@ export class VacanciesQueries {
 
     static async countActiveVacancies(
         prisma: PrismaService,
+        idTenant: number,
         companyId: number,
         search: string,
-        recruiterEmployeeId: number | null, // <-- Nuevo parámetro recibido
+        recruiterEmployeeId: number | null,
     ): Promise<number> {
         const searchFilter = search
             ? Prisma.sql`
@@ -96,7 +99,8 @@ export class VacanciesQueries {
         SELECT COUNT(*) AS total
         FROM Vacantes v
         INNER JOIN CatPuestos p ON p.idPuesto = v.idPuesto
-        WHERE v.idEmpresa = ${companyId}
+        WHERE v.idTenant = ${idTenant}
+            AND v.idEmpresa = ${companyId}
             AND v.idEstatusVacante = 5
             AND p.Activo = 1
             ${searchFilter}
@@ -106,7 +110,12 @@ export class VacanciesQueries {
         return Number(result[0].total);
     }
 
-    static async getVacancyPostulantsSummary(prisma: PrismaService, companyId: number, vacancyId: number) {
+    static async getVacancyPostulantsSummary(
+        prisma: PrismaService,
+        companyId: number,
+        vacancyId: number
+    ) {
+
         return await prisma.$queryRaw`
       SELECT 
         p.idPostulacion,
@@ -166,6 +175,7 @@ export class VacanciesQueries {
 
     static async getPaginatedRequisitions(
         prisma: PrismaService,
+        idTenant: number,
         companyId: number,
         userId: number,
         roleId: number,
@@ -205,7 +215,8 @@ export class VacanciesQueries {
             LEFT JOIN CatEstatusVacante ce ON ce.idEstatusVacante = v.idEstatusVacante
             LEFT JOIN CatTiposPublicacion ctp ON ctp.idTipoPublicacion = v.idTipoPublicacion
             WHERE
-                v.idEmpresa = ${companyId}
+                v.idTenant = ${idTenant}
+                AND v.idEmpresa = ${companyId}
                 AND v.idEstatusVacante IN (1,2,3,4,6)
                 ${roleFilter}
                 ${searchFilter}
@@ -217,6 +228,7 @@ export class VacanciesQueries {
 
     static async countRequisitions(
         prisma: PrismaService,
+        idTenant: number,
         companyId: number,
         userId: number,
         roleId: number,
@@ -244,7 +256,8 @@ export class VacanciesQueries {
             LEFT JOIN Empleados jefe ON jefe.idEmpleado = e.idJefeInmediato
             LEFT JOIN auth_user usuarioJefe ON usuarioJefe.uuid = jefe.idUsuario
             WHERE
-                v.idEmpresa = ${companyId}
+                v.idTenant = ${idTenant}
+                AND v.idEmpresa = ${companyId}
                 AND v.idEstatusVacante IN (1,2,3,4,5,6)
                 ${roleFilter}
                 ${searchFilter}

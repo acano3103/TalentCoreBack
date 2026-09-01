@@ -14,9 +14,9 @@ import { CreateRequisitionDto } from './dto/create-requisition.dto';
 export class VacanciesController {
     constructor(private readonly vacanciesService: VacanciesService) { }
 
-    // -------------------------------------------------------------------
-    //      SECCIÓN 1: VACANTES
-    // -------------------------------------------------------------------
+    // ==========================================
+    // ENDPOINTS: Subservicio de vacantes
+    // ==========================================
 
     // Endpoint para obtener todas las vacantes paginadas de una empresa
     @Get()
@@ -32,7 +32,7 @@ export class VacanciesController {
         @Query('search') search?: string
     ) {
         const querySearch = search || '';
-        return this.vacanciesService.findAll(companyId, page, querySearch, limit, activeUser);
+        return this.vacanciesService.findAll(activeUser, companyId, page, querySearch, limit);
     }
 
     // Endpoint para obtener el resumen de postulaciones de una vacante específica
@@ -53,37 +53,19 @@ export class VacanciesController {
     @ApiResponse({ status: 200, description: 'Vacancy closed or canceled successfully.' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     async closeOrCancelVacancy(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('vacancyId', ParseIntPipe) vacancyId: number,
         @Query('status') status: "CERRADA" | "CANCELADA",
-        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return await this.vacanciesService.closeOrCancelVacancy(companyId, vacancyId, status, activeUser);
+        return await this.vacanciesService.closeOrCancelVacancy(activeUser, companyId, vacancyId, status);
     }
 
-    // @Get('test/create')
-    // @ApiOperation({ summary: 'Create test vacancy', description: 'Creates a test vacancy bypassing RBAC for UI testing' })
-    // async createTestVacancy() {
-    //     return this.vacanciesService.createTestVacancy();
-    // }
+    // ==========================================
+    // ENDPOINTS: Subservicio de solicitudes de puesto (Requisiciones)
+    // ==========================================
 
-    // @Get()
-    // @ApiOperation({ summary: 'Get all active vacancies', description: SWAGGER_AUTH_DESCRIPTION })
-    // @ApiResponse({ status: 200, description: 'Active vacancies obtained successfully' })
-    // @ApiResponse({ status: 404, description: 'Active vacancies not found' })
-    // @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-    // async getActiveVacancies(
-    //     @GetActiveUser() activeUser: ActiveUserDto,
-    //     @Param('companyId', ParseIntPipe) companyId: number
-    // ) {
-    //     return this.vacanciesService.findActiveVacancies(companyId, activeUser);
-    // }
-
-
-    // -------------------------------------------------------------------
-    //      SECCIÓN 2: REQUISICIONES (SOLICITUDES)
-    // -------------------------------------------------------------------
-
+    // Endpoint para obtener todas las requisiciones paginadas de una empresa
     @Get('requisitions')
     @ApiOperation({ summary: 'Get all requisitions', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requisitions obtained successfully' })
@@ -97,9 +79,10 @@ export class VacanciesController {
         @Query('search') search?: string
     ) {
         const querySearch = search || '';
-        return this.vacanciesService.findAllRequisitions(companyId, page, querySearch, limit, activeUser);
+        return this.vacanciesService.findAllRequisitions(activeUser, companyId, page, querySearch, limit);
     }
 
+    // Obtiene todos los puestos a cargo de la persona que hace la solicitud
     @Get('requisitions/allowed-positions')
     @ApiOperation({ summary: 'Get all allowed positions for requisition', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Allowed positions for requisition obtained successfully' })
@@ -109,9 +92,10 @@ export class VacanciesController {
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number
     ) {
-        return this.vacanciesService.findAllowedPositions(companyId, activeUser);
+        return this.vacanciesService.findAllowedPositions(activeUser, companyId);
     }
 
+    // Obtiene todas las locaciones donde el usuario tiene permiso de crear vacantes
     @Get('requisitions/allowed-locations')
     @ApiOperation({ summary: 'Get all allowed physical locations for requisition based on user permissions', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Allowed locations for requisition obtained successfully' })
@@ -120,9 +104,10 @@ export class VacanciesController {
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number
     ) {
-        return this.vacanciesService.findAllowedLocations(companyId, activeUser);
+        return this.vacanciesService.findAllowedLocations(activeUser, companyId);
     }
 
+    // Obtiene todos los catálogos necesarios para la creación de una vacante
     @Get('requisitions/catalogs')
     @ApiOperation({ summary: 'Get all catalogs needed in requisition creation', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Catalogs for requisition obtained successfully' })
@@ -132,9 +117,10 @@ export class VacanciesController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('positionId', ParseIntPipe) positionId: number,
     ) {
-        return this.vacanciesService.findRequisitionCatalogs(companyId, positionId, activeUser);
+        return this.vacanciesService.findRequisitionCatalogs(activeUser, companyId, positionId);
     }
 
+    // Obtiene una requisición específica por su id
     @Get('requisitions/:requisitionId')
     @ApiOperation({ summary: 'Get a requisition by id', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requisition obtained successfully' })
@@ -145,9 +131,10 @@ export class VacanciesController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('requisitionId', ParseIntPipe) requisitionId: number,
     ) {
-        return this.vacanciesService.findRequisitionById(companyId, requisitionId, activeUser);
+        return this.vacanciesService.findRequisitionById(activeUser, companyId, requisitionId);
     }
 
+    // Crear una nueva requisición
     @Post('requisitions')
     @ApiOperation({ summary: 'Create a new requisition', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requisition created successfully' })
@@ -157,9 +144,10 @@ export class VacanciesController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Body() createRequisitionDto: CreateRequisitionDto,
     ) {
-        return this.vacanciesService.createRequisition(companyId, createRequisitionDto, activeUser);
+        return this.vacanciesService.createRequisition(activeUser, companyId, createRequisitionDto);
     }
 
+    // Elimina permanentemente una requisición
     @Delete('requisitions/:requisitionId')
     @ApiOperation({ summary: 'Delete a requisition', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requisition deleted successfully' })
@@ -169,7 +157,7 @@ export class VacanciesController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('requisitionId', ParseIntPipe) requisitionId: number,
     ) {
-        return this.vacanciesService.deleteRequisition(companyId, requisitionId, activeUser);
+        return this.vacanciesService.deleteRequisition(activeUser, companyId, requisitionId);
     }
 
     // Endpoint para aprovar o rechazar una requisición como manager o rh
@@ -183,23 +171,10 @@ export class VacanciesController {
         @Param('requisitionId', ParseIntPipe) requisitionId: number,
         @Body() { action, recruiterId }: { action: 'aprobar' | 'rechazar', recruiterId?: number }
     ) {
-        return this.vacanciesService.evaluateRequisition(companyId, requisitionId, action, recruiterId, activeUser);
+        return this.vacanciesService.evaluateRequisition(activeUser, companyId, requisitionId, action, recruiterId);
     }
 
-    @Put('requisitions/:id')
-    async updateRequisition(
-    ) {
-        return this.vacanciesService.updateRequisition();
-    }
-
-    @Patch('requisitions/:id/status')
-    async changeRequisitionStatus(
-    ) {
-        return this.vacanciesService.changeStatus();
-    }
-
-    //      SECCIÓN 3: DETALLE DE VACANTE (dinámico, al final para evitar colisión con rutas estáticas)
-
+    // SECCIÓN 3: DETALLE DE VACANTE (dinámico, al final para evitar colisión con rutas estáticas)
     @Get(':vacancyId')
     @ApiOperation({ summary: 'Get vacancy detail', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Vacancy detail obtained successfully' })
