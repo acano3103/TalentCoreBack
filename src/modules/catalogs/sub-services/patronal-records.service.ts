@@ -2,6 +2,7 @@ import { ConflictException, Injectable, InternalServerErrorException, Logger, No
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePatronalRecordDto } from '../dto/create-patronal-record.dto';
 import { UpdatePatronalRecordDto } from '../dto/update-patronal-record.dto';
+import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 
 @Injectable()
 export class PatronalRecordsService {
@@ -9,7 +10,11 @@ export class PatronalRecordsService {
 
     private readonly logger = new Logger(PatronalRecordsService.name);
 
-    async findAll(idEmpresa: number, page: number, limit: number, query: string) {
+    async findAll(idEmpresa: number, page: number, limit: number, query: string, user: ActiveUserDto) {
+    if (!user.idTenant) {
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+    const idTenant = user.idTenant;
         const offset = (page - 1) * limit;
         const searchPattern = `%${query}%`;
 
@@ -26,18 +31,20 @@ export class PatronalRecordsService {
         FROM CatRegistrosPatronales rp
         LEFT JOIN CatSites s ON rp.idRegistroPatronal = s.idRegistroPatronal AND s.Activo = 1
         WHERE rp.idEmpresa = ${idEmpresa} 
+          AND rp.idTenant = ${idTenant}
           AND (${query} = '' OR rp.RegistroPatronal LIKE ${searchPattern} OR rp.RazonSocial LIKE ${searchPattern})
         GROUP BY rp.idRegistroPatronal
         ORDER BY rp.idRegistroPatronal DESC
         LIMIT ${limit} OFFSET ${offset};
     `;
 
-        const countResult = await this.prisma.$queryRaw<any[]>`
+     const countResult = await this.prisma.$queryRaw<any[]>`
         SELECT COUNT(*) AS total
         FROM CatRegistrosPatronales rp
         WHERE rp.idEmpresa = ${idEmpresa} 
-          AND (${query} = '' OR rp.RegistroPatronal LIKE ${searchPattern} OR rp.RazonSocial LIKE ${searchPattern});
-    `;
+        AND rp.idTenant = ${idTenant}
+        AND (${query} = '' OR rp.RegistroPatronal LIKE ${searchPattern} OR rp.RazonSocial LIKE ${searchPattern});
+        `;
         const total = countResult[0]?.total ? Number(countResult[0].total) : 0;
         if ((!patronalRecords || patronalRecords.length === 0) && page === 1 && !query) {
             return {
@@ -64,9 +71,12 @@ export class PatronalRecordsService {
         };
     }
 
-    async findOne(idEmpresa: number, idRegistroPatronal: number) {
-        const patronalRecord = await this.prisma.catRegistrosPatronales.findUnique({
-            where: { idRegistroPatronal, idEmpresa },
+     async findOne(idEmpresa: number, idRegistroPatronal: number, user: ActiveUserDto) {   
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+       const patronalRecord = await this.prisma.catRegistrosPatronales.findFirst({
+       where: { idRegistroPatronal, idEmpresa, idTenant: user.idTenant },
         });
         if (!patronalRecord) {
             throw new NotFoundException('El registro patronal no existe.');
@@ -74,15 +84,21 @@ export class PatronalRecordsService {
         return patronalRecord;
     }
 
-    async create(idEmpresa: number, dto: CreatePatronalRecordDto) {
+     async create(idEmpresa: number, dto: CreatePatronalRecordDto, user: ActiveUserDto) {   
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+        const idTenant = user.idTenant; 
         const companyExists = await this.prisma.catEmpresas.findUnique({
             where: { idEmpresa },
         });
         if (!companyExists) throw new NotFoundException('La empresa especificada no existe.');
-
+            if (companyExists.idTenant !== idTenant) {   
+                throw new NotFoundException('La empresa especificada no existe.');
+            }
         const registroPatronalUnico = dto.registroPatronal.toUpperCase().trim();
         const recordExists = await this.prisma.catRegistrosPatronales.findFirst({
-            where: { RegistroPatronal: registroPatronalUnico }
+            where: { RegistroPatronal: registroPatronalUnico}
         });
         if (recordExists) {
             throw new ConflictException(`El registro patronal ${registroPatronalUnico} ya se encuentra registrado.`);
@@ -92,6 +108,7 @@ export class PatronalRecordsService {
             const nuevoRegistro = await this.prisma.catRegistrosPatronales.create({
                 data: {
                     idEmpresa,
+                     idTenant,
                     RegistroPatronal: registroPatronalUnico,
                     RazonSocial: dto.razonSocial.toUpperCase().trim(),
                     ClaseRiesgo: dto.claseRiesgo,
@@ -102,16 +119,19 @@ export class PatronalRecordsService {
 
             return { message: 'Registro Patronal creado correctamente' };
 
-        } catch (error) {
+        } catch (error:any) {
             this.logger.error(`Error al insertar Registro Patronal en Prisma: ${error.message}`);
             throw new InternalServerErrorException('Error interno al intentar dar de alta el registro patronal.');
         }
     }
 
-    async update(companyId: number, idRegistroPatronal: number, dto: UpdatePatronalRecordDto) {
-        const recordExists = await this.prisma.catRegistrosPatronales.findUnique({
-            where: { idRegistroPatronal },
-        });
+    async update(companyId: number, idRegistroPatronal: number, dto: UpdatePatronalRecordDto, user: ActiveUserDto) {
+    if (!user.idTenant) {
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+       const recordExists = await this.prisma.catRegistrosPatronales.findFirst({
+        where: { idRegistroPatronal, idEmpresa: companyId, idTenant: user.idTenant },
+    });
         if (!recordExists) throw new NotFoundException('El registro patronal especificado no existe.');
 
         if (dto.registroPatronal) {
@@ -142,23 +162,31 @@ export class PatronalRecordsService {
             });
 
             return { message: 'Registro Patronal actualizado correctamente' };
-        } catch (error) {
+        } catch (error:any) {
             this.logger.error(`Error al actualizar Registro Patronal ${idRegistroPatronal}: ${error.message}`);
             throw new InternalServerErrorException('Error interno al intentar guardar los cambios del registro patronal.');
         }
     }
 
-    async changeStatus(companyId: number, id: number, active: boolean) {
-
-        await this.prisma.catRegistrosPatronales.update({
-            where: { idRegistroPatronal: id, idEmpresa: companyId },
-            data: {
-                Activo: active
-            },
-        });
-
-        return {
-            message: active ? 'Registro patronal activado correctamente' : 'Registro patronal desactivado correctamente'
-        };
+    async changeStatus(companyId: number, id: number, active: boolean, user: ActiveUserDto) {
+    if (!user.idTenant) {
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
+
+    const recordExists = await this.prisma.catRegistrosPatronales.findFirst({
+        where: { idRegistroPatronal: id, idEmpresa: companyId, idTenant: user.idTenant },
+    });
+    if (!recordExists) throw new NotFoundException('El registro patronal especificado no existe.');
+
+    await this.prisma.catRegistrosPatronales.update({
+        where: { idRegistroPatronal: id, idEmpresa: companyId },   
+        data: {
+            Activo: active
+        },
+    });
+
+    return {
+        message: active ? 'Registro patronal activado correctamente' : 'Registro patronal desactivado correctamente'
+    };
+}
 }

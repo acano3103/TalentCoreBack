@@ -16,7 +16,11 @@ export class OperatingUnitsService {
 
     private readonly logger = new Logger(OperatingUnitsService.name);
 
-    async findAll(idEmpresa: number, page: number, limit: number, query: string = "", user?: ActiveUserDto) {
+    async findAll(idEmpresa: number, page: number, limit: number, query: string = "", user: ActiveUserDto) {   
+    if (!user.idTenant) {
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+
         const pageNumber = Math.max(1, Number(page) || 1);
         const limitNumber = Math.max(1, Number(limit) || 10);
         const skip = (pageNumber - 1) * limitNumber;
@@ -24,6 +28,7 @@ export class OperatingUnitsService {
 
         const whereCondition: Prisma.CatUnidadesOperativasWhereInput = {
             idEmpresa: Number(idEmpresa),
+            idTenant: user.idTenant,
             ...(search
                 ? {
                     OR: [
@@ -77,7 +82,7 @@ export class OperatingUnitsService {
                 currentPage: pageNumber,
                 totalPages: Math.ceil(total / limitNumber) || 1,
             };
-        } catch (error) {
+        } catch (error:any) {
             this.logger.error(
                 `Error al consultar unidades operativas de la empresa ${idEmpresa}: ${error.message}`,
                 error.stack
@@ -86,12 +91,17 @@ export class OperatingUnitsService {
         }
     }
 
-    async findById(idEmpresa: number, idUnidadOperativa: number) {
+    async findById(idEmpresa: number, idUnidadOperativa: number, user: ActiveUserDto) {   
+    if (!user.idTenant) {
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+
         try {
             const record = await this.prisma.catUnidadesOperativas.findFirst({
                 where: {
                     idUnidadOperativa: Number(idUnidadOperativa),
                     idEmpresa: Number(idEmpresa),
+                     idTenant: user.idTenant,
                 },
                 include: {
                     _count: {
@@ -119,7 +129,7 @@ export class OperatingUnitsService {
                 Activo: Boolean(record.Activo),
                 totalSites: _count?.CatSites ?? 0,
             };
-        } catch (error) {
+        } catch (error:any) {
             if (error instanceof NotFoundException) throw error;
             this.logger.error(
                 `Error al obtener la unidad operativa ${idUnidadOperativa}: ${error.message}`,
@@ -130,11 +140,18 @@ export class OperatingUnitsService {
     }
 
     async create(idEmpresa: number, dto: CreateOperatingUnitDto, user: ActiveUserDto) {
+        if (!user.idTenant) {
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+
+     const idTenant = user.idTenant;
+
         try {
             const result = await this.prisma.$transaction(async (tx: any) => {
                 const newRecord = await tx.catUnidadesOperativas.create({
                     data: {
                         idEmpresa: Number(idEmpresa),
+                         idTenant,
                         Codigo: dto.codigo ? dto.codigo.trim().toUpperCase() : null,
                         Nombre: dto.nombre.trim(),
                         Descripcion: dto.descripcion?.trim() || null,
@@ -177,7 +194,7 @@ export class OperatingUnitsService {
                     Activo: Boolean(result.Activo),
                 },
             };
-        } catch (error) {
+        } catch (error:any) {
             this.logger.error(
                 `Error al crear unidad operativa para la empresa ${idEmpresa}: ${error.message}`,
                 error.stack
@@ -187,7 +204,7 @@ export class OperatingUnitsService {
     }
 
     async update(idEmpresa: number, idUnidadOperativa: number, dto: UpdateOperatingUnitDto, user: ActiveUserDto) {
-        const existingRecord = await this.findById(idEmpresa, idUnidadOperativa);
+        const existingRecord = await this.findById(idEmpresa, idUnidadOperativa,user);
 
         try {
             const dataToUpdate: Prisma.CatUnidadesOperativasUpdateInput = {};
@@ -238,7 +255,7 @@ export class OperatingUnitsService {
                     Activo: Boolean(result.Activo),
                 },
             };
-        } catch (error) {
+        } catch (error:any) {
             this.logger.error(
                 `Error al actualizar la unidad operativa ${idUnidadOperativa}: ${error.message}`,
                 error.stack
@@ -248,7 +265,7 @@ export class OperatingUnitsService {
     }
 
     async changeStatus(companyId: number, idUnidadOperativa: number, active: boolean, user: ActiveUserDto) {
-        const existingRecord = await this.findById(companyId, idUnidadOperativa);
+        const existingRecord = await this.findById(companyId, idUnidadOperativa, user);
 
         try {
             await this.prisma.$transaction(async (tx: any) => {
@@ -285,7 +302,7 @@ export class OperatingUnitsService {
                     ? "Unidad operativa reactivada correctamente"
                     : "Unidad operativa desactivada correctamente",
             };
-        } catch (error) {
+        } catch (error:any) {
             this.logger.error(
                 `Error al cambiar el estatus de la unidad operativa ${idUnidadOperativa}: ${error.message}`,
                 error.stack
