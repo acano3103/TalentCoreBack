@@ -355,7 +355,6 @@ model CatSites {
   ZonaFronteriza        Boolean?                @default(false)
   Activo                Boolean?                @default(true)
   FechaRegistro         DateTime?               @db.DateTime(0)
-  idTenant              Int 
   CatPuestos            CatPuestos[]
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   CatUnidadesOperativas CatUnidadesOperativas?  @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
@@ -1042,7 +1041,6 @@ model usuarioslogin {
 model CatRegistrosPatronales {
   idRegistroPatronal Int         @id @default(autoincrement())
   idEmpresa          Int
-   idTenant          Int
   RegistroPatronal   String      @unique(map: "UK_Registro_Patronal") @db.VarChar(11)
   RazonSocial        String      @db.VarChar(250)
   ClaseRiesgo        String      @db.VarChar(10)
@@ -1717,7 +1715,6 @@ model AsignacionAprobador {
 model CatUnidadesOperativas {
   idUnidadOperativa   Int         @id @default(autoincrement())
   idEmpresa           Int
-  idTenant            Int
   Codigo              String?     @db.VarChar(50)
   Nombre              String      @db.VarChar(200)
   Descripcion         String?     @db.Text
