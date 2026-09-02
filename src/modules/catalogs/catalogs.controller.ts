@@ -152,14 +152,15 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Patronal records not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async getPatronalRecords(
+    @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
   ) {
     const querySearch = search || '';
-    return this.patronalRecordsService.findAll(companyId, page, limit, querySearch);
-  }
+    return this.patronalRecordsService.findAll(companyId, page, limit, querySearch, user);  
+}
 
   // Obtiene un registro patronal por id
   @Get('patronal-records/:id')
@@ -169,11 +170,12 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Patronal records not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async getPatronalRecordById(
+    @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.patronalRecordsService.findOne(companyId, id);
-  }
+    return this.patronalRecordsService.findOne(companyId, id, user);   // <-- user agregado
+}
 
   // Crea un registro patronal
   @Post('patronal-records')
@@ -182,11 +184,12 @@ export class CatalogsController {
   @ApiResponse({ status: 200, description: 'Patronal record created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async createPatronalRecord(
+    @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Body() createPatronalRecordDto: CreatePatronalRecordDto
   ) {
-    return this.patronalRecordsService.create(companyId, createPatronalRecordDto);
-  }
+     return this.patronalRecordsService.create(companyId, createPatronalRecordDto, user);   
+}
 
   // Actualiza un registro patronal
   @Put('patronal-records/:id')
@@ -197,11 +200,12 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Patronal record not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async updatePatronalRecord(
+    @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePatronalRecordDto: UpdatePatronalRecordDto
   ) {
-    return this.patronalRecordsService.update(companyId, id, updatePatronalRecordDto);
+    return this.patronalRecordsService.update(companyId, id, updatePatronalRecordDto, user);
   }
 
   // Desactiva un registro patronal
@@ -214,8 +218,9 @@ export class CatalogsController {
   async disablePatronalRecord(
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('id', ParseIntPipe) id: number,
+    @GetActiveUser() user: ActiveUserDto
   ) {
-    return this.patronalRecordsService.changeStatus(companyId, id, false);
+    return this.patronalRecordsService.changeStatus(companyId, id, false, user);
   }
 
   // Reactiva un registro patronal
@@ -228,8 +233,9 @@ export class CatalogsController {
   async reactivatePatronalRecord(
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('id', ParseIntPipe) id: number,
+    @GetActiveUser() user: ActiveUserDto
   ) {
-    return this.patronalRecordsService.changeStatus(companyId, id, true);
+    return this.patronalRecordsService.changeStatus(companyId, id, true, user);
   }
 
   // ==========================================
@@ -262,10 +268,11 @@ export class CatalogsController {
   @ApiResponse({ status: 200, description: 'Detalle de la unidad operativa obtenido exitosamente' })
   @ApiResponse({ status: 404, description: 'Unidad operativa no encontrada' })
   async getOperatingUnitById(
+    @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.operatingUnitsService.findById(companyId, id);
+    return this.operatingUnitsService.findById(companyId, id, user);
   }
 
   // Crea una unidad operativa

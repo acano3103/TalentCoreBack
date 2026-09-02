@@ -21,16 +21,17 @@ export class LocationsController {
     @ApiResponse({ status: 404, description: 'Locations not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async findAll(
-        @Param('companyId', ParseIntPipe) companyId: number,
-        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-        @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-        @Query('search') search?: string,
-        @Query('operatingUnitId') operatingUnitId?: string,
-    ) {
-        const querySearch = search || '';
-        const unitId = operatingUnitId ? Number(operatingUnitId) : null;
-        return this.locationsService.findAll(companyId, page, querySearch, limit, unitId);
-    }
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+    @Query('operatingUnitId') operatingUnitId?: string,
+) {
+    const querySearch = search || '';
+    const unitId = operatingUnitId ? Number(operatingUnitId) : null;
+    return this.locationsService.findAll(companyId, page, querySearch, limit, user, unitId);  
+}
 
     // Crea una nueva ubicación
     @Post()
@@ -55,13 +56,14 @@ export class LocationsController {
     @ApiResponse({ status: 200, description: 'Location obtained successfully' })
     @ApiResponse({ status: 404, description: 'Location not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-    async getLocationById(
-        @Param('companyId', ParseIntPipe) companyId: number,
-        @Param('locationId', ParseIntPipe) locationId: number,
+   async getLocationById(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('locationId', ParseIntPipe) locationId: number,
     ) {
-        return this.locationsService.getLocationById(companyId, locationId);
+    return this.locationsService.getLocationById(companyId, locationId, user);
     }
-
+    
     // Actualiza una ubicación por ID
     @Put(':locationId')
     @ApiBearerAuth()
