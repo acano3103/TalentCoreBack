@@ -64,7 +64,10 @@ export class PublicCatalogsService {
 
             case 'areas':
                 return this.prisma.catAreas.findMany({
-                    where: { Activo: true },
+                    where: {
+                        Activo: true,
+                        ...(companyId ? { idEmpresa: companyId } : {}),
+                    },
                     select: { idArea: true, Descripcion: true, Activo: true },
                     orderBy: { Descripcion: 'asc' },
                 });

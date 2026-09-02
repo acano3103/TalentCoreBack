@@ -2,24 +2,19 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateAreaDto } from './dto/create-area.dto';
 import { UpdateAreaDto } from './dto/update-area.dto';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @Injectable()
 export class AreasService {
     constructor(private prismaService: PrismaService) { }
 
-    async findAll(companyId: number, page: number, query: string, limit: number) {
+    async findAll(user: ActiveUserDto, companyId: number, page: number, query: string, limit: number) {
         const skip = (page - 1) * limit;
 
-        // Filtramos las áreas que tengan presencia operativa en la empresa actual a través de relAreasUbicaciones
+        // Filtramos las áreas del tenant y empresa actual
         const whereCondition: any = {
-            RelAreasUbicaciones: {
-                some: {
-                    OR: [
-                        { CatCentroCostos: { idEmpresa: companyId } },
-                        { CatSites: { idEmpresa: companyId } }
-                    ]
-                }
-            }
+            idTenant: user.idTenant,
+            idEmpresa: companyId,
         };
 
         // Búsqueda por texto (Query) adaptada a los campos del catálogo y las relaciones
@@ -27,7 +22,7 @@ export class AreasService {
             whereCondition.OR = [
                 { Descripcion: { contains: query } },
                 {
-                    relAreasUbicaciones: {
+                    RelAreasUbicaciones: {
                         some: {
                             OR: [
                                 { Encargado: { contains: query } },
@@ -42,7 +37,7 @@ export class AreasService {
             ];
         }
 
-        // Consultas en paralelo optimizadas
+        // Consultas en paralelo optimizadas con aislamiento por tenant y empresa
         const [areas, total, totalActivas] = await Promise.all([
             this.prismaService.catAreas.findMany({
                 where: whereCondition,
@@ -50,7 +45,7 @@ export class AreasService {
                     RelAreasUbicaciones: {
                         where: {
                             OR: [
-                                { CatSites: { idEmpresa: companyId } },
+                                { CatSites: { idEmpresa: companyId, idTenant: user.idTenant } },
                                 { CatCentroCostos: { idEmpresa: companyId } }
                             ]
                         },
@@ -132,25 +127,19 @@ export class AreasService {
         };
     }
 
-    async findOne(companyId: number, id: number) {
-        // 1. Buscamos el área y traemos TODAS sus sedes y centros de costos vinculados de esta empresa
+    async findOne(user: ActiveUserDto, companyId: number, id: number) {
+        // 1. Buscamos el área y traemos TODAS sus sedes y centros de costos vinculados de esta empresa y tenant
         const area = await this.prismaService.catAreas.findFirst({
             where: {
                 idArea: id,
-                RelAreasUbicaciones: {
-                    some: {
-                        OR: [
-                            { CatSites: { idEmpresa: companyId } },
-                            { CatCentroCostos: { idEmpresa: companyId } }
-                        ]
-                    }
-                }
+                idTenant: user.idTenant,
+                idEmpresa: companyId,
             },
             include: {
                 RelAreasUbicaciones: {
                     where: {
                         OR: [
-                            { CatSites: { idEmpresa: companyId } },
+                            { CatSites: { idEmpresa: companyId, idTenant: user.idTenant } },
                             { CatCentroCostos: { idEmpresa: companyId } }
                         ]
                     },
@@ -176,11 +165,12 @@ export class AreasService {
 
         if (!area) throw new NotFoundException(`Área no encontrada o no pertenece a la empresa actual.`);
 
-        // Traemos los puestos que pertenecen a esta área en esta empresa
+        // Traemos los puestos que pertenecen a esta área en esta empresa y tenant
         const dbPositions = await this.prismaService.catPuestos.findMany({
             where: {
                 idArea: id,
-                idEmpresa: companyId
+                idEmpresa: companyId,
+                idTenant: user.idTenant,
             },
             select: {
                 idPuesto: true,
@@ -248,20 +238,22 @@ export class AreasService {
         };
     }
 
-    async create(companyId: number, createAreaDto: CreateAreaDto) {
+    async create(user: ActiveUserDto, companyId: number, createAreaDto: CreateAreaDto) {
         return await this.prismaService.$transaction(async (tx) => {
-            // Buscar si el área ya existe como concepto global en la empresa
+            // Buscar si el área ya existe como concepto global en la empresa para este tenant
             let area = await tx.catAreas.findFirst({
                 where: {
+                    idTenant: user.idTenant,
                     Descripcion: createAreaDto.descripcion.toUpperCase(),
                     idEmpresa: companyId
                 },
             });
 
-            // Si no existe el registro maestro, lo creamos
+            // Si no existe el registro maestro, lo creamos asignando el idTenant
             if (!area) {
                 area = await tx.catAreas.create({
                     data: {
+                        idTenant: user.idTenant,
                         Descripcion: createAreaDto.descripcion.toUpperCase(),
                         idEmpresa: companyId,
                         Activo: true,
@@ -272,6 +264,20 @@ export class AreasService {
             // Procesar las asignaciones masivas en lote si es que vienen en el payload
             if (createAreaDto.asignaciones && createAreaDto.asignaciones.length > 0) {
                 for (const asignation of createAreaDto.asignaciones) {
+                    // Validar que la sede (Site) pertenezca a la empresa y al tenant
+                    const site = await tx.catSites.findFirst({
+                        where: {
+                            idSite: asignation.idSite,
+                            idEmpresa: companyId,
+                            idTenant: user.idTenant,
+                        }
+                    });
+
+                    if (!site) {
+                        throw new NotFoundException(
+                            `La sucursal (Site) ID ${asignation.idSite} no pertenece a esta empresa o no existe.`
+                        );
+                    }
 
                     // Si el usuario seleccionó un centro de costos, validamos presupuestos
                     if (asignation.idCentroCostos) {
@@ -341,22 +347,23 @@ export class AreasService {
         });
     }
 
-    async update(companyId: number, areaId: number, updateAreaDto: UpdateAreaDto) {
+    async update(user: ActiveUserDto, companyId: number, areaId: number, updateAreaDto: UpdateAreaDto) {
         return await this.prismaService.$transaction(async (tx) => {
             const currentArea = await tx.catAreas.findFirst({
-                where: { idArea: areaId, idEmpresa: companyId },
+                where: { idArea: areaId, idTenant: user.idTenant, idEmpresa: companyId },
             });
 
             if (!currentArea) {
                 throw new NotFoundException('El área operativa que intentas modificar no existe o no pertenece a esta empresa.');
             }
 
-            // Si se envió una nueva descripción, validar duplicados globales (exceptuando la misma área)
+            // Si se envió una nueva descripción, validar duplicados dentro del tenant en la empresa (exceptuando la misma área)
             if (updateAreaDto.descripcion) {
                 const descriptionUpper = updateAreaDto.descripcion.toUpperCase();
 
                 const duplicateArea = await tx.catAreas.findFirst({
                     where: {
+                        idTenant: user.idTenant,
                         Descripcion: descriptionUpper,
                         idEmpresa: companyId,
                         NOT: { idArea: areaId }
@@ -374,6 +381,22 @@ export class AreasService {
             }
 
             if (updateAreaDto.asignaciones) {
+                // Validar que las sedes (Sites) pertenezcan al tenant y a la empresa
+                for (const asignation of updateAreaDto.asignaciones) {
+                    const site = await tx.catSites.findFirst({
+                        where: {
+                            idSite: asignation.idSite,
+                            idEmpresa: companyId,
+                            idTenant: user.idTenant,
+                        }
+                    });
+
+                    if (!site) {
+                        throw new NotFoundException(
+                            `La sucursal (Site) ID ${asignation.idSite} no pertenece a esta empresa o no existe.`
+                        );
+                    }
+                }
 
                 // Paso A: Limpiar las asignaciones anteriores para esta área 
                 await tx.relAreasUbicaciones.deleteMany({
@@ -443,19 +466,13 @@ export class AreasService {
         });
     }
 
-    async changeStatus(companyId: number, id: number, active: boolean) {
-        // Verificamos si el área existe y si tiene presencia en la empresa actual
+    async changeStatus(user: ActiveUserDto, companyId: number, id: number, active: boolean) {
+        // Verificamos si el área existe y si pertenece al tenant y empresa actual
         const area = await this.prismaService.catAreas.findFirst({
             where: {
                 idArea: id,
-                RelAreasUbicaciones: {
-                    some: {
-                        OR: [
-                            { CatSites: { idEmpresa: companyId } },
-                            { CatCentroCostos: { idEmpresa: companyId } }
-                        ]
-                    }
-                }
+                idTenant: user.idTenant,
+                idEmpresa: companyId,
             },
             include: {
                 RelAreasUbicaciones: {
@@ -467,7 +484,7 @@ export class AreasService {
         });
 
         if (!area) {
-            throw new Error('Área no encontrada o no pertenece a la empresa actual');
+            throw new NotFoundException('Área no encontrada o no pertenece a la empresa actual');
         }
 
         // Si el usuario quiere ACTIVAR el área, validamos que al menos una de sus sedes asociadas esté activa
@@ -477,7 +494,7 @@ export class AreasService {
             );
 
             if (!tieneSitioActivo) {
-                throw new Error('No se puede activar el área porque no tiene sedes operativas o activas asociadas en esta empresa.');
+                throw new BadRequestException('No se puede activar el área porque no tiene sedes operativas o activas asociadas en esta empresa.');
             }
         }
 
