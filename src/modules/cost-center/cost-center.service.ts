@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCostCenterDto } from './dto/create-cost-center.dto';
 import { UpdateCostCenterDto } from './dto/update-cost-center.dto';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @Injectable()
 export class CostCenterService {
@@ -9,10 +10,11 @@ export class CostCenterService {
 
     constructor(private prismaService: PrismaService) { }
 
-    async findAll(companyId: number, page: number, query: string, limit: number) {
+    async findAll(user: ActiveUserDto, companyId: number, page: number, query: string, limit: number) {
         const skip = (page - 1) * limit;
 
         const whereCondition: any = {
+            idTenant: user.idTenant,
             idEmpresa: companyId,
         };
 
@@ -83,9 +85,9 @@ export class CostCenterService {
         };
     }
 
-    async findOne(companyId: number, id: number) {
+    async findOne(user: ActiveUserDto, companyId: number, id: number) {
         const costCenter = await this.prismaService.catCentroCostos.findFirst({
-            where: { idCentroCostos: id, idEmpresa: companyId },
+            where: { idCentroCostos: id, idEmpresa: companyId, idTenant: user.idTenant },
             include: {
                 RelAreasUbicaciones: {
                     select: {
@@ -137,10 +139,11 @@ export class CostCenterService {
         };
     }
 
-    async create(companyId: number, createCostCenterDto: CreateCostCenterDto) {
+    async create(user: ActiveUserDto, companyId: number, createCostCenterDto: CreateCostCenterDto) {
         const existingCC = await this.prismaService.catCentroCostos.findFirst({
             where: {
                 idEmpresa: companyId,
+                idTenant: user.idTenant,
                 Codigo: createCostCenterDto.Codigo,
             },
         });
@@ -153,6 +156,7 @@ export class CostCenterService {
 
         await this.prismaService.catCentroCostos.create({
             data: {
+                idTenant: user.idTenant,
                 idEmpresa: companyId,
                 Codigo: createCostCenterDto.Codigo,
                 Descripcion: createCostCenterDto.Descripcion,
@@ -166,10 +170,11 @@ export class CostCenterService {
         return { message: 'Centro de costos registrado con éxito.' };
     }
 
-    async update(companyId: number, costCenterId: number, updateCostCenterDto: UpdateCostCenterDto) {
+    async update(user: ActiveUserDto, companyId: number, costCenterId: number, updateCostCenterDto: UpdateCostCenterDto) {
         const currentCC = await this.prismaService.catCentroCostos.findFirst({
             where: {
                 idCentroCostos: costCenterId,
+                idTenant: user.idTenant,
                 idEmpresa: companyId,
             },
             include: {
@@ -183,6 +188,7 @@ export class CostCenterService {
         if (currentCC.Codigo !== updateCostCenterDto.Codigo) {
             const codeDuplicate = await this.prismaService.catCentroCostos.findFirst({
                 where: {
+                    idTenant: user.idTenant,
                     idEmpresa: companyId,
                     Codigo: updateCostCenterDto.Codigo,
                     NOT: {
@@ -224,10 +230,10 @@ export class CostCenterService {
         return { message: 'Centro de costos actualizado correctamente.' };
     }
 
-    async changeStatus(companyId: number, id: number, active: boolean) {
+    async changeStatus(user: ActiveUserDto, companyId: number, id: number, active: boolean) {
 
         await this.prismaService.catCentroCostos.update({
-            where: { idCentroCostos: id, idEmpresa: companyId },
+            where: { idCentroCostos: id, idEmpresa: companyId, idTenant: user.idTenant },
             data: {
                 Activo: active
             },

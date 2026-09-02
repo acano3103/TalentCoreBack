@@ -5,6 +5,8 @@ import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateCostCenterDto } from './dto/create-cost-center.dto';
 import { UpdateCostCenterDto } from './dto/update-cost-center.dto';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/cost-centers')
@@ -18,13 +20,14 @@ export class CostCenterController {
     @ApiResponse({ status: 404, description: 'Cost centers not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async findAll(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query('search') search?: string,
     ) {
         const querySearch = search || '';
-        return this.costCenterService.findAll(companyId, page, querySearch, limit);
+        return this.costCenterService.findAll(user, companyId, page, querySearch, limit);
     }
 
     @Get('/:costCenterId')
@@ -34,10 +37,11 @@ export class CostCenterController {
     @ApiResponse({ status: 404, description: 'Cost center not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async findOne(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('costCenterId', ParseIntPipe) costCenterId: number,
     ) {
-        return await this.costCenterService.findOne(companyId, costCenterId);
+        return await this.costCenterService.findOne(user, companyId, costCenterId);
     }
 
     @Post()
@@ -47,10 +51,11 @@ export class CostCenterController {
     @ApiResponse({ status: 404, description: 'Cost center not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async create(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Body() createCostCenterDto: CreateCostCenterDto,
     ) {
-        return await this.costCenterService.create(companyId, createCostCenterDto);
+        return await this.costCenterService.create(user, companyId, createCostCenterDto);
     }
 
     @Put('/:costCenterId')
@@ -60,11 +65,12 @@ export class CostCenterController {
     @ApiResponse({ status: 404, description: 'Cost center not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async update(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('costCenterId', ParseIntPipe) costCenterId: number,
         @Body() updateCostCenterDto: UpdateCostCenterDto,
     ) {
-        return await this.costCenterService.update(companyId, costCenterId, updateCostCenterDto);
+        return await this.costCenterService.update(user, companyId, costCenterId, updateCostCenterDto);
     }
 
     @Delete('/:costCenterId')
@@ -74,10 +80,11 @@ export class CostCenterController {
     @ApiResponse({ status: 404, description: 'Cost center not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async disable(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('costCenterId', ParseIntPipe) costCenterId: number,
     ) {
-        return this.costCenterService.changeStatus(companyId, costCenterId, false);
+        return this.costCenterService.changeStatus(user, companyId, costCenterId, false);
     }
 
     @Patch('/:costCenterId/reactivate')
@@ -87,9 +94,10 @@ export class CostCenterController {
     @ApiResponse({ status: 404, description: 'Cost center not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async reactivate(
+        @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('costCenterId', ParseIntPipe) costCenterId: number,
     ) {
-        return this.costCenterService.changeStatus(companyId, costCenterId, true);
+        return this.costCenterService.changeStatus(user, companyId, costCenterId, true);
     }
 }

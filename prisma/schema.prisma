@@ -84,6 +84,7 @@ model CatCanalesNotificaciones {
 
 model CatCentroCostos {
   idCentroCostos       Int                   @id @default(autoincrement())
+  idTenant             Int?
   idEmpresa            Int?
   Codigo               String?               @db.VarChar(50)
   Descripcion          String?               @db.VarChar(200)
@@ -607,6 +608,7 @@ model HistorialDescargasExpediente {
   motivo          String   @db.Text
   fechaDescarga   DateTime @default(now()) @db.DateTime(0)
   activo          Boolean  @default(true)
+  idTenant        Int      @default(0)
 }
 
 model HistorialDocumentosCandidato {
@@ -628,6 +630,7 @@ model HistorialExpediente {
   fechaCambio           DateTime? @default(now()) @db.Timestamp(0)
   usuario               String?   @db.VarChar(250)
   comentario            String?   @db.Text
+  idTenant              Int       @default(0)
 }
 
 model HorariosPuesto {
@@ -1144,6 +1147,7 @@ model Expedientes {
   usuarioRegistro      String?   @db.VarChar(250)
   fechaActualizacion   DateTime? @default(now()) @db.Timestamp(0)
   usuarioActualizacion String?   @db.VarChar(250)
+  idTenant             Int       @default(0)
 }
 
 model RelPuestosUbicaciones {
@@ -1382,6 +1386,7 @@ model DocumentosEmpleado {
   fechaEmision                       DateTime? @db.Date
   fechaVencimiento                   DateTime? @db.Date
   fechaUltimaNotificacionVencimiento DateTime? @db.DateTime(0)
+  idTenant                           Int       @default(0)
 }
 
 model CatEstatusContratos {
