@@ -14,45 +14,47 @@ export class RequiredDocumentsService {
         private readonly prisma: PrismaService,
     ) { }
 
-async findAll(companyId: number, page: number, limit: number, search?: string, soloConValidacion?: boolean) {
-    // Definir el objeto de condiciones (Where) dinámico
-    const where = {
-        idEmpresa: companyId,
-        ...(search
-            ? {
-                OR: [
-                    { Descripcion: { contains: search } },
-                ],
-            }
-            : {}),
-        ...(soloConValidacion ? { tieneValidacionAutomatica: true } : {}),
-    };
+    async findAll(user: ActiveUserDto, companyId: number, page: number, limit: number, search?: string, soloConValidacion?: boolean) {
+        // Definir el objeto de condiciones (Where) dinámico
+        const where = {
+            idTenant: user.idTenant,
+            idEmpresa: companyId,
+            ...(search
+                ? {
+                    OR: [
+                        { Descripcion: { contains: search } },
+                    ],
+                }
+                : {}),
+            ...(soloConValidacion ? { tieneValidacionAutomatica: true } : {}),
+        };
 
-    // Ejecutar de manera concurrente la consulta paginada y el conteo total para optimizar tiempos
-    const [documents, total] = await Promise.all([
-        this.prisma.catDocumentos.findMany({
-            where,
-            skip: (page - 1) * limit,
-            take: limit,
-            orderBy: { IdDocumento: 'asc' },
-        }),
-        this.prisma.catDocumentos.count({ where }),
-    ]);
+        // Ejecutar de manera concurrente la consulta paginada y el conteo total para optimizar tiempos
+        const [documents, total] = await Promise.all([
+            this.prisma.catDocumentos.findMany({
+                where,
+                skip: (page - 1) * limit,
+                take: limit,
+                orderBy: { IdDocumento: 'asc' },
+            }),
+            this.prisma.catDocumentos.count({ where }),
+        ]);
 
-    // Formatear la respuesta con la metadata de paginación
-    return {
-        data: documents,
-        total,
-        currentPage: page,
-        totalPages: Math.ceil(total / limit) || 1,
-    };
-}
+        // Formatear la respuesta con la metadata de paginación
+        return {
+            data: documents,
+            total,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit) || 1,
+        };
+    }
 
-   async create(companyId: number, createDto: CreateRequiredDocumentDto, user: ActiveUserDto) {
+    async create(user: ActiveUserDto, companyId: number, createDto: CreateRequiredDocumentDto) {
         const { descripcion, esRequeridoBase, requiereVencimiento, diasVigenciaDefault, diasAlertaPrevio } = createDto;
 
         const document = await this.prisma.catDocumentos.create({
             data: {
+                idTenant: user.idTenant,
                 idEmpresa: companyId,
                 Descripcion: descripcion,
                 EsRequeridoBase: esRequeridoBase,
@@ -81,11 +83,12 @@ async findAll(companyId: number, page: number, limit: number, search?: string, s
         return { message: "Documento creado correctamente" };
     }
 
-   async update(companyId: number, documentId: number, updateDto: UpdateRequiredDocumentDto, user: ActiveUserDto) {
+    async update(user: ActiveUserDto, companyId: number, documentId: number, updateDto: UpdateRequiredDocumentDto) {
         const { descripcion, esRequeridoBase, requiereVencimiento, diasVigenciaDefault, diasAlertaPrevio } = updateDto;
 
         const document = await this.prisma.catDocumentos.findFirst({
             where: {
+                idTenant: user.idTenant,
                 idEmpresa: companyId,
                 IdDocumento: documentId,
             },
@@ -122,10 +125,11 @@ async findAll(companyId: number, page: number, limit: number, search?: string, s
         return { message: "Documento actualizado correctamente" };
     }
 
-    async changeStatus(companyId: number, documentId: number, active: boolean, user: ActiveUserDto) {
+    async changeStatus(user: ActiveUserDto, companyId: number, documentId: number, active: boolean) {
         // Verificamos si el área existe y si tiene presencia en la empresa actual
         const document = await this.prisma.catDocumentos.findFirst({
             where: {
+                idTenant: user.idTenant,
                 idEmpresa: companyId,
                 IdDocumento: documentId,
             },
