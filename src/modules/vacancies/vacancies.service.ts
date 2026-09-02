@@ -22,16 +22,16 @@ export class VacanciesService {
     private readonly logger = new Logger(VacanciesService.name);
 
     // Obtener todas las vacantes activas por empresa
-    async findAll(companyId: number, page: number, search: string, limit: number, activeUser: ActiveUserDto) {
+    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number) {
         try {
             const skip = (page - 1) * limit;
             let recruiterEmployeeId: number | null = null;
 
             // 1. Verificar si el usuario tiene el rol de reclutador
             const userRoles = await this.prisma.$queryRaw<{ idRol: number }[]>`
-            SELECT idRol FROM RelUsuarioRol 
-            WHERE idUsuario = ${activeUser.id} AND activo = 1;
-        `;
+                SELECT idRol FROM RelUsuarioRol 
+                WHERE idUsuario = ${activeUser.id} AND activo = 1;
+            `;
 
             const isReclutador = userRoles.some(r => r.idRol === 4);
 
@@ -53,6 +53,7 @@ export class VacanciesService {
             const [rows, total] = await Promise.all([
                 VacanciesQueries.getPaginatedActiveVacancies(
                     this.prisma,
+                    activeUser.idTenant,
                     companyId,
                     skip,
                     limit,
@@ -61,6 +62,7 @@ export class VacanciesService {
                 ),
                 VacanciesQueries.countActiveVacancies(
                     this.prisma,
+                    activeUser.idTenant,
                     companyId,
                     search,
                     recruiterEmployeeId
@@ -284,11 +286,12 @@ export class VacanciesService {
         }
     }
 
-    async closeOrCancelVacancy(companyId: number, vacancyId: number, status: "CERRADA" | "CANCELADA", activeUser: ActiveUserDto) {
+    async closeOrCancelVacancy(activeUser: ActiveUserDto, companyId: number, vacancyId: number, status: "CERRADA" | "CANCELADA") {
         try {
             const vacancy = await this.prisma.vacantes.findUnique({
                 where: {
                     idVacante: vacancyId,
+                    idTenant: activeUser.idTenant,
                     idEmpresa: companyId
                 }
             });
@@ -402,7 +405,7 @@ export class VacanciesService {
         return { data: serialized };
     }
 
-    async findAllRequisitions(companyId: number, page: number, search: string, limit: number, activeUser: ActiveUserDto) {
+    async findAllRequisitions(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number) {
         const userRole = await this.prisma.relUsuarioRol.findFirst({
             where: {
                 idUsuario: activeUser.id,
@@ -417,6 +420,7 @@ export class VacanciesService {
         const [requisitions, total] = await Promise.all([
             VacanciesQueries.getPaginatedRequisitions(
                 this.prisma,
+                activeUser.idTenant,
                 companyId,
                 activeUser.id,
                 userRole.idRol,
@@ -426,6 +430,7 @@ export class VacanciesService {
             ),
             VacanciesQueries.countRequisitions(
                 this.prisma,
+                activeUser.idTenant,
                 companyId,
                 activeUser.id,
                 userRole.idRol,
@@ -441,11 +446,12 @@ export class VacanciesService {
         };
     }
 
-    async findRequisitionById(companyId: number, requisitionId: number, activeUser: ActiveUserDto) {
+    async findRequisitionById(activeUser: ActiveUserDto, companyId: number, requisitionId: number) {
         // Obtener la requisición / vacante
         const requisition = await this.prisma.vacantes.findUnique({
             where: {
                 idVacante: requisitionId,
+                idTenant: activeUser.idTenant,
                 idEmpresa: companyId
             }
         });
@@ -535,7 +541,7 @@ export class VacanciesService {
         };
     }
 
-    async findAllowedPositions(companyId: number, activeUser: ActiveUserDto) {
+    async findAllowedPositions(activeUser: ActiveUserDto, companyId: number) {
         const userAuth = await this.prisma.auth_user.findUnique({
             where: {
                 id: activeUser.id
@@ -543,6 +549,7 @@ export class VacanciesService {
             include: {
                 Empleados: {
                     where: {
+                        idTenant: activeUser.idTenant,
                         idEmpresa: companyId,
                         activo: true
                     }
@@ -563,6 +570,7 @@ export class VacanciesService {
         const allPositions = await this.prisma.catPuestos.findMany({
             where: {
                 idEmpresa: companyId,
+                idTenant: activeUser.idTenant,
                 Activo: true,
                 aprobada: true,
                 pendiente: false
@@ -594,12 +602,13 @@ export class VacanciesService {
         return allowedPositions;
     }
 
-    async findAllowedLocations(companyId: number, activeUser: ActiveUserDto) {
+    async findAllowedLocations(activeUser: ActiveUserDto, companyId: number) {
         const userSites = await this.prisma.relUsuarioSite.findMany({
             where: {
                 idUsuario: activeUser.id,
                 activo: true,
                 CatSites: {
+                    idTenant: activeUser.idTenant,
                     idEmpresa: companyId,
                     Activo: true
                 }
@@ -629,7 +638,7 @@ export class VacanciesService {
             }));
     }
 
-    async findRequisitionCatalogs(companyId: number, positionId: number, activeUser: ActiveUserDto) {
+    async findRequisitionCatalogs(activeUser: ActiveUserDto, companyId: number, positionId: number) {
         // Obtener los tipos de publicación activos
         const publicationTypes = await this.prisma.catTiposPublicacion.findMany({
             where: { activo: true }
@@ -637,7 +646,7 @@ export class VacanciesService {
 
         // Obtener el puesto seleccionado para extraer su puesto jefe estructural (idJefeInmediato)
         const selectedPosition = await this.prisma.catPuestos.findUnique({
-            where: { idPuesto: positionId },
+            where: { idPuesto: positionId, idEmpresa: companyId, idTenant: activeUser.idTenant },
             select: { idJefeInmediato: true }
         });
 
@@ -652,6 +661,7 @@ export class VacanciesService {
         // Obtener los empleados activos que ocupan físicamente el puesto superior dentro de la empresa
         const employees = await this.prisma.empleados.findMany({
             where: {
+                idTenant: activeUser.idTenant,
                 idEmpresa: companyId,
                 idPuesto: selectedPosition.idJefeInmediato,
                 activo: true
@@ -683,11 +693,12 @@ export class VacanciesService {
         return { publicationTypes, immediateBosses };
     }
 
-    async createRequisition(companyId: number, requisitionDto: CreateRequisitionDto, activeUser: ActiveUserDto) {
+    async createRequisition(activeUser: ActiveUserDto, companyId: number, requisitionDto: CreateRequisitionDto) {
         // Obtener el puesto e incluir su nivel salarial asignado de una sola vez
         const position = await this.prisma.catPuestos.findUnique({
             where: {
                 idPuesto: requisitionDto.idPuesto,
+                idTenant: activeUser.idTenant,
                 idEmpresa: companyId,
                 Activo: true,
                 aprobada: true,
@@ -739,6 +750,7 @@ export class VacanciesService {
             }),
             this.prisma.empleados.count({
                 where: {
+                    idTenant: activeUser.idTenant,
                     idEmpresa: companyId,
                     idPuesto: requisitionDto.idPuesto,
                     idSite: requisitionDto.idSite,
@@ -762,6 +774,7 @@ export class VacanciesService {
             const requisition = await this.prisma.vacantes.create({
                 data: {
                     idUsuarioCreador: activeUser.id,
+                    idTenant: activeUser.idTenant,
                     idEmpresa: companyId,
                     idPuesto: requisitionDto.idPuesto,
                     idSite: requisitionDto.idSite,
@@ -830,10 +843,10 @@ export class VacanciesService {
         return { message: 'Requisición validada y creada exitosamente.' };
     }
 
-    async deleteRequisition(companyId: number, requisitionId: number, activeUser: ActiveUserDto) {
+    async deleteRequisition(activeUser: ActiveUserDto, companyId: number, requisitionId: number) {
         await this.prisma.$transaction(async (tx) => {
             const requisition = await tx.vacantes.findUnique({
-                where: { idVacante: requisitionId },
+                where: { idVacante: requisitionId, idTenant: activeUser.idTenant, idEmpresa: companyId },
             });
             if (!requisition) throw new NotFoundException('No se encontró la requisición');
 
@@ -856,9 +869,9 @@ export class VacanciesService {
         });
     }
 
-    async evaluateRequisition(companyId: number, requisitionId: number, action: 'aprobar' | 'rechazar', recruiterId: number | undefined, activeUser: ActiveUserDto) {
+    async evaluateRequisition(activeUser: ActiveUserDto, companyId: number, requisitionId: number, action: 'aprobar' | 'rechazar', recruiterId: number | undefined) {
 
-        const { requisition, permissions } = await this.findRequisitionById(companyId, requisitionId, activeUser);
+        const { requisition, permissions } = await this.findRequisitionById(activeUser, companyId, requisitionId);
 
         if (!permissions.canApproveOrReject) {
             throw new ForbiddenException('No tienes privilegios para dictaminar esta requisición en su estatus actual.');
@@ -870,12 +883,12 @@ export class VacanciesService {
         if (action === 'rechazar') {
             if (permissions.userContextRole == 'JEFE_INMEDIATO') {
                 await this.prisma.vacantes.update({
-                    where: { idVacante: requisitionId },
+                    where: { idVacante: requisitionId, idTenant: activeUser.idTenant, idEmpresa: companyId },
                     data: { idEstatusVacante: 3 }
                 });
             } else if (currentStatus === 2 && permissions.userContextRole === 'RECURSOS_HUMANOS') {
                 await this.prisma.vacantes.update({
-                    where: { idVacante: requisitionId },
+                    where: { idVacante: requisitionId, idTenant: activeUser.idTenant, idEmpresa: companyId },
                     data: { idEstatusVacante: 6 }
                 });
             }
@@ -1043,13 +1056,5 @@ export class VacanciesService {
                 urls: links
             };
         }
-    }
-
-    async updateRequisition() {
-
-    }
-
-    async changeStatus() {
-
     }
 }

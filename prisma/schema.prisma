@@ -55,6 +55,7 @@ model Beneficiarios {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model CatAreas {
   idArea              Int                   @id @default(autoincrement())
+  idTenant            Int?
   idEmpresa           Int
   Descripcion         String                @db.VarChar(200)
   Activo              Boolean?              @default(true)
@@ -118,6 +119,7 @@ model CatCriterios {
 
 model CatCursos {
   idCursos                Int             @id @default(autoincrement())
+  idTenant                Int?
   idEmpresa               Int
   idTipoCurso             Int             @default(1)
   Descripcion             String?         @db.VarChar(300)
@@ -141,6 +143,7 @@ model CatDescripcionesPuesto {
 
 model CatDocumentos {
   IdDocumento               Int       @id @default(autoincrement())
+  idTenant                  Int?
   idEmpresa                 Int?
   Descripcion               String?   @db.VarChar(100)
   EsRequeridoBase           Boolean   @default(false)
@@ -274,10 +277,11 @@ model CatNivel {
 
 model CatNivelesSalario {
   IdNivelSalario Int          @id @default(autoincrement())
+  idTenant       Int?
+  IdEmpresa      Int          @default(1)
   NombreNivel    String       @db.VarChar(50)
   Descripcion    String?      @db.Text
   Activo         Boolean?     @default(true)
-  IdEmpresa      Int          @default(1)
   SalarioMinimo  Decimal?     @db.Decimal(10, 2)
   SalarioMaximo  Decimal?     @db.Decimal(10, 2)
   CatPuestos     CatPuestos[]
@@ -297,6 +301,7 @@ model CatPlataforma {
 
 model CatPuestos {
   idPuesto              Int                     @id @default(autoincrement())
+  idTenant              Int?
   idEmpresa             Int                     @default(1)
   NombrePuesto          String                  @db.VarChar(200)
   idTipoPuesto          Int?
@@ -330,6 +335,7 @@ model CatPuestos {
 
 model CatSites {
   idSite                Int                     @id @default(autoincrement())
+  idTenant              Int                     @default(0)
   idEmpresa             Int?
   idUnidadOperativa     Int?
   idTipoUbicacion       Int                     @default(1)
@@ -475,7 +481,6 @@ model DocumentosPuesto {
 model DomicilioEmpresas {
   idDomicilioEmpresa Int         @id @default(autoincrement())
   idEmpresa          Int
-  idTenant           Int
   codigo_postal      String      @db.VarChar(10)
   idColonia          Int
   colonia            String      @db.VarChar(150)
@@ -486,6 +491,7 @@ model DomicilioEmpresas {
   numero_interior    String?     @db.VarChar(20)
   fechaRegistro      DateTime?   @default(now()) @db.DateTime(0)
   usuarioRegistro    String?     @db.VarChar(100)
+  idTenant           Int
   CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "DomicilioEmpresas_ibfk_1")
 
   @@index([idEmpresa], map: "idEmpresa")
@@ -506,6 +512,7 @@ model EntrevistaCriteriosEvaluacion {
 
 model Entrevistas {
   id                     String                     @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  tenant_id              Int?
   company_id             Int
   idVacante              Int?
   provider_id            Int
@@ -545,6 +552,7 @@ model EntrevistasCriterios {
 
 model EntrevistasPostulantes {
   id                            String                          @id @default(dbgenerated("(uuid())")) @db.Char(36)
+  tenant_id                     Int?
   candidate_uuid                String                          @db.Char(36)
   interview_id                  String                          @db.Char(36)
   scheduled_at                  DateTime?                       @db.DateTime(0)
@@ -1040,6 +1048,7 @@ model CatRegistrosPatronales {
   ClaseRiesgo        String      @db.VarChar(10)
   PrimaRiesgo        Decimal     @default(0.50000) @db.Decimal(7, 5)
   Activo             Boolean?    @default(true)
+  idTenant           Int         @default(0)
   CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, onUpdate: NoAction, map: "FK_RegPatronal_Empresa")
 
   @@index([idEmpresa], map: "FK_RegPatronal_Empresa")
@@ -1078,8 +1087,9 @@ model RelAreasUbicaciones {
 
 model Empleados {
   idEmpleado                                        Int                   @id @default(autoincrement())
-  idUsuario                                         String?               @db.VarChar(36)
+  idTenant                                          Int?
   idEmpresa                                         Int?
+  idUsuario                                         String?               @db.VarChar(36)
   idPuesto                                          Int?
   idJefeInmediato                                   Int?
   idSite                                            Int?
@@ -1152,6 +1162,7 @@ model RelPuestosUbicaciones {
 
 model RelRolPermisos {
   id              Int        @id @default(autoincrement())
+  idTenant        Int?
   idRol           Int
   idModulo        Int
   puedeVer        Boolean    @default(false)
@@ -1168,8 +1179,9 @@ model RelRolPermisos {
 
 model Vacantes {
   idVacante                                          Int                  @id @default(autoincrement())
-  idUsuarioCreador                                   Int
+  idTenant                                           Int?
   idEmpresa                                          Int
+  idUsuarioCreador                                   Int
   idPuesto                                           Int
   idSite                                             Int
   idJefeInmediato                                    Int
@@ -1293,6 +1305,7 @@ model CatTiposPublicacion {
 
 model CatRoles {
   idRol          Int              @id @default(autoincrement())
+  idTenant       Int?
   descripcion    String           @db.VarChar(100)
   activo         Boolean          @default(true)
   RelRolPermisos RelRolPermisos[]
@@ -1315,6 +1328,7 @@ model CatEstatusSolicitudPuesto {
 
 model SolicitudPuesto {
   id                        Int                       @id @default(autoincrement())
+  idTenant                  Int?
   idEmpresa                 Int
   idUsuarioSolicita         Int
   descripcion               String                    @db.Text
@@ -1714,6 +1728,7 @@ model CatUnidadesOperativas {
   Activo              Boolean?    @default(true)
   FechaRegistro       DateTime?   @default(now()) @db.DateTime(0)
   UsuarioRegistro     String?     @db.VarChar(100)
+  idTenant            Int         @default(0)
   CatSites            CatSites[]
   CatEmpresas         CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, map: "FK_UnidadesOperativas_Empresas")
 

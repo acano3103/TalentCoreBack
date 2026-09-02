@@ -61,13 +61,14 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Salary levels not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async findAllSalaryLevels(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
   ) {
     const querySearch = search || '';
-    return this.salaryLevelsCatalogService.findAll(companyId, page, limit, querySearch);
+    return this.salaryLevelsCatalogService.findAll(activeUser, companyId, page, limit, querySearch);
   }
 
   // Obtiene un nivel salarial por id
@@ -78,10 +79,11 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Salary level not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async findOne(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
   ) {
-    return await this.salaryLevelsCatalogService.findOne(companyId, salaryLevelId);
+    return await this.salaryLevelsCatalogService.findOne(activeUser, companyId, salaryLevelId);
   }
 
   // Crea un nivel salarial
@@ -91,10 +93,11 @@ export class CatalogsController {
   @ApiResponse({ status: 200, description: 'Salary level created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async create(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Body() createSalaryLevelsCatalogDto: CreateSalaryLevelsCatalogDto,
   ) {
-    return await this.salaryLevelsCatalogService.create(companyId, createSalaryLevelsCatalogDto);
+    return await this.salaryLevelsCatalogService.create(activeUser, companyId, createSalaryLevelsCatalogDto);
   }
 
   // Actualiza un nivel salarial
@@ -105,11 +108,12 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Salary level not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async update(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
     @Body() updateSalaryLevelsCatalogDto: UpdateSalaryLevelsCatalogDto,
   ) {
-    return await this.salaryLevelsCatalogService.update(companyId, salaryLevelId, updateSalaryLevelsCatalogDto);
+    return await this.salaryLevelsCatalogService.update(activeUser, companyId, salaryLevelId, updateSalaryLevelsCatalogDto);
   }
 
   // Desactiva un nivel salarial
@@ -120,10 +124,11 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Salary level not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async disable(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
   ) {
-    return this.salaryLevelsCatalogService.changeStatus(companyId, salaryLevelId, false);
+    return this.salaryLevelsCatalogService.changeStatus(activeUser, companyId, salaryLevelId, false);
   }
 
   // Reactiva un nivel salarial
@@ -134,10 +139,11 @@ export class CatalogsController {
   @ApiResponse({ status: 404, description: 'Salary level not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   async reactivate(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('salaryLevelId', ParseIntPipe) salaryLevelId: number,
   ) {
-    return this.salaryLevelsCatalogService.changeStatus(companyId, salaryLevelId, true);
+    return this.salaryLevelsCatalogService.changeStatus(activeUser, companyId, salaryLevelId, true);
   }
 
   // ==========================================

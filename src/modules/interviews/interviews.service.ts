@@ -25,6 +25,7 @@ export class InterviewsService {
     private readonly logger = new Logger(InterviewsService.name);
 
     async findAll(
+        user: ActiveUserDto,
         companyId: number,
         vacancyId: number | undefined,
         page: number,
@@ -33,8 +34,8 @@ export class InterviewsService {
     ) {
         const skip = (page - 1) * limit;
 
-        const data = await findAllInterviews(companyId, vacancyId, search, skip, limit, this.prisma);
-        const total = await countInterviews(companyId, vacancyId, search, this.prisma);
+        const data = await findAllInterviews(user.idTenant, companyId, vacancyId, search, skip, limit, this.prisma);
+        const total = await countInterviews(user.idTenant, companyId, vacancyId, search, this.prisma);
 
         return {
             data,
@@ -44,10 +45,11 @@ export class InterviewsService {
         };
     }
 
-    async findActiveVacancies(companyId: number) {
+    async findActiveVacancies(user: ActiveUserDto, companyId: number) {
         const activeVacancies = await this.prisma.vacantes.findMany({
             where: {
                 idEmpresa: companyId,
+                idTenant: user.idTenant,
                 idEstatusVacante: 5,
             },
             select: {
@@ -63,12 +65,12 @@ export class InterviewsService {
         }));
     }
 
-    async findProgrammedInterviews(companyId: number, mainInterviewId: string) {
-        return await findProgrammedInterviews(companyId, mainInterviewId, this.prisma);
+    async findProgrammedInterviews(user: ActiveUserDto, companyId: number, mainInterviewId: string) {
+        return await findProgrammedInterviews(user.idTenant, companyId, mainInterviewId, this.prisma);
     }
 
     // Función para crear una entrevista como catalogo
-    async create(companyId: number, dto: CreateInterviewDto, user: ActiveUserDto) {
+    async create(user: ActiveUserDto, companyId: number, dto: CreateInterviewDto) {
 
         return await this.prisma.$transaction(async (tx) => {
             // Creamos todas las entrevistas en base a los vacancyIds
@@ -76,6 +78,7 @@ export class InterviewsService {
                 dto.vacancyIds.map(vacancyId =>
                     tx.entrevistas.create({
                         data: {
+                            tenant_id: user.idTenant,
                             company_id: companyId,
                             idVacante: vacancyId,
                             provider_id: dto.providerId,
@@ -134,9 +137,9 @@ export class InterviewsService {
     }
 
     // Función para programar una entrevista ya creada como catalogo
-    async programInterview(companyId: number, interviewId: string, dto: ProgramInterviewDto, user: ActiveUserDto) {
+    async programInterview(user: ActiveUserDto, companyId: number, interviewId: string, dto: ProgramInterviewDto) {
         const mainInterview = await this.prisma.entrevistas.findFirst({
-            where: { id: interviewId },
+            where: { id: interviewId, tenant_id: user.idTenant, company_id: companyId },
             include: { EntrevistasCriterios: true }
         });
         if (!mainInterview) throw new BadRequestException('No se encontró la entrevista principal');
@@ -165,6 +168,7 @@ export class InterviewsService {
                 // Creamos la entrevista programada (Enlace para que el postulante acuda)
                 const newInterview = await tx.entrevistasPostulantes.create({
                     data: {
+                        tenant_id: user.idTenant,
                         candidate_uuid: postulant.uuid,
                         interview_id: mainInterview.id,
                         scheduled_at: date,
@@ -309,24 +313,24 @@ export class InterviewsService {
     }
 
     // Método para obtener todas las entrevistas de un postulante
-    async findAllByPostulant(companyId: number, postulantId: number) {
+    async findAllByPostulant(user: ActiveUserDto, companyId: number, postulantId: number) {
         const postulant = await this.prisma.postulaciones.findFirst({
             where: { idPostulacion: postulantId }
         })
         if (!postulant) throw new BadRequestException('No se encontró el postulante');
 
-        return await findAllInterviewsByPostulant(postulant.uuid, this.prisma);
+        return await findAllInterviewsByPostulant(user.idTenant, postulant.uuid, this.prisma);
     }
 
     // Metodo para obtener detalles de una entrevista especifica
-    async getMeetingDetail(companyId: number, interviewId: string) {
-        return await findInterviewDetail(interviewId, this.prisma);
+    async getMeetingDetail(user: ActiveUserDto, companyId: number, interviewId: string) {
+        return await findInterviewDetail(user.idTenant, interviewId, this.prisma);
     }
 
     // Metodo para actualizar detalles de una entrevista programada
-    async updateMeeting(companyId: number, meetingId: string, dto: UpdateMeetingDto, user: ActiveUserDto) {
+    async updateMeeting(user: ActiveUserDto, companyId: number, meetingId: string, dto: UpdateMeetingDto) {
         const interviewPostulant = await this.prisma.entrevistasPostulantes.findFirst({
-            where: { id: meetingId },
+            where: { id: meetingId, tenant_id: user.idTenant },
             include: {
                 Entrevistas: true,
                 EntrevistasResultados: true,
@@ -394,11 +398,12 @@ export class InterviewsService {
         return { message: 'Entrevista actualizada exitosamente' };
     }
 
-    async findOne(companyId: number, interviewId: string) {
+    async findOne(user: ActiveUserDto, companyId: number, interviewId: string) {
         const interview = await this.prisma.entrevistas.findFirst({
             where: {
                 id: interviewId,
                 company_id: companyId,
+                tenant_id: user.idTenant,
                 active: true
             },
             include: {
@@ -415,9 +420,9 @@ export class InterviewsService {
     }
 
     // Esta función actualiza una entrevista catalogo cuando no tiene entrevistas programadas
-    async updateInterview(companyId: number, interviewId: string, dto: UpdateInterviewDto, user: ActiveUserDto) {
+    async updateInterview(user: ActiveUserDto, companyId: number, interviewId: string, dto: UpdateInterviewDto) {
         const interview = await this.prisma.entrevistas.findFirst({
-            where: { id: interviewId, company_id: companyId, active: true }
+            where: { id: interviewId, company_id: companyId, tenant_id: user.idTenant, active: true }
         });
         if (!interview) throw new BadRequestException('No se encontró la entrevista');
 
@@ -456,9 +461,9 @@ export class InterviewsService {
     }
 
     // Esta funcion actualiza la fecha, hora y duracion de una entrevista programada
-    async rescheduleInterview(companyId: number, meetingId: string, dto: RescheduleInterviewDto, user: ActiveUserDto) {
+    async rescheduleInterview(user: ActiveUserDto, companyId: number, meetingId: string, dto: RescheduleInterviewDto) {
         const meeting = await this.prisma.entrevistasPostulantes.findFirst({
-            where: { id: meetingId },
+            where: { id: meetingId, tenant_id: user.idTenant },
             include: {
                 Entrevistas: true
             }
@@ -583,9 +588,9 @@ export class InterviewsService {
     }
 
     // Esta funcion elimina una entrevista catalogo cuando no tiene reuniones programadas
-    async deleteInterview(companyId: number, interviewId: string, user: ActiveUserDto) {
+    async deleteInterview(user: ActiveUserDto, companyId: number, interviewId: string) {
         const interview = await this.prisma.entrevistas.findFirst({
-            where: { id: interviewId, company_id: companyId }
+            where: { id: interviewId, tenant_id: user.idTenant, company_id: companyId }
         });
 
         if (!interview) throw new BadRequestException('No se encontró la entrevista');
@@ -628,12 +633,11 @@ export class InterviewsService {
         }));
     }
 
-    async deleteMeeting(companyId: number, meetingId: string, user: ActiveUserDto) {
+    async deleteMeeting(user: ActiveUserDto, companyId: number, meetingId: string) {
         const meeting = await this.prisma.entrevistasPostulantes.findFirst({
-            where: { id: meetingId }
+            where: { id: meetingId, tenant_id: user.idTenant }
         });
         if (!meeting) throw new BadRequestException('No se encontró el meeting');
-
 
         await this.prisma.$transaction(async (tx) => {
             const deleteInterview = tx.entrevistasPostulantes.delete({

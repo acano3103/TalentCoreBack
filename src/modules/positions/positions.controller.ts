@@ -17,7 +17,11 @@ import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 export class PositionsController {
     constructor(private readonly service: PositionsService) { }
 
-    // Position requests endpoints
+    // ==========================================
+    // ENDPOINTS: Subservicio de solicitudes de puesto
+    // ==========================================
+
+    // Obtiene todas las solicitudes de puesto
     @Get('requests')
     @ApiOperation({ summary: 'Get all position requests for the administration panel', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requests obtained successfully.' })
@@ -35,6 +39,7 @@ export class PositionsController {
         return this.service.findAllRequests(companyId, activeUser, page, limit, filterByUser, estatusId, search);
     }
 
+    // Obtiene el catalogo de estatus de solicitudes
     @Get('requests/status')
     @ApiOperation({ summary: 'Get all catalog status of requests', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Requests status obtained successfully.' })
@@ -46,6 +51,7 @@ export class PositionsController {
         return this.service.getRequestsStatus(companyId);
     }
 
+    // Crea una nueva solicitud de puesto
     @Post('requests')
     @ApiOperation({ summary: 'Create a new position request (raw text)', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 201, description: 'Request registered successfully.' })
@@ -59,6 +65,7 @@ export class PositionsController {
         return this.service.createRequest(companyId, activeUser, data);
     }
 
+    // Aprueba o rechaza una solicitud de puesto
     @Patch('requests/:requestId')
     @ApiOperation({ summary: 'Validate a position request', description: 'Validates a position request and public it.' })
     @ApiResponse({ status: 201, description: 'Position request successfully validated.' })
@@ -73,6 +80,7 @@ export class PositionsController {
         return this.service.approveOrRejectRequests(companyId, requestId, activeUser, data);
     }
 
+    // Elimina una solicitud de puesto
     @Delete('requests/:requestId')
     @ApiOperation({ summary: 'Delete a position request', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Request deleted successfully.' })
@@ -86,7 +94,11 @@ export class PositionsController {
         return this.service.deleteRequest(companyId, requestId, activeUser);
     }
 
-    // positions endpoints
+    // ==========================================
+    // ENDPOINTS: Subservicio de puestos
+    // ==========================================
+
+    // Obtener todos los puestos páginados
     @Get()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get all positions', description: SWAGGER_AUTH_DESCRIPTION })
@@ -94,6 +106,7 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Positions not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async findAll(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -101,9 +114,10 @@ export class PositionsController {
         @Query('search') search?: string,
     ) {
         const querySearch = search || '';
-        return this.service.findAll(companyId, page, querySearch, limit, aprobada);
+        return this.service.findAll(activeUser, companyId, page, querySearch, limit, aprobada);
     }
 
+    // Obtiene los catálogos necesarios para la creación de un puesto
     @Get('/catalogs')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get all position catalogs', description: SWAGGER_AUTH_DESCRIPTION })
@@ -111,11 +125,13 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Position catalogs not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async getCatalogs(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
     ) {
-        return this.service.getCatalogs(companyId);
+        return this.service.getCatalogs(activeUser, companyId);
     }
 
+    // Obtiene un puesto especifico por su id
     @Get(':positionId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get a position', description: SWAGGER_AUTH_DESCRIPTION })
@@ -123,13 +139,15 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async findOne(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
         @Query('specific', new DefaultValuePipe(1), ParseIntPipe) specific: number,
     ) {
-        return this.service.findOne(companyId, positionId, specific);
+        return this.service.findOne(activeUser, companyId, positionId, specific);
     }
 
+    // Actualiza un puesto completo con todos sus datos
     @Put(':positionId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Update a position', description: SWAGGER_AUTH_DESCRIPTION })
@@ -137,17 +155,15 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async update(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
-        @GetActiveUser() activeUser: ActiveUserDto,
         @Body() data: CreatePositionDto,
     ) {
-        return this.service.update(companyId, positionId, activeUser, data);
+        return this.service.update(activeUser, companyId, positionId, data);
     }
 
-
-
-
+    // Obtiene los horarios de un puesto específico
     @Get(':positionId/schedule')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get schedule (horarios) for a position', description: SWAGGER_AUTH_DESCRIPTION })
@@ -155,14 +171,14 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async getSchedule(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
     ) {
-        return this.service.getSchedule(positionId);
+        return this.service.getSchedule(activeUser, companyId, positionId);
     }
 
-
-
+    // Obtiene los documentos requeridos de un puesto específico
     @Get(':positionId/required-documents')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get required documents for a position', description: SWAGGER_AUTH_DESCRIPTION })
@@ -170,14 +186,14 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async getRequiredDocuments(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
     ) {
-        return this.service.getRequiredDocuments(positionId);
+        return this.service.getRequiredDocuments(activeUser, companyId, positionId);
     }
 
-
-
+    // Genera la descripción de un puesto mediante IA
     @Post(':positionId/generate-ai-description')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Generate AI description for a vacanci', description: SWAGGER_AUTH_DESCRIPTION })
@@ -185,13 +201,14 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async generateAIPositionDescription(
-        @Param('companyId', ParseIntPipe) companyId: number,
         @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
     ) {
-        return this.service.generateAIPositionDescription(companyId, positionId, activeUser);
+        return this.service.generateAIPositionDescription(activeUser, companyId, positionId);
     }
 
+    // Crea el descriptivo de puesto completo
     @Post()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Create a new position', description: SWAGGER_AUTH_DESCRIPTION })
@@ -199,80 +216,58 @@ export class PositionsController {
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async create(
-        @Param('companyId', ParseIntPipe) companyId: number,
         @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
         @Body() data: CreatePositionDto,
     ) {
-        return this.service.create(companyId, activeUser, data);
+        return this.service.create(activeUser, companyId, data);
     }
 
+    // Desactiva un puesto específico
     @Delete(':positionId')
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'Disable position', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Position disabled successfully' })
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async disable(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
-        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.changeStatus(companyId, positionId, false, activeUser);
+        return this.service.changeStatus(activeUser, companyId, positionId, false);
     }
 
     //@UseGuards(JwtAuthGuard, ModulesGuard)
     //@Modules('Administrador')
+    // Valida un puesto específico, puede aprobarlo o rechazarlo
     @Patch(':positionId')
-    @ApiOperation({ summary: 'Validate a position', description: 'Validates a position and public it.' })
-    @ApiResponse({ status: 201, description: 'Position successfully validated.' })
-    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    @ApiResponse({ status: 400, description: 'Bad Request. Validation errors.' })
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Validate a position', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Position validated successfully' })
+    @ApiResponse({ status: 404, description: 'Position not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async approveOrReject(
-        @Param('companyId') companyId: number,
-        @Param('positionId') positionId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('positionId', ParseIntPipe) positionId: number,
         @Body() dto: ValidatePositionDto,
-        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.approveOrReject(companyId, positionId, dto, activeUser);
+        return this.service.approveOrReject(activeUser, companyId, positionId, dto);
     }
 
+    // Reactiva un puesto específico
     @Patch(':positionId/reactivate')
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'Reactivate position', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Position reactivated successfully' })
     @ApiResponse({ status: 404, description: 'Position not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async reactivate(
+        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('positionId', ParseIntPipe) positionId: number,
-        @GetActiveUser() activeUser: ActiveUserDto
     ) {
-        return this.service.changeStatus(companyId, positionId, true, activeUser);
-    }
-
-
-    // Endpoint de la version vieja, eliminar cuando el modulo de reclutamiento este completo y ya no se usen
-    @Get('/vacancies')
-    @ApiOperation({
-        summary: 'Get all positions',
-        description: 'Returns all positions for a company, optionally filtered by status (e.g., active, inactive).'
-    })
-    @ApiQuery({
-        name: 'status',
-        required: false,
-        type: String,
-        description: 'Filter positions by status (active, inactive). If omitted, returns all positions.'
-    })
-    @ApiResponse({ status: 200, description: 'Positions successfully retrieved.' })
-    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    async getPositions(@Param('companyId') companyId: number, @Query('status') status?: string) {
-        return this.service.findAllPositions(Number(companyId), status);
-    }
-
-    @UseGuards(JwtAuthGuard)
-    @Get(':positionId/summary')
-    @ApiOperation({ summary: 'Get summary of postulants for a specific position' })
-    @ApiResponse({ status: 200, description: 'Position summary obtained successfully.' })
-    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-    async getSummary(@Param('positionId') positionId: string) {
-        return await this.service.getPostulantsSummary(parseInt(positionId));
+        return this.service.changeStatus(activeUser, companyId, positionId, true);
     }
 }
