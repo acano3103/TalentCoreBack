@@ -1,7 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
-import { CreateEmployeeDto } from './dto/create-employee.dto';
-import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
@@ -14,6 +12,22 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 @Controller('companies/:companyId/employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) { }
+
+  // Endpoint que obtiene a todos los empleados que ya tienen su expediente completo
+  @Get('/hired')
+  @ApiOperation({ summary: 'Get all employees with complete expediente', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  findAllWithCompleteFile(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string
+  ) {
+    const querySearch = search || '';
+    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit);
+  }
 
   // Endpint para obtener un empleado por su id
   @Get('/:employeeId')
@@ -48,12 +62,4 @@ export class EmployeesController {
   findAll(@Param('companyId', ParseIntPipe) companyId: number) {
     return this.employeesService.findAll(companyId);
   }
-
-@Get('/completos/lista')
-@ApiOperation({ summary: 'Get all employees with complete expediente', description: SWAGGER_AUTH_DESCRIPTION })
-@ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
-@ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-findAllWithCompleteFile(@Param('companyId', ParseIntPipe) companyId: number) {
-  return this.employeesService.findAllWithCompleteFile(companyId);
-}
 }
