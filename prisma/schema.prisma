@@ -604,7 +604,6 @@ model HabilidadesPuesto {
 model HistorialDescargasExpediente {
   idDescarga      Int      @id @default(autoincrement())
   idCandidato     Int
-  idTenant        Int
   usuarioRegistro String   @db.VarChar(250)
   motivo          String   @db.Text
   fechaDescarga   DateTime @default(now()) @db.DateTime(0)
@@ -628,7 +627,6 @@ model HistorialExpediente {
   idExpediente          Int?
   idEstatusAnterior     Int?
   idEstatusNuevo        Int?
-   idTenant             Int
   fechaCambio           DateTime? @default(now()) @db.Timestamp(0)
   usuario               String?   @db.VarChar(250)
   comentario            String?   @db.Text
@@ -1146,7 +1144,6 @@ model Expedientes {
   idPuesto             Int?
   idEstatus            Int?
   fechaRegistro        DateTime? @db.Timestamp(0)
-  idTenant            Int
   usuarioRegistro      String?   @db.VarChar(250)
   fechaActualizacion   DateTime? @default(now()) @db.Timestamp(0)
   usuarioActualizacion String?   @db.VarChar(250)
@@ -1384,7 +1381,6 @@ model DocumentosEmpleado {
   idEmpleado                         Int?
   IdDocumento                        Int?
   idEstatusDocumento                 Int?      @default(1)
-  idTenant                           Int
   rutaArchivo                        String?   @db.Text
   fechaCarga                         DateTime? @default(now()) @db.Timestamp(0)
   fechaEmision                       DateTime? @db.Date
