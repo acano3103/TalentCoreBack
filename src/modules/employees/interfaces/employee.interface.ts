@@ -35,3 +35,14 @@ export interface EmployeeQueryResult {
     primerApellidoJefeDirecto: string | null;
     segundoApellidoJefeDirecto: string | null;
 }
+
+export interface EmployeeSchedule {
+    idHorario: number;
+    DiaSemana: string;
+    HoraEntrada: string;
+    HoraSalida: string;
+}
+
+export interface EmployeeDetailResponse extends EmployeeQueryResult {
+    horarios: EmployeeSchedule[];
+}

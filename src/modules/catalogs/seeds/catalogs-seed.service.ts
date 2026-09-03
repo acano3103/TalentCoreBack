@@ -567,7 +567,11 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 20, Descripcion: 'Documentos requeridos', Codigo: 'required-documents', idPadre: 19, Activo: true },
             { idModulo: 21, Descripcion: 'Expedientes', Codigo: 'case-files', idPadre: 19, Activo: true },
             { idModulo: 22, Descripcion: 'Contratos digitales', Codigo: 'digital-contracts', idPadre: 19, Activo: true },
-            { idModulo: 23, Descripcion: 'Control de vencimientos', Codigo: 'due-date-tracking', idPadre: 19, Activo: true }
+            { idModulo: 23, Descripcion: 'Control de vencimientos', Codigo: 'due-date-tracking', idPadre: 19, Activo: true },
+            { idModulo: 24, Descripcion: 'Administración de personal', Codigo: 'personnel-administration', idPadre: null, Activo: true },
+            { idModulo: 25, Descripcion: 'Empleados', Codigo: 'employees', idPadre: 24, Activo: true },
+            { idModulo: 26, Descripcion: 'Movimientos internos', Codigo: 'internal-movements', idPadre: 24, Activo: true },
+            { idModulo: 27, Descripcion: 'Solicitudes pendientes', Codigo: 'pending-requests', idPadre: 24, Activo: true },
         ];
 
         for (const module of modules) {
@@ -630,6 +634,10 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 1, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes
             { idRol: 1, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Contratos digitales
             { idRol: 1, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Mis contratos
+            { idRol: 1, idModulo: 24, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Administración de personal (Padre)
+            { idRol: 1, idModulo: 25, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Empleados
+            { idRol: 1, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Movimientos internos
+            { idRol: 1, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Solicitudes pendientes
 
             // =========================================================================
             // ROL: RH (idRol: 2)
@@ -657,6 +665,10 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 2, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes
             { idRol: 2, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Contratos digitales
             { idRol: 2, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 2, idModulo: 24, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
+            { idRol: 2, idModulo: 25, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Empleados
+            { idRol: 2, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 2, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Solicitudes pendientes
 
             // =========================================================================
             // ROL: FINANZAS (idRol: 3)
@@ -684,6 +696,10 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 3, idModulo: 21, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
             { idRol: 3, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
             { idRol: 3, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
+            { idRol: 3, idModulo: 24, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
+            { idRol: 3, idModulo: 25, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
+            { idRol: 3, idModulo: 26, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 3, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
 
             // =========================================================================
             // ROL: RECLUTADOR (idRol: 4)
@@ -711,6 +727,10 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 4, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
             { idRol: 4, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Contratos digitales
             { idRol: 4, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 4, idModulo: 24, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
+            { idRol: 4, idModulo: 25, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
+            { idRol: 4, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 4, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
 
             // =========================================================================
             // ROL: MANAGER (idRol: 5)
@@ -738,6 +758,10 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 5, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
             { idRol: 5, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
             { idRol: 5, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
+            { idRol: 5, idModulo: 24, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Administración de personal (Padre)
+            { idRol: 5, idModulo: 25, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
+            { idRol: 5, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Movimientos internos
+            { idRol: 5, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Solicitudes pendientes
 
             // =========================================================================
             // ROL: EMPLEADO (idRol: 6)
@@ -765,6 +789,10 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 6, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes
             { idRol: 6, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
             { idRol: 6, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
+            { idRol: 6, idModulo: 24, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
+            { idRol: 6, idModulo: 25, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
+            { idRol: 6, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 6, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
         ];
 
         for (const permiso of permisos) {
