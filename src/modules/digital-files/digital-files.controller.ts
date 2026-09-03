@@ -30,12 +30,13 @@ export class DigitalFilesController {
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page' })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by name or RFC' })
   listExpedientes(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
   ) {
-    return this.digitalFilesService.listExpedientes(companyId, page, limit, search || '');
+    return this.digitalFilesService.listExpedientes(companyId, page, limit, search || '', activeUser);
   }
 
   // Endpoint para obtener el catálogo de estatus de documento
@@ -66,10 +67,12 @@ export class DigitalFilesController {
   @ApiResponse({ status: 403, description: 'Employee does not belong to this company' })
   @ApiResponse({ status: 404, description: 'Employee not found' })
   getExpediente(
+    
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
+    @GetActiveUser() activeUser: ActiveUserDto,
   ) {
-    return this.digitalFilesService.getExpediente(companyId, employeeId);
+    return this.digitalFilesService.getExpediente(companyId, employeeId, activeUser);
   }
 
   // Endpoint publico para que el candidato pueda subir sus documentos
@@ -234,11 +237,12 @@ export class DigitalFilesController {
   @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
   @ApiResponse({ status: 404, description: 'Expediente not found' })
   getStatusHistory(
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
   ) {
-    return this.digitalFilesService.getStatusHistory(employeeId);
-  }
+   return this.digitalFilesService.getStatusHistory(employeeId, activeUser);  
+}
 
   // Endpoint para actualizar el estatus del expediente
   @UseGuards(JwtAuthGuard)
@@ -260,7 +264,7 @@ export class DigitalFilesController {
       employeeId,
       dto.nuevoEstatus,
       dto.comentario || '',
-      activeUser.username,
+      activeUser,
     );
   }
 
@@ -301,7 +305,7 @@ export class DigitalFilesController {
       idDocumentoEmpleado,
       dto.nuevoEstatus,
       dto.comentario || '',
-      activeUser.username,
+      activeUser, 
     );
   }
 
@@ -335,10 +339,11 @@ export class DigitalFilesController {
   @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
   @ApiResponse({ status: 404, description: 'Employee not found' })
   resendCredentials(
+    @GetActiveUser() activeUser: ActiveUserDto, 
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
   ) {
-    return this.digitalFilesService.resendCredentials(employeeId);
+     return this.digitalFilesService.resendCredentials(employeeId, activeUser);
   }
 
   
@@ -370,10 +375,11 @@ notifyExpiringDocuments(
   @ApiResponse({ status: 200, description: 'Download history obtained successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
   getDownloadHistory(
+    @GetActiveUser() activeUser: ActiveUserDto, 
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
   ) {
-    return this.digitalFilesService.getDownloadHistory(employeeId);
+     return this.digitalFilesService.getDownloadHistory(employeeId, activeUser); 
   }
 
   // Endpoint para descargar el expediente completo como ZIP
@@ -407,7 +413,7 @@ notifyExpiringDocuments(
     const buffer = await this.digitalFilesService.downloadExpedienteZip(
       employeeId,
       motivo,
-      activeUser.username,
+      activeUser,
     );
 
     res.set({
