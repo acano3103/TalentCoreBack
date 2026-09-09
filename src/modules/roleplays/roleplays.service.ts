@@ -30,7 +30,7 @@ export class RoleplaysService {
         const rolePlays = await this.prisma.rolePlays.findMany({
             where: whereCondition,
             include: {
-                Criterios: { orderBy: { Orden: 'asc' } },
+                EvaluationCriteria: { orderBy: { Orden: 'asc' } },
             },
             orderBy: { FechaRegistro: 'desc' },
         });
@@ -50,7 +50,7 @@ export class RoleplaysService {
                 idTenant: user.idTenant,
             },
             include: {
-                Criterios: { orderBy: { Orden: 'asc' } },
+                EvaluationCriteria: { orderBy: { Orden: 'asc' } },
             },
         });
 

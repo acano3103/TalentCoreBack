@@ -92,9 +92,9 @@ export class RoleplayCallsService {
         const evaluacion = await this.prisma.rolePlayEvaluaciones.findFirst({
             where: { idLlamada, idTenant: user.idTenant },
             include: {
-                CriteriosEvaluados: {
-                    include: { Criterio: true },
-                },
+              RolePlayEvaluacionCriterios: {
+                include: { EvaluationCriteria: true },
+            },
             },
         });
 

@@ -463,7 +463,7 @@ async processRoleplayTurn(
     // 1. Buscar la llamada y confirmar que pertenece al tenant/empresa y sigue en curso
     const llamada = await this.prisma.rolePlayLlamadas.findFirst({
         where: { idLlamada, idEmpresa: companyId, idTenant },
-        include: { RolePlay: true },
+        include: { RolePlays: true },
     });
 
     if (!llamada) {
@@ -497,8 +497,8 @@ async processRoleplayTurn(
         : [];
 
     const systemPrompt = `Eres un cliente en una simulación de call center para capacitación.
-    ESCENARIO: ${llamada.RolePlay.Contexto}
-    INSTRUCCIONES DE PERSONAJE: ${llamada.RolePlay.AiScript}
+    ESCENARIO: ${llamada.RolePlays.Contexto}
+    INSTRUCCIONES DE PERSONAJE: ${llamada.RolePlays.AiScript}
     Responde de forma natural, breve (máximo 3 oraciones).
     Mantén el tono y personalidad del escenario.
     No menciones que eres una IA.`;
@@ -560,8 +560,8 @@ async evaluateRoleplayCall(
     const llamada = await this.prisma.rolePlayLlamadas.findFirst({
         where: { idLlamada, idEmpresa: companyId, idTenant },
         include: {
-            RolePlay: {
-                include: { Criterios: { orderBy: { Orden: 'asc' } } },
+            RolePlays: {
+                include: { EvaluationCriteria: { orderBy: { Orden: 'asc' } } },
             },
         },
     });
@@ -599,7 +599,7 @@ async evaluateRoleplayCall(
     const model = metadata.defaultModel || 'gpt-4o';
 
     // 3. Armar el prompt de evaluación: escenario + conversación completa + lista de criterios con sus IDs
-    const criterios = llamada.RolePlay.Criterios;
+    const criterios = llamada.RolePlays.EvaluationCriteria;
     const history = Array.isArray(llamada.HistorialConversacion)
         ? (llamada.HistorialConversacion as Array<{ role: string; content: string }>)
         : [];
@@ -618,12 +618,12 @@ async evaluateRoleplayCall(
         })
         .join('\n\n');
 
-    const scoreMaximo = criterios.reduce((sum, c) => sum + c.PuntosMaximos, 0);
+   const scoreMaximo = criterios.reduce((sum, c) => sum + c.PuntosMaximos, 0);
 
-    const evaluationPrompt = `ROLE PLAY: ${llamada.RolePlay.Titulo}
+    const evaluationPrompt = `ROLE PLAY: ${llamada.RolePlays.Titulo}
 
     CONTEXTO DEL ESCENARIO:
-    ${llamada.RolePlay.Contexto}
+    ${llamada.RolePlays.Contexto}
 
     CONVERSACIÓN:
     ${conversacionTexto}
