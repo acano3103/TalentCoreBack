@@ -12,6 +12,7 @@ export class GeofencesService {
 
     async findAll(user: ActiveUserDto, companyId: number) {
         try {
+            // Obtener todas las geocercas activas
             const geofences = await this.prisma.catGeocercas.findMany({
                 where: {
                     idEmpresa: companyId,
@@ -33,7 +34,40 @@ export class GeofencesService {
                 },
             });
 
-            // Mapeo para formatear los tipos Decimal a number y entregar una estructura limpia al Front
+            // Si no hay geocercas, retornamos arreglo vacío de inmediato
+            if (!geofences.length) return [];
+
+            // 2. Extraer los IDs únicos de los sitios (descartando nulos)
+            const siteIds = [
+                ...new Set(
+                    geofences
+                        .map((geo) => geo.idSite)
+                        .filter((id): id is number => id !== null && id !== undefined),
+                ),
+            ];
+
+            // UNA SOLA query agregada para contar empleados activos por cada idSite
+            const employeeCounts = siteIds.length > 0
+                ? await this.prisma.empleados.groupBy({
+                    by: ['idSite'],
+                    where: {
+                        idSite: { in: siteIds },
+                        idEmpresa: companyId,
+                        idTenant: user.idTenant,
+                        activo: true,
+                    },
+                    _count: {
+                        idEmpleado: true,
+                    },
+                })
+                : [];
+
+            // Crear un mapa en memoria O(1) idSite -> totalEmpleados
+            const countsMap = new Map<number, number>(
+                employeeCounts.map((item) => [item.idSite as number, item._count.idEmpleado]),
+            );
+
+            // Mapear la respuesta agregando la propiedad totalEmpleados
             return geofences.map((geo) => ({
                 idGeocerca: geo.idGeocerca,
                 idSite: geo.idSite,
@@ -44,12 +78,15 @@ export class GeofencesService {
                 radio: geo.Radio !== null ? Number(geo.Radio) : null,
                 poligonoGeoJSON: geo.PoligonoGeoJSON ?? null,
                 activo: Boolean(geo.Activo),
-                site: geo.CatSites ? {
-                    idSite: geo.CatSites.idSite,
-                    descripcion: geo.CatSites.Descripcion,
-                    municipio: geo.CatSites.MunicipioDelegacion,
-                    estado: geo.CatSites.Estado,
-                } : null,
+                totalEmpleados: geo.idSite ? (countsMap.get(geo.idSite) ?? 0) : 0,
+                site: geo.CatSites
+                    ? {
+                        idSite: geo.CatSites.idSite,
+                        descripcion: geo.CatSites.Descripcion,
+                        municipio: geo.CatSites.MunicipioDelegacion,
+                        estado: geo.CatSites.Estado,
+                    }
+                    : null,
             }));
         } catch (error) {
             console.error('Error al obtener geocercas:', error);
