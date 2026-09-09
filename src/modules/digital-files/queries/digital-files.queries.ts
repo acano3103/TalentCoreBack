@@ -66,94 +66,107 @@ export class DigitalFilesQueries {
     }
 
 // Guardar documento del empleado
-    static async subirDocumentoEmpleado(
-        prisma: any,
-        idEmpleado: number,
-        idDocumento: number,
-        rutaArchivo: string,
-        usuario: string,
-        comentario: string = '',
-        fechaEmision: Date | null = null,
-        fechaVencimiento: Date | null = null,
-    ): Promise<void> {
+static async subirDocumentoEmpleado(
+    prisma: any,
+    idEmpleado: number,
+    idDocumento: number,
+    rutaArchivo: string,
+    usuario: string,
+    comentario: string = '',
+    fechaEmision: Date | null = null,
+    fechaVencimiento: Date | null = null,
+): Promise<void> {
 
-        // Buscar si ya existe el registro del documento del empleado en estatus 1 o 5
-        const docsExistentes = await prisma.$queryRaw`
-            SELECT idDocumentoEmpleado, idEstatusDocumento 
-            FROM DocumentosEmpleado
-            WHERE idEmpleado = ${idEmpleado}
-                AND idDocumento = ${idDocumento}
-                AND idEstatusDocumento IN (1, 5)
-            ORDER BY fechaCarga DESC
-            LIMIT 1;
-        ` as any[];
+    // Resolvemos el idTenant desde el propio empleado, ya que este método
+    // se llama tanto desde flujo privado (RH) como público (candidato por token),
+    // y no siempre hay un ActiveUserDto disponible.
+    const empleadoRows = await prisma.$queryRaw`
+        SELECT idTenant FROM Empleados WHERE idEmpleado = ${idEmpleado} LIMIT 1;
+    ` as any[];
+    const idTenant = empleadoRows[0]?.idTenant ? parseInt(empleadoRows[0].idTenant, 10) : null;
 
-        let idDocumentoEmpleado: number;
-        let estatusAnterior: number;
+    if (!idTenant) {
+        throw new Error('No se pudo determinar el tenant del empleado.');
+    }
 
-        if (docsExistentes.length > 0) {
-            idDocumentoEmpleado = parseInt(docsExistentes[0].idDocumentoEmpleado, 10);
-            estatusAnterior = parseInt(docsExistentes[0].idEstatusDocumento, 10);
+    // Buscar si ya existe el registro del documento del empleado en estatus 1 o 5
+    const docsExistentes = await prisma.$queryRaw`
+        SELECT idDocumentoEmpleado, idEstatusDocumento 
+        FROM DocumentosEmpleado
+        WHERE idEmpleado = ${idEmpleado}
+            AND idDocumento = ${idDocumento}
+            AND idTenant = ${idTenant}
+            AND idEstatusDocumento IN (1, 5)
+        ORDER BY fechaCarga DESC
+        LIMIT 1;
+    ` as any[];
 
-            // Actualizar el documento existente al estatus 2
-            await prisma.$executeRaw`
-                UPDATE DocumentosEmpleado
-                SET rutaArchivo = ${rutaArchivo},
-                    fechaCarga = NOW(),
-                    idEstatusDocumento = 2,
-                    fechaEmision = ${fechaEmision},
-                    fechaVencimiento = ${fechaVencimiento}
-                WHERE idDocumentoEmpleado = ${idDocumentoEmpleado};
-            `;
-        } else {
-            // Si no existe, insertar un nuevo registro de documento
-            await prisma.$executeRaw`
-                INSERT INTO DocumentosEmpleado (idEmpleado, idDocumento, idEstatusDocumento, rutaArchivo, fechaCarga, fechaEmision, fechaVencimiento)
-                VALUES (${idEmpleado}, ${idDocumento}, 2, ${rutaArchivo}, NOW(), ${fechaEmision}, ${fechaVencimiento});
-            `;
+    let idDocumentoEmpleado: number;
+    let estatusAnterior: number;
 
-            // Obtener el ID autogenerado del documento insertado (LAST_INSERT_ID)
-            const resLastId = await prisma.$queryRaw`SELECT LAST_INSERT_ID() AS id;` as any[];
-            idDocumentoEmpleado = parseInt(resLastId[0]?.id, 10) || 0;
-            estatusAnterior = 1;
-        }
+    if (docsExistentes.length > 0) {
+        idDocumentoEmpleado = parseInt(docsExistentes[0].idDocumentoEmpleado, 10);
+        estatusAnterior = parseInt(docsExistentes[0].idEstatusDocumento, 10);
 
-        // 2. Insertar historial del documento cargado
+        // Actualizar el documento existente al estatus 2
         await prisma.$executeRaw`
-            INSERT INTO HistorialDocumentosCandidato (idDocumentoCandidato, rutaArchivo, usuario, comentario, estatusAnterior, estatusActual)
-            VALUES (${idDocumentoEmpleado}, ${rutaArchivo}, ${usuario}, ${comentario}, ${estatusAnterior}, 2);
+            UPDATE DocumentosEmpleado
+            SET rutaArchivo = ${rutaArchivo},
+                fechaCarga = NOW(),
+                idEstatusDocumento = 2,
+                fechaEmision = ${fechaEmision},
+                fechaVencimiento = ${fechaVencimiento}
+            WHERE idDocumentoEmpleado = ${idDocumentoEmpleado};
+        `;
+    } else {
+        // Si no existe, insertar un nuevo registro de documento
+        await prisma.$executeRaw`
+            INSERT INTO DocumentosEmpleado (idEmpleado, idDocumento, idEstatusDocumento, idTenant, rutaArchivo, fechaCarga, fechaEmision, fechaVencimiento)
+            VALUES (${idEmpleado}, ${idDocumento}, 2, ${idTenant}, ${rutaArchivo}, NOW(), ${fechaEmision}, ${fechaVencimiento});
         `;
 
-       // 3. Obtener el último expediente asociado al empleado para gestionar su flujo de estados
-        const expedientes = await prisma.$queryRaw`
-            SELECT idExpediente, idEstatus 
-            FROM Expedientes
-            WHERE idEmpleado = ${idEmpleado}
-            ORDER BY idExpediente DESC
-            LIMIT 1;
-        ` as any[];
+        // Obtener el ID autogenerado del documento insertado (LAST_INSERT_ID)
+        const resLastId = await prisma.$queryRaw`SELECT LAST_INSERT_ID() AS id;` as any[];
+        idDocumentoEmpleado = parseInt(resLastId[0]?.id, 10) || 0;
+        estatusAnterior = 1;
+    }
 
-        if (expedientes.length > 0) {
-            const idExpediente = parseInt(expedientes[0].idExpediente, 10);
-            const estatusExpedienteAnterior = expedientes[0].idEstatus ? parseInt(expedientes[0].idEstatus, 10) : null;
+    // 2. Insertar historial del documento cargado (HistorialDocumentosCandidato: fuera de nuestro alcance, sin idTenant)
+    await prisma.$executeRaw`
+        INSERT INTO HistorialDocumentosCandidato (idDocumentoCandidato, rutaArchivo, usuario, comentario, estatusAnterior, estatusActual)
+        VALUES (${idDocumentoEmpleado}, ${rutaArchivo}, ${usuario}, ${comentario}, ${estatusAnterior}, 2);
+    `;
 
-            // Si el expediente no está en estatus 3, lo cambiamos a 3 y registramos el cambio en el historial
-            if (estatusExpedienteAnterior !== null && estatusExpedienteAnterior !== 3) {
-                await prisma.$executeRaw`
-                    INSERT INTO HistorialExpediente (idExpediente, idEstatusAnterior, idEstatusNuevo, fechaCambio, usuario, comentario)
-                    VALUES (${idExpediente}, ${estatusExpedienteAnterior}, 3, NOW(), ${usuario}, 'Cambio automático por carga de documento');
-                `;
+   // 3. Obtener el último expediente asociado al empleado para gestionar su flujo de estados
+    const expedientes = await prisma.$queryRaw`
+        SELECT idExpediente, idEstatus 
+        FROM Expedientes
+        WHERE idEmpleado = ${idEmpleado} AND idTenant = ${idTenant}
+        ORDER BY idExpediente DESC
+        LIMIT 1;
+    ` as any[];
 
-                await prisma.$executeRaw`
-                    UPDATE Expedientes
-                    SET idEstatus = 3,
-                        fechaActualizacion = NOW(),
-                        usuarioActualizacion = ${usuario}
-                    WHERE idExpediente = ${idExpediente};
-                `;
-            }
+    if (expedientes.length > 0) {
+        const idExpediente = parseInt(expedientes[0].idExpediente, 10);
+        const estatusExpedienteAnterior = expedientes[0].idEstatus ? parseInt(expedientes[0].idEstatus, 10) : null;
+
+        // Si el expediente no está en estatus 3, lo cambiamos a 3 y registramos el cambio en el historial
+        if (estatusExpedienteAnterior !== null && estatusExpedienteAnterior !== 3) {
+            await prisma.$executeRaw`
+                INSERT INTO HistorialExpediente (idExpediente, idEstatusAnterior, idEstatusNuevo, idTenant, fechaCambio, usuario, comentario)
+                VALUES (${idExpediente}, ${estatusExpedienteAnterior}, 3, ${idTenant}, NOW(), ${usuario}, 'Cambio automático por carga de documento');
+            `;
+
+            await prisma.$executeRaw`
+                UPDATE Expedientes
+                SET idEstatus = 3,
+                    fechaActualizacion = NOW(),
+                    usuarioActualizacion = ${usuario}
+                WHERE idExpediente = ${idExpediente};
+            `;
         }
     }
+}
 
     /**
      * Calcula el estatus de vigencia de un documento comparando su

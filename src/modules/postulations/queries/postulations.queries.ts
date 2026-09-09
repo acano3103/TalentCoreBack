@@ -52,21 +52,22 @@ export async function createEmployee(
     idUsuario: string;
     idCampania: number | null;
     idEmpresa: number;
+    idTenant: number;
     idJefeInmediato: number;
     idSite: number;
   },
   prisma: PrismaClient
 ) {
-  const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, idPuesto, idUsuario, idCampania, idEmpresa, idJefeInmediato, idSite } = data;
+   const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, idPuesto, idUsuario, idCampania, idEmpresa, idTenant, idJefeInmediato, idSite } = data; 
 
   return await prisma.$transaction(async (tx) => {
-    // Insertamos al postulante en la tabla de empleados
     await tx.$executeRaw`
       INSERT INTO Empleados (
-        idEmpresa, idPuesto, idJefeInmediato, idSite, nombre, primerApellido, segundoApellido, idCampania,
+        idEmpresa, idTenant, idPuesto, idJefeInmediato, idSite, nombre, primerApellido, segundoApellido, idCampania,
         curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro
       ) VALUES (
         ${idEmpresa},
+        ${idTenant},
         ${idPuesto},
         ${idJefeInmediato},
         ${idSite},
@@ -94,11 +95,12 @@ export async function createEmployee(
     // Insert expediente del empleado
     await tx.$executeRaw`
       INSERT INTO Expedientes (
-        idEmpleado, idPuesto, idEstatus, fechaRegistro, usuarioRegistro
+        idEmpleado, idPuesto, idEstatus, idTenant, fechaRegistro, usuarioRegistro
       ) VALUES (
         ${idEmpleado},
         ${idPuesto},
         1,
+        ${idTenant},
         NOW(),
         ${idUsuario}
       );
@@ -118,6 +120,7 @@ export async function createEmployee(
         idExpediente,
         idEstatusAnterior,
         idEstatusNuevo,
+        idTenant,
         fechaCambio,
         usuario,
         comentario
@@ -125,6 +128,7 @@ export async function createEmployee(
         ${idExpediente},
         NULL,
         1,
+        ${idTenant},
         NOW(),
         ${idUsuario},
         'Creación de link para subida de documentos'

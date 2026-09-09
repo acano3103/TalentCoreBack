@@ -25,6 +25,7 @@ export async function generateEmployeeAndLink(
         idUsuario: string,
         idCampania: number | null,
         idEmpresa: number,
+        idTenant: number,
         idJefeInmediato: number,
         idSite: number,
         schedules?: { dia: string; horaEntrada: string; horaSalida: string }[],

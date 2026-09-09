@@ -289,6 +289,10 @@ export class PostulationsService {
         });
         if (!vacancy) throw new NotFoundException('Vacante no encontrada');
 
+        if (!user.idTenant) {   
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+
         // Creamos el registro de empleado y el link para que pueda subir su info y documentación
         await generateEmployeeAndLink(
           {
@@ -304,6 +308,7 @@ export class PostulationsService {
             idUsuario: user.uuid,
             idCampania: dto.campaignId || null,
             idEmpresa: companyId,
+            idTenant: user.idTenant, 
             idJefeInmediato: vacancy.idJefeInmediato,
             idSite: vacancy.idSite
           },
