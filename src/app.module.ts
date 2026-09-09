@@ -36,6 +36,7 @@ import { ConfigurationModule } from './modules/configuration/configuration.modul
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { GeofencesService } from './modules/geofences/geofences.service';
 import { GeofencesModule } from './modules/geofences/geofences.module';
+import { MobileModule } from './modules/mobile/mobile.module';
 
 @Module({
   imports: [
@@ -82,7 +83,8 @@ import { GeofencesModule } from './modules/geofences/geofences.module';
     CareerPlanModule,
     ConfigurationModule,
     SuperAdminModule,
-    GeofencesModule
+    GeofencesModule,
+    MobileModule
   ],
   controllers: [],
   providers: [AreasService, GeofencesService],
