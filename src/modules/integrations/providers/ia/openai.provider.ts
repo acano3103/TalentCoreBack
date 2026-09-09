@@ -362,4 +362,371 @@ export class OpenAiProvider implements IAiProvider {
             throw new InternalServerErrorException(`Error en el motor de análisis de CV: ${errorMsg}`);
         }
     }
+
+
+async startRoleplayCall(
+    companyId: number,
+    idTenant: number,
+    idRolePlay: number,
+    idUsuario: number,
+): Promise<{ idLlamada: number; aiMessage: string }> {
+    // 1. Obtener y desencriptar las credenciales de la empresa 
+    const integracion = await this.prisma.integraciones.findFirst({
+        where: {
+            idEmpresa: companyId,
+            isConnected: true,
+            CatIntegracionesProvedores: { code: 'OPENAI' },
+        },
+        include: { CatIntegracionesProvedores: true },
+    });
+
+    if (!integracion) {
+        throw new BadRequestException('OpenAI no está configurado o conectado para esta empresa.');
+    }
+
+    const metadata = integracion.metadata as any;
+    const apiKey = this.encryptionService.decrypt(metadata.apiKey);
+    const model = metadata.defaultModel || 'gpt-4o';
+
+    // 2. Buscar el role play y confirmar que existe, pertenece al tenant, y está activo
+    const rolePlay = await this.prisma.rolePlays.findFirst({
+        where: { idRolePlay, idEmpresa: companyId, idTenant, Activo: true },
+    });
+
+    if (!rolePlay) {
+        throw new BadRequestException('El role play no existe o no está activo.');
+    }
+
+    // 3. Armar el prompt de sistema con el Contexto y AiScript del role play
+    const systemPrompt = `Eres un cliente en una simulación de call center para capacitación.
+    ESCENARIO: ${rolePlay.Contexto}
+    INSTRUCCIONES DE PERSONAJE: ${rolePlay.AiScript}
+    Responde de forma natural, breve (máximo 3 oraciones).
+    Mantén el tono y personalidad del escenario.
+    No menciones que eres una IA.`;
+
+    // 4. Pedirle a OpenAI el primer mensaje del "cliente"
+    let aiMessage: string;
+    try {
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                model: model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: 'Inicia la conversación como el cliente del escenario. Una sola frase.' },
+                ],
+                temperature: 0.8,
+                max_tokens: 150,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+            },
+        );
+
+        aiMessage = response.data.choices[0]?.message?.content?.trim();
+        if (!aiMessage) {
+            throw new Error('No se recibió respuesta de la IA');
+        }
+    } catch (error) {
+        const errorMsg = error.response?.data?.error?.message || error.message;
+        throw new BadRequestException(`Error al iniciar la sesión con OpenAI: ${errorMsg}`);
+    }
+
+    // 5. Crear el registro de la llamada con el historial inicial
+    const conversationHistory = [{ role: 'assistant', content: aiMessage }];
+
+    const llamada = await this.prisma.rolePlayLlamadas.create({
+        data: {
+            idRolePlay,
+            idTenant,
+            idEmpresa: companyId,
+            idUsuario,
+            Estatus: 'EN_CURSO',
+            HistorialConversacion: conversationHistory,
+            FechaInicio: new Date(),
+        },
+    });
+
+    return { idLlamada: llamada.idLlamada, aiMessage };
+}
+
+async processRoleplayTurn(
+    companyId: number,
+    idTenant: number,
+    idLlamada: number,
+    agentMessage: string,
+): Promise<{ aiMessage: string }> {
+    // 1. Buscar la llamada y confirmar que pertenece al tenant/empresa y sigue en curso
+    const llamada = await this.prisma.rolePlayLlamadas.findFirst({
+        where: { idLlamada, idEmpresa: companyId, idTenant },
+        include: { RolePlay: true },
+    });
+
+    if (!llamada) {
+        throw new BadRequestException('La sesión de práctica no existe.');
+    }
+    if (llamada.Estatus !== 'EN_CURSO') {
+        throw new BadRequestException('La sesión de práctica no está en curso.');
+    }
+
+    // 2. Obtener y desencriptar las credenciales (mismo patrón)
+    const integracion = await this.prisma.integraciones.findFirst({
+        where: {
+            idEmpresa: companyId,
+            isConnected: true,
+            CatIntegracionesProvedores: { code: 'OPENAI' },
+        },
+        include: { CatIntegracionesProvedores: true },
+    });
+
+    if (!integracion) {
+        throw new BadRequestException('OpenAI no está configurado o conectado para esta empresa.');
+    }
+
+    const metadata = integracion.metadata as any;
+    const apiKey = this.encryptionService.decrypt(metadata.apiKey);
+    const model = metadata.defaultModel || 'gpt-4o';
+
+    // 3. Recuperar el historial existente (guardado como JSON) y armar el mismo prompt de sistema
+    const history = Array.isArray(llamada.HistorialConversacion)
+        ? (llamada.HistorialConversacion as Array<{ role: string; content: string }>)
+        : [];
+
+    const systemPrompt = `Eres un cliente en una simulación de call center para capacitación.
+    ESCENARIO: ${llamada.RolePlay.Contexto}
+    INSTRUCCIONES DE PERSONAJE: ${llamada.RolePlay.AiScript}
+    Responde de forma natural, breve (máximo 3 oraciones).
+    Mantén el tono y personalidad del escenario.
+    No menciones que eres una IA.`;
+
+    // 4. Mandar el prompt + TODO el historial + el nuevo mensaje del agente
+    let aiMessage: string;
+    try {
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                model: model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    ...history,
+                    { role: 'user', content: agentMessage },
+                ],
+                temperature: 0.8,
+                max_tokens: 150,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+            },
+        );
+
+        aiMessage = response.data.choices[0]?.message?.content?.trim();
+        if (!aiMessage) {
+            throw new Error('No se recibió respuesta de la IA');
+        }
+    } catch (error) {
+        const errorMsg = error.response?.data?.error?.message || error.message;
+        throw new BadRequestException(`Error al procesar el turno con OpenAI: ${errorMsg}`);
+    }
+
+    // 5. Actualizar el historial guardado con el nuevo intercambio
+    const updatedHistory = [
+        ...history,
+        { role: 'user', content: agentMessage },
+        { role: 'assistant', content: aiMessage },
+    ];
+
+    await this.prisma.rolePlayLlamadas.update({
+        where: { idLlamada },
+        data: { HistorialConversacion: updatedHistory },
+    });
+
+    return { aiMessage };
+}
+
+
+async evaluateRoleplayCall(
+    companyId: number,
+    idTenant: number,
+    idLlamada: number,
+): Promise<{ idEvaluacion: number; scoreGlobal: number }> {
+    // 1. Buscar la llamada, confirmando tenant/empresa, que esté finalizada, y traer sus criterios
+    const llamada = await this.prisma.rolePlayLlamadas.findFirst({
+        where: { idLlamada, idEmpresa: companyId, idTenant },
+        include: {
+            RolePlay: {
+                include: { Criterios: { orderBy: { Orden: 'asc' } } },
+            },
+        },
+    });
+
+    if (!llamada) {
+        throw new BadRequestException('La sesión de práctica no existe.');
+    }
+    if (llamada.Estatus !== 'FINALIZADA') {
+        throw new BadRequestException('Solo se pueden evaluar sesiones finalizadas.');
+    }
+
+    const evaluacionExistente = await this.prisma.rolePlayEvaluaciones.findUnique({
+        where: { idLlamada },
+    });
+    if (evaluacionExistente) {
+        throw new BadRequestException('Esta sesión ya fue evaluada.');
+    }
+
+    // 2. Obtener y desencriptar las credenciales (mismo patrón)
+    const integracion = await this.prisma.integraciones.findFirst({
+        where: {
+            idEmpresa: companyId,
+            isConnected: true,
+            CatIntegracionesProvedores: { code: 'OPENAI' },
+        },
+        include: { CatIntegracionesProvedores: true },
+    });
+
+    if (!integracion) {
+        throw new BadRequestException('OpenAI no está configurado o conectado para esta empresa.');
+    }
+
+    const metadata = integracion.metadata as any;
+    const apiKey = this.encryptionService.decrypt(metadata.apiKey);
+    const model = metadata.defaultModel || 'gpt-4o';
+
+    // 3. Armar el prompt de evaluación: escenario + conversación completa + lista de criterios con sus IDs
+    const criterios = llamada.RolePlay.Criterios;
+    const history = Array.isArray(llamada.HistorialConversacion)
+        ? (llamada.HistorialConversacion as Array<{ role: string; content: string }>)
+        : [];
+
+    const conversacionTexto = history
+        .map((m) => `${m.role === 'user' ? 'Agente' : 'Cliente'}: ${m.content}`)
+        .join('\n');
+
+    const criteriosTexto = criterios
+        .map((c) => {
+            const instruccionTipo =
+                c.Tipo === 'BINARIO'
+                    ? `Evalúa como 0 (no cumplió) o ${c.PuntosMaximos} (cumplió)`
+                    : `Evalúa entre 0 y ${c.PuntosMaximos} proporcional al cumplimiento`;
+            return `[ID: ${c.idCriterio}] ${c.Nombre} (máx: ${c.PuntosMaximos} pts, tipo: ${c.Tipo})\nInstrucción: ${c.Descripcion}\n${instruccionTipo}`;
+        })
+        .join('\n\n');
+
+    const scoreMaximo = criterios.reduce((sum, c) => sum + c.PuntosMaximos, 0);
+
+    const evaluationPrompt = `ROLE PLAY: ${llamada.RolePlay.Titulo}
+
+    CONTEXTO DEL ESCENARIO:
+    ${llamada.RolePlay.Contexto}
+
+    CONVERSACIÓN:
+    ${conversacionTexto}
+
+    CRITERIOS DE EVALUACIÓN:
+    ${criteriosTexto}
+
+    Total máximo de puntos: ${scoreMaximo}
+
+    Responde SOLO con JSON válido:
+    {
+    "criterionScores": [
+        { "criterionId": 0, "score": 0, "feedback": "..." }
+    ],
+    "agentSummary": "...",
+    "supervisorReport": "...",
+    "strengths": ["..."],
+    "improvements": ["..."],
+    "recommendations": ["..."]
+    }`;
+
+    // 4. Pedirle a OpenAI la evaluación en formato JSON
+    let parsed: any;
+    try {
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                model: model,
+                response_format: { type: 'json_object' },
+                messages: [
+                    { role: 'system', content: 'Eres evaluador experto en call center y ventas. Responde solo JSON.' },
+                    { role: 'user', content: evaluationPrompt },
+                ],
+                temperature: 0.3,
+                max_tokens: 2000,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+            },
+        );
+
+        const rawContent = response.data.choices[0]?.message?.content;
+        if (!rawContent) throw new Error('No se recibió respuesta de la evaluación');
+        parsed = JSON.parse(rawContent);
+    } catch (error) {
+        const errorMsg = error.response?.data?.error?.message || error.message;
+        throw new BadRequestException(`Error al evaluar la sesión con OpenAI: ${errorMsg}`);
+    }
+
+    // 5. Procesar y acotar los puntajes que regresó la IA contra los límites reales de cada criterio
+    const criterionScores = criterios.map((c) => {
+        const gptScore = (parsed.criterionScores || []).find(
+            (item: any) => Number(item.criterionId) === c.idCriterio,
+        );
+        const rawScore = gptScore?.score ?? 0;
+        const feedback = gptScore?.feedback ?? 'Sin evaluación disponible para este criterio.';
+
+        let score: number;
+        if (c.Tipo === 'BINARIO') {
+            score = rawScore > 0 ? c.PuntosMaximos : 0;
+        } else {
+            score = Math.min(Math.max(rawScore, 0), c.PuntosMaximos);
+        }
+
+        return { idCriterio: c.idCriterio, score, feedback };
+    });
+
+    const scoreTotal = criterionScores.reduce((sum, item) => sum + item.score, 0);
+    const scoreGlobal = scoreMaximo > 0 ? parseFloat(((scoreTotal / scoreMaximo) * 100).toFixed(2)) : 0;
+
+    // 6. Guardar la evaluación y los puntajes por criterio en una transacción
+    const idEvaluacion = await this.prisma.$transaction(async (tx) => {
+        const evaluacion = await tx.rolePlayEvaluaciones.create({
+            data: {
+                idLlamada,
+                idTenant,
+                ScoreGlobal: scoreGlobal,
+                ScoreMaximo: scoreMaximo,
+                ResumenAgente: parsed.agentSummary || '',
+                ReporteSupervisor: parsed.supervisorReport || '',
+                Fortalezas: parsed.strengths || [],
+                AreasMejora: parsed.improvements || [],
+                Recomendaciones: parsed.recommendations || [],
+            },
+        });
+
+        await tx.rolePlayEvaluacionCriterios.createMany({
+            data: criterionScores.map((cs) => ({
+                idEvaluacion: evaluacion.idEvaluacion,
+                idCriterio: cs.idCriterio,
+                idTenant,
+                Score: cs.score,
+                Feedback: cs.feedback,
+            })),
+        });
+
+        return evaluacion.idEvaluacion;
+    });
+
+    return { idEvaluacion, scoreGlobal };
+}
+
 }

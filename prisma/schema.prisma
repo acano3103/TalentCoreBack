@@ -1748,6 +1748,110 @@ model CatTenants {
   auth_user           auth_user[]
 }
 
+model RolePlays {
+  idRolePlay           Int                  @id @default(autoincrement())
+  idTenant             Int
+  idEmpresa            Int
+  Titulo               String               @db.VarChar(250)
+  Descripcion          String?              @db.Text
+  Contexto             String               @db.Text
+  Objetivo             String               @db.Text
+  AiScript             String               @db.Text
+  ObjetivosAprendizaje String?              @db.Text
+  DuracionMinutos      Int                  @default(15)
+  Activo               Boolean              @default(true)
+  idUsuarioCreador     Int
+  FechaRegistro        DateTime?            @default(now()) @db.DateTime(0)
+  FechaActualizacion   DateTime?            @db.DateTime(0)
+
+  Criterios            EvaluationCriteria[]
+  Llamadas             RolePlayLlamadas[]
+  @@index([idEmpresa], map: "idx_roleplays_idEmpresa")
+  @@index([idTenant], map: "idx_roleplays_idTenant")
+}
+
+model EvaluationCriteria {
+  idCriterio    Int       @id @default(autoincrement())
+  idRolePlay    Int
+  idTenant      Int
+  Nombre        String    @db.VarChar(200)
+  Descripcion   String    @db.Text
+  PuntosMaximos Int
+  Orden         Int
+  Tipo          String    @db.VarChar(20)
+
+  RolePlay      RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], map: "FK_EvalCriteria_RolePlay")
+  ScoresEvaluados      RolePlayEvaluacionCriterios[]
+  @@index([idRolePlay], map: "idx_evalcriteria_idRolePlay")
+}
+
+model RolePlayLlamadas {
+  idLlamada             Int       @id @default(autoincrement())
+  idRolePlay            Int
+  idTenant              Int
+  idEmpresa             Int
+  idUsuario             Int
+  Estatus               String    @default("INICIADA") @db.VarChar(20)
+  HistorialConversacion Json?
+  FechaInicio           DateTime? @db.DateTime(0)
+  FechaFin              DateTime? @db.DateTime(0)
+  FechaRegistro         DateTime? @default(now()) @db.DateTime(0)
+
+  RolePlay              RolePlays              @relation(fields: [idRolePlay], references: [idRolePlay], map: "FK_RolePlayLlamadas_RolePlay")
+  Evaluacion            RolePlayEvaluaciones?
+
+  @@index([idRolePlay], map: "idx_rolellamadas_idRolePlay")
+  @@index([idTenant], map: "idx_rolellamadas_idTenant")
+}
+
+model RolePlayEvaluaciones {
+  idEvaluacion       Int       @id @default(autoincrement())
+  idLlamada          Int       @unique(map: "UK_RolePlayEvaluaciones_idLlamada")
+  idTenant           Int
+  ScoreGlobal        Decimal   @default(0.00) @db.Decimal(6, 2)
+  ScoreMaximo        Decimal   @default(0.00) @db.Decimal(6, 2)
+  ResumenAgente      String?   @db.Text
+  ReporteSupervisor  String?   @db.Text
+  Fortalezas         Json?
+  AreasMejora        Json?
+  Recomendaciones    Json?
+  FechaEvaluacion    DateTime? @default(now()) @db.DateTime(0)
+
+  Llamada            RolePlayLlamadas               @relation(fields: [idLlamada], references: [idLlamada], map: "FK_RolePlayEvaluaciones_Llamada")
+  CriteriosEvaluados RolePlayEvaluacionCriterios[]
+
+  @@index([idTenant], map: "idx_roleevaluaciones_idTenant")
+}
+
+model RolePlayEvaluacionCriterios {
+  idScore              Int       @id @default(autoincrement())
+  idEvaluacion         Int
+  idCriterio           Int
+  idTenant             Int
+  Score                Decimal   @default(0.00) @db.Decimal(6, 2)
+  Feedback             String?   @db.Text
+  ScoreOverride        Decimal?  @db.Decimal(6, 2)
+  OverrideBy           Int?
+  OverrideAt           DateTime? @db.DateTime(0)
+  ComentarioSupervisor String?   @db.Text
+
+  Evaluacion           RolePlayEvaluaciones @relation(fields: [idEvaluacion], references: [idEvaluacion], map: "FK_RolePlayEvalCrit_Evaluacion")
+  Criterio             EvaluationCriteria   @relation(fields: [idCriterio], references: [idCriterio], map: "FK_RolePlayEvalCrit_Criterio")
+
+  @@index([idEvaluacion], map: "idx_roleevalcrit_idEvaluacion")
+  @@index([idCriterio], map: "idx_roleevalcrit_idCriterio")
+}
+
+
+
+
+
+
+
+
+
+
+
 enum Entrevistas_interview_type {
   PERSONA
   IA

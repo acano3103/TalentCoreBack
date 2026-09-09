@@ -8,6 +8,7 @@ import { HumeController } from './providers/ia/hume.controller';
 import { HumeService } from './providers/ia/hume.service';
 import { HttpModule } from '@nestjs/axios';
 import { OpenAiProvider } from './providers/ia/openai.provider';
+import { ElevenLabsProvider } from './providers/ia/elevenlabs.provider';   // <-- nuevo
 import { ArtemisController } from './providers/workforce-management/artemis/artemis.controller';
 import { ArtemisService } from './providers/workforce-management/artemis/artemis.service';
 import { ArtemisMapper } from './providers/workforce-management/artemis/artemis.mapper';
@@ -21,6 +22,7 @@ import { ArtemisProvider } from './providers/workforce-management/artemis/artemi
         IntegrationsFactory,
         ZoomProvider,
         OpenAiProvider,
+        ElevenLabsProvider,   
         EncryptionService,
         HumeService,
         ArtemisService,
