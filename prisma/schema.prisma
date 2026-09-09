@@ -356,6 +356,7 @@ model CatSites {
   ZonaFronteriza        Boolean?                @default(false)
   Activo                Boolean?                @default(true)
   FechaRegistro         DateTime?               @db.DateTime(0)
+  CatGeocercas          CatGeocercas[]
   CatPuestos            CatPuestos[]
   CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   CatUnidadesOperativas CatUnidadesOperativas?  @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
@@ -894,6 +895,7 @@ model auth_permission {
 model auth_user {
   id                                Int                                 @id @default(autoincrement())
   uuid                              String                              @unique(map: "uuid") @db.VarChar(36)
+  idTenant                          Int?
   password                          String                              @db.VarChar(128)
   last_login                        DateTime?                           @db.DateTime(6)
   is_superuser                      Boolean
@@ -905,7 +907,6 @@ model auth_user {
   is_staff                          Boolean
   is_active                         Boolean
   date_joined                       DateTime                            @db.DateTime(6)
-  idTenant                          Int?
   AsignacionAprobador               AsignacionAprobador[]
   Empleados                         Empleados[]
   HistoricoMovimientos              HistoricoMovimientos[]
@@ -1748,6 +1749,131 @@ model CatTenants {
   auth_user           auth_user[]
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatGeocercas {
+  idGeocerca          Int                   @id @default(autoincrement())
+  idTenant            Int                   @default(0)
+  idEmpresa           Int
+  idSite              Int
+  Nombre              String                @db.VarChar(150)
+  Tipo                CatGeocercas_Tipo     @default(circle)
+  Latitud             Decimal               @db.Decimal(10, 8)
+  Longitud            Decimal               @db.Decimal(11, 8)
+  Radio               Decimal?              @db.Decimal(8, 2)
+  PoligonoGeoJSON     Json?
+  Activo              Boolean               @default(true)
+  FechaRegistro       DateTime              @default(now()) @db.DateTime(0)
+  FechaActualizacion  DateTime?             @db.DateTime(0)
+  CatSites            CatSites              @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_Geocercas_Site")
+  RelGeocercaVertices RelGeocercaVertices[]
+
+  @@index([idSite], map: "FK_Geocercas_Site")
+  @@index([idEmpresa, Activo], map: "IDX_Geocercas_Empresa")
+}
+
+model EvaluationCriteria {
+  idCriterio                  Int                           @id @default(autoincrement())
+  idRolePlay                  Int
+  idTenant                    Int
+  Nombre                      String                        @db.VarChar(200)
+  Descripcion                 String                        @db.Text
+  PuntosMaximos               Int
+  Orden                       Int
+  Tipo                        String                        @db.VarChar(20)
+  RolePlays                   RolePlays                     @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_EvalCriteria_RolePlay")
+  RolePlayEvaluacionCriterios RolePlayEvaluacionCriterios[]
+
+  @@index([idRolePlay], map: "idx_evalcriteria_idRolePlay")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelGeocercaVertices {
+  idVertice    Int          @id @default(autoincrement())
+  idGeocerca   Int
+  Orden        Int          @default(0)
+  Latitud      Decimal      @db.Decimal(10, 8)
+  Longitud     Decimal      @db.Decimal(11, 8)
+  CatGeocercas CatGeocercas @relation(fields: [idGeocerca], references: [idGeocerca], onDelete: Cascade, map: "FK_Vertices_Geocerca")
+
+  @@index([idGeocerca], map: "FK_Vertices_Geocerca")
+}
+
+model RolePlayEvaluacionCriterios {
+  idScore              Int                  @id @default(autoincrement())
+  idEvaluacion         Int
+  idCriterio           Int
+  idTenant             Int
+  Score                Decimal              @default(0.00) @db.Decimal(6, 2)
+  Feedback             String?              @db.Text
+  ScoreOverride        Decimal?             @db.Decimal(6, 2)
+  OverrideBy           Int?
+  OverrideAt           DateTime?            @db.DateTime(0)
+  ComentarioSupervisor String?              @db.Text
+  EvaluationCriteria   EvaluationCriteria   @relation(fields: [idCriterio], references: [idCriterio], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayEvalCrit_Criterio")
+  RolePlayEvaluaciones RolePlayEvaluaciones @relation(fields: [idEvaluacion], references: [idEvaluacion], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayEvalCrit_Evaluacion")
+
+  @@index([idCriterio], map: "idx_roleevalcrit_idCriterio")
+  @@index([idEvaluacion], map: "idx_roleevalcrit_idEvaluacion")
+}
+
+model RolePlayEvaluaciones {
+  idEvaluacion                Int                           @id @default(autoincrement())
+  idLlamada                   Int                           @unique(map: "UK_RolePlayEvaluaciones_idLlamada")
+  idTenant                    Int
+  ScoreGlobal                 Decimal                       @default(0.00) @db.Decimal(6, 2)
+  ScoreMaximo                 Decimal                       @default(0.00) @db.Decimal(6, 2)
+  ResumenAgente               String?                       @db.Text
+  ReporteSupervisor           String?                       @db.Text
+  Fortalezas                  Json?
+  AreasMejora                 Json?
+  Recomendaciones             Json?
+  FechaEvaluacion             DateTime?                     @default(now()) @db.DateTime(0)
+  RolePlayEvaluacionCriterios RolePlayEvaluacionCriterios[]
+  RolePlayLlamadas            RolePlayLlamadas              @relation(fields: [idLlamada], references: [idLlamada], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayEvaluaciones_Llamada")
+
+  @@index([idTenant], map: "idx_roleevaluaciones_idTenant")
+}
+
+model RolePlayLlamadas {
+  idLlamada             Int                   @id @default(autoincrement())
+  idRolePlay            Int
+  idTenant              Int
+  idEmpresa             Int
+  idUsuario             Int
+  Estatus               String                @default("INICIADA") @db.VarChar(20)
+  HistorialConversacion Json?
+  FechaInicio           DateTime?             @db.DateTime(0)
+  FechaFin              DateTime?             @db.DateTime(0)
+  FechaRegistro         DateTime?             @default(now()) @db.DateTime(0)
+  RolePlayEvaluaciones  RolePlayEvaluaciones?
+  RolePlays             RolePlays             @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayLlamadas_RolePlay")
+
+  @@index([idRolePlay], map: "idx_rolellamadas_idRolePlay")
+  @@index([idTenant], map: "idx_rolellamadas_idTenant")
+}
+
+model RolePlays {
+  idRolePlay           Int                  @id @default(autoincrement())
+  idTenant             Int
+  idEmpresa            Int
+  Titulo               String               @db.VarChar(250)
+  Descripcion          String?              @db.Text
+  Contexto             String               @db.Text
+  Objetivo             String               @db.Text
+  AiScript             String               @db.Text
+  ObjetivosAprendizaje String?              @db.Text
+  DuracionMinutos      Int                  @default(15)
+  Activo               Boolean              @default(true)
+  idUsuarioCreador     Int
+  FechaRegistro        DateTime?            @default(now()) @db.DateTime(0)
+  FechaActualizacion   DateTime?            @db.DateTime(0)
+  EvaluationCriteria   EvaluationCriteria[]
+  RolePlayLlamadas     RolePlayLlamadas[]
+
+  @@index([idEmpresa], map: "idx_roleplays_idEmpresa")
+  @@index([idTenant], map: "idx_roleplays_idTenant")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -1805,4 +1931,9 @@ enum PlanCarreraEstatus {
   en_preparacion
   listo_para_ascenso
   promovido
+}
+
+enum CatGeocercas_Tipo {
+  circle
+  polygon
 }

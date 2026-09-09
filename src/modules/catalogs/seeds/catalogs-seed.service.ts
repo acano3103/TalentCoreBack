@@ -572,6 +572,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 25, Descripcion: 'Empleados', Codigo: 'employees', idPadre: 24, Activo: true },
             { idModulo: 26, Descripcion: 'Movimientos internos', Codigo: 'internal-movements', idPadre: 24, Activo: true },
             { idModulo: 27, Descripcion: 'Solicitudes pendientes', Codigo: 'pending-requests', idPadre: 24, Activo: true },
+            { idModulo: 28, Descripcion: 'Control de asistencia', Codigo: 'attendance-tracking', idPadre: null, Activo: true },
+            { idModulo: 29, Descripcion: 'Geocercas', Codigo: 'geofences', idPadre: 28, Activo: true },
         ];
 
         for (const module of modules) {
@@ -638,6 +640,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 1, idModulo: 25, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Empleados
             { idRol: 1, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Movimientos internos
             { idRol: 1, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Solicitudes pendientes
+            { idRol: 1, idModulo: 28, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Control de asistencia (Padre)
+            { idRol: 1, idModulo: 29, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Geocercas
 
             // =========================================================================
             // ROL: RH (idRol: 2)
@@ -669,6 +673,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 2, idModulo: 25, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Empleados
             { idRol: 2, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Movimientos internos
             { idRol: 2, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 2, idModulo: 28, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 2, idModulo: 29, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Geocercas
 
             // =========================================================================
             // ROL: FINANZAS (idRol: 3)
@@ -700,6 +706,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 3, idModulo: 25, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
             { idRol: 3, idModulo: 26, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
             { idRol: 3, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 3, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 3, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
 
             // =========================================================================
             // ROL: RECLUTADOR (idRol: 4)
@@ -725,12 +733,14 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 4, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
             { idRol: 4, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
             { idRol: 4, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
-            { idRol: 4, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Contratos digitales
+            { idRol: 2, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Contratos digitales
             { idRol: 4, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Mis contratos
             { idRol: 4, idModulo: 24, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
             { idRol: 4, idModulo: 25, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
             { idRol: 4, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
             { idRol: 4, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 4, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 4, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
 
             // =========================================================================
             // ROL: MANAGER (idRol: 5)
@@ -762,6 +772,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 5, idModulo: 25, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
             { idRol: 5, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Movimientos internos
             { idRol: 5, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Solicitudes pendientes
+            { idRol: 5, idModulo: 28, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 5, idModulo: 29, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas (Solo lectura)
 
             // =========================================================================
             // ROL: EMPLEADO (idRol: 6)
@@ -793,6 +805,8 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 6, idModulo: 25, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
             { idRol: 6, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
             { idRol: 6, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 6, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 6, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
         ];
 
         for (const permiso of permisos) {

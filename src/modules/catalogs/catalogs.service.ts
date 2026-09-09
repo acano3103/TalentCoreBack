@@ -45,7 +45,7 @@ export class CatalogsService {
       case 'sites':
         if (companyId) {
           return this.prisma.catSites.findMany({
-            where: { Activo: true, idEmpresa: companyId },
+            where: { Activo: true, idTenant: user.idTenant, idEmpresa: companyId },
             orderBy: { Descripcion: 'asc' },
           });
         } else {

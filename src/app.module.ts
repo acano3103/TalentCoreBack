@@ -34,6 +34,8 @@ import { CoursesModule } from './modules/courses/courses.module';
 import { CareerPlanModule } from './modules/career-plan/career-plan.module';
 import { ConfigurationModule } from './modules/configuration/configuration.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
+import { GeofencesService } from './modules/geofences/geofences.service';
+import { GeofencesModule } from './modules/geofences/geofences.module';
 
 @Module({
   imports: [
@@ -79,9 +81,10 @@ import { SuperAdminModule } from './modules/super-admin/super-admin.module';
     CoursesModule,
     CareerPlanModule,
     ConfigurationModule,
-    SuperAdminModule
+    SuperAdminModule,
+    GeofencesModule
   ],
   controllers: [],
-  providers: [AreasService],
+  providers: [AreasService, GeofencesService],
 })
 export class AppModule { }
