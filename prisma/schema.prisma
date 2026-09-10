@@ -1130,6 +1130,7 @@ model Empleados {
   Empleados                                         Empleados?            @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                   Empleados[]           @relation("EmpleadosToEmpleados")
   auth_user                                         auth_user?            @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  Expedientes                                       Expedientes[]
   HistorialSalarios                                 HistorialSalarios[]
   MovimientosInternos                               MovimientosInternos[]
   Vacantes                                          Vacantes[]
@@ -1141,15 +1142,18 @@ model Empleados {
 }
 
 model Expedientes {
-  idExpediente         Int       @id @default(autoincrement())
+  idExpediente         Int        @id @default(autoincrement())
   idEmpleado           Int?
   idPuesto             Int?
   idEstatus            Int?
-  fechaRegistro        DateTime? @db.Timestamp(0)
-  usuarioRegistro      String?   @db.VarChar(250)
-  fechaActualizacion   DateTime? @default(now()) @db.Timestamp(0)
-  usuarioActualizacion String?   @db.VarChar(250)
-  idTenant             Int       @default(0)
+  fechaRegistro        DateTime?  @db.Timestamp(0)
+  usuarioRegistro      String?    @db.VarChar(250)
+  fechaActualizacion   DateTime?  @default(now()) @db.Timestamp(0)
+  usuarioActualizacion String?    @db.VarChar(250)
+  idTenant             Int        @default(0)
+  Empleados            Empleados? @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_Expedientes_Empleados")
+
+  @@index([idEmpleado], map: "FK_Expedientes_Empleados_idx")
 }
 
 model RelPuestosUbicaciones {
