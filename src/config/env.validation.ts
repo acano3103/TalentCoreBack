@@ -27,6 +27,7 @@ export const envValidationSchema = Joi.object({
     HUME_CONFIG_ID_INTERVIEW: Joi.string().required(),
     OPENAI_API_KEY: Joi.string().required(),
     MEDIA_PATH_PREFIX: Joi.string().default('media'),
+    MEDIA_ROOT_PATH: Joi.string().required(),
     NUBARIUM_BASE_URL: Joi.string().required(),
     NUBARIUM_USERNAME: Joi.string().required(),
     NUBARIUM_PASSWORD: Joi.string().required(),

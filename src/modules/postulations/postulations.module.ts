@@ -5,6 +5,7 @@ import { HttpModule } from '@nestjs/axios';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { MediaPathModule } from 'src/common/services/media-path.module';   
 
 @Module({
     imports: [HttpModule,
@@ -16,6 +17,7 @@ import { ConfigService } from '@nestjs/config';
             }),
             inject: [ConfigService],
         }),
+        MediaPathModule,  
     ],
     controllers: [PostulationsController],
     providers: [PostulationsService]

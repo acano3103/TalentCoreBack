@@ -13,19 +13,23 @@ import { NotificationDispatcher } from 'src/modules/notifications/notification.d
 import { Cron } from '@nestjs/schedule';
 import { generateEmployeeAndLink } from '../postulations/services/credentials.service';
 import JSZip = require('jszip');
+import { MediaPathService } from 'src/common/services/media-path.service';
 
 @Injectable()
 export class DigitalFilesService {
   private readonly logger = new Logger(DigitalFilesService.name);
-  private readonly mediaRoot = path.join(process.cwd(), 'media');
+ private readonly mediaRoot: string;
 
-  constructor(
+constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly nubariumService: NubariumService,
     private readonly configService: ConfigService,
     private readonly notifications: NotificationDispatcher,
-  ) { }
+    private readonly mediaPathService: MediaPathService
+  ) {
+    this.mediaRoot = this.configService.get<string>('MEDIA_ROOT_PATH')!;
+  }
 
   async listExpedientes(companyId: number, page: number, limit: number, search: string, user: ActiveUserDto) {   
     if (!user.idTenant) {
@@ -589,6 +593,7 @@ export class DigitalFilesService {
     idCampania: number | null,
     files: Array<Express.Multer.File>,
     usuarioRegistro: string,
+    idTenant: number, 
   ) {
     const curp = empleadoData.curp?.toUpperCase().trim();
     if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
@@ -621,13 +626,22 @@ export class DigitalFilesService {
       fechaVencimiento: Date | null;
     }> = [];
 
-    const carpetaTemp = path.join(this.mediaRoot, 'temp', curp);
-    const carpetaFinal = path.join(this.mediaRoot, curp);
-    await fs.ensureDir(carpetaTemp);
-    await fs.ensureDir(carpetaFinal);
+  const tenantExpedientesPath = await this.mediaPathService.getTenantPath(this.mediaRoot, idTenant, 'expedientes');
+const carpetaTemp = path.join(tenantExpedientesPath, 'temp', curp);
+const carpetaFinal = path.join(tenantExpedientesPath, curp);
+await fs.ensureDir(carpetaTemp);
+await fs.ensureDir(carpetaFinal);
 
-    if (files && files.length > 0) {
-      for (const file of files) {
+const tenant = await this.prisma.catTenants.findUnique({
+    where: { idTenant },
+    select: { slug: true },
+});
+if (!tenant) {
+    throw new InternalServerErrorException('No se encontró el tenant.');
+}
+
+if (files && files.length > 0) {
+    for (const file of files) {
         const key = file.fieldname;
         const campoNormalizado = key.replace('[]', '');
         const idDocumento = documentoMap[campoNormalizado];
@@ -636,18 +650,18 @@ export class DigitalFilesService {
 
         // Obtener configuración de vigencia del catálogo de documentos
         const catDocumento = await this.prisma.catDocumentos.findUnique({
-          where: { IdDocumento: Number(idDocumento) },
-          select: { requiereVencimiento: true, diasVigenciaDefault: true },
+            where: { IdDocumento: Number(idDocumento) },
+            select: { requiereVencimiento: true, diasVigenciaDefault: true },
         });
 
         const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
         contadorPorTipo[key] = (contadorPorTipo[key] || 0) + 1;
         const sufijo = contadorPorTipo[key] === 1 ? '' : String(contadorPorTipo[key]);
 
-        const nombreArchivo = `${campoNormalizado}${sufijo}_${curp}.${ext}`;
-        const rutaTemp = path.join(carpetaTemp, nombreArchivo);
-        const rutaFinal = path.join(carpetaFinal, nombreArchivo);
-        const rutaRelativaBd = `${curp}/${nombreArchivo}`;
+      const nombreArchivo = `${campoNormalizado}${sufijo}_${curp}.${ext}`;
+      const rutaTemp = path.join(carpetaTemp, nombreArchivo);
+      const rutaFinal = path.join(carpetaFinal, nombreArchivo);
+      const rutaRelativaBd = `${tenant.slug}/expedientes/${curp}/${nombreArchivo}`;
 
         await fs.writeFile(rutaTemp, file.buffer);
 
@@ -842,7 +856,10 @@ export class DigitalFilesService {
     const idEmpleado = await DigitalFilesQueries.findIdByCURP(this.prisma, curp);
     if (!idEmpleado) throw new BadRequestException('Empleado no encontrado por el CURP proporcionado');
 
-    return this.processEmployeeDocuments(idEmpleado, empleadoData, documentoMap, idCampania, files, usuarioRegistro);
+    if (!user?.idTenant) {
+    throw new BadRequestException('El usuario no tiene un tenant asignado.');
+}
+return this.processEmployeeDocuments(idEmpleado, empleadoData, documentoMap, idCampania, files, usuarioRegistro, user.idTenant);
   }
 
 
@@ -853,20 +870,31 @@ export class DigitalFilesService {
   // Flujo PÚBLICO (candidato sin sesión): resuelve el idEmpleado
   // verificando el JWT del token, igual que initExpediente.
   // ─────────────────────────────────────────────────────────────
-  async insertEmployeeWithFilesPublic(
+ async insertEmployeeWithFilesPublic(
     token: string,
     empleadoJsonRaw: string,
     documentoMapRaw: string,
     idCampaniaRaw: string,
     files: Array<Express.Multer.File>,
-  ) {
+) {
     let employeeId: number;
     try {
-      const payload = await this.jwtService.verifyAsync(token);
-      employeeId = Number(payload.employee_id);
-      if (!employeeId) throw new UnauthorizedException('El token no contiene un ID de empleado válido');
+        const payload = await this.jwtService.verifyAsync(token);
+        employeeId = Number(payload.employee_id);
+        if (!employeeId) throw new UnauthorizedException('El token no contiene un ID de empleado válido');
     } catch (error) {
-      throw new UnauthorizedException('El enlace no es válido o ya ha expirado.');
+        throw new UnauthorizedException('El enlace no es válido o ya ha expirado.');
+    }
+
+    // Resolvemos el idTenant desde el propio empleado, ya que este flujo público
+    // no tiene sesión ni ActiveUserDto disponible.
+    const empleado = await this.prisma.empleados.findUnique({
+        where: { idEmpleado: employeeId },
+        select: { idTenant: true },
+    });
+
+    if (!empleado?.idTenant) {
+        throw new InternalServerErrorException('No se pudo determinar el tenant del empleado.');
     }
 
     if (!empleadoJsonRaw) throw new BadRequestException('Falta la información del empleado');
@@ -875,17 +903,16 @@ export class DigitalFilesService {
     let documentoMap: Record<string, number>;
 
     try {
-      empleadoData = JSON.parse(empleadoJsonRaw);
-      documentoMap = documentoMapRaw ? JSON.parse(documentoMapRaw) : {};
+        empleadoData = JSON.parse(empleadoJsonRaw);
+        documentoMap = documentoMapRaw ? JSON.parse(documentoMapRaw) : {};
     } catch (e) {
-      throw new BadRequestException('Formato JSON inválido en empleado_json o documento_map');
+        throw new BadRequestException('Formato JSON inválido en empleado_json o documento_map');
     }
 
     const idCampania = idCampaniaRaw ? parseInt(idCampaniaRaw, 10) : null;
 
-    return this.processEmployeeDocuments(employeeId, empleadoData, documentoMap, idCampania, files, 'candidato');
-  }
-
+    return this.processEmployeeDocuments(employeeId, empleadoData, documentoMap, idCampania, files, 'candidato', empleado.idTenant);
+}
   // ─────────────────────────────────────────────────────────────
   // GET .../digital-files/:employeeId/status-history
   // Estatus actual + catálogo + historial de cambios
