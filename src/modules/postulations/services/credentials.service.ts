@@ -87,39 +87,46 @@ export async function generateEmployeeAndLink(
         obligatorio: Number(row.esObligatorio) === 1
     }));
 
-    const docsEmpresaAdjuntos: string[] = [];
+   const docsEmpresaAdjuntos: string[] = [];
 
-    // Guardamos los documentos del empleado en el servidor
-    if (files?.length) {
-        const folderPath = path.join(
-            process.cwd(),
-            "media",
-            "empresa_docs",
-            String(idEmpleado)
-        );
+// Guardamos los documentos del empleado en el servidor
+if (files?.length) {
+    const tenant = await prisma.catTenants.findUnique({
+        where: { idTenant: data.idTenant },
+        select: { slug: true },
+    });
+    if (!tenant) throw new BadRequestException('No se encontró el tenant del empleado.');
 
-        await fs.promises.mkdir(folderPath, { recursive: true });
+    const folderPath = path.join(
+        process.cwd(),
+        "media",
+        tenant.slug,
+        "empresa_docs",
+        String(idEmpleado)
+    );
 
-        // Guardamos los documentos en la db
-        for (const file of files) {
-            const fileName = `${Date.now()}-${file.originalname}`;
-            const filePath = path.join(folderPath, fileName);
+    await fs.promises.mkdir(folderPath, { recursive: true });
 
-            await fs.promises.writeFile(filePath, file.buffer);
+    // Guardamos los documentos en la db
+    for (const file of files) {
+        const fileName = `${Date.now()}-${file.originalname}`;
+        const filePath = path.join(folderPath, fileName);
 
-            const relativePath = `/media/empresa_docs/${idEmpleado}/${fileName}`;
+        await fs.promises.writeFile(filePath, file.buffer);
 
-            await prisma.$executeRaw`
-                INSERT INTO DocumentosEmpresa (
-                    idEmpleado, nombre, rutaOriginal, usuarioRegistro
-                ) VALUES (
-                    ${idEmpleado}, ${fileName}, ${relativePath}, ${data.idUsuario}
-                )
-            `;
+        const relativePath = `/media/${tenant.slug}/empresa_docs/${idEmpleado}/${fileName}`;
 
-            docsEmpresaAdjuntos.push(fileName);
-        }
+        await prisma.$executeRaw`
+            INSERT INTO DocumentosEmpresa (
+                idEmpleado, nombre, rutaOriginal, usuarioRegistro
+            ) VALUES (
+                ${idEmpleado}, ${fileName}, ${relativePath}, ${data.idUsuario}
+            )
+        `;
+
+        docsEmpresaAdjuntos.push(fileName);
     }
+}
 
     // Enviamos la notificación al nuevo empleado para que suba su documentación
     await notify({
