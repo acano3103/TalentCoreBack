@@ -12,9 +12,10 @@ import { ArtemisController } from './providers/workforce-management/artemis/arte
 import { ArtemisService } from './providers/workforce-management/artemis/artemis.service';
 import { ArtemisMapper } from './providers/workforce-management/artemis/artemis.mapper';
 import { ArtemisProvider } from './providers/workforce-management/artemis/artemis.provider';
+import { AttendanceModule } from './providers/attendance/attendance.module';
 
 @Module({
-    imports: [HttpModule],
+    imports: [HttpModule, AttendanceModule],
     controllers: [IntegrationsController, HumeController, ArtemisController],
     providers: [
         IntegrationsService,
