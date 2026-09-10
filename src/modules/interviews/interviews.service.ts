@@ -323,8 +323,8 @@ export class InterviewsService {
     }
 
     // Metodo para obtener detalles de una entrevista especifica
-    async getMeetingDetail(user: ActiveUserDto, companyId: number, interviewId: string) {
-        return await findInterviewDetail(user.idTenant, interviewId, this.prisma);
+    async getMeetingDetail(companyId: number, interviewId: string) {
+        return await findInterviewDetail(interviewId, this.prisma);
     }
 
     // Metodo para actualizar detalles de una entrevista programada

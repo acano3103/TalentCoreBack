@@ -138,7 +138,7 @@ export class UsersService {
   }
 
   /** POST — create user + assign role atomically via $transaction */
-  async create(dto: CreateUserDto): Promise<AuthUserRow> {
+  async create(user: ActiveUserDto, dto: CreateUserDto): Promise<AuthUserRow> {
     // Validar que el nombre de usuario no exista previamente
     const existing = await this.prisma.auth_user.findUnique({
       where: { username: dto.username },
@@ -158,6 +158,7 @@ export class UsersService {
       const newUser = await tx.auth_user.create({
         data: {
           uuid: randomUUID(),
+          idTenant: user.idTenant,
           password: hashedPassword,
           last_login: null,
           is_superuser: dto.is_superuser === 1,
