@@ -1089,6 +1089,7 @@ model RelAreasUbicaciones {
 
 model Empleados {
   idEmpleado                                        Int                   @id @default(autoincrement())
+  numeroEmpleado                                    String?               @db.VarChar(20)
   idTenant                                          Int?
   idEmpresa                                         Int?
   idUsuario                                         String?               @db.VarChar(36)

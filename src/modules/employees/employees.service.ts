@@ -215,7 +215,9 @@ export class EmployeesService {
         s.idSite,
         s.Descripcion AS site,
         ex.idEstatus,
-        ex.fechaActualizacion AS fechaExpedienteCompleto
+        ex.fechaActualizacion AS fechaExpedienteCompleto,
+        ep.artemisUserId, 
+        ep.artemisSyncedAt
       FROM Empleados ep
       LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
       LEFT JOIN CatAreas a ON a.idArea = p.idArea
