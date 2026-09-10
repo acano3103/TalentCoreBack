@@ -68,7 +68,7 @@ export class PostulationsService {
           throw new BadRequestException('La empresa no tiene un tenant asignado.');
       }
 
-      const rootPath = path.resolve(process.cwd(), 'media');
+      const rootPath = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
       const relativePath = path.join('VACANTES', cleanNombrePuesto, nombrePostulante);
       const targetFolder = await this.mediaPathService.getTenantPath(rootPath, empresa.idTenant, relativePath);
 
