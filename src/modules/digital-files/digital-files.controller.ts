@@ -67,7 +67,7 @@ export class DigitalFilesController {
   @ApiResponse({ status: 403, description: 'Employee does not belong to this company' })
   @ApiResponse({ status: 404, description: 'Employee not found' })
   getExpediente(
-    
+
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
     @GetActiveUser() activeUser: ActiveUserDto,
@@ -102,8 +102,6 @@ export class DigitalFilesController {
     return this.digitalFilesService.getCompanyDocuments(employeeId);
   }
 
-
-
   // Endpoint para registrar un nuevo empleado y subir sus documentos en una sola petición
   @UseGuards(JwtAuthGuard)
   @Post('employee')
@@ -128,12 +126,10 @@ export class DigitalFilesController {
       },
     },
   })
-
   @ApiResponse({ status: 200, description: 'Empleado registrado correctamente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos o faltantes' })
   @ApiResponse({ status: 422, description: 'Documentos rechazados por Nubarium' })
   @ApiResponse({ status: 500, description: 'Error interno del servidor' })
-
   async insertEmployeeWithFiles(
     @Body('empleado_json') empleadoJsonRaw: string,
     @Body('documento_map') documentoMapRaw: string,
@@ -143,7 +139,6 @@ export class DigitalFilesController {
   ) {
     return await this.digitalFilesService.insertEmployeeWithFiles(empleadoJsonRaw, documentoMapRaw, idCampania, files, activeUser);
   }
-
 
   // Endpoint público para que el candidato guarde su información y documentos (sin sesión, valida el token)
   @Post(':token/public')
@@ -241,8 +236,8 @@ export class DigitalFilesController {
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
   ) {
-   return this.digitalFilesService.getStatusHistory(employeeId, activeUser);  
-}
+    return this.digitalFilesService.getStatusHistory(employeeId, activeUser);
+  }
 
   // Endpoint para actualizar el estatus del expediente
   @UseGuards(JwtAuthGuard)
@@ -305,7 +300,7 @@ export class DigitalFilesController {
       idDocumentoEmpleado,
       dto.nuevoEstatus,
       dto.comentario || '',
-      activeUser, 
+      activeUser,
     );
   }
 
@@ -327,7 +322,7 @@ export class DigitalFilesController {
     return this.digitalFilesService.notifyRejectedDocuments(employeeId);
   }
 
-   // Endpoint para regenerar el link de acceso y reenviar el correo (cuando el link original ya expiró)
+  // Endpoint para regenerar el link de acceso y reenviar el correo (cuando el link original ya expiró)
   @UseGuards(JwtAuthGuard)
   @Post(':employeeId/resend-credentials')
   @ApiOperation({
@@ -339,31 +334,31 @@ export class DigitalFilesController {
   @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
   @ApiResponse({ status: 404, description: 'Employee not found' })
   resendCredentials(
-    @GetActiveUser() activeUser: ActiveUserDto, 
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
   ) {
-     return this.digitalFilesService.resendCredentials(employeeId, activeUser);
+    return this.digitalFilesService.resendCredentials(employeeId, activeUser);
   }
 
-  
-// Endpoint para notificar al empleado sobre documentos por vencer/vencidos (botón manual del front)
-@UseGuards(JwtAuthGuard)
-@Post(':employeeId/notify-expiring')
-@ApiOperation({
-  summary: 'Notify expiring documents',
-  description: 'Sends a single email to the employee listing documents that are expiring soon or already expired.',
-})
-@ApiResponse({ status: 200, description: 'Notification sent successfully' })
-@ApiResponse({ status: 400, description: 'Employee has no expiring documents or no email registered' })
-@ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-@ApiResponse({ status: 404, description: 'Employee not found' })
-notifyExpiringDocuments(
-  @Param('companyId', ParseIntPipe) companyId: number,
-  @Param('employeeId', ParseIntPipe) employeeId: number,
-) {
-  return this.digitalFilesService.notifyExpiringDocuments(employeeId);
-}
+
+  // Endpoint para notificar al empleado sobre documentos por vencer/vencidos (botón manual del front)
+  @UseGuards(JwtAuthGuard)
+  @Post(':employeeId/notify-expiring')
+  @ApiOperation({
+    summary: 'Notify expiring documents',
+    description: 'Sends a single email to the employee listing documents that are expiring soon or already expired.',
+  })
+  @ApiResponse({ status: 200, description: 'Notification sent successfully' })
+  @ApiResponse({ status: 400, description: 'Employee has no expiring documents or no email registered' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  notifyExpiringDocuments(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+  ) {
+    return this.digitalFilesService.notifyExpiringDocuments(employeeId);
+  }
 
   // Endpoint para obtener el historial de descargas del expediente
   @UseGuards(JwtAuthGuard)
@@ -375,11 +370,11 @@ notifyExpiringDocuments(
   @ApiResponse({ status: 200, description: 'Download history obtained successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
   getDownloadHistory(
-    @GetActiveUser() activeUser: ActiveUserDto, 
+    @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Param('employeeId', ParseIntPipe) employeeId: number,
   ) {
-     return this.digitalFilesService.getDownloadHistory(employeeId, activeUser); 
+    return this.digitalFilesService.getDownloadHistory(employeeId, activeUser);
   }
 
   // Endpoint para descargar el expediente completo como ZIP
@@ -424,7 +419,7 @@ notifyExpiringDocuments(
     res.send(buffer);
   }
 
-  
+
 }
 
 

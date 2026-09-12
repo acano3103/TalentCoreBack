@@ -55,16 +55,17 @@ export async function createEmployee(
     idTenant: number;
     idJefeInmediato: number;
     idSite: number;
+    idModalidad: number;
   },
   prisma: PrismaClient
 ) {
-   const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, idPuesto, idUsuario, idCampania, idEmpresa, idTenant, idJefeInmediato, idSite } = data; 
+  const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, idPuesto, idUsuario, idCampania, idEmpresa, idTenant, idJefeInmediato, idSite, idModalidad } = data;
 
   return await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
       INSERT INTO Empleados (
         idEmpresa, idTenant, idPuesto, idJefeInmediato, idSite, nombre, primerApellido, segundoApellido, idCampania,
-        curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro
+        curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro, idModalidad
       ) VALUES (
         ${idEmpresa},
         ${idTenant},
@@ -79,7 +80,8 @@ export async function createEmployee(
         ${correo},
         ${telefono},
         NOW(),
-        ${idUsuario}
+        ${idUsuario},
+        ${idModalidad}
       );
     `;
 

@@ -61,11 +61,11 @@ export class PostulationsService {
 
       // 2. Rutas Físicas
       const empresa = await this.prisma.catEmpresas.findUnique({
-          where: { idEmpresa: companyId },
-          select: { idTenant: true },
+        where: { idEmpresa: companyId },
+        select: { idTenant: true },
       });
       if (!empresa?.idTenant) {
-          throw new BadRequestException('La empresa no tiene un tenant asignado.');
+        throw new BadRequestException('La empresa no tiene un tenant asignado.');
       }
 
       const rootPath = path.resolve(process.cwd(), 'media');
@@ -74,14 +74,14 @@ export class PostulationsService {
 
       // Validar el prefijo para destruir cualquier intento de Path Traversal
       if (!targetFolder.startsWith(rootPath)) {
-          throw new BadRequestException('Path Injection detected and blocked.');
+        throw new BadRequestException('Path Injection detected and blocked.');
       }
 
       // Lista blanca de extensiones para el CV (Solo PDF)
       const extension = path.extname(file.originalname).toLowerCase();
       const allowedExtensions = ['.pdf'];
       if (!allowedExtensions.includes(extension)) {
-          throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
+        throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
       }
 
       const fileName = `CV_${uuidv4()}${extension}`;
@@ -298,9 +298,9 @@ export class PostulationsService {
         });
         if (!vacancy) throw new NotFoundException('Vacante no encontrada');
 
-        if (!user.idTenant) {   
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
-    }
+        if (!user.idTenant) {
+          throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
 
         // Creamos el registro de empleado y el link para que pueda subir su info y documentación
         await generateEmployeeAndLink(
@@ -317,9 +317,10 @@ export class PostulationsService {
             idUsuario: user.uuid,
             idCampania: dto.campaignId || null,
             idEmpresa: companyId,
-            idTenant: user.idTenant, 
+            idTenant: user.idTenant,
             idJefeInmediato: vacancy.idJefeInmediato,
-            idSite: vacancy.idSite
+            idSite: vacancy.idSite,
+            idModalidad: 1,
           },
           files ?? [],
           this.prisma,

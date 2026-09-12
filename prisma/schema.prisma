@@ -1114,6 +1114,7 @@ model Empleados {
   tieneHijos                                        Boolean?
   FechaRegistro                                     DateTime?             @default(now()) @db.Timestamp(0)
   usuarioRegistro                                   String?               @db.VarChar(250)
+  idModalidad                                       Int?
   idGenero                                          Int?
   numeroInfonavit                                   String?               @db.VarChar(30)
   numeroHijos                                       Int?
@@ -1641,6 +1642,7 @@ model HorariosEmpleado {
   DiaSemana   String?   @db.VarChar(10)
   HoraEntrada DateTime? @db.Time(0)
   HoraSalida  DateTime? @db.Time(0)
+  Modalidad   String?   @db.VarChar(100)
 
   @@index([idEmpleado], map: "idx_idEmpleado")
 }
