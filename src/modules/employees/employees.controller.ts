@@ -41,6 +41,18 @@ export class EmployeesController {
     return this.employeesService.findOne(companyId, employeeId);
   }
 
+  // Endpoint que sincroniza los empleados pendientes de la empresa con artemis
+  @Post('sync/artemis')
+  @ApiOperation({ summary: 'Sync all pending employees to Artemis', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employees synced successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  syncAllToArtemis(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.employeesService.syncAllPendingToArtemis(activeUser, companyId);
+  }
+
   // Endpoint que registra el salario del empleado por primera vez
   @Post('/:employeeId/salary')
   @ApiOperation({ summary: 'Save employee salary for the first time', description: SWAGGER_AUTH_DESCRIPTION })

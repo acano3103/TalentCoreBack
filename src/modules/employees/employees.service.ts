@@ -1,16 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeeQueryResult, EmployeeDetailResponse, EmployeeSchedule } from './interfaces/employee.interface';
 import { SaveSalaryDto } from './dto/save-salary.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { Prisma } from 'generated/prisma/client';
+import { IntegrationsFactory } from '../integrations/providers/factory.service';
 
 @Injectable()
 export class EmployeesService {
+  private readonly logger = new Logger(EmployeesService.name);
+
   constructor(
-    private prisma: PrismaService
+    private prisma: PrismaService,
+    private integrationFactory: IntegrationsFactory,
   ) { }
 
+  // Método que obtiene un empleado por su id
   async findOne(companyId: number, employeeId: number): Promise<EmployeeDetailResponse> {
     const employeePromise = this.prisma.$queryRaw<EmployeeQueryResult[]>`
     SELECT 
@@ -94,6 +99,7 @@ export class EmployeesService {
     };
   }
 
+  // Método que registra el salario del empleado por primera vez
   async saveSalary(user: ActiveUserDto, companyId: number, employeeId: number, salaryData: SaveSalaryDto) {
     const { idEmpleado, idTipoMoneda, idPeriodicidadPago, salarioBruto, salarioNeto, bono, fechaInicioVigencia } = salaryData;
 
@@ -130,6 +136,7 @@ export class EmployeesService {
     return { message: 'Salario registrado exitosamente' };
   }
 
+  // Método que obtiene a todos los empleados de la empresa
   async findAll(companyId: number) {
     const employees = await this.prisma.$queryRaw<EmployeeQueryResult[]>`
       SELECT 
@@ -185,7 +192,14 @@ export class EmployeesService {
     return employees;
   }
 
-  async findAllWithCompleteFile(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number) {
+  // Obtener a todos los empleados que ya tienen su expediente completo y que no han sido sincronizados con artemis
+  async findAllWithCompleteFile(
+    activeUser: ActiveUserDto,
+    companyId: number,
+    page: number,
+    search: string,
+    limit: number,
+  ) {
     const skip = (page - 1) * limit;
 
     // Condición opcional para búsqueda por nombre, apellidos, correo o puesto
@@ -201,57 +215,67 @@ export class EmployeesService {
 
     // 1. Obtener registros paginados
     const employeesPromise = this.prisma.$queryRaw`
-      SELECT 
-        ep.idEmpleado,
-        ep.nombre,
-        ep.primerApellido,
-        ep.segundoApellido,
-        ep.correo,
-        ep.telefonoMovil,
-        p.idPuesto,
-        p.nombrePuesto,
-        a.idArea,
-        a.Descripcion AS area,
-        s.idSite,
-        s.Descripcion AS site,
-        ex.idEstatus,
-        ex.fechaActualizacion AS fechaExpedienteCompleto,
-        ep.artemisUserId, 
-        ep.artemisSyncedAt
-      FROM Empleados ep
-      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-      LEFT JOIN CatAreas a ON a.idArea = p.idArea
-      LEFT JOIN CatSites s ON s.idSite = ep.idSite
-      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-      WHERE ep.idEmpresa = ${companyId}
-        AND ep.idTenant = ${activeUser.idTenant}
-        AND ep.activo = 1
-        AND ex.idEstatus = 4
-        ${searchCondition}
-      ORDER BY ep.nombre ASC
-      LIMIT ${limit} OFFSET ${skip};
-    `;
+    SELECT 
+      ep.idEmpleado,
+      ep.nombre,
+      ep.primerApellido,
+      ep.segundoApellido,
+      ep.correo,
+      ep.telefonoMovil,
+      p.idPuesto,
+      p.nombrePuesto,
+      a.idArea,
+      a.Descripcion AS area,
+      s.idSite,
+      s.Descripcion AS site,
+      ex.idEstatus,
+      ex.fechaActualizacion AS fechaExpedienteCompleto,
+      ep.artemisUserId, 
+      ep.artemisSyncedAt
+    FROM Empleados ep
+    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+    LEFT JOIN CatAreas a ON a.idArea = p.idArea
+    LEFT JOIN CatSites s ON s.idSite = ep.idSite
+    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+    WHERE ep.idEmpresa = ${companyId}
+      AND ep.idTenant = ${activeUser.idTenant}
+      AND ep.activo = 1
+      AND ex.idEstatus = 4
+      ${searchCondition}
+    ORDER BY ep.nombre ASC
+    LIMIT ${limit} OFFSET ${skip};
+  `;
 
-    // 2. Obtener el total de registros que cumplen los filtros
-    const totalCountPromise = this.prisma.$queryRaw<{ total: number | bigint }[]>`
-      SELECT COUNT(ep.idEmpleado) AS total
-      FROM Empleados ep
-      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-      WHERE ep.idEmpresa = ${companyId}
-        AND ep.activo = 1
-        AND ex.idEstatus = 4
-        ${searchCondition};
-    `;
+    // 2. Obtener el total y los no sincronizados en la misma consulta
+    const metricsPromise = this.prisma.$queryRaw<{ total: number | bigint; unassignedSync: number | bigint }[]>`
+    SELECT 
+      COUNT(ep.idEmpleado) AS total,
+      SUM(
+        CASE 
+          WHEN (ep.artemisUserId IS NULL OR ep.artemisUserId = '') 
+            OR ep.artemisSyncedAt IS NULL 
+          THEN 1 
+          ELSE 0 
+        END
+      ) AS unassignedSync
+    FROM Empleados ep
+    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+    WHERE ep.idEmpresa = ${companyId}
+      AND ep.idTenant = ${activeUser.idTenant}
+      AND ep.activo = 1
+      AND ex.idEstatus = 4
+      ${searchCondition};
+  `;
 
-    // Ejecutamos ambas consultas en paralelo
-    const [employees, countResult] = await Promise.all([
+    // Ejecución paralela
+    const [employees, metricsResult] = await Promise.all([
       employeesPromise,
-      totalCountPromise,
+      metricsPromise,
     ]);
 
-    // Si el motor SQL retorna BigInt para COUNT, lo convertimos a Number
-    const total = Number(countResult[0]?.total ?? 0);
+    const total = Number(metricsResult[0]?.total ?? 0);
+    const pendingSyncCount = Number(metricsResult[0]?.unassignedSync ?? 0);
     const totalPages = Math.ceil(total / limit) || 1;
 
     return {
@@ -259,7 +283,107 @@ export class EmployeesService {
       total,
       currentPage: page,
       totalPages,
+      syncStats: {
+        pendingSyncCount,
+        isFullySynced: total > 0 && pendingSyncCount === 0,
+      },
     };
+  }
+
+  // Método que sincroniza todos los empleados pendientes de la empresa con artemis
+  async syncAllPendingToArtemis(activeUser: ActiveUserDto, companyId: number) {
+    // Buscar empleados con expediente completo (idEstatus = 4) y sin sincronizar
+    const pendingEmployees = await this.prisma.empleados.findMany({
+      where: {
+        idEmpresa: companyId,
+        idTenant: activeUser.idTenant,
+        activo: true,
+        Expedientes: { some: { idEstatus: 4 } },
+        OR: [
+          { artemisUserId: null },
+          { artemisUserId: '' },
+          { artemisSyncedAt: null },
+        ],
+      },
+    });
+
+    if (pendingEmployees.length === 0) {
+      return { message: 'No hay empleados pendientes de sincronizar.', synced: 0 };
+    }
+
+    // Buscamos si la empresa tiene una integración de Artemis activa
+    const activeArtemisIntegration = await this.prisma.integraciones.findFirst({
+      where: {
+        idEmpresa: companyId,
+        isConnected: true,
+        CatIntegracionesProvedores: {
+          name: 'Artemis',
+          type: 'workforce',
+          isActive: true
+        }
+      },
+      include: {
+        CatIntegracionesProvedores: true
+      }
+    });
+
+    // Si la empresa no tiene la Artemis configurada, forzamos un error
+    if (!activeArtemisIntegration) {
+      throw new BadRequestException('La empresa no cuenta con una integración de Artemis activa.');
+    }
+
+    const providerId = activeArtemisIntegration.providerId;
+    const artemisProvider = await this.integrationFactory.getProvider(providerId);
+
+    await Promise.all(
+      pendingEmployees.map(async (employee) => {
+
+        const { schedules, bankDetails, salaryInfo, address } = await this.prisma.$transaction(async (tx) => {
+          const [schedules, bankDetails, salaryInfo, address] = await Promise.all([
+            tx.horariosEmpleado.findMany({ where: { idEmpleado: employee.idEmpleado } }),
+            tx.datosBancarios.findFirst({ where: { idEmpleado: employee.idEmpleado } }),
+            tx.historialSalarios.findFirst({ where: { idEmpleado: employee.idEmpleado, actual: true } }),
+            tx.domicilioEmpleado.findFirst({ where: { idEmpleado: employee.idEmpleado } }),
+          ]);
+
+          return { schedules, bankDetails, salaryInfo, address };
+        });
+
+        const employeeData = {
+          externalEmployeeId: employee.numeroEmpleado,
+          name: employee.nombre,
+          lastName: employee.primerApellido,
+          motherLastName: employee.segundoApellido,
+          email: employee.correo,
+          phone: employee.telefonoMovil,
+          rfc: employee.rfc,
+          curp: employee.curp,
+          nss: employee.numeroSeguroSocial,
+          startDate: employee.FechaRegistro,
+          birthDate: employee.fechaNacimiento,
+          schedules: schedules,
+          bankDetails: bankDetails,
+          salaryInfo: salaryInfo,
+          address: address
+        };
+
+        const response = await artemisProvider.syncSingleEmployee(companyId, employeeData);
+        console.log('Respuesta recibida de Artemis:', response);
+
+        // GUARDAR EN LA BD TALENTCORE
+        await this.prisma.empleados.update({
+          where: { idEmpleado: employee.idEmpleado },
+          data: {
+            artemisUserId: response.artemisUserId,
+            artemisSyncedAt: new Date(),
+          },
+        });
+
+        return response;
+      }),
+    );
+
+    return { message: 'Empleados sincronizados exitosamente.', synced: pendingEmployees.length };
   }
 
 }

@@ -51,4 +51,5 @@ export const envValidationSchema = Joi.object({
     GUPSHUP_SOURCE_PHONE: Joi.string().required(),
     GUPSHUP_APP_NAME: Joi.string().required(),
     IVR_API_KEY: Joi.string().required(),
+    ARTEMIS_API_KEY: Joi.string().required(),
 });
