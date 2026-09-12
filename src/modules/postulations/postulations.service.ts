@@ -14,6 +14,8 @@ import { calculatePercentage } from '../vacancies/utils/formatters.util';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { MediaPathService } from 'src/common/services/media-path.service';
+
 
 @Injectable()
 export class PostulationsService {
@@ -23,6 +25,7 @@ export class PostulationsService {
     private readonly integrationFactory: IntegrationsFactory,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
+    private readonly mediaPathService: MediaPathService
   ) { }
 
   private readonly logger = new Logger(PostulationsService.name);
@@ -57,29 +60,35 @@ export class PostulationsService {
       const nombrePostulante = `${cleanNombre}_${cleanApellido}`;
 
       // 2. Rutas Físicas
+      const empresa = await this.prisma.catEmpresas.findUnique({
+          where: { idEmpresa: companyId },
+          select: { idTenant: true },
+      });
+      if (!empresa?.idTenant) {
+          throw new BadRequestException('La empresa no tiene un tenant asignado.');
+      }
+
       const rootPath = path.resolve(process.cwd(), 'media');
       const relativePath = path.join('VACANTES', cleanNombrePuesto, nombrePostulante);
-      const targetFolder = path.join(rootPath, relativePath);
+      const targetFolder = await this.mediaPathService.getTenantPath(rootPath, empresa.idTenant, relativePath);
 
       // Validar el prefijo para destruir cualquier intento de Path Traversal
       if (!targetFolder.startsWith(rootPath)) {
-        throw new BadRequestException('Path Injection detected and blocked.');
+          throw new BadRequestException('Path Injection detected and blocked.');
       }
 
       // Lista blanca de extensiones para el CV (Solo PDF)
       const extension = path.extname(file.originalname).toLowerCase();
       const allowedExtensions = ['.pdf'];
       if (!allowedExtensions.includes(extension)) {
-        throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
-      }
-
-      if (!fs.existsSync(targetFolder)) {
-        fs.mkdirSync(targetFolder, { recursive: true });
+          throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
       }
 
       const fileName = `CV_${uuidv4()}${extension}`;
       const physicalPath = path.join(targetFolder, fileName);
-      const webPath = `/media/${path.join(relativePath, fileName).replace(/\\/g, '/')}`;
+
+      const tenant = await this.prisma.catTenants.findUnique({ where: { idTenant: empresa.idTenant }, select: { slug: true } });
+      const webPath = `/media/${tenant?.slug}/${path.join(relativePath, fileName).replace(/\\/g, '/')}`;
 
       // Guardamos el archivo y registramos la ruta física por si necesitamos borrarlo en el catch
       fs.writeFileSync(physicalPath, file.buffer);

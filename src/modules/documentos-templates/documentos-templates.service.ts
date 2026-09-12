@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as mammoth from 'mammoth';
 import PizZip = require('pizzip');
+import { MediaPathService } from 'src/common/services/media-path.service';
 
 const execAsync = promisify(exec);
 
@@ -193,6 +194,7 @@ export class DocumentosTemplatesService {
         private readonly prisma: PrismaService,
         private readonly notifications: NotificationDispatcher,
         private readonly nubarium: NubariumService,
+        private readonly mediaPathService: MediaPathService,
     ) { }
 
     async create(
@@ -440,7 +442,7 @@ export class DocumentosTemplatesService {
                 const preparedPath = originalPath.replace(/\.docx$/i, '_template.docx');
                 prepareDocxTemplate(originalPath, preparedPath, updateCamposDto.campos);
                 this.logger.log(`Template DOCX preparado en: ${preparedPath}`);
-            } catch (err) {
+            } catch (err) {PrismaService
                 this.logger.warn(`No se pudo preparar el template DOCX: ${err.message}`);
             }
         }
@@ -448,69 +450,72 @@ export class DocumentosTemplatesService {
         return result;
     }
 
-    async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, activeUser: ActiveUserDto) {
-        const plantilla = await this.prisma.plantillasDocumentos.findFirst({
-            where: { id, idEmpresa: companyId, activa: true },
-            include: { campos: true },
-        });
 
-        if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
-
-        const originalPath = path.join(process.cwd(), plantilla.archivoOriginal);
-        if (!fs.existsSync(originalPath)) {
-            throw new BadRequestException('El archivo original de la plantilla no existe en el servidor');
-        }
-
-        const outputDir = path.join(process.cwd(), 'media', 'documentos-generados');
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-        }
-
-        const docId = crypto.randomUUID();
-        const ext = path.extname(plantilla.archivoOriginal).toLowerCase();
-        let outputPath: string;
-        let pdfFilename: string;
-        let tempDocxPath: string | null = null;
-
-        if (ext === '.pdf') {
-            pdfFilename = `${docId}.pdf`;
-            outputPath = path.join(outputDir, pdfFilename);
-            await this.generatePdf(originalPath, plantilla.campos, generateDto.valores, outputPath);
-        } else {
-            pdfFilename = `${docId}.docx`;
-            outputPath = path.join(outputDir, pdfFilename);
-
-            // Usar el template preparado (con {{identificadores}}) si existe
-            const preparedPath = originalPath.replace(/\.docx$/i, '_template.docx');
-            const templatePath = fs.existsSync(preparedPath) ? preparedPath : originalPath;
-
-            try {
-                generateDocxFromTemplate(templatePath, outputPath, generateDto.valores);
-            } catch (err) {
-                this.logger.error(`Error generando DOCX: ${err.message}`);
-                throw new InternalServerErrorException('Error al generar el documento DOCX');
-            }
-        }
-
-        if (!fs.existsSync(outputPath)) {
-            throw new InternalServerErrorException('Error al generar el documento: el archivo de salida no se creó');
-        }
-
-        const documento = await this.prisma.documentosGenerados.create({
-            data: {
-                idPlantilla: id,
-                idVacante: generateDto.idVacante,
-                idCandidato: generateDto.idCandidato,
-                datosJson: generateDto.valores,
-                archivoGenerado: `media/documentos-generados/${pdfFilename}`,
-                estatus: 'generado',
-                idUsuarioGenero: activeUser.id,
-            },
-        });
-
-        return documento;
+async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, activeUser: ActiveUserDto) {
+    if (!activeUser.idTenant) {
+        throw new BadRequestException('El usuario no tiene un tenant asignado.');
     }
 
+    const plantilla = await this.prisma.plantillasDocumentos.findFirst({
+        where: { id, idEmpresa: companyId, activa: true },
+        include: { campos: true },
+    });
+
+    if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
+
+    const originalPath = path.join(process.cwd(), plantilla.archivoOriginal);
+    if (!fs.existsSync(originalPath)) {
+        throw new BadRequestException('El archivo original de la plantilla no existe en el servidor');
+    }
+
+    const baseMediaFolder = path.join(process.cwd(), 'media');
+    const outputDir = await this.mediaPathService.getTenantPath(baseMediaFolder, activeUser.idTenant, 'documentos-generados');
+
+    const docId = crypto.randomUUID();
+    const ext = path.extname(plantilla.archivoOriginal).toLowerCase();
+    let outputPath: string;
+    let pdfFilename: string;
+    let tempDocxPath: string | null = null;
+
+    if (ext === '.pdf') {
+        pdfFilename = `${docId}.pdf`;
+        outputPath = path.join(outputDir, pdfFilename);
+        await this.generatePdf(originalPath, plantilla.campos, generateDto.valores, outputPath);
+    } else {
+        pdfFilename = `${docId}.docx`;
+        outputPath = path.join(outputDir, pdfFilename);
+
+        const preparedPath = originalPath.replace(/\.docx$/i, '_template.docx');
+        const templatePath = fs.existsSync(preparedPath) ? preparedPath : originalPath;
+
+        try {
+            generateDocxFromTemplate(templatePath, outputPath, generateDto.valores);
+        } catch (err) {
+            this.logger.error(`Error generando DOCX: ${err.message}`);
+            throw new InternalServerErrorException('Error al generar el documento DOCX');
+        }
+    }
+
+    if (!fs.existsSync(outputPath)) {
+        throw new InternalServerErrorException('Error al generar el documento: el archivo de salida no se creó');
+    }
+
+    const tenant = await this.prisma.catTenants.findUnique({ where: { idTenant: activeUser.idTenant }, select: { slug: true } });
+
+    const documento = await this.prisma.documentosGenerados.create({
+        data: {
+            idPlantilla: id,
+            idVacante: generateDto.idVacante,
+            idCandidato: generateDto.idCandidato,
+            datosJson: generateDto.valores,
+            archivoGenerado: `media/${tenant?.slug}/documentos-generados/${pdfFilename}`,
+            estatus: 'generado',
+            idUsuarioGenero: activeUser.id,
+        },
+    });
+
+    return documento;
+}
     async findGenerated(companyId: number, page: number, limit: number) {
         const skip = (page - 1) * limit;
         const where = {

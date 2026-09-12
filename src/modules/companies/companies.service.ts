@@ -5,10 +5,14 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { MediaPathService } from 'src/common/services/media-path.service';
 
 @Injectable()
 export class CompaniesService {
-    constructor(private prismaService: PrismaService) { }
+    constructor(
+        private prismaService: PrismaService,
+        private mediaPathService: MediaPathService,
+    ) { }
 
     private readonly logger = new Logger(CompaniesService.name);
 
@@ -76,40 +80,40 @@ export class CompaniesService {
         };
     }
 
-    async create(dto: CreateCompanyDto, file: Express.Multer.File, activeUser: ActiveUserDto) {
-        let logoPath: string | null = null;
+async create(dto: CreateCompanyDto, file: Express.Multer.File, activeUser: ActiveUserDto) {
+    const user = await this.prismaService.auth_user.findUnique({ where: { id: activeUser.id } });
+    if (!user) throw new NotFoundException('No se encontró el usuario');
+    if (!user.idTenant) throw new BadRequestException('El usuario no tiene un tenant asignado');
+    const idTenant = user.idTenant;
 
-        if (file) {
-            try {
-                const safeCommercialName = dto.nombre_comercial
-                    .replace(/[^a-zA-Z0-9\s-_]/g, '')
-                    .trim()
-                    .replace(/\s+/g, '_');
+    let logoPath: string | null = null;
 
-                const folderName = safeCommercialName || 'default_company';
-                const fileExtension = path.extname(file.originalname).toLowerCase();
-                const logoName = `logo_${folderName}${fileExtension}`;
-                const baseMediaFolder = path.resolve(process.cwd(), 'media');
-                const absoluteFolder = path.join(baseMediaFolder, folderName, 'logo');
-                const absolutePath = path.join(absoluteFolder, logoName);
+    if (file) {
+        try {
+            const safeCommercialName = dto.nombre_comercial
+                .replace(/[^a-zA-Z0-9\s-_]/g, '')
+                .trim()
+                .replace(/\s+/g, '_');
 
-                if (!absolutePath.startsWith(baseMediaFolder)) throw new BadRequestException('Path Injection is not allowed.');
+            const folderName = safeCommercialName || 'default_company';
+            const fileExtension = path.extname(file.originalname).toLowerCase();
+            const logoName = `logo_${folderName}${fileExtension}`;
+            const baseMediaFolder = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
 
-                fs.mkdirSync(absoluteFolder, { recursive: true });
-                fs.writeFileSync(absolutePath, file.buffer);
-                logoPath = `/media/${folderName}/logo/${logoName}`;
-            } catch (fileError) {
-                if (fileError instanceof BadRequestException) throw fileError;
-                throw new InternalServerErrorException(`Failed to save logo file: ${fileError.message}`);
-            }
+            const absoluteFolder = await this.mediaPathService.getTenantPath(baseMediaFolder, idTenant, path.join('logo', folderName));
+            const absolutePath = path.join(absoluteFolder, logoName);
+
+            if (!absolutePath.startsWith(baseMediaFolder)) throw new BadRequestException('Path Injection is not allowed.');
+
+            fs.writeFileSync(absolutePath, file.buffer);
+
+            const tenant = await this.prismaService.catTenants.findUnique({ where: { idTenant }, select: { slug: true } });
+            logoPath = `/media/${tenant?.slug}/logo/${folderName}/${logoName}`;
+        } catch (fileError) {
+            if (fileError instanceof BadRequestException) throw fileError;
+            throw new InternalServerErrorException(`Failed to save logo file: ${fileError.message}`);
         }
-
-       const user = await this.prismaService.auth_user.findUnique({ where: { id: activeUser.id } });
-        if (!user) throw new NotFoundException('No se encontró el usuario');
-        if (!user.idTenant) throw new BadRequestException('El usuario no tiene un tenant asignado');
-        const idTenant = user.idTenant;
-      
-
+    }
         try {
             await this.prismaService.$transaction(async (tx) => {
                 const nuevaEmpresa = await tx.catEmpresas.create({
@@ -165,28 +169,29 @@ async update(id: string, dto: UpdateCompanyDto, file: Express.Multer.File, activ
     if (rfcLimpio.length > 13) throw new BadRequestException('El RFC no puede superar los 13 caracteres.');
     let logoPath: string | null = null;
 
-    if (file) {
-        try {
-            const safeCommercialName = dto.nombre_comercial.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
-            const folderName = safeCommercialName || 'default_company';
-            const fileExtension = path.extname(file.originalname).toLowerCase();
-            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
-            const logoName = `logo_${folderName}_${timestamp}${fileExtension}`;
+   if (file) {
+    try {
+        const safeCommercialName = dto.nombre_comercial.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_');
+        const folderName = safeCommercialName || 'default_company';
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
+        const logoName = `logo_${folderName}_${timestamp}${fileExtension}`;
 
-            const baseMediaFolder = path.resolve(process.cwd(), 'media');
-            const absoluteFolder = path.join(baseMediaFolder, folderName, 'logo');
-            const absolutePath = path.join(absoluteFolder, logoName);
+        const baseMediaFolder = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
+        const absoluteFolder = await this.mediaPathService.getTenantPath(baseMediaFolder, idTenant, path.join('logo', folderName));
+        const absolutePath = path.join(absoluteFolder, logoName);
 
-            if (!absolutePath.startsWith(baseMediaFolder)) throw new BadRequestException('Intento de Path Injection detectado.');
+        if (!absolutePath.startsWith(baseMediaFolder)) throw new BadRequestException('Intento de Path Injection detectado.');
 
-            fs.mkdirSync(absoluteFolder, { recursive: true });
-            fs.writeFileSync(absolutePath, file.buffer);
-            logoPath = `/media/${folderName}/logo/${logoName}`;
-        } catch (fileError) {
-            if (fileError instanceof BadRequestException) throw fileError;
-            throw new InternalServerErrorException(`Failed to save logo file: ${fileError.message}`);
-        }
+        fs.writeFileSync(absolutePath, file.buffer);
+
+        const tenant = await this.prismaService.catTenants.findUnique({ where: { idTenant }, select: { slug: true } });
+        logoPath = `/media/${tenant?.slug}/logo/${folderName}/${logoName}`;
+    } catch (fileError) {
+        if (fileError instanceof BadRequestException) throw fileError;
+        throw new InternalServerErrorException(`Failed to save logo file: ${fileError.message}`);
     }
+}
 
     try {
         await this.prismaService.$transaction(async (tx) => {

@@ -45,13 +45,13 @@ import { MobileModule } from './modules/mobile/mobile.module';
       validationSchema: envValidationSchema,
     }),
     ScheduleModule.forRoot(),
-   ServeStaticModule.forRoot(
+  ServeStaticModule.forRoot(
   {
     rootPath: join(process.cwd(), 'public'),
     serveRoot: '/public',
   },
   {
-    rootPath: join(process.cwd(), 'media'),
+    rootPath: process.env.MEDIA_ROOT_PATH || join(process.cwd(), 'media'),
     serveRoot: '/media',
   }
 ),
