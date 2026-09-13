@@ -444,6 +444,19 @@ export class EmployeesService {
         })
       }
 
+      // Registramos el movimiento en el historico
+      await tx.historicoMovimientos.create({
+        data: {
+          idUsuario: activeUser.id,
+          idEmpresa: companyId,
+          accion: 'ACTUALIZAR',
+          tablaOrigen: 'Empleados',
+          idRegistro: String(employeeId),
+          descripcion: `El usuario ${activeUser.username} actualizó el horario laboral del empleado ${employee.numeroEmpleado}`,
+          fechaCreacion: new Date()
+        }
+      });
+
       return {
         message: 'Horario laboral y modalidad actualizados correctamente',
         idEmpleado: employeeId,
