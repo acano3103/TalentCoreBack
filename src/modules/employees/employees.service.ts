@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeeQueryResult, EmployeeDetailResponse, EmployeeSchedule } from './interfaces/employee.interface';
 import { SaveSalaryDto } from './dto/save-salary.dto';
@@ -6,6 +6,7 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { Prisma } from 'generated/prisma/client';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
+import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 
 @Injectable()
 export class EmployeesService {
@@ -16,7 +17,7 @@ export class EmployeesService {
     private integrationFactory: IntegrationsFactory,
   ) { }
 
-  // Método que obtiene un empleado por su id
+  // Método que obtiene un empleado por su id con horarios, sedes autorizadas y DIDs
   async findOne(companyId: number, employeeId: number): Promise<EmployeeDetailResponse> {
     const employeePromise = this.prisma.$queryRaw<EmployeeQueryResult[]>`
     SELECT 
@@ -41,6 +42,7 @@ export class EmployeesService {
       emp.nombre_comercial as Empresa,
       s.idSite,
       s.Descripcion as Ubicacion,
+      s.TipoAsistencia as tipoAsistenciaUbicacionPrincipal,
       a.idArea,
       a.Descripcion as Area,
       hs.idHistorialSalario as idSalario,
@@ -57,7 +59,14 @@ export class EmployeesService {
       jefe.primerApellido as primerApellidoJefeDirecto,
       jefe.segundoApellido as segundoApellidoJefeDirecto, 
       ep.idModalidad as idModalidadHorario, 
-      cm.Descripcion as ModalidadHorario
+      cm.Descripcion as ModalidadHorario,
+      CAST(
+        EXISTS(
+          SELECT 1 FROM auth_user u 
+          WHERE u.uuid = ep.idUsuario 
+            AND u.is_active = 1
+        ) AS UNSIGNED
+      ) AS tieneUsuarioActivo
     FROM Empleados ep
     JOIN CatPuestos p ON ep.idPuesto = p.idPuesto
     JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
@@ -89,18 +98,132 @@ export class EmployeesService {
       HoraEntrada ASC;
   `;
 
-    const [[employee], horarios] = await Promise.all([
+    // Sedes autorizadas para este empleado (RelEmpleadosSites)
+    const allowedSitesPromise = this.prisma.$queryRaw<any[]>`
+    SELECT 
+      res.idEmpleadoSite,
+      s.idSite,
+      s.Descripcion as nombreUbicacion,
+      s.TipoAsistencia as tipoAsistenciaSede,
+      COALESCE(res.MetodoAsistencia, s.TipoAsistencia) as metodoAsistenciaAsignado,
+      res.EsPrincipal,
+      res.Activo
+    FROM RelEmpleadosSites res
+    JOIN CatSites s ON s.idSite = res.idSite
+    WHERE res.idEmpleado = ${employeeId}
+      AND res.idEmpresa = ${companyId}
+      AND res.Activo = 1;
+  `;
+
+    // DIDs autorizados (Catálogo de sedes con IVR + Excepciones BLOQUEADO / EXTRA)
+    const didsPromise = this.prisma.$queryRaw<any[]>`
+    SELECT 
+      d.Did,
+      d.idSite,
+      d.nombreUbicacion,
+      d.origen,
+      d.motivo,
+      CAST(
+        CASE 
+          WHEN d.origen = 'EXTRA' THEN 1
+          WHEN exc.idExcepcion IS NOT NULL THEN 0 
+          ELSE 1 
+        END AS UNSIGNED
+      ) as habilitado
+    FROM (
+      -- 1. DIDs de las sedes con IVR asignadas al colaborador
+      SELECT 
+        sd.Did,
+        s.idSite,
+        s.Descripcion as nombreUbicacion,
+        'UBICACION' as origen,
+        NULL as motivo
+      FROM RelEmpleadosSites res
+      JOIN CatSites s ON s.idSite = res.idSite
+      JOIN CatSitesDids sd ON sd.idSite = s.idSite AND sd.Activo = 1
+      WHERE res.idEmpleado = ${employeeId} 
+        AND res.idEmpresa = ${companyId}
+        AND res.Activo = 1
+        AND (res.MetodoAsistencia = 'IVR' OR (res.MetodoAsistencia IS NULL AND s.TipoAsistencia = 'IVR'))
+
+      UNION ALL
+
+      -- 2. DIDs personalizados EXTRA asignados al colaborador
+      SELECT 
+        e_extra.Did,
+        NULL as idSite,
+        'Número Personalizado' as nombreUbicacion,
+        'EXTRA' as origen,
+        e_extra.Motivo as motivo
+      FROM RelEmpleadosDidsExcepciones e_extra
+      WHERE e_extra.idEmpleado = ${employeeId}
+        AND e_extra.idEmpresa = ${companyId}
+        AND e_extra.TipoExcepcion = 'EXTRA'
+        AND e_extra.Activo = 1
+    ) d
+    LEFT JOIN RelEmpleadosDidsExcepciones exc 
+      ON exc.idEmpleado = ${employeeId} 
+     AND exc.idEmpresa = ${companyId}
+     AND exc.Did = d.Did 
+     AND exc.TipoExcepcion = 'BLOQUEADO'
+     AND exc.Activo = 1
+    ORDER BY d.nombreUbicacion ASC, d.Did ASC;
+  `;
+
+    const [[rawEmployee], schedules, rawSites, rawDids] = await Promise.all([
       employeePromise,
       schedulesPromise,
+      allowedSitesPromise,
+      didsPromise,
     ]);
 
-    if (!employee) {
+    if (!rawEmployee) {
       throw new NotFoundException(`Empleado con id ${employeeId} no encontrado`);
     }
 
+    // Conversión recursiva de BigInt a Number manteniendo arreglos nativos
+    const sanitizeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj;
+      if (typeof obj === 'bigint') return Number(obj);
+
+      if (Array.isArray(obj)) {
+        return obj.map(item => sanitizeBigInt(item));
+      }
+
+      if (obj instanceof Date) return obj;
+
+      if (typeof obj === 'object') {
+        const result: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+          result[key] = sanitizeBigInt(value);
+        }
+        return result;
+      }
+
+      return obj;
+    };
+
+    const employee = sanitizeBigInt(rawEmployee);
+    const horarios = sanitizeBigInt(schedules || []);
+    const sedesAsignadas = sanitizeBigInt(rawSites || []);
+    const didsAutorizados = sanitizeBigInt(rawDids || []);
+
+    const tieneSedesConfiguradas = sedesAsignadas.length > 0;
+
     return {
       ...employee,
-      horarios: horarios || [],
+      tieneUsuarioActivo: Boolean(employee.tieneUsuarioActivo),
+      horarios,
+      asistencia: {
+        activa: tieneSedesConfiguradas,
+        ubicacionPrincipal: {
+          idSite: employee.idSite,
+          nombre: employee.Ubicacion,
+          tipoAsistencia: employee.tipoAsistenciaUbicacionPrincipal || null,
+        },
+        sedesAutorizadas: sedesAsignadas,
+        didsAutorizados,
+      },
     };
   }
 
@@ -460,6 +583,129 @@ export class EmployeesService {
       return {
         message: 'Horario laboral y modalidad actualizados correctamente',
         idEmpleado: employeeId,
+      };
+    });
+  }
+
+  // Endpoint para obtener las sedes con asistencia configurada
+  async getLocationsForAttendance(companyId: number, user: ActiveUserDto) {
+    return this.prisma.catSites.findMany({
+      where: {
+        idEmpresa: companyId,
+        idTenant: user.idTenant,
+        Activo: true,
+        TipoAsistencia: { not: null }, // Solo sedes con asistencia configurada
+      },
+      select: {
+        idSite: true,
+        Descripcion: true,
+        TipoAsistencia: true,
+        EsPrincipal: true,
+        CatSitesDids: {
+          where: { Activo: true },
+          select: { idSiteDid: true, Did: true, Descripcion: true },
+        },
+      },
+      orderBy: { Descripcion: 'asc' },
+    });
+  }
+
+  // Actualización de configuración de sedes y excepciones de DIDs
+  async updateAttendanceConfig(
+    user: ActiveUserDto,
+    companyId: number,
+    employeeId: number,
+    dto: UpdateAttendanceConfigDto,
+  ) {
+    if (!user.idTenant) {
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+
+    const employeeExists = await this.prisma.empleados.findFirst({
+      where: {
+        idEmpleado: employeeId,
+        idEmpresa: companyId,
+        idTenant: user.idTenant,
+      },
+    });
+    if (!employeeExists) {
+      throw new NotFoundException('El empleado especificado no existe para esta empresa.');
+    }
+
+    const sedes = dto.sedes || [];
+    const excepcionesDids = dto.excepcionesDids || [];
+    const selectedSiteIds = sedes.map((s) => s.idSite);
+
+    return this.prisma.$transaction(async (tx: any) => {
+      const relSitesModel = tx.relEmpleadosSites || tx.RelEmpleadosSites;
+      const relExcepcionesModel = tx.relEmpleadosDidsExcepciones || tx.RelEmpleadosDidsExcepciones;
+
+      // 1. Eliminar sedes que fueron desmarcadas
+      await relSitesModel.deleteMany({
+        where: {
+          idEmpleado: employeeId,
+          idEmpresa: companyId,
+          idSite: { notIn: selectedSiteIds },
+        },
+      });
+
+      // 2. Insertar o actualizar sedes seleccionadas
+      for (const sede of sedes) {
+        const existing = await relSitesModel.findFirst({
+          where: {
+            idEmpleado: employeeId,
+            idSite: sede.idSite,
+          },
+        });
+
+        if (existing) {
+          await relSitesModel.update({
+            where: { idEmpleadoSite: existing.idEmpleadoSite },
+            data: {
+              MetodoAsistencia: sede.metodoAsistencia || null,
+              Activo: true,
+            },
+          });
+        } else {
+          await relSitesModel.create({
+            data: {
+              idTenant: user.idTenant,
+              idEmpresa: companyId,
+              idEmpleado: employeeId,
+              idSite: sede.idSite,
+              MetodoAsistencia: sede.metodoAsistencia || null,
+              Activo: true,
+              FechaAsignacion: new Date(),
+            },
+          });
+        }
+      }
+
+      // 3. Sincronizar excepciones de DIDs (recreación limpia)
+      await relExcepcionesModel.deleteMany({
+        where: {
+          idEmpleado: employeeId,
+          idEmpresa: companyId,
+        },
+      });
+
+      if (excepcionesDids.length > 0) {
+        await relExcepcionesModel.createMany({
+          data: excepcionesDids.map((exc) => ({
+            idTenant: user.idTenant,
+            idEmpresa: companyId,
+            idEmpleado: employeeId,
+            Did: exc.did.trim(),
+            TipoExcepcion: exc.tipoExcepcion, // 'BLOQUEADO' | 'EXTRA'
+            Activo: true, // La regla de excepción se guarda activa
+            FechaRegistro: new Date(),
+          })),
+        });
+      }
+
+      return {
+        success: true,
+        message: 'Configuración de asistencia actualizada correctamente',
       };
     });
   }

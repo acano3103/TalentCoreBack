@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe, Put } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -7,12 +7,22 @@ import { SaveSalaryDto } from './dto/save-salary.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
+import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) { }
+
+  // Endpoint que obtiene a todos los empleados de la empresa
+  @Get()
+  @ApiOperation({ summary: 'Get all employees enriched', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  findAll(@Param('companyId', ParseIntPipe) companyId: number) {
+    return this.employeesService.findAll(companyId);
+  }
 
   // Endpoint que obtiene a todos los empleados que ya tienen su expediente completo
   @Get('/hired')
@@ -42,6 +52,18 @@ export class EmployeesController {
     return this.employeesService.findOne(companyId, employeeId);
   }
 
+  // Endpoint que obtiene las sedes para asistencia
+  @Get('/attendance/locations')
+  @ApiOperation({ summary: 'Get all locations for attendance', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Locations retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  getLocationsForAttendance(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.employeesService.getLocationsForAttendance(companyId, activeUser);
+  }
+
   // Endpoint que sincroniza los empleados pendientes de la empresa con artemis
   @Post('sync/artemis')
   @ApiOperation({ summary: 'Sync all pending employees to Artemis', description: SWAGGER_AUTH_DESCRIPTION })
@@ -68,14 +90,6 @@ export class EmployeesController {
     return this.employeesService.saveSalary(activeUser, companyId, employeeId, salaryData);
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Get all employees enriched', description: SWAGGER_AUTH_DESCRIPTION })
-  @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-  findAll(@Param('companyId', ParseIntPipe) companyId: number) {
-    return this.employeesService.findAll(companyId);
-  }
-
   // Endpoint para actualizar el horario laboral y modalidad del empleado
   @Patch('/:employeeId/schedule')
   @ApiOperation({ summary: 'Update employee work schedule and modality', description: SWAGGER_AUTH_DESCRIPTION })
@@ -89,5 +103,19 @@ export class EmployeesController {
     @GetActiveUser() activeUser: ActiveUserDto,
   ) {
     return this.employeesService.updateSchedule(activeUser, companyId, employeeId, scheduleData);
+  }
+
+  @Put(':employeeId/attendance-config')
+  @ApiOperation({ summary: 'Actualizar sedes autorizadas y excepciones de DIDs del empleado', description: 'Sincroniza las sedes donde el empleado puede pasar lista y los números telefónicos habilitados para IVR' })
+  @ApiResponse({ status: 200, description: 'Configuración de asistencia actualizada exitosamente' })
+  @ApiResponse({ status: 400, description: 'Bad Request: Datos de entrada inválidos' })
+  @ApiResponse({ status: 404, description: 'Empleado o empresa no encontrados' })
+  async updateAttendanceConfig(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() dto: UpdateAttendanceConfigDto,
+  ) {
+    return this.employeesService.updateAttendanceConfig(activeUser, companyId, employeeId, dto);
   }
 }

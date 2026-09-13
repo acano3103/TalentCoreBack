@@ -9,24 +9,64 @@ export class IvrService {
     constructor(private readonly prisma: PrismaService) { }
 
     async verifyEmployee(dto: VerifyEmployeeIvrDto) {
-        if (!dto.employeeNumber.trim()) throw new BadRequestException('El número de empleado no es válido');
+        const cleanEmployeeNumber = dto.employeeNumber ? String(dto.employeeNumber).trim() : '';
+        if (!cleanEmployeeNumber) {
+            throw new BadRequestException('El número de empleado no es válido');
+        }
 
         const employee = await this.prisma.empleados.findFirst({
             where: {
-                numeroEmpleado: dto.employeeNumber,
+                numeroEmpleado: cleanEmployeeNumber,
                 activo: true,
-            }
-        })
-        if (!employee) throw new BadRequestException(`No se encontró un empleado activo con el número ${dto.employeeNumber}`);
+            },
+        });
+
+        if (!employee) {
+            throw new BadRequestException(`No se encontró un empleado activo con el número ${cleanEmployeeNumber}`);
+        }
 
         const fullName = `${employee.nombre ?? ''} ${employee.primerApellido ?? ''} ${employee.segundoApellido ?? ''}`.trim();
 
+        // Consulta de DIDs activos según sedes autorizadas para IVR y excepciones (bloqueados y extras)
+        const activeDidsResult = await this.prisma.$queryRaw<{ Did: string }[]>`
+            SELECT DISTINCT d.Did
+            FROM (
+                -- 1. DIDs de catálogo pertenecientes a las sedes asignadas con IVR
+                SELECT sd.Did
+                FROM RelEmpleadosSites res
+                JOIN CatSites s ON s.idSite = res.idSite
+                JOIN CatSitesDids sd ON sd.idSite = s.idSite AND sd.Activo = 1
+                WHERE res.idEmpleado = ${employee.idEmpleado}
+                  AND res.Activo = 1
+                  AND (res.MetodoAsistencia = 'IVR' OR (res.MetodoAsistencia IS NULL AND s.TipoAsistencia = 'IVR'))
+
+                UNION ALL
+
+                -- 2. DIDs personalizados EXTRA asignados al colaborador
+                SELECT exc.Did
+                FROM RelEmpleadosDidsExcepciones exc
+                WHERE exc.idEmpleado = ${employee.idEmpleado}
+                  AND exc.TipoExcepcion = 'EXTRA'
+                  AND exc.Activo = 1
+            ) d
+            -- Descartar DIDs explícitamente bloqueados
+            WHERE d.Did NOT IN (
+                SELECT exc_b.Did
+                FROM RelEmpleadosDidsExcepciones exc_b
+                WHERE exc_b.idEmpleado = ${employee.idEmpleado}
+                  AND exc_b.TipoExcepcion = 'BLOQUEADO'
+                  AND exc_b.Activo = 1
+            )
+            ORDER BY d.Did ASC;
+        `;
+
+        const activeDids = activeDidsResult.map((item) => item.Did);
+
         return {
-            employeeId: employee.idEmpleado,
+            employeeNumber: employee.numeroEmpleado,
             fullName,
             birthDate: employee.fechaNacimiento,
-            activeDids: ["5586820555", "5586820554", "5510110814", "4777148724"]
-        }
+            activeDids,
+        };
     }
-
 }

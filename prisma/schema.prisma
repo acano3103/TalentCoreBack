@@ -335,32 +335,35 @@ model CatPuestos {
 }
 
 model CatSites {
-  idSite                Int                     @id @default(autoincrement())
-  idTenant              Int                     @default(0)
+  idSite                Int                      @id @default(autoincrement())
+  idTenant              Int                      @default(0)
   idEmpresa             Int?
   idUnidadOperativa     Int?
-  idTipoUbicacion       Int                     @default(1)
-  Descripcion           String?                 @db.VarChar(200)
-  EsPrincipal           Boolean?                @default(false)
-  Calle                 String?                 @db.VarChar(250)
-  NoExterior            String?                 @db.VarChar(50)
-  NoInterior            String?                 @db.VarChar(50)
-  Colonia               String?                 @db.VarChar(150)
-  MunicipioDelegacion   String?                 @db.VarChar(150)
-  Estado                String?                 @db.VarChar(150)
-  CodigoPostal          String?                 @db.VarChar(10)
-  Pais                  String?                 @default("México") @db.VarChar(100)
-  Latitud               Decimal?                @db.Decimal(10, 8)
-  Longitud              Decimal?                @db.Decimal(11, 8)
+  idTipoUbicacion       Int                      @default(1)
+  Descripcion           String?                  @db.VarChar(200)
+  EsPrincipal           Boolean?                 @default(false)
+  Calle                 String?                  @db.VarChar(250)
+  NoExterior            String?                  @db.VarChar(50)
+  NoInterior            String?                  @db.VarChar(50)
+  Colonia               String?                  @db.VarChar(150)
+  MunicipioDelegacion   String?                  @db.VarChar(150)
+  Estado                String?                  @db.VarChar(150)
+  CodigoPostal          String?                  @db.VarChar(10)
+  Pais                  String?                  @default("México") @db.VarChar(100)
+  Latitud               Decimal?                 @db.Decimal(10, 8)
+  Longitud              Decimal?                 @db.Decimal(11, 8)
   idRegistroPatronal    Int?
-  ZonaFronteriza        Boolean?                @default(false)
-  Activo                Boolean?                @default(true)
-  FechaRegistro         DateTime?               @db.DateTime(0)
+  ZonaFronteriza        Boolean?                 @default(false)
+  Activo                Boolean?                 @default(true)
+  FechaRegistro         DateTime?                @db.DateTime(0)
+  TipoAsistencia        CatSites_TipoAsistencia?
   CatGeocercas          CatGeocercas[]
   CatPuestos            CatPuestos[]
-  CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
-  CatUnidadesOperativas CatUnidadesOperativas?  @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
+  CatTiposUbicacion     CatTiposUbicacion        @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
+  CatUnidadesOperativas CatUnidadesOperativas?   @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
+  CatSitesDids          CatSitesDids[]
   RelAreasUbicaciones   RelAreasUbicaciones[]
+  RelEmpleadosSites     RelEmpleadosSites[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
   RelUsuarioSite        RelUsuarioSite[]
   Vacantes              Vacantes[]
@@ -1881,6 +1884,59 @@ model RolePlays {
   @@index([idTenant], map: "idx_roleplays_idTenant")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatSitesDids {
+  idSiteDid         Int       @id @default(autoincrement())
+  idTenant          Int       @default(0)
+  idEmpresa         Int?
+  idSite            Int
+  Did               String    @db.VarChar(20)
+  Descripcion       String?   @db.VarChar(100)
+  Activo            Boolean   @default(true)
+  FechaRegistro     DateTime  @default(now()) @db.DateTime(0)
+  FechaModificacion DateTime? @db.DateTime(0)
+  CatSites          CatSites  @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_SitesDids_CatSites")
+
+  @@unique([idSite, Did], map: "UK_SitesDids_Site_Did")
+  @@index([idEmpresa], map: "FK_SitesDids_Empresa")
+  @@index([Did, Activo], map: "IDX_SitesDids_Did_Activo")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelEmpleadosDidsExcepciones {
+  idExcepcion   Int                                       @id @default(autoincrement())
+  idTenant      Int                                       @default(0)
+  idEmpresa     Int
+  idEmpleado    Int
+  Did           String                                    @db.VarChar(20)
+  TipoExcepcion RelEmpleadosDidsExcepciones_TipoExcepcion @default(BLOQUEADO)
+  Motivo        String?                                   @db.VarChar(150)
+  Activo        Boolean                                   @default(true)
+  FechaRegistro DateTime                                  @default(now()) @db.DateTime(0)
+
+  @@unique([idEmpleado, Did], map: "UK_EmpDidExcepcion")
+  @@index([idEmpresa], map: "FK_EmpDidExcepcion_Empresa")
+  @@index([idEmpleado, Did, TipoExcepcion, Activo], map: "IDX_EmpDidExcepcion_Lookup")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelEmpleadosSites {
+  idEmpleadoSite   Int                                @id @default(autoincrement())
+  idTenant         Int                                @default(0)
+  idEmpresa        Int
+  idEmpleado       Int
+  idSite           Int
+  EsPrincipal      Boolean                            @default(false)
+  Activo           Boolean                            @default(true)
+  FechaAsignacion  DateTime                           @default(now()) @db.DateTime(0)
+  MetodoAsistencia RelEmpleadosSites_MetodoAsistencia @default(IVR)
+  CatSites         CatSites                           @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_EmpSite_CatSites")
+
+  @@unique([idEmpleado, idSite], map: "UK_EmpSite_Empleado_Site")
+  @@index([idEmpresa], map: "IDX_EmpSite_Empresa")
+  @@index([idSite], map: "IDX_EmpSite_Site")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -1943,4 +1999,22 @@ enum PlanCarreraEstatus {
 enum CatGeocercas_Tipo {
   circle
   polygon
+}
+
+enum RelEmpleadosDidsExcepciones_TipoExcepcion {
+  BLOQUEADO
+  EXTRA
+}
+
+enum RelEmpleadosSites_MetodoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
+  CUALQUIERA
+}
+
+enum CatSites_TipoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
 }
