@@ -1497,6 +1497,7 @@ export class DigitalFilesService {
         curp: data.curp.toUpperCase().trim(),
         correo: data.correo,
         telefono: data.telefono,
+        numeroEmpleado: data.numeroEmpleado ? String(data.numeroEmpleado).trim() : null,
         idPuesto: Number(data.idPuesto),
         idUsuario: activeUser.uuid,
         idCampania: data.idCampania ? Number(data.idCampania) : null,

@@ -21,6 +21,7 @@ export async function generateEmployeeAndLink(
         curp: string,
         correo: string,
         telefono: string,
+        numeroEmpleado: string | null,
         idPuesto: number,
         idUsuario: string,
         idCampania: number | null,

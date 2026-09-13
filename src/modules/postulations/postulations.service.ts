@@ -313,6 +313,7 @@ export class PostulationsService {
             curp: postulation.curp,
             correo: postulation.correo,
             telefono: postulation.telefono,
+            numeroEmpleado: null,
             idPuesto: vacancy.idPuesto,
             idUsuario: user.uuid,
             idCampania: dto.campaignId || null,
