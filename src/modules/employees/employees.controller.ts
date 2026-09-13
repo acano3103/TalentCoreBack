@@ -6,6 +6,7 @@ import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { SaveSalaryDto } from './dto/save-salary.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -73,5 +74,20 @@ export class EmployeesController {
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   findAll(@Param('companyId', ParseIntPipe) companyId: number) {
     return this.employeesService.findAll(companyId);
+  }
+
+  // Endpoint para actualizar el horario laboral y modalidad del empleado
+  @Patch('/:employeeId/schedule')
+  @ApiOperation({ summary: 'Update employee work schedule and modality', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employee schedule updated successfully' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  updateSchedule(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() scheduleData: UpdateEmployeeScheduleDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return this.employeesService.updateSchedule(activeUser, companyId, employeeId, scheduleData);
   }
 }

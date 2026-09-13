@@ -5,6 +5,7 @@ import { SaveSalaryDto } from './dto/save-salary.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { Prisma } from 'generated/prisma/client';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
+import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 
 @Injectable()
 export class EmployeesService {
@@ -54,7 +55,9 @@ export class EmployeesService {
       jefe.idEmpleado as idJefeDirecto,
       jefe.nombre as nombreJefeDirecto,
       jefe.primerApellido as primerApellidoJefeDirecto,
-      jefe.segundoApellido as segundoApellidoJefeDirecto
+      jefe.segundoApellido as segundoApellidoJefeDirecto, 
+      ep.idModalidad as idModalidadHorario, 
+      cm.Descripcion as ModalidadHorario
     FROM Empleados ep
     JOIN CatPuestos p ON ep.idPuesto = p.idPuesto
     JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
@@ -66,6 +69,7 @@ export class EmployeesService {
     LEFT JOIN HistorialSalarios hs ON hs.idEmpleado = ep.idEmpleado AND hs.actual = true
     LEFT JOIN CatTiposMoneda tm ON tm.idTipoMoneda = hs.idTipoMoneda
     LEFT JOIN CatPeriodicidadesPago cpp ON cpp.idPeriodicidadPago = hs.idPeriodicidadPago
+    LEFT JOIN CatModalidad cm ON cm.idModalidad = ep.idModalidad
     WHERE ep.idEmpleado = ${employeeId}
       AND ep.idEmpresa = ${companyId}
       AND ep.activo = true;
@@ -76,7 +80,8 @@ export class EmployeesService {
       idHorario,
       DiaSemana,
       HoraEntrada,
-      HoraSalida
+      HoraSalida, 
+      Modalidad
     FROM HorariosEmpleado
     WHERE idEmpleado = ${employeeId}
     ORDER BY 
@@ -386,4 +391,63 @@ export class EmployeesService {
     return { message: 'Empleados sincronizados exitosamente.', synced: pendingEmployees.length };
   }
 
+  async updateSchedule(activeUser: ActiveUserDto, companyId: number, employeeId: number, dto: UpdateEmployeeScheduleDto,) {
+    // Validar existencia del empleado dentro de la empresa
+    const employee = await this.prisma.empleados.findFirst({
+      where: {
+        idEmpleado: employeeId,
+        idEmpresa: companyId,
+        idTenant: activeUser.idTenant,
+      },
+    });
+
+    if (!employee) {
+      throw new NotFoundException(`Empleado con ID ${employeeId} no fue encontrado en esta empresa`);
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      let idModalidad = dto.idModalidadHorario;
+      if (!idModalidad) {
+        const modalidadRecord = await tx.catModalidad.findFirst({
+          where: {
+            Descripcion: {
+              equals: dto.ModalidadHorario.trim(),
+            },
+          },
+        });
+        if (modalidadRecord) {
+          idModalidad = modalidadRecord.idModalidad;
+        }
+      }
+
+      await tx.empleados.update({
+        where: { idEmpleado: employeeId },
+        data: {
+          ...(idModalidad ? { idModalidad: idModalidad } : {}),
+        },
+      });
+
+      // Eliminamos los horarios anteriores del empleado y creamos la lista actualizada
+      await tx.horariosEmpleado.deleteMany({
+        where: { idEmpleado: employeeId },
+      });
+
+      if (dto.horarios && dto.horarios.length > 0) {
+        await tx.horariosEmpleado.createMany({
+          data: dto.horarios.map((h) => ({
+            idEmpleado: employeeId,
+            DiaSemana: h.DiaSemana,
+            HoraEntrada: new Date(h.HoraEntrada),
+            HoraSalida: new Date(h.HoraSalida),
+            Modalidad: h.Modalidad,
+          })),
+        })
+      }
+
+      return {
+        message: 'Horario laboral y modalidad actualizados correctamente',
+        idEmpleado: employeeId,
+      };
+    });
+  }
 }
