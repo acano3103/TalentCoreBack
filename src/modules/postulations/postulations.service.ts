@@ -59,7 +59,7 @@ export class PostulationsService {
 
       const nombrePostulante = `${cleanNombre}_${cleanApellido}`;
 
-      // 2. Rutas Físicas
+      // 2. Obtener Tenant de la Empresa
       const empresa = await this.prisma.catEmpresas.findUnique({
         where: { idEmpresa: companyId },
         select: { idTenant: true },
@@ -68,13 +68,27 @@ export class PostulationsService {
         throw new BadRequestException('La empresa no tiene un tenant asignado.');
       }
 
-      const rootPath = path.resolve(process.cwd(), 'media');
-      const relativePath = path.join('VACANTES', cleanNombrePuesto, nombrePostulante);
-      const targetFolder = await this.mediaPathService.getTenantPath(rootPath, empresa.idTenant, relativePath);
+      const tenant = await this.prisma.catTenants.findUnique({
+        where: { idTenant: empresa.idTenant },
+        select: { slug: true }
+      });
+      if (!tenant?.slug) {
+        throw new BadRequestException('No se encontró el tenant asignado.');
+      }
+
+      // 3. Resolución de Rutas Físicas mediante Variable de Entorno
+      const baseMediaFolder = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
+      const relativeSubPath = path.join('VACANTES', cleanNombrePuesto, nombrePostulante);
+      const targetFolder = path.join(baseMediaFolder, tenant.slug, relativeSubPath);
 
       // Validar el prefijo para destruir cualquier intento de Path Traversal
-      if (!targetFolder.startsWith(rootPath)) {
+      if (!targetFolder.startsWith(baseMediaFolder)) {
         throw new BadRequestException('Path Injection detected and blocked.');
+      }
+
+      // Aseguramos que la carpeta destino exista
+      if (!fs.existsSync(targetFolder)) {
+        fs.mkdirSync(targetFolder, { recursive: true });
       }
 
       // Lista blanca de extensiones para el CV (Solo PDF)
@@ -87,10 +101,14 @@ export class PostulationsService {
       const fileName = `CV_${uuidv4()}${extension}`;
       const physicalPath = path.join(targetFolder, fileName);
 
-      const tenant = await this.prisma.catTenants.findUnique({ where: { idTenant: empresa.idTenant }, select: { slug: true } });
-      const webPath = `/media/${tenant?.slug}/${path.join(relativePath, fileName).replace(/\\/g, '/')}`;
+      // Doble validación de seguridad sobre el archivo físico final
+      if (!physicalPath.startsWith(baseMediaFolder)) {
+        throw new BadRequestException('Path Injection detected and blocked.');
+      }
 
-      // Guardamos el archivo y registramos la ruta física por si necesitamos borrarlo en el catch
+      const webPath = `/media/${tenant.slug}/${path.join(relativeSubPath, fileName).replace(/\\/g, '/')}`;
+
+      // Guardamos el archivo físicamente
       fs.writeFileSync(physicalPath, file.buffer);
       physicalPathToDelete = physicalPath;
 
@@ -109,9 +127,8 @@ export class PostulationsService {
         }
       });
 
-      // 3. Transacción secuencial estricta solo para lo que escribe en la BD y depende entre sí
+      // 4. Transacción en base de datos
       const [postulation, log] = await this.prisma.$transaction(async (tx) => {
-        // Primero registramos la postulación para obtener su ID
         const newPostulation = await tx.postulaciones.create({
           data: {
             idEstatus: 1,
@@ -128,7 +145,6 @@ export class PostulationsService {
           }
         });
 
-        // Registramos el moviemiento en el historico
         const newLog = await tx.historicoMovimientos.create({
           data: {
             idUsuario: 1,
@@ -144,12 +160,11 @@ export class PostulationsService {
         return [newPostulation, newLog];
       });
 
-      // Si la empresa no tiene la IA configurada, forzamos un error para disparar el catch y borrar el CV recién subido
       if (!activeAiIntegration) {
         throw new BadRequestException('La empresa no cuenta con una integración de Inteligencia Artificial activa.');
       }
 
-      // 4. DISPARO ASÍNCRONO (Background Job)
+      // 5. Disparo asíncrono para análisis de IA
       const providerId = activeAiIntegration.providerId;
       this.integrationFactory.getProvider(providerId).then((aiProvider) => {
         return aiProvider.analyzeCV(
