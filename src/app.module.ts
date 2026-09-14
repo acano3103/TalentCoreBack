@@ -39,6 +39,7 @@ import { GeofencesModule } from './modules/geofences/geofences.module';
 import { MobileModule } from './modules/mobile/mobile.module';
 import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
 import { LegalWorkdayModule } from './modules/legal-workday/legal-workday.module';
+import { LogbookModule } from './modules/logbook/logbook.module';
 
 @Module({
   imports: [
@@ -88,7 +89,8 @@ import { LegalWorkdayModule } from './modules/legal-workday/legal-workday.module
     GeofencesModule,
     MobileModule,
     WorkShiftsModule,
-    LegalWorkdayModule
+    LegalWorkdayModule,
+    LogbookModule
   ],
   controllers: [],
   providers: [AreasService, GeofencesService],

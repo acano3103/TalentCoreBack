@@ -8,6 +8,8 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { MOBILE_SUBMODULES, MobileModule } from './modules/mobile/mobile.module';
 import { AttendanceModule } from './modules/integrations/providers/attendance/attendance.module';
+import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
+import { LogbookModule } from './modules/logbook/logbook.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -61,7 +63,7 @@ async function bootstrap() {
       },
       {
         name: 'Web App',
-        tags: ['Web Auth', 'Users', 'Reports', 'Companies'],
+        tags: ['Work Shifts', 'Logbook'],
       },
       {
         name: 'Integrations',
@@ -71,7 +73,7 @@ async function bootstrap() {
     .build();
 
   const mobileDocument = SwaggerModule.createDocument(app, mobileConfig, {
-    include: [MobileModule, ...MOBILE_SUBMODULES, AttendanceModule],
+    include: [MobileModule, ...MOBILE_SUBMODULES, AttendanceModule, WorkShiftsModule, LogbookModule],
   });
 
   // 3. Montar Scalar para la App Móvil
