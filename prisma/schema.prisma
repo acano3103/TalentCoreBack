@@ -1136,7 +1136,9 @@ model Empleados {
   auth_user                                         auth_user?            @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
   Expedientes                                       Expedientes[]
   HistorialSalarios                                 HistorialSalarios[]
+  JornadasEmpleado                                  JornadasEmpleado[]
   MovimientosInternos                               MovimientosInternos[]
+  RegistrosAsistencia                               RegistrosAsistencia[]
   Vacantes                                          Vacantes[]
   Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]            @relation("Vacantes_idReclutadorAsignadoToEmpleados")
 
@@ -1937,6 +1939,80 @@ model RelEmpleadosSites {
   @@index([idSite], map: "IDX_EmpSite_Site")
 }
 
+model JornadasEmpleado {
+  idJornada           Int                             @id @default(autoincrement())
+  idTenant            Int
+  idEmpresa           Int
+  idEmpleado          Int
+  fecha               DateTime                        @db.Date
+  horaEntradaTeorica  DateTime?                       @db.Time(0)
+  horaSalidaTeorica   DateTime?                       @db.Time(0)
+  horaEntradaReal     DateTime?                       @db.DateTime(0)
+  horaSalidaReal      DateTime?                       @db.DateTime(0)
+  minutosTrabajados   Int                             @default(0)
+  minutosRetardo      Int                             @default(0)
+  minutosExtraDobles  Int                             @default(0)
+  minutosExtraTriples Int                             @default(0)
+  estatusJornada      JornadasEmpleado_estatusJornada @default(ABIERTA)
+  revisada            Boolean                         @default(false)
+  fechaActualizacion  DateTime?                       @default(now()) @db.Timestamp(0)
+  Empleados           Empleados                       @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Jornadas_Empleados")
+  RegistrosAsistencia RegistrosAsistencia[]
+
+  @@unique([idEmpleado, fecha], map: "UK_Jornada_Empleado_Fecha")
+  @@index([idTenant, idEmpresa, fecha], map: "IDX_Jornadas_Tenant_Empresa_Fecha")
+}
+
+model RegistrosAsistencia {
+  idRegistro           BigInt                                   @id @default(autoincrement())
+  idTenant             Int
+  idEmpresa            Int
+  idEmpleado           Int
+  idJornada            Int?
+  canal                RegistrosAsistencia_canal
+  tipo                 RegistrosAsistencia_tipo
+  fechaHoraRegistro    DateTime                                 @db.DateTime(0)
+  fechaHoraRecepcion   DateTime                                 @default(now()) @db.DateTime(0)
+  esOffline            Boolean                                  @default(false)
+  latitud              Decimal?                                 @db.Decimal(10, 8)
+  longitud             Decimal?                                 @db.Decimal(11, 8)
+  resultadoGeocerca    RegistrosAsistencia_resultadoGeocerca    @default(NO_APLICA)
+  idSitioDetectado     Int?
+  idExternoArtemis     BigInt?                                  @unique(map: "UK_Idempotencia_Artemis")
+  idDispositivoArtemis Int?
+  nombreDispositivo    String?                                  @db.VarChar(150)
+  urlFoto              String?                                  @db.VarChar(500)
+  uuidCliente          String?                                  @unique(map: "UK_Idempotencia_Movil") @db.VarChar(64)
+  estatusProcesamiento RegistrosAsistencia_estatusProcesamiento @default(PENDIENTE)
+  Empleados            Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Registros_Empleados")
+  JornadasEmpleado     JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: NoAction, map: "FK_Registros_Jornadas")
+
+  @@index([idJornada], map: "FK_Registros_Jornadas")
+  @@index([idEmpleado, fechaHoraRegistro], map: "IDX_Registros_Empleado_Fecha")
+}
+
+model ConfiguracionJornadaLegal {
+  idConfiguracion    Int       @id @default(autoincrement())
+  idTenant           Int       @default(0)
+  idEmpresa          Int
+  codigoPais         String    @default("MEX") @db.VarChar(5)
+  anio               Int
+  horasSemana        Decimal   @db.Decimal(5, 2)
+  horasDia           Decimal   @default(8.00) @db.Decimal(5, 2)
+  extraSemanalMax    Decimal   @default(9.00) @db.Decimal(5, 2)
+  extraDiarioMax     Decimal   @default(3.00) @db.Decimal(5, 2)
+  diasConExtraMax    Int       @default(3)
+  factorDentro       Decimal   @default(2.00) @db.Decimal(4, 2)
+  factorFuera        Decimal   @default(3.00) @db.Decimal(4, 2)
+  primaDominical     Decimal   @default(0.25) @db.Decimal(4, 2)
+  activo             Boolean   @default(true)
+  fechaRegistro      DateTime? @default(now()) @db.Timestamp(0)
+  fechaActualizacion DateTime? @default(now()) @db.Timestamp(0)
+
+  @@unique([idEmpresa, anio], map: "UK_JornadaLegal_Empresa_Anio")
+  @@index([idTenant, codigoPais], map: "IDX_JornadaLegal_Tenant")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -2017,4 +2093,42 @@ enum CatSites_TipoAsistencia {
   IVR
   BIOMETRICO
   APP_MOVIL
+}
+
+enum RegistrosAsistencia_canal {
+  APP_MOVIL
+  IVR
+  BIOMETRICO
+  NFC
+  WEB_MANUAL
+}
+
+enum RegistrosAsistencia_tipo {
+  ENTRADA
+  SALIDA
+  INICIO_COMIDA
+  FIN_COMIDA
+}
+
+enum RegistrosAsistencia_resultadoGeocerca {
+  DENTRO
+  FUERA_PERMITIDA
+  FUERA_BLOQUEADA
+  NO_APLICA
+}
+
+enum JornadasEmpleado_estatusJornada {
+  ABIERTA
+  CERRADA
+  CIERRE_AUTOMATICO
+  INCOMPLETA
+  FALTA
+  DESCANSO
+}
+
+enum RegistrosAsistencia_estatusProcesamiento {
+  PENDIENTE
+  PROCESADO
+  DUPLICADO
+  RECHAZADO
 }

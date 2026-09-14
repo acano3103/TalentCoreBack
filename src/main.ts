@@ -52,7 +52,7 @@ async function bootstrap() {
         in: 'header',
         description: 'Token privado para la integración del conmutador telefónico IVR',
       },
-      'IVR-ApiKey',
+      'x-api-key',
     )
     .addExtension('x-tagGroups', [
       {
@@ -65,7 +65,7 @@ async function bootstrap() {
       },
       {
         name: 'Integrations',
-        tags: ['IVR Attendance'],
+        tags: ['IVR Attendance', 'Artemis Attendance'],
       },
     ])
     .build();
