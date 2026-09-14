@@ -40,6 +40,7 @@ import { MobileModule } from './modules/mobile/mobile.module';
 import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
 import { LegalWorkdayModule } from './modules/legal-workday/legal-workday.module';
 import { LogbookModule } from './modules/logbook/logbook.module';
+import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashboard/attendance-dashboard.module';
 
 @Module({
   imports: [
@@ -90,7 +91,8 @@ import { LogbookModule } from './modules/logbook/logbook.module';
     MobileModule,
     WorkShiftsModule,
     LegalWorkdayModule,
-    LogbookModule
+    LogbookModule,
+    AttendanceDashboardModule
   ],
   controllers: [],
   providers: [AreasService, GeofencesService],
