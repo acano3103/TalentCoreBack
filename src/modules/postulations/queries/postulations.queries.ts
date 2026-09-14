@@ -1,6 +1,8 @@
+import { BadRequestException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaClient } from "generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
+import { generateUniqueEmployeeNumber } from "../helpers/herlper";
 
 export class PostulationsQueries {
   static async getProfileEvaluationDetail(
@@ -48,6 +50,7 @@ export async function createEmployee(
     curp: string;
     correo: string;
     telefono: string;
+    numeroEmpleado: string | null;
     idPuesto: number;
     idUsuario: string;
     idCampania: number | null;
@@ -55,22 +58,47 @@ export async function createEmployee(
     idTenant: number;
     idJefeInmediato: number;
     idSite: number;
+    idModalidad: number;
   },
   prisma: PrismaClient
 ) {
-   const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, idPuesto, idUsuario, idCampania, idEmpresa, idTenant, idJefeInmediato, idSite } = data; 
+  const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, numeroEmpleado, idPuesto, idUsuario, idCampania, idEmpresa, idTenant, idJefeInmediato, idSite, idModalidad } = data;
 
   return await prisma.$transaction(async (tx) => {
+    let finalNumeroEmpleado = numeroEmpleado ? numeroEmpleado.trim() : null;
+
+    if (finalNumeroEmpleado) {
+      // Validar si el manual ya está en uso en el tenant
+      const duplicate = await tx.empleados.findFirst({
+        where: {
+          idTenant,
+          idEmpresa,
+          numeroEmpleado: finalNumeroEmpleado,
+        },
+        select: { idEmpleado: true },
+      });
+
+      if (duplicate) {
+        throw new BadRequestException(
+          `El número de empleado "${finalNumeroEmpleado}" ya está registrado en la empresa.`
+        );
+      }
+    } else {
+      // Generar número de 6 dígitos aleatorio no repetido
+      finalNumeroEmpleado = await generateUniqueEmployeeNumber(tx, idTenant, idEmpresa);
+    }
+
     await tx.$executeRaw`
       INSERT INTO Empleados (
-        idEmpresa, idTenant, idPuesto, idJefeInmediato, idSite, nombre, primerApellido, segundoApellido, idCampania,
-        curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro
+        idEmpresa, idTenant, idPuesto, idJefeInmediato, idSite, numeroEmpleado, nombre, primerApellido, segundoApellido, idCampania,
+        curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro, idModalidad
       ) VALUES (
         ${idEmpresa},
         ${idTenant},
         ${idPuesto},
         ${idJefeInmediato},
         ${idSite},
+        ${finalNumeroEmpleado},
         ${nombre},
         ${apellido1.trim()},
         ${apellido2.trim()},
@@ -79,7 +107,8 @@ export async function createEmployee(
         ${correo},
         ${telefono},
         NOW(),
-        ${idUsuario}
+        ${idUsuario},
+        ${idModalidad}
       );
     `;
 

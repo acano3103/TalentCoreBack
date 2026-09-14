@@ -5,7 +5,7 @@ import { IvrService } from './ivr.service';
 import { IvrApiKeyGuard } from './guards/ivr-api-key.guard';
 
 @ApiTags('IVR Attendance')
-@ApiSecurity('IVR-ApiKey')
+@ApiSecurity('x-api-key')
 @UseGuards(IvrApiKeyGuard)
 @Controller('integrations/attendance/ivr')
 export class IvrController {

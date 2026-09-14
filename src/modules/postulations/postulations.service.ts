@@ -59,13 +59,13 @@ export class PostulationsService {
 
       const nombrePostulante = `${cleanNombre}_${cleanApellido}`;
 
-      // 2. Rutas Físicas
+      // 2. Obtener Tenant de la Empresa
       const empresa = await this.prisma.catEmpresas.findUnique({
-          where: { idEmpresa: companyId },
-          select: { idTenant: true },
+        where: { idEmpresa: companyId },
+        select: { idTenant: true },
       });
       if (!empresa?.idTenant) {
-          throw new BadRequestException('La empresa no tiene un tenant asignado.');
+        throw new BadRequestException('La empresa no tiene un tenant asignado.');
       }
 
       const rootPath = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
@@ -74,18 +74,23 @@ export class PostulationsService {
 
       // Validar el prefijo para destruir cualquier intento de Path Traversal
       if (!targetFolder.startsWith(rootPath)) {
-          throw new BadRequestException('Path Injection detected and blocked.');
+        throw new BadRequestException('Path Injection detected and blocked.');
       }
 
       // Lista blanca de extensiones para el CV (Solo PDF)
       const extension = path.extname(file.originalname).toLowerCase();
       const allowedExtensions = ['.pdf'];
       if (!allowedExtensions.includes(extension)) {
-          throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
+        throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
       }
 
       const fileName = `CV_${uuidv4()}${extension}`;
       const physicalPath = path.join(targetFolder, fileName);
+
+      // Doble validación de seguridad sobre el archivo físico final
+      if (!physicalPath.startsWith(rootPath)) {
+        throw new BadRequestException('Path Injection detected and blocked.');
+      }
 
       const tenant = await this.prisma.catTenants.findUnique({ where: { idTenant: empresa.idTenant }, select: { slug: true } });
       const webPath = `/media/${tenant?.slug}/${path.join(relativePath, fileName).replace(/\\/g, '/')}`;
@@ -109,9 +114,8 @@ export class PostulationsService {
         }
       });
 
-      // 3. Transacción secuencial estricta solo para lo que escribe en la BD y depende entre sí
+      // 4. Transacción en base de datos
       const [postulation, log] = await this.prisma.$transaction(async (tx) => {
-        // Primero registramos la postulación para obtener su ID
         const newPostulation = await tx.postulaciones.create({
           data: {
             idEstatus: 1,
@@ -128,7 +132,6 @@ export class PostulationsService {
           }
         });
 
-        // Registramos el moviemiento en el historico
         const newLog = await tx.historicoMovimientos.create({
           data: {
             idUsuario: 1,
@@ -144,12 +147,11 @@ export class PostulationsService {
         return [newPostulation, newLog];
       });
 
-      // Si la empresa no tiene la IA configurada, forzamos un error para disparar el catch y borrar el CV recién subido
       if (!activeAiIntegration) {
         throw new BadRequestException('La empresa no cuenta con una integración de Inteligencia Artificial activa.');
       }
 
-      // 4. DISPARO ASÍNCRONO (Background Job)
+      // 5. Disparo asíncrono para análisis de IA
       const providerId = activeAiIntegration.providerId;
       this.integrationFactory.getProvider(providerId).then((aiProvider) => {
         return aiProvider.analyzeCV(
@@ -298,9 +300,9 @@ export class PostulationsService {
         });
         if (!vacancy) throw new NotFoundException('Vacante no encontrada');
 
-        if (!user.idTenant) {   
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
-    }
+        if (!user.idTenant) {
+          throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
 
         // Creamos el registro de empleado y el link para que pueda subir su info y documentación
         await generateEmployeeAndLink(
@@ -313,13 +315,15 @@ export class PostulationsService {
             curp: postulation.curp,
             correo: postulation.correo,
             telefono: postulation.telefono,
+            numeroEmpleado: null,
             idPuesto: vacancy.idPuesto,
             idUsuario: user.uuid,
             idCampania: dto.campaignId || null,
             idEmpresa: companyId,
-            idTenant: user.idTenant, 
+            idTenant: user.idTenant,
             idJefeInmediato: vacancy.idJefeInmediato,
-            idSite: vacancy.idSite
+            idSite: vacancy.idSite,
+            idModalidad: 1,
           },
           files ?? [],
           this.prisma,
