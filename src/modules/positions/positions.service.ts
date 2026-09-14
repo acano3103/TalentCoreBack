@@ -91,13 +91,22 @@ export class PositionsService {
         const position = await this.prisma.catPuestos.findFirst({
             where: { idTenant: activeUser.idTenant, idEmpresa: companyId, idPuesto: positionId },
         });
-        if (!position) throw new NotFoundException('El puesto no se encontro o no existe.');
+        if (!position) throw new NotFoundException('El puesto no se encontró o no existe.');
 
-        const horarios = await this.prisma.horariosPuesto.findMany({
-            where: { idPuesto: positionId },
-        });
+        // Ejecutamos ambas consultas en paralelo para optimizar tiempos
+        const [horarios, modalidades] = await Promise.all([
+            this.prisma.horariosPuesto.findMany({
+                where: { idPuesto: positionId },
+            }),
+            this.prisma.catModalidad.findMany({
+                where: { Activo: true },
+            }),
+        ]);
 
-        // Formateamos las horas a "HH:mm" (vienen como DateTime con fecha base 1970-01-01)
+        // Buscamos cuál modalidad le corresponde al puesto según su idModalidad
+        const modalidadPuesto = modalidades.find((m) => m.idModalidad === position.idModalidad);
+
+        // Formateamos las horas a "HH:mm"
         const formatearHora = (fecha: Date | null): string => {
             if (!fecha) return '';
             const d = new Date(fecha);
@@ -106,11 +115,25 @@ export class PositionsService {
             return `${horas}:${minutos}`;
         };
 
-        return horarios.map((h) => ({
+        const horariosList = horarios.map((h) => ({
             dia: h.DiaSemana,
             horaEntrada: formatearHora(h.HoraEntrada),
             horaSalida: formatearHora(h.HoraSalida),
         }));
+
+        return {
+            modalidadDefault: modalidadPuesto
+                ? {
+                    idModalidad: modalidadPuesto.idModalidad,
+                    descripcion: modalidadPuesto.Descripcion,
+                }
+                : null,
+            modalidades: modalidades.map((m) => ({
+                idModalidad: m.idModalidad,
+                descripcion: m.Descripcion,
+            })),
+            horariosList,
+        };
     }
 
     async getRequiredDocuments(activeUser: ActiveUserDto, companyId: number, positionId: number) {

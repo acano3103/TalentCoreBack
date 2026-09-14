@@ -7,6 +7,9 @@ import { apiReference } from '@scalar/nestjs-api-reference';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { MOBILE_SUBMODULES, MobileModule } from './modules/mobile/mobile.module';
+import { AttendanceModule } from './modules/integrations/providers/attendance/attendance.module';
+import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
+import { LogbookModule } from './modules/logbook/logbook.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -44,7 +47,15 @@ async function bootstrap() {
     .setDescription('Documentación interactiva de la plataforma')
     .setVersion('2.0')
     .addBearerAuth()
-    // Definimos la jerarquía del menú lateral
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'x-api-key',
+        in: 'header',
+        description: 'Token privado para la integración del conmutador telefónico IVR',
+      },
+      'x-api-key',
+    )
     .addExtension('x-tagGroups', [
       {
         name: 'Mobile App',
@@ -52,13 +63,17 @@ async function bootstrap() {
       },
       {
         name: 'Web App',
-        tags: ['Web Auth', 'Users', 'Reports', 'Companies'],
+        tags: ['Work Shifts', 'Logbook'],
+      },
+      {
+        name: 'Integrations',
+        tags: ['IVR Attendance', 'Artemis Attendance'],
       },
     ])
     .build();
 
   const mobileDocument = SwaggerModule.createDocument(app, mobileConfig, {
-    include: [MobileModule, ...MOBILE_SUBMODULES],
+    include: [MobileModule, ...MOBILE_SUBMODULES, AttendanceModule, WorkShiftsModule, LogbookModule],
   });
 
   // 3. Montar Scalar para la App Móvil

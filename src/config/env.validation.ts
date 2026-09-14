@@ -27,6 +27,7 @@ export const envValidationSchema = Joi.object({
     HUME_CONFIG_ID_INTERVIEW: Joi.string().required(),
     OPENAI_API_KEY: Joi.string().required(),
     MEDIA_PATH_PREFIX: Joi.string().default('media'),
+    MEDIA_ROOT_PATH: Joi.string().required(),
     NUBARIUM_BASE_URL: Joi.string().required(),
     NUBARIUM_USERNAME: Joi.string().required(),
     NUBARIUM_PASSWORD: Joi.string().required(),
@@ -50,4 +51,6 @@ export const envValidationSchema = Joi.object({
     GUPSHUP_BASE_URL: Joi.string().required(),
     GUPSHUP_SOURCE_PHONE: Joi.string().required(),
     GUPSHUP_APP_NAME: Joi.string().required(),
+    IVR_API_KEY: Joi.string().required(),
+    ARTEMIS_API_KEY: Joi.string().required(),
 });

@@ -233,8 +233,6 @@ export class VacanciesService {
     }
 
     async getVacancyPostulantsSummary(companyId: number, vacancyId: number) {
-        const CV_DEFAULT = "https://fileonline.datavoice.com.mx/RR-HH/media/GRUS990820HDFVRC07/documento_1_GRUS990820HDFVRC07.pdf";
-
         try {
             const rows = await VacanciesQueries.getVacancyPostulantsSummary(this.prisma, companyId, Number(vacancyId)) as any[];
 
@@ -259,21 +257,12 @@ export class VacanciesService {
                     });
                 }
 
-                let finalRutaCV = CV_DEFAULT;
-                if (p.rutaCV) {
-                    const rootPath = path.join(process.cwd());
-                    const rutaFisica = path.join(rootPath, p.rutaCV);
-                    if (fs.existsSync(rutaFisica)) {
-                        finalRutaCV = p.rutaCV.startsWith('http') ? p.rutaCV : `/${p.rutaCV}`;
-                    }
-                }
-
                 return {
                     ...p,
                     idPostulacion: typeof p.idPostulacion === 'bigint' ? Number(p.idPostulacion) : p.idPostulacion,
                     indices,
                     detalle_por_categoria: categorias,
-                    rutaCV: finalRutaCV,
+                    rutaCV: p.rutaCV,
                     semaforo_global: getScoreTrafficLight(Number(p.score_global)),
                 };
             });

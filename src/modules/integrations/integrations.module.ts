@@ -13,9 +13,11 @@ import { ArtemisController } from './providers/workforce-management/artemis/arte
 import { ArtemisService } from './providers/workforce-management/artemis/artemis.service';
 import { ArtemisMapper } from './providers/workforce-management/artemis/artemis.mapper';
 import { ArtemisProvider } from './providers/workforce-management/artemis/artemis.provider';
+import { MediaPathModule } from 'src/common/services/media-path.module';
+import { AttendanceModule } from './providers/attendance/attendance.module';
 
 @Module({
-    imports: [HttpModule],
+    imports: [HttpModule, MediaPathModule, AttendanceModule],
     controllers: [IntegrationsController, HumeController, ArtemisController],
     providers: [
         IntegrationsService,
@@ -27,7 +29,7 @@ import { ArtemisProvider } from './providers/workforce-management/artemis/artemi
         HumeService,
         ArtemisService,
         ArtemisMapper,
-        ArtemisProvider
+        ArtemisProvider,
     ],
     exports: [IntegrationsService, HumeService, IntegrationsFactory, ArtemisService],
 })

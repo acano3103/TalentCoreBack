@@ -14,6 +14,8 @@ import { calculatePercentage } from '../vacancies/utils/formatters.util';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { MediaPathService } from 'src/common/services/media-path.service';
+
 
 @Injectable()
 export class PostulationsService {
@@ -23,6 +25,7 @@ export class PostulationsService {
     private readonly integrationFactory: IntegrationsFactory,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
+    private readonly mediaPathService: MediaPathService
   ) { }
 
   private readonly logger = new Logger(PostulationsService.name);
@@ -56,14 +59,36 @@ export class PostulationsService {
 
       const nombrePostulante = `${cleanNombre}_${cleanApellido}`;
 
-      // 2. Rutas Físicas
-      const rootPath = path.resolve(process.cwd(), 'media');
-      const relativePath = path.join('VACANTES', cleanNombrePuesto, nombrePostulante);
-      const targetFolder = path.join(rootPath, relativePath);
+      // 2. Obtener Tenant de la Empresa
+      const empresa = await this.prisma.catEmpresas.findUnique({
+        where: { idEmpresa: companyId },
+        select: { idTenant: true },
+      });
+      if (!empresa?.idTenant) {
+        throw new BadRequestException('La empresa no tiene un tenant asignado.');
+      }
+
+      const tenant = await this.prisma.catTenants.findUnique({
+        where: { idTenant: empresa.idTenant },
+        select: { slug: true }
+      });
+      if (!tenant?.slug) {
+        throw new BadRequestException('No se encontró el tenant asignado.');
+      }
+
+      // 3. Resolución de Rutas Físicas mediante Variable de Entorno
+      const baseMediaFolder = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
+      const relativeSubPath = path.join('VACANTES', cleanNombrePuesto, nombrePostulante);
+      const targetFolder = path.join(baseMediaFolder, tenant.slug, relativeSubPath);
 
       // Validar el prefijo para destruir cualquier intento de Path Traversal
-      if (!targetFolder.startsWith(rootPath)) {
+      if (!targetFolder.startsWith(baseMediaFolder)) {
         throw new BadRequestException('Path Injection detected and blocked.');
+      }
+
+      // Aseguramos que la carpeta destino exista
+      if (!fs.existsSync(targetFolder)) {
+        fs.mkdirSync(targetFolder, { recursive: true });
       }
 
       // Lista blanca de extensiones para el CV (Solo PDF)
@@ -73,15 +98,17 @@ export class PostulationsService {
         throw new BadRequestException('Formato de archivo no permitido. Solo se acepta PDF.');
       }
 
-      if (!fs.existsSync(targetFolder)) {
-        fs.mkdirSync(targetFolder, { recursive: true });
-      }
-
       const fileName = `CV_${uuidv4()}${extension}`;
       const physicalPath = path.join(targetFolder, fileName);
-      const webPath = `/media/${path.join(relativePath, fileName).replace(/\\/g, '/')}`;
 
-      // Guardamos el archivo y registramos la ruta física por si necesitamos borrarlo en el catch
+      // Doble validación de seguridad sobre el archivo físico final
+      if (!physicalPath.startsWith(baseMediaFolder)) {
+        throw new BadRequestException('Path Injection detected and blocked.');
+      }
+
+      const webPath = `/media/${tenant.slug}/${path.join(relativeSubPath, fileName).replace(/\\/g, '/')}`;
+
+      // Guardamos el archivo físicamente
       fs.writeFileSync(physicalPath, file.buffer);
       physicalPathToDelete = physicalPath;
 
@@ -100,9 +127,8 @@ export class PostulationsService {
         }
       });
 
-      // 3. Transacción secuencial estricta solo para lo que escribe en la BD y depende entre sí
+      // 4. Transacción en base de datos
       const [postulation, log] = await this.prisma.$transaction(async (tx) => {
-        // Primero registramos la postulación para obtener su ID
         const newPostulation = await tx.postulaciones.create({
           data: {
             idEstatus: 1,
@@ -119,7 +145,6 @@ export class PostulationsService {
           }
         });
 
-        // Registramos el moviemiento en el historico
         const newLog = await tx.historicoMovimientos.create({
           data: {
             idUsuario: 1,
@@ -135,12 +160,11 @@ export class PostulationsService {
         return [newPostulation, newLog];
       });
 
-      // Si la empresa no tiene la IA configurada, forzamos un error para disparar el catch y borrar el CV recién subido
       if (!activeAiIntegration) {
         throw new BadRequestException('La empresa no cuenta con una integración de Inteligencia Artificial activa.');
       }
 
-      // 4. DISPARO ASÍNCRONO (Background Job)
+      // 5. Disparo asíncrono para análisis de IA
       const providerId = activeAiIntegration.providerId;
       this.integrationFactory.getProvider(providerId).then((aiProvider) => {
         return aiProvider.analyzeCV(
@@ -289,9 +313,9 @@ export class PostulationsService {
         });
         if (!vacancy) throw new NotFoundException('Vacante no encontrada');
 
-        if (!user.idTenant) {   
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
-    }
+        if (!user.idTenant) {
+          throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
 
         // Creamos el registro de empleado y el link para que pueda subir su info y documentación
         await generateEmployeeAndLink(
@@ -304,13 +328,15 @@ export class PostulationsService {
             curp: postulation.curp,
             correo: postulation.correo,
             telefono: postulation.telefono,
+            numeroEmpleado: null,
             idPuesto: vacancy.idPuesto,
             idUsuario: user.uuid,
             idCampania: dto.campaignId || null,
             idEmpresa: companyId,
-            idTenant: user.idTenant, 
+            idTenant: user.idTenant,
             idJefeInmediato: vacancy.idJefeInmediato,
-            idSite: vacancy.idSite
+            idSite: vacancy.idSite,
+            idModalidad: 1,
           },
           files ?? [],
           this.prisma,

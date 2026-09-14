@@ -10,8 +10,10 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { lastValueFrom } from 'rxjs';
 import { HumeEviConfigBody } from './interfaces/hume.interface';
-import { saveFileLocal } from 'src/common/utils/file-storage.util';
 import { analyzeInterviewWithOpenAI } from 'src/common/utils/openai-eval.util';
+import { MediaPathService } from 'src/common/services/media-path.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class HumeService {
@@ -21,6 +23,7 @@ export class HumeService {
         private readonly httpService: HttpService,
         private readonly configService: ConfigService,
         private readonly prisma: PrismaService,
+        private readonly mediaPathService: MediaPathService,
     ) { }
 
     async getHumeSession(interviewId: string) {
@@ -128,14 +131,38 @@ export class HumeService {
         }
     }
 
-    async processHumeAnalysis(interviewId: string, video?: Express.Multer.File, historyRaw?: string, emotionsRaw?: string) {
+async processHumeAnalysis(interviewId: string, video?: Express.Multer.File, historyRaw?: string, emotionsRaw?: string) {
         try {
             const interview = await this.prisma.entrevistasPostulantes.findUnique({ where: { id: interviewId } });
             if (!interview) throw new NotFoundException('Entrevista no encontrada');
             if (interview.status_id !== 1) throw new BadRequestException('La entrevista ya se ha realizado o cancelado');
 
+            
+            const mainInterview = await this.prisma.entrevistas.findFirst({
+                where: { id: interview.interview_id },
+                include: { EntrevistasCriterios: true }
+            });
+            if (!mainInterview || !mainInterview.agent_id || !mainInterview.idVacante) throw new NotFoundException('Entrevista de catalogo no encontrada');
+            const agent = await this.prisma.agentes.findFirst({ where: { id: mainInterview.agent_id } });
+            if (!agent || !agent.script) throw new NotFoundException('Agente no encontrado');
+            const vacancy = await this.prisma.vacantes.findFirst({ where: { idVacante: mainInterview.idVacante } });
+            if (!vacancy) throw new NotFoundException('Vacante no encontrada');
+            if (!vacancy.idTenant) throw new BadRequestException('La vacante no tiene un tenant asignado');
+
             let videoUrl = '';
-            if (video) videoUrl = await saveFileLocal(video, 'recordings', `${interviewId}-video.webm`);
+            if (video) {
+                const baseMediaFolder = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
+                const absoluteFolder = await this.mediaPathService.getTenantPath(baseMediaFolder, vacancy.idTenant, 'recordings');
+                const videoFileName = `${interviewId}-video.webm`;
+                const absolutePath = path.join(absoluteFolder, videoFileName);
+
+                if (!absolutePath.startsWith(baseMediaFolder)) throw new BadRequestException('Path Injection is not allowed.');
+
+                fs.writeFileSync(absolutePath, video.buffer);
+
+                const tenant = await this.prisma.catTenants.findUnique({ where: { idTenant: vacancy.idTenant }, select: { slug: true } });
+                videoUrl = `/media/${tenant?.slug}/recordings/${videoFileName}`;
+            }
 
             const parsedHistory = historyRaw ? JSON.parse(historyRaw) : [];
             const parsedEmotions = emotionsRaw ? JSON.parse(emotionsRaw) : [];
@@ -144,18 +171,9 @@ export class HumeService {
                 .map(msg => `${msg.role === 'user' ? 'Candidato' : 'Entrevistador'}: ${msg.content}`)
                 .join('\n');
 
-            const mainInterview = await this.prisma.entrevistas.findFirst({
-                where: { id: interview.interview_id },
-                include: { EntrevistasCriterios: true }
-            })
-            if (!mainInterview || !mainInterview.agent_id || !mainInterview.idVacante) throw new NotFoundException('Entrevista de catalogo no encontrada');
-            const agent = await this.prisma.agentes.findFirst({ where: { id: mainInterview.agent_id } })
-            if (!agent || !agent.script) throw new NotFoundException('Agente no encontrado');
-            const vacancy = await this.prisma.vacantes.findFirst({ where: { idVacante: mainInterview.idVacante } })
-            if (!vacancy) throw new NotFoundException('Vacante no encontrada');
-            const position = await this.prisma.catPuestos.findFirst({ where: { idPuesto: vacancy.idPuesto } })
+            const position = await this.prisma.catPuestos.findFirst({ where: { idPuesto: vacancy.idPuesto } });
             if (!position) throw new NotFoundException('Puesto no encontrado');
-            const requirements = await this.prisma.competenciasPuesto.findMany({ where: { idPuesto: vacancy.idPuesto } })
+            const requirements = await this.prisma.competenciasPuesto.findMany({ where: { idPuesto: vacancy.idPuesto } });
 
             const evaluation = await analyzeInterviewWithOpenAI(
                 this.configService.get<string>('OPENAI_API_KEY')!,
@@ -169,6 +187,7 @@ export class HumeService {
                 transcription,
                 parsedHistory
             );
+
 
             return await this.prisma.$transaction(async (tx) => {
                 await tx.entrevistasPostulantes.update({

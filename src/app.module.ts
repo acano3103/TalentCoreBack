@@ -38,6 +38,9 @@ import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { GeofencesService } from './modules/geofences/geofences.service';
 import { GeofencesModule } from './modules/geofences/geofences.module';
 import { MobileModule } from './modules/mobile/mobile.module';
+import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
+import { LegalWorkdayModule } from './modules/legal-workday/legal-workday.module';
+import { LogbookModule } from './modules/logbook/logbook.module';
 
 @Module({
   imports: [
@@ -46,13 +49,13 @@ import { MobileModule } from './modules/mobile/mobile.module';
       validationSchema: envValidationSchema,
     }),
     ScheduleModule.forRoot(),
-   ServeStaticModule.forRoot(
+  ServeStaticModule.forRoot(
   {
     rootPath: join(process.cwd(), 'public'),
     serveRoot: '/public',
   },
   {
-    rootPath: join(process.cwd(), 'media'),
+    rootPath: process.env.MEDIA_ROOT_PATH || join(process.cwd(), 'media'),
     serveRoot: '/media',
   }
 ),
@@ -86,7 +89,10 @@ import { MobileModule } from './modules/mobile/mobile.module';
     ConfigurationModule,
     SuperAdminModule,
     GeofencesModule,
-    MobileModule
+    MobileModule,
+    WorkShiftsModule,
+    LegalWorkdayModule,
+    LogbookModule
   ],
   controllers: [],
   providers: [AreasService, GeofencesService],

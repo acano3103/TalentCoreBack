@@ -2,10 +2,16 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException,
 import { createReadStream, existsSync, statSync } from 'fs'; // 1. Importa statSync aquí
 import { resolve, join, extname } from 'path';
 import { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MediaService {
-    private readonly ALLOWED_ROOT = resolve(join(process.cwd(), 'media'));
+    private readonly ALLOWED_ROOT: string;
+
+    constructor(private readonly configService: ConfigService) {
+        const mediaRootPath = this.configService.get<string>('MEDIA_ROOT_PATH');
+        this.ALLOWED_ROOT = resolve(mediaRootPath || join(process.cwd(), 'media'));
+    }
 
     async getPrivateFileGeneric(fileRelativePath: string, res: Response): Promise<StreamableFile> {
         if (!fileRelativePath) {
@@ -30,7 +36,7 @@ export class MediaService {
         // 3. Cabeceras estándar para streaming de archivos binarios seguros
         res.set({
             'Content-Type': contentType,
-            'Content-Length': fileStat.size, // 🚀 CRÍTICO: Indica al navegador cuántos bytes procesar
+            'Content-Length': fileStat.size, 
             'Content-Disposition': `inline; filename="${fileName}"`,
             'Accept-Ranges': 'bytes', // Permite scroll rápido y navegación por páginas en PDFs largos
             'Cache-Control': 'no-store, no-cache, must-revalidate, private', // Evita fugas de caché en local

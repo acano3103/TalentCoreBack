@@ -61,16 +61,23 @@ export class UsersQueries {
         `;
   }
 
-  static async findAllPaginated(prisma: PrismaService, idTenant: number, limit: number, offset: number, search?: string): Promise<AuthUserRow[]> {
+  static async findAllPaginated(
+    prisma: PrismaService,
+    idTenant: number,
+    limit: number,
+    offset: number,
+    search?: string,
+  ): Promise<AuthUserRow[]> {
     const searchFilter = search
-      ? Prisma.sql`WHERE 
+      ? Prisma.sql`AND (
           u.username LIKE ${`%${search}%`} OR 
           u.first_name LIKE ${`%${search}%`} OR 
           u.last_name LIKE ${`%${search}%`} OR 
-          u.email LIKE ${`%${search}%`}`
+          u.email LIKE ${`%${search}%`}
+        )`
       : Prisma.empty;
 
-    return prisma.$queryRaw<AuthUserRow[]>`
+    const rows = await prisma.$queryRaw<any[]>`
       SELECT
         u.id, u.uuid, u.username, u.first_name, u.last_name,
         u.email, u.phone, u.is_superuser, u.is_staff, u.is_active,
@@ -87,15 +94,29 @@ export class UsersQueries {
       ORDER BY u.id ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
+
+    return rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
+      idRol: row.idRol ? Number(row.idRol) : null,
+      is_superuser: Boolean(row.is_superuser),
+      is_staff: Boolean(row.is_staff),
+      is_active: Boolean(row.is_active),
+    }));
   }
 
-  static async countAll(prisma: PrismaService, idTenant: number, search?: string): Promise<number> {
+  static async countAll(
+    prisma: PrismaService,
+    idTenant: number,
+    search?: string,
+  ): Promise<number> {
     const searchFilter = search
-      ? Prisma.sql`WHERE 
+      ? Prisma.sql`AND (
           u.username LIKE ${`%${search}%`} OR 
           u.first_name LIKE ${`%${search}%`} OR 
           u.last_name LIKE ${`%${search}%`} OR 
-          u.email LIKE ${`%${search}%`}`
+          u.email LIKE ${`%${search}%`}
+        )`
       : Prisma.empty;
 
     const countResult = await prisma.$queryRaw<{ count: bigint }[]>`

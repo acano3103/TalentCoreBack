@@ -99,19 +99,17 @@ export class InterviewsController {
         return this.interviewsService.findAllByPostulant(activeUser, companyId, postulantId);
     }
 
-    // Endpoint para obtener el detalle de una entrevista programada específica
-    @UseGuards(JwtAuthGuard)
+    // Endpoint para obtener el detalle de una entrevista programada específica (Link publico)
     @Get('/meetings/:meetingId')
     @ApiOperation({ summary: 'Get meeting detail', description: 'Get meeting detail' })
     @ApiResponse({ status: 200, description: 'Meeting detail' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     @ApiResponse({ status: 404, description: 'No meeting found for this meeting ID' })
     getMeetingDetail(
-        @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('meetingId') meetingId: string
     ) {
-        return this.interviewsService.getMeetingDetail(activeUser, companyId, meetingId);
+        return this.interviewsService.getMeetingDetail(companyId, meetingId);
     }
 
     // Endpoint para obtener todas las entrevistas programadas por id de entrevista catalogo

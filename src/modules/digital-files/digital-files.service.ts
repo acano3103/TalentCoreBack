@@ -13,11 +13,12 @@ import { NotificationDispatcher } from 'src/modules/notifications/notification.d
 import { Cron } from '@nestjs/schedule';
 import { generateEmployeeAndLink } from '../postulations/services/credentials.service';
 import JSZip = require('jszip');
+import { MediaPathService } from 'src/common/services/media-path.service';
 
 @Injectable()
 export class DigitalFilesService {
   private readonly logger = new Logger(DigitalFilesService.name);
-  private readonly mediaRoot = path.join(process.cwd(), 'media');
+  private readonly mediaRoot: string;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -25,16 +26,19 @@ export class DigitalFilesService {
     private readonly nubariumService: NubariumService,
     private readonly configService: ConfigService,
     private readonly notifications: NotificationDispatcher,
-  ) { }
+    private readonly mediaPathService: MediaPathService
+  ) {
+    this.mediaRoot = this.configService.get<string>('MEDIA_ROOT_PATH')!;
+  }
 
-  async listExpedientes(companyId: number, page: number, limit: number, search: string, user: ActiveUserDto) {   
+  async listExpedientes(companyId: number, page: number, limit: number, search: string, user: ActiveUserDto) {
     if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
 
     const where = {
       idEmpresa: companyId,
-      idTenant: user.idTenant,  
+      idTenant: user.idTenant,
       activo: true,
       ...(search
         ? {
@@ -87,9 +91,9 @@ export class DigitalFilesService {
     };
   }
 
-  async getExpediente(companyId: number, employeeId: number, user: ActiveUserDto) {   
+  async getExpediente(companyId: number, employeeId: number, user: ActiveUserDto) {
     if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
 
     const empleado = await this.prisma.empleados.findUnique({
@@ -100,8 +104,8 @@ export class DigitalFilesService {
     if (!empleado) {
       throw new NotFoundException('Empleado no encontrado');
     }
-     if (empleado.idEmpresa !== null && empleado.idEmpresa !== companyId) {
-     throw new ForbiddenException('El empleado no pertenece a esta empresa');
+    if (empleado.idEmpresa !== null && empleado.idEmpresa !== companyId) {
+      throw new ForbiddenException('El empleado no pertenece a esta empresa');
     }
     if (empleado.idTenant !== null && empleado.idTenant !== user.idTenant) {
       throw new ForbiddenException('El empleado no pertenece a esta empresa');
@@ -109,7 +113,7 @@ export class DigitalFilesService {
 
     // Puesto y estatus del expediente
     const expediente = await this.prisma.expedientes.findFirst({
-       where: { idEmpleado: employeeId, idTenant: user.idTenant },  
+      where: { idEmpleado: employeeId, idTenant: user.idTenant },
       select: { idPuesto: true, idEstatus: true },
     });
 
@@ -198,22 +202,22 @@ export class DigitalFilesService {
     // Buscamos al empleado para extraer su companyId (idEmpresa)
     const empleado = await this.prisma.empleados.findUnique({
       where: { idEmpleado: employeeId },
-      select: { idEmpresa: true, idTenant: true } 
+      select: { idEmpresa: true, idTenant: true }
     });
 
     if (!empleado) throw new NotFoundException('El empleado asociado a este enlace no existe');
     const companyId = Number(empleado.idEmpresa);
 
-     if (!empleado.idTenant) {   
+    if (!empleado.idTenant) {
       throw new InternalServerErrorException('El empleado no tiene un tenant asignado.');
     }
 
-     // Construimos un "usuario" mínimo con el tenant del propio empleado,
+    // Construimos un "usuario" mínimo con el tenant del propio empleado,
     // ya que este flujo público no tiene sesión ni ActiveUserDto real.
-    const pseudoUser = { idTenant: empleado.idTenant } as ActiveUserDto; 
+    const pseudoUser = { idTenant: empleado.idTenant } as ActiveUserDto;
 
     // Obtenemos y retornamos los datos del expediente con el formato esperado
-     return await this.getExpediente(companyId, employeeId, pseudoUser); 
+    return await this.getExpediente(companyId, employeeId, pseudoUser);
   }
 
   async getCompanyDocuments(employeeId: number) {
@@ -371,7 +375,7 @@ export class DigitalFilesService {
 
   private async getEmployeeDocuments(employeeId: number, idTenant: number) {
     const docsEmpleado = await this.prisma.documentosEmpleado.findMany({
-      where: { idEmpleado: employeeId, idTenant }, 
+      where: { idEmpleado: employeeId, idTenant },
       orderBy: { fechaCarga: 'desc' },
     });
     if (docsEmpleado.length === 0) return {};
@@ -589,6 +593,7 @@ export class DigitalFilesService {
     idCampania: number | null,
     files: Array<Express.Multer.File>,
     usuarioRegistro: string,
+    idTenant: number,
   ) {
     const curp = empleadoData.curp?.toUpperCase().trim();
     if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
@@ -621,10 +626,19 @@ export class DigitalFilesService {
       fechaVencimiento: Date | null;
     }> = [];
 
-    const carpetaTemp = path.join(this.mediaRoot, 'temp', curp);
-    const carpetaFinal = path.join(this.mediaRoot, curp);
+    const tenantExpedientesPath = await this.mediaPathService.getTenantPath(this.mediaRoot, idTenant, 'expedientes');
+    const carpetaTemp = path.join(tenantExpedientesPath, 'temp', curp);
+    const carpetaFinal = path.join(tenantExpedientesPath, curp);
     await fs.ensureDir(carpetaTemp);
     await fs.ensureDir(carpetaFinal);
+
+    const tenant = await this.prisma.catTenants.findUnique({
+      where: { idTenant },
+      select: { slug: true },
+    });
+    if (!tenant) {
+      throw new InternalServerErrorException('No se encontró el tenant.');
+    }
 
     if (files && files.length > 0) {
       for (const file of files) {
@@ -647,7 +661,7 @@ export class DigitalFilesService {
         const nombreArchivo = `${campoNormalizado}${sufijo}_${curp}.${ext}`;
         const rutaTemp = path.join(carpetaTemp, nombreArchivo);
         const rutaFinal = path.join(carpetaFinal, nombreArchivo);
-        const rutaRelativaBd = `${curp}/${nombreArchivo}`;
+        const rutaRelativaBd = `${tenant.slug}/expedientes/${curp}/${nombreArchivo}`;
 
         await fs.writeFile(rutaTemp, file.buffer);
 
@@ -842,7 +856,10 @@ export class DigitalFilesService {
     const idEmpleado = await DigitalFilesQueries.findIdByCURP(this.prisma, curp);
     if (!idEmpleado) throw new BadRequestException('Empleado no encontrado por el CURP proporcionado');
 
-    return this.processEmployeeDocuments(idEmpleado, empleadoData, documentoMap, idCampania, files, usuarioRegistro);
+    if (!user?.idTenant) {
+      throw new BadRequestException('El usuario no tiene un tenant asignado.');
+    }
+    return this.processEmployeeDocuments(idEmpleado, empleadoData, documentoMap, idCampania, files, usuarioRegistro, user.idTenant);
   }
 
 
@@ -869,6 +886,17 @@ export class DigitalFilesService {
       throw new UnauthorizedException('El enlace no es válido o ya ha expirado.');
     }
 
+    // Resolvemos el idTenant desde el propio empleado, ya que este flujo público
+    // no tiene sesión ni ActiveUserDto disponible.
+    const empleado = await this.prisma.empleados.findUnique({
+      where: { idEmpleado: employeeId },
+      select: { idTenant: true },
+    });
+
+    if (!empleado?.idTenant) {
+      throw new InternalServerErrorException('No se pudo determinar el tenant del empleado.');
+    }
+
     if (!empleadoJsonRaw) throw new BadRequestException('Falta la información del empleado');
 
     let empleadoData: any;
@@ -883,20 +911,19 @@ export class DigitalFilesService {
 
     const idCampania = idCampaniaRaw ? parseInt(idCampaniaRaw, 10) : null;
 
-    return this.processEmployeeDocuments(employeeId, empleadoData, documentoMap, idCampania, files, 'candidato');
+    return this.processEmployeeDocuments(employeeId, empleadoData, documentoMap, idCampania, files, 'candidato', empleado.idTenant);
   }
-
   // ─────────────────────────────────────────────────────────────
   // GET .../digital-files/:employeeId/status-history
   // Estatus actual + catálogo + historial de cambios
   // ─────────────────────────────────────────────────────────────
-  async getStatusHistory(employeeId: number, user: ActiveUserDto) {   
+  async getStatusHistory(employeeId: number, user: ActiveUserDto) {
     if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
 
     const expediente = await this.prisma.expedientes.findFirst({
-     where: { idEmpleado: employeeId, idTenant: user.idTenant },  
+      where: { idEmpleado: employeeId, idTenant: user.idTenant },
       orderBy: { idExpediente: 'desc' },
     });
 
@@ -910,7 +937,7 @@ export class DigitalFilesService {
         : null,
       this.prisma.catEstatusExpedientes.findMany({ where: { Activo: true } }),
       this.prisma.historialExpediente.findMany({
-         where: { idExpediente: expediente.idExpediente, idTenant: user.idTenant },
+        where: { idExpediente: expediente.idExpediente, idTenant: user.idTenant },
         orderBy: { fechaCambio: 'desc' },
       }),
     ]);
@@ -949,14 +976,14 @@ export class DigitalFilesService {
   // POST .../digital-files/:employeeId/status
   // Cambiar estatus del expediente + registrar en historial
   // ─────────────────────────────────────────────────────────────
-  async updateExpedienteStatus(employeeId: number, nuevoEstatus: number, comentario: string, user: ActiveUserDto) {   
+  async updateExpedienteStatus(employeeId: number, nuevoEstatus: number, comentario: string, user: ActiveUserDto) {
     if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
 
 
     const expediente = await this.prisma.expedientes.findFirst({
-      where: { idEmpleado: employeeId, idTenant: user.idTenant }, 
+      where: { idEmpleado: employeeId, idTenant: user.idTenant },
       orderBy: { idExpediente: 'desc' },
     });
 
@@ -972,17 +999,17 @@ export class DigitalFilesService {
         data: {
           idEstatus: nuevoEstatus,
           fechaActualizacion: new Date(),
-           usuarioActualizacion: user.username,
+          usuarioActualizacion: user.username,
         },
       }),
       this.prisma.historialExpediente.create({
         data: {
           idExpediente: expediente.idExpediente,
-          idTenant: user.idTenant,   
+          idTenant: user.idTenant,
           idEstatusAnterior,
           idEstatusNuevo: nuevoEstatus,
           fechaCambio: new Date(),
-          usuario: user.username,   
+          usuario: user.username,
           comentario,
         },
       }),
@@ -1015,12 +1042,12 @@ export class DigitalFilesService {
     user: ActiveUserDto,
   ) {
 
-     if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    if (!user.idTenant) {
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
 
-      const doc = await this.prisma.documentosEmpleado.findFirst({   
-      where: { idDocumentoEmpleado, idTenant: user.idTenant },   
+    const doc = await this.prisma.documentosEmpleado.findFirst({
+      where: { idDocumentoEmpleado, idTenant: user.idTenant },
     });
     if (!doc) throw new NotFoundException('Documento no encontrado.');
 
@@ -1031,23 +1058,23 @@ export class DigitalFilesService {
       data: { idEstatusDocumento: nuevoEstatus },
     });
 
-      await this.prisma.$executeRaw`
+    await this.prisma.$executeRaw`
         INSERT INTO HistorialDocumentosCandidato (idDocumentoCandidato, rutaArchivo, usuario, comentario, estatusAnterior, estatusActual)
         VALUES (${idDocumentoEmpleado}, ${doc.rutaArchivo}, ${user.username}, ${comentario}, ${estatusAnterior}, ${nuevoEstatus});
       `;
 
-     if (doc.idEmpleado) {
+    if (doc.idEmpleado) {
       const pendientes = await this.prisma.documentosEmpleado.count({
-        where: { idEmpleado: doc.idEmpleado, idEstatusDocumento: { not: 4 }, idTenant: user.idTenant },   
+        where: { idEmpleado: doc.idEmpleado, idEstatusDocumento: { not: 4 }, idTenant: user.idTenant },
       });
 
-       if (pendientes === 0) {
+      if (pendientes === 0) {
         const expediente = await this.prisma.expedientes.findFirst({
           where: { idEmpleado: doc.idEmpleado, idTenant: user.idTenant },   // <-- nuevo
           orderBy: { idExpediente: 'desc' },
         });
 
-          if (expediente && expediente.idEstatus !== 4) {
+        if (expediente && expediente.idEstatus !== 4) {
           await this.prisma.$transaction([
             this.prisma.expedientes.update({
               where: { idExpediente: expediente.idExpediente },
@@ -1343,9 +1370,9 @@ export class DigitalFilesService {
   // ─────────────────────────────────────────────────────────────
   // GET .../digital-files/:employeeId/download-history
   // ─────────────────────────────────────────────────────────────
-  async getDownloadHistory(employeeId: number, user: ActiveUserDto) {   
+  async getDownloadHistory(employeeId: number, user: ActiveUserDto) {
     if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
 
 
@@ -1375,9 +1402,9 @@ export class DigitalFilesService {
   // Genera y regresa el ZIP con todos los documentos del empleado.
   // Solo permitido si el expediente está completo (idEstatus = 4).
   // ─────────────────────────────────────────────────────────────
-async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUserDto): Promise<Buffer> {   
+  async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUserDto): Promise<Buffer> {
     if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+      throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
 
 
@@ -1386,7 +1413,7 @@ async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUser
     }
 
     const expediente = await this.prisma.expedientes.findFirst({
-      where: { idEmpleado: employeeId,idTenant: user.idTenant },
+      where: { idEmpleado: employeeId, idTenant: user.idTenant },
       orderBy: { idExpediente: 'desc' },
     });
 
@@ -1394,13 +1421,13 @@ async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUser
       throw new ForbiddenException('El expediente no está completo, no se puede descargar todavía.');
     }
 
-     await this.prisma.$executeRaw`
+    await this.prisma.$executeRaw`
       INSERT INTO HistorialDescargasExpediente (idCandidato, idTenant, usuarioRegistro, motivo)
       VALUES (${employeeId}, ${user.idTenant}, ${user.username}, ${motivo});
     `;
 
     const documentos = await this.prisma.documentosEmpleado.findMany({
-      where: { idEmpleado: employeeId, idTenant: user.idTenant },  
+      where: { idEmpleado: employeeId, idTenant: user.idTenant },
       select: { rutaArchivo: true },
     });
 
@@ -1432,12 +1459,8 @@ async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUser
     files: Array<Express.Multer.File>,
     activeUser: ActiveUserDto,
     companyId: number,
-    
   ) {
-    if (!activeUser.idTenant) {   // <-- AGREGAR ESTO
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
-    }
-
+    if (!activeUser.idTenant) throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     if (!expedienteJsonRaw) throw new BadRequestException('Faltan los datos del expediente');
 
     let data: any;
@@ -1449,14 +1472,21 @@ async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUser
 
     const requiredFields = [
       'nombre', 'apellido1', 'curp', 'correo', 'telefono',
-      'idPuesto', 'idJefeInmediato', 'idSite',
+      'idPuesto', 'idJefeInmediato', 'idSite', 'idModalidad',
     ];
     const faltantes = requiredFields.filter((f) => data[f] === undefined || data[f] === null || data[f] === '');
-    if (faltantes.length > 0) {
-      throw new BadRequestException(`Faltan los siguientes campos: ${faltantes.join(', ')}`);
-    }
+    if (faltantes.length > 0) throw new BadRequestException(`Faltan los siguientes campos: ${faltantes.join(', ')}`);
 
-    
+    // Aseguramos que los horarios incluyan la modalidad de asistencia diaria
+    const formattedSchedules = Array.isArray(data.schedules)
+      ? data.schedules.map((s: any) => ({
+        dia: s.dia,
+        horaEntrada: s.horaEntrada,
+        horaSalida: s.horaSalida,
+        modalidad: s.modalidad ? String(s.modalidad).toUpperCase() : 'PRESENCIAL',
+      }))
+      : [];
+
     const result = await generateEmployeeAndLink(
       {
         jwtService: this.jwtService,
@@ -1467,14 +1497,16 @@ async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUser
         curp: data.curp.toUpperCase().trim(),
         correo: data.correo,
         telefono: data.telefono,
+        numeroEmpleado: data.numeroEmpleado ? String(data.numeroEmpleado).trim() : null,
         idPuesto: Number(data.idPuesto),
         idUsuario: activeUser.uuid,
         idCampania: data.idCampania ? Number(data.idCampania) : null,
         idEmpresa: companyId,
-        idTenant: activeUser.idTenant,   
+        idTenant: activeUser.idTenant,
         idJefeInmediato: Number(data.idJefeInmediato),
         idSite: Number(data.idSite),
-        schedules: data.schedules ?? [],
+        idModalidad: Number(data.idModalidad),
+        schedules: formattedSchedules,
         additionalDocuments: data.additionalDocuments ?? [],
       },
       files ?? [],
@@ -1487,67 +1519,65 @@ async downloadExpedienteZip(employeeId: number, motivo: string, user: ActiveUser
       message: 'Expediente creado correctamente. Se envió el enlace de documentación al empleado.',
       ...result,
     };
-
-
   }
 
   // ─────────────────────────────────────────────────────────────
-// POST .../digital-files/:employeeId/resend-credentials
-// Regenera el link de acceso (JWT nuevo de 30 días) y reenvía
-// el correo de documentación al empleado. Se usa cuando el link
-// original ya expiró y el empleado no puede volver a entrar.
-// ─────────────────────────────────────────────────────────────
-async resendCredentials(employeeId: number, user: ActiveUserDto) {  
-  if (!user.idTenant) {
+  // POST .../digital-files/:employeeId/resend-credentials
+  // Regenera el link de acceso (JWT nuevo de 30 días) y reenvía
+  // el correo de documentación al empleado. Se usa cuando el link
+  // original ya expiró y el empleado no puede volver a entrar.
+  // ─────────────────────────────────────────────────────────────
+  async resendCredentials(employeeId: number, user: ActiveUserDto) {
+    if (!user.idTenant) {
       throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
-  }
- const empleado = await this.prisma.empleados.findUnique({
-    where: { idEmpleado: employeeId },
-    select: { nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true, idTenant: true },   
-  });
- 
-  if (!empleado) throw new NotFoundException('Empleado no encontrado.');
-  if (empleado.idTenant !== null && empleado.idTenant !== user.idTenant) {   
-    throw new NotFoundException('Empleado no encontrado.');
-  }
-  if (!empleado.correo) throw new BadRequestException('El empleado no tiene un correo registrado.');
+    }
+    const empleado = await this.prisma.empleados.findUnique({
+      where: { idEmpleado: employeeId },
+      select: { nombre: true, primerApellido: true, segundoApellido: true, correo: true, telefonoMovil: true, idTenant: true },
+    });
 
-  // Traemos el puesto del empleado para saber qué documentos le corresponden
-  const expediente = await this.prisma.expedientes.findFirst({
+    if (!empleado) throw new NotFoundException('Empleado no encontrado.');
+    if (empleado.idTenant !== null && empleado.idTenant !== user.idTenant) {
+      throw new NotFoundException('Empleado no encontrado.');
+    }
+    if (!empleado.correo) throw new BadRequestException('El empleado no tiene un correo registrado.');
+
+    // Traemos el puesto del empleado para saber qué documentos le corresponden
+    const expediente = await this.prisma.expedientes.findFirst({
       where: { idEmpleado: employeeId, idTenant: user.idTenant },
-    select: { idPuesto: true },
-  });
+      select: { idPuesto: true },
+    });
 
-  const documentos = expediente?.idPuesto
-    ? await this.getDocumentsByPosition(expediente.idPuesto, employeeId)
-    : [];
+    const documentos = expediente?.idPuesto
+      ? await this.getDocumentsByPosition(expediente.idPuesto, employeeId)
+      : [];
 
-  const frontUrl = this.configService.get<string>('FRONT_URL') || '';
-  const token = this.jwtService.sign({ employee_id: employeeId }, { expiresIn: '30d' });
-  const uploadLink = `${frontUrl}upload-information/${token}`;
+    const frontUrl = this.configService.get<string>('FRONT_URL') || '';
+    const token = this.jwtService.sign({ employee_id: employeeId }, { expiresIn: '30d' });
+    const uploadLink = `${frontUrl}upload-information/${token}`;
 
-  await this.prisma.$executeRaw`
+    await this.prisma.$executeRaw`
     UPDATE Empleados
     SET uploadLink = ${uploadLink}, token = ${token}
     WHERE idEmpleado = ${employeeId};
   `;
 
-  await this.notifications.notify({
-    userUuid: String(employeeId),
-    notificationTypeCode: 'LINK_CREATED',
-    to: empleado.correo,
-    phone: empleado.telefonoMovil || undefined,
-    subject: '📎 Documentación requerida para tu postulación',
-    context: {
-      nombre: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido].filter(Boolean).join(' '),
-      documentos,
-      link: uploadLink,
-      docs_empresa: [],
-    },
-  });
+    await this.notifications.notify({
+      userUuid: String(employeeId),
+      notificationTypeCode: 'LINK_CREATED',
+      to: empleado.correo,
+      phone: empleado.telefonoMovil || undefined,
+      subject: '📎 Documentación requerida para tu postulación',
+      context: {
+        nombre: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido].filter(Boolean).join(' '),
+        documentos,
+        link: uploadLink,
+        docs_empresa: [],
+      },
+    });
 
-  return { success: true, message: 'Link de acceso regenerado y correo reenviado correctamente.' };
-}
+    return { success: true, message: 'Link de acceso regenerado y correo reenviado correctamente.' };
+  }
 
 }
 

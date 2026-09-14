@@ -335,32 +335,35 @@ model CatPuestos {
 }
 
 model CatSites {
-  idSite                Int                     @id @default(autoincrement())
-  idTenant              Int                     @default(0)
+  idSite                Int                      @id @default(autoincrement())
+  idTenant              Int                      @default(0)
   idEmpresa             Int?
   idUnidadOperativa     Int?
-  idTipoUbicacion       Int                     @default(1)
-  Descripcion           String?                 @db.VarChar(200)
-  EsPrincipal           Boolean?                @default(false)
-  Calle                 String?                 @db.VarChar(250)
-  NoExterior            String?                 @db.VarChar(50)
-  NoInterior            String?                 @db.VarChar(50)
-  Colonia               String?                 @db.VarChar(150)
-  MunicipioDelegacion   String?                 @db.VarChar(150)
-  Estado                String?                 @db.VarChar(150)
-  CodigoPostal          String?                 @db.VarChar(10)
-  Pais                  String?                 @default("México") @db.VarChar(100)
-  Latitud               Decimal?                @db.Decimal(10, 8)
-  Longitud              Decimal?                @db.Decimal(11, 8)
+  idTipoUbicacion       Int                      @default(1)
+  Descripcion           String?                  @db.VarChar(200)
+  EsPrincipal           Boolean?                 @default(false)
+  Calle                 String?                  @db.VarChar(250)
+  NoExterior            String?                  @db.VarChar(50)
+  NoInterior            String?                  @db.VarChar(50)
+  Colonia               String?                  @db.VarChar(150)
+  MunicipioDelegacion   String?                  @db.VarChar(150)
+  Estado                String?                  @db.VarChar(150)
+  CodigoPostal          String?                  @db.VarChar(10)
+  Pais                  String?                  @default("México") @db.VarChar(100)
+  Latitud               Decimal?                 @db.Decimal(10, 8)
+  Longitud              Decimal?                 @db.Decimal(11, 8)
   idRegistroPatronal    Int?
-  ZonaFronteriza        Boolean?                @default(false)
-  Activo                Boolean?                @default(true)
-  FechaRegistro         DateTime?               @db.DateTime(0)
+  ZonaFronteriza        Boolean?                 @default(false)
+  Activo                Boolean?                 @default(true)
+  FechaRegistro         DateTime?                @db.DateTime(0)
+  TipoAsistencia        CatSites_TipoAsistencia?
   CatGeocercas          CatGeocercas[]
   CatPuestos            CatPuestos[]
-  CatTiposUbicacion     CatTiposUbicacion       @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
-  CatUnidadesOperativas CatUnidadesOperativas?  @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
+  CatTiposUbicacion     CatTiposUbicacion        @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
+  CatUnidadesOperativas CatUnidadesOperativas?   @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
+  CatSitesDids          CatSitesDids[]
   RelAreasUbicaciones   RelAreasUbicaciones[]
+  RelEmpleadosSites     RelEmpleadosSites[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
   RelUsuarioSite        RelUsuarioSite[]
   Vacantes              Vacantes[]
@@ -1089,6 +1092,7 @@ model RelAreasUbicaciones {
 
 model Empleados {
   idEmpleado                                        Int                   @id @default(autoincrement())
+  numeroEmpleado                                    String?               @db.VarChar(20)
   idTenant                                          Int?
   idEmpresa                                         Int?
   idUsuario                                         String?               @db.VarChar(36)
@@ -1113,6 +1117,7 @@ model Empleados {
   tieneHijos                                        Boolean?
   FechaRegistro                                     DateTime?             @default(now()) @db.Timestamp(0)
   usuarioRegistro                                   String?               @db.VarChar(250)
+  idModalidad                                       Int?
   idGenero                                          Int?
   numeroInfonavit                                   String?               @db.VarChar(30)
   numeroHijos                                       Int?
@@ -1129,8 +1134,11 @@ model Empleados {
   Empleados                                         Empleados?            @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                   Empleados[]           @relation("EmpleadosToEmpleados")
   auth_user                                         auth_user?            @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  Expedientes                                       Expedientes[]
   HistorialSalarios                                 HistorialSalarios[]
+  JornadasEmpleado                                  JornadasEmpleado[]
   MovimientosInternos                               MovimientosInternos[]
+  RegistrosAsistencia                               RegistrosAsistencia[]
   Vacantes                                          Vacantes[]
   Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]            @relation("Vacantes_idReclutadorAsignadoToEmpleados")
 
@@ -1140,15 +1148,18 @@ model Empleados {
 }
 
 model Expedientes {
-  idExpediente         Int       @id @default(autoincrement())
+  idExpediente         Int        @id @default(autoincrement())
   idEmpleado           Int?
   idPuesto             Int?
   idEstatus            Int?
-  fechaRegistro        DateTime? @db.Timestamp(0)
-  usuarioRegistro      String?   @db.VarChar(250)
-  fechaActualizacion   DateTime? @default(now()) @db.Timestamp(0)
-  usuarioActualizacion String?   @db.VarChar(250)
-  idTenant             Int       @default(0)
+  fechaRegistro        DateTime?  @db.Timestamp(0)
+  usuarioRegistro      String?    @db.VarChar(250)
+  fechaActualizacion   DateTime?  @default(now()) @db.Timestamp(0)
+  usuarioActualizacion String?    @db.VarChar(250)
+  idTenant             Int        @default(0)
+  Empleados            Empleados? @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_Expedientes_Empleados")
+
+  @@index([idEmpleado], map: "FK_Expedientes_Empleados_idx")
 }
 
 model RelPuestosUbicaciones {
@@ -1636,6 +1647,7 @@ model HorariosEmpleado {
   DiaSemana   String?   @db.VarChar(10)
   HoraEntrada DateTime? @db.Time(0)
   HoraSalida  DateTime? @db.Time(0)
+  Modalidad   String?   @db.VarChar(100)
 
   @@index([idEmpleado], map: "idx_idEmpleado")
 }
@@ -1875,6 +1887,133 @@ model RolePlays {
   @@index([idTenant], map: "idx_roleplays_idTenant")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatSitesDids {
+  idSiteDid         Int       @id @default(autoincrement())
+  idTenant          Int       @default(0)
+  idEmpresa         Int?
+  idSite            Int
+  Did               String    @db.VarChar(20)
+  Descripcion       String?   @db.VarChar(100)
+  Activo            Boolean   @default(true)
+  FechaRegistro     DateTime  @default(now()) @db.DateTime(0)
+  FechaModificacion DateTime? @db.DateTime(0)
+  CatSites          CatSites  @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_SitesDids_CatSites")
+
+  @@unique([idSite, Did], map: "UK_SitesDids_Site_Did")
+  @@index([idEmpresa], map: "FK_SitesDids_Empresa")
+  @@index([Did, Activo], map: "IDX_SitesDids_Did_Activo")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelEmpleadosDidsExcepciones {
+  idExcepcion   Int                                       @id @default(autoincrement())
+  idTenant      Int                                       @default(0)
+  idEmpresa     Int
+  idEmpleado    Int
+  Did           String                                    @db.VarChar(20)
+  TipoExcepcion RelEmpleadosDidsExcepciones_TipoExcepcion @default(BLOQUEADO)
+  Motivo        String?                                   @db.VarChar(150)
+  Activo        Boolean                                   @default(true)
+  FechaRegistro DateTime                                  @default(now()) @db.DateTime(0)
+
+  @@unique([idEmpleado, Did], map: "UK_EmpDidExcepcion")
+  @@index([idEmpresa], map: "FK_EmpDidExcepcion_Empresa")
+  @@index([idEmpleado, Did, TipoExcepcion, Activo], map: "IDX_EmpDidExcepcion_Lookup")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelEmpleadosSites {
+  idEmpleadoSite   Int                                @id @default(autoincrement())
+  idTenant         Int                                @default(0)
+  idEmpresa        Int
+  idEmpleado       Int
+  idSite           Int
+  EsPrincipal      Boolean                            @default(false)
+  Activo           Boolean                            @default(true)
+  FechaAsignacion  DateTime                           @default(now()) @db.DateTime(0)
+  MetodoAsistencia RelEmpleadosSites_MetodoAsistencia @default(IVR)
+  CatSites         CatSites                           @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_EmpSite_CatSites")
+
+  @@unique([idEmpleado, idSite], map: "UK_EmpSite_Empleado_Site")
+  @@index([idEmpresa], map: "IDX_EmpSite_Empresa")
+  @@index([idSite], map: "IDX_EmpSite_Site")
+}
+
+model JornadasEmpleado {
+  idJornada           Int                             @id @default(autoincrement())
+  idTenant            Int
+  idEmpresa           Int
+  idEmpleado          Int
+  fecha               DateTime                        @db.Date
+  horaEntradaTeorica  DateTime?                       @db.Time(0)
+  horaSalidaTeorica   DateTime?                       @db.Time(0)
+  horaEntradaReal     DateTime?                       @db.DateTime(0)
+  horaSalidaReal      DateTime?                       @db.DateTime(0)
+  minutosTrabajados   Int                             @default(0)
+  minutosRetardo      Int                             @default(0)
+  minutosExtraDobles  Int                             @default(0)
+  minutosExtraTriples Int                             @default(0)
+  estatusJornada      JornadasEmpleado_estatusJornada @default(ABIERTA)
+  revisada            Boolean                         @default(false)
+  fechaActualizacion  DateTime?                       @default(now()) @db.Timestamp(0)
+  Empleados           Empleados                       @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Jornadas_Empleados")
+  RegistrosAsistencia RegistrosAsistencia[]
+
+  @@unique([idEmpleado, fecha], map: "UK_Jornada_Empleado_Fecha")
+  @@index([idTenant, idEmpresa, fecha], map: "IDX_Jornadas_Tenant_Empresa_Fecha")
+}
+
+model RegistrosAsistencia {
+  idRegistro           BigInt                                   @id @default(autoincrement())
+  idTenant             Int
+  idEmpresa            Int
+  idEmpleado           Int
+  idJornada            Int?
+  canal                RegistrosAsistencia_canal
+  tipo                 RegistrosAsistencia_tipo
+  fechaHoraRegistro    DateTime                                 @db.DateTime(0)
+  fechaHoraRecepcion   DateTime                                 @default(now()) @db.DateTime(0)
+  esOffline            Boolean                                  @default(false)
+  latitud              Decimal?                                 @db.Decimal(10, 8)
+  longitud             Decimal?                                 @db.Decimal(11, 8)
+  resultadoGeocerca    RegistrosAsistencia_resultadoGeocerca    @default(NO_APLICA)
+  idSitioDetectado     Int?
+  idExternoArtemis     BigInt?                                  @unique(map: "UK_Idempotencia_Artemis")
+  idDispositivoArtemis Int?
+  nombreDispositivo    String?                                  @db.VarChar(150)
+  urlFoto              String?                                  @db.VarChar(500)
+  uuidCliente          String?                                  @unique(map: "UK_Idempotencia_Movil") @db.VarChar(64)
+  estatusProcesamiento RegistrosAsistencia_estatusProcesamiento @default(PENDIENTE)
+  Empleados            Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Registros_Empleados")
+  JornadasEmpleado     JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: NoAction, map: "FK_Registros_Jornadas")
+
+  @@index([idJornada], map: "FK_Registros_Jornadas")
+  @@index([idEmpleado, fechaHoraRegistro], map: "IDX_Registros_Empleado_Fecha")
+}
+
+model ConfiguracionJornadaLegal {
+  idConfiguracion    Int       @id @default(autoincrement())
+  idTenant           Int       @default(0)
+  idEmpresa          Int
+  codigoPais         String    @default("MEX") @db.VarChar(5)
+  anio               Int
+  horasSemana        Decimal   @db.Decimal(5, 2)
+  horasDia           Decimal   @default(8.00) @db.Decimal(5, 2)
+  extraSemanalMax    Decimal   @default(9.00) @db.Decimal(5, 2)
+  extraDiarioMax     Decimal   @default(3.00) @db.Decimal(5, 2)
+  diasConExtraMax    Int       @default(3)
+  factorDentro       Decimal   @default(2.00) @db.Decimal(4, 2)
+  factorFuera        Decimal   @default(3.00) @db.Decimal(4, 2)
+  primaDominical     Decimal   @default(0.25) @db.Decimal(4, 2)
+  activo             Boolean   @default(true)
+  fechaRegistro      DateTime? @default(now()) @db.Timestamp(0)
+  fechaActualizacion DateTime? @default(now()) @db.Timestamp(0)
+
+  @@unique([idEmpresa, anio], map: "UK_JornadaLegal_Empresa_Anio")
+  @@index([idTenant, codigoPais], map: "IDX_JornadaLegal_Tenant")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -1937,4 +2076,60 @@ enum PlanCarreraEstatus {
 enum CatGeocercas_Tipo {
   circle
   polygon
+}
+
+enum RelEmpleadosDidsExcepciones_TipoExcepcion {
+  BLOQUEADO
+  EXTRA
+}
+
+enum RelEmpleadosSites_MetodoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
+  CUALQUIERA
+}
+
+enum CatSites_TipoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
+}
+
+enum RegistrosAsistencia_canal {
+  APP_MOVIL
+  IVR
+  BIOMETRICO
+  NFC
+  WEB_MANUAL
+}
+
+enum RegistrosAsistencia_tipo {
+  ENTRADA
+  SALIDA
+  INICIO_COMIDA
+  FIN_COMIDA
+}
+
+enum RegistrosAsistencia_resultadoGeocerca {
+  DENTRO
+  FUERA_PERMITIDA
+  FUERA_BLOQUEADA
+  NO_APLICA
+}
+
+enum JornadasEmpleado_estatusJornada {
+  ABIERTA
+  CERRADA
+  CIERRE_AUTOMATICO
+  INCOMPLETA
+  FALTA
+  DESCANSO
+}
+
+enum RegistrosAsistencia_estatusProcesamiento {
+  PENDIENTE
+  PROCESADO
+  DUPLICADO
+  RECHAZADO
 }

@@ -53,8 +53,11 @@ export class UsersController {
   @ApiResponse({ status: 201, description: 'User successfully created.' })
   @ApiResponse({ status: 409, description: 'Username already exists.' })
   @ApiResponse({ status: 400, description: 'Invalid data.' })
-  create(@Body() dto: CreateUserDto): Promise<AuthUserRow> {
-    return this.usersService.create(dto);
+  create(
+    @GetActiveUser() user: ActiveUserDto,
+    @Body() dto: CreateUserDto,
+  ): Promise<AuthUserRow> {
+    return this.usersService.create(user, dto);
   }
 
   @Put(':id')

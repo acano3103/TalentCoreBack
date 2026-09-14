@@ -1,4 +1,13 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, MaxLength, IsIn } from 'class-validator';
+import {
+    IsNotEmpty,
+    IsString,
+    IsNumber,
+    IsOptional,
+    MaxLength,
+    IsIn,
+    IsArray,
+    Matches
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateLocationDto {
@@ -92,4 +101,28 @@ export class CreateLocationDto {
     @IsNumber()
     @IsIn([0, 1])
     zonaFronteriza?: number;
+
+    @ApiPropertyOptional({
+        example: 'IVR',
+        enum: ['IVR', 'BIOMETRICO', 'APP_MOVIL'],
+        nullable: true,
+        description: 'Mecanismo de marcaje de asistencia de la sucursal (null si no maneja asistencia)'
+    })
+    @IsOptional()
+    @IsIn(['IVR', 'BIOMETRICO', 'APP_MOVIL', null])
+    tipoAsistencia?: 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | null;
+
+    @ApiPropertyOptional({
+        example: ['5512345678', '5598765432'],
+        description: 'Lista de DIDs / Números telefónicos autorizados para marcar asistencia vía IVR',
+        type: [String]
+    })
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    @Matches(/^\+?[0-9]{10,15}$/, {
+        each: true,
+        message: 'Cada DID debe ser un número telefónico válido de entre 10 y 15 dígitos',
+    })
+    dids?: string[];
 }
