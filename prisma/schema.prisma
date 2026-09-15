@@ -1107,6 +1107,7 @@ model Empleados {
   numeroSeguroSocial                                String?               @db.VarChar(15)
   idEstadoCivil                                     Int?
   fechaNacimiento                                   DateTime?             @db.Date
+  fechaIngreso                                      DateTime?             @db.Date
   curp                                              String?               @db.VarChar(18)
   rfc                                               String?               @db.VarChar(18)
   correo                                            String?               @db.VarChar(250)
