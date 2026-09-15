@@ -52,6 +52,7 @@ export class UsersService {
       UsersQueries.findAllPaginated(this.prisma, user.idTenant, limit, offset, search),
       UsersQueries.countAll(this.prisma, user.idTenant, search),
     ]);
+    console.log(data)
 
     return {
       data,
