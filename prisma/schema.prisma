@@ -263,11 +263,14 @@ model CatModalidad {
 
 model CatModulos {
   idModulo       Int              @id @default(autoincrement())
+  idTenant       Int?
   Descripcion    String?          @db.VarChar(200)
   Codigo         String?          @db.VarChar(100)
   idPadre        Int?
   Activo         Boolean?         @default(true)
   RelRolPermisos RelRolPermisos[]
+
+  @@index([idTenant], map: "idx_catmodulos_idtenant")
 }
 
 model CatNivel {

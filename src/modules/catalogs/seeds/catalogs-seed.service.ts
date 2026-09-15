@@ -832,11 +832,11 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 6, idModulo: 16, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Bolsa de trabajo
             { idRol: 6, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
             { idRol: 6, idModulo: 18, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
-            { idRol: 6, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes digitales (Padre)
+            { idRol: 6, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes digitales (Padre)
             { idRol: 6, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
-            { idRol: 6, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes
-            { idRol: 6, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
-            { idRol: 6, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Control de vencimientos
+            { idRol: 6, idModulo: 21, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes
+            { idRol: 6, idModulo: 22, puedeVer: false, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
+            { idRol: 6, idModulo: 23, puedeVer: false, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Control de vencimientos
             { idRol: 6, idModulo: 24, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
             { idRol: 6, idModulo: 25, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
             { idRol: 6, idModulo: 26, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Incidencias (Ver las propias)

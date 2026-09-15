@@ -8,10 +8,20 @@ export class RolesService {
 
     async findAll(user: ActiveUserDto) {
         return await this.prismaService.catRoles.findMany({
-            where: { activo: true, idTenant: user.idTenant },
+            where: {
+                activo: true,
+                idTenant: user.idTenant
+            },
             include: {
                 RelRolPermisos: {
-                    where: { activo: true, idTenant: user.idTenant },
+                    where: {
+                        activo: true,
+                        idTenant: user.idTenant,
+                        CatModulos: {
+                            Activo: true,
+                            idTenant: user.idTenant
+                        }
+                    },
                     include: {
                         CatModulos: true
                     }
@@ -22,10 +32,20 @@ export class RolesService {
 
     async findOne(user: ActiveUserDto, id: number) {
         return await this.prismaService.catRoles.findUnique({
-            where: { idRol: id, idTenant: user.idTenant },
+            where: {
+                idRol: id,
+                idTenant: user.idTenant
+            },
             include: {
                 RelRolPermisos: {
-                    where: { activo: true, idTenant: user.idTenant },
+                    where: {
+                        activo: true,
+                        idTenant: user.idTenant,
+                        CatModulos: {
+                            Activo: true,
+                            idTenant: user.idTenant
+                        }
+                    },
                     include: {
                         CatModulos: true
                     }
