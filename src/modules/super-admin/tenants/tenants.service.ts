@@ -92,15 +92,30 @@ export class TenantsService {
   async findOne(id: string) {
     const tenantId = Number(id);
 
-    const [tenant, users, roles, modules] = await Promise.all([
+    const [tenant, users, roles, modules, aiFeatures] = await Promise.all([
       this.prisma.catTenants.findUnique({ where: { idTenant: tenantId } }),
       this.prisma.auth_user.findMany({ where: { idTenant: tenantId } }),
       this.prisma.catRoles.findMany({ where: { idTenant: tenantId } }),
       this.prisma.catModulos.findMany({ where: { idTenant: tenantId } }),
+      this.prisma.tenantAiFeatures.findMany({ where: { idTenant: tenantId } }),
     ]);
 
     if (!tenant) {
       throw new NotFoundException(`Tenant con id ${id} no encontrado`);
+    }
+
+    // Mapa base por defecto en false
+    const ai_config: Record<string, boolean> = {
+      ai_job_description: false,
+      ai_cv_profiler: false,
+      ai_video_interviews: false,
+    };
+
+    // Sobrescribimos solo los que ya existan configurados
+    if (aiFeatures) {
+      for (const item of aiFeatures) {
+        ai_config[item.feature_code] = Boolean(item.activo);
+      }
     }
 
     return {
@@ -108,6 +123,7 @@ export class TenantsService {
       users,
       roles,
       modules,
+      ai_config,
     };
   }
 
@@ -317,5 +333,69 @@ export class TenantsService {
       message: 'Módulos actualizados exitosamente',
       totalUpdated: dto.modules.length,
     };
+  }
+
+  async updateAiConfig(tenantId: number, config: Record<string, boolean>) {
+    // Validar que el tenant exista
+    const tenant = await this.prisma.catTenants.findUnique({
+      where: { idTenant: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`Tenant con id ${tenantId} no encontrado`);
+    }
+
+    const entries = Object.entries(config);
+
+    // Ejecutar upserts con Prisma de forma dinámica
+    await this.prisma.$transaction(
+      entries.map(([featureCode, activo]) =>
+        this.prisma.tenantAiFeatures.upsert({
+          where: {
+            idTenant_feature_code: {
+              idTenant: tenantId,
+              feature_code: featureCode,
+            },
+          },
+          update: { activo: Boolean(activo) },
+          create: {
+            idTenant: tenantId,
+            feature_code: featureCode,
+            activo: Boolean(activo),
+          },
+        })
+      )
+    );
+
+    return {
+      message: 'Configuración de IA actualizada exitosamente',
+      updatedFeatures: entries.length,
+    };
+  }
+
+  async isAiFeatureEnabled(tenantId: number, featureCode: string): Promise<boolean> {
+    // Validar que el tenant exista
+    const tenant = await this.prisma.catTenants.findUnique({
+      where: { idTenant: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`Tenant con id ${tenantId} no encontrado`);
+    }
+
+    const feature = await this.prisma.tenantAiFeatures.findUnique({
+      where: {
+        idTenant_feature_code: {
+          idTenant: tenantId,
+          feature_code: featureCode,
+        },
+      },
+      select: {
+        activo: true,
+      },
+    });
+
+    // Si no existe registro o activo es falsy, retorna false
+    return Boolean(feature?.activo);
   }
 }

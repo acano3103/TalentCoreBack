@@ -1755,13 +1755,14 @@ model CatUnidadesOperativas {
 }
 
 model CatTenants {
-  idTenant            Int         @id @default(autoincrement())
-  uuid                String      @unique(map: "uq_tenant_uuid") @db.VarChar(36)
-  nombre              String      @db.VarChar(150)
-  slug                String      @unique(map: "uq_tenant_slug") @db.VarChar(100)
-  activo              Boolean     @default(true)
-  fecha_creacion      DateTime    @default(now()) @db.DateTime(0)
-  fecha_actualizacion DateTime?   @db.DateTime(0)
+  idTenant            Int                @id @default(autoincrement())
+  uuid                String             @unique(map: "uq_tenant_uuid") @db.VarChar(36)
+  nombre              String             @db.VarChar(150)
+  slug                String             @unique(map: "uq_tenant_slug") @db.VarChar(100)
+  activo              Boolean            @default(true)
+  fecha_creacion      DateTime           @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime?          @db.DateTime(0)
+  TenantAiFeatures    TenantAiFeatures[]
   auth_user           auth_user[]
 }
 
@@ -2015,6 +2016,17 @@ model ConfiguracionJornadaLegal {
 
   @@unique([idEmpresa, anio], map: "UK_JornadaLegal_Empresa_Anio")
   @@index([idTenant, codigoPais], map: "IDX_JornadaLegal_Tenant")
+}
+
+model TenantAiFeatures {
+  idTenant            Int
+  feature_code        String     @db.VarChar(100)
+  activo              Boolean    @default(true)
+  fecha_actualizacion DateTime?  @default(now()) @db.DateTime(0)
+  CatTenants          CatTenants @relation(fields: [idTenant], references: [idTenant], onDelete: Cascade, map: "fk_tenant_ai_tenant")
+
+  @@id([idTenant, feature_code])
+  @@index([idTenant, activo], map: "idx_tenant_ai_lookup")
 }
 
 enum Entrevistas_interview_type {

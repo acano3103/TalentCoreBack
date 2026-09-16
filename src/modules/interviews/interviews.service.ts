@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
@@ -12,6 +12,7 @@ import { UpdateMeetingDto } from './dto/update-interview.dto';
 import { UpdateInterviewDto, RescheduleInterviewDto } from './dto/update-interview-base.dto';
 import { ConfigService } from '@nestjs/config';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { TenantsService } from '../super-admin/tenants/tenants.service';
 
 @Injectable()
 export class InterviewsService {
@@ -19,7 +20,8 @@ export class InterviewsService {
         private readonly configService: ConfigService,
         private prisma: PrismaService,
         private integrationsFactory: IntegrationsFactory,
-        private readonly notifications: NotificationDispatcher
+        private readonly notifications: NotificationDispatcher,
+        private readonly tenantsService: TenantsService,
     ) { }
 
     private readonly logger = new Logger(InterviewsService.name);
@@ -324,7 +326,55 @@ export class InterviewsService {
 
     // Metodo para obtener detalles de una entrevista especifica
     async getMeetingDetail(companyId: number, interviewId: string) {
-        return await findInterviewDetail(interviewId, this.prisma);
+        const rows = await findInterviewDetail(interviewId, this.prisma);
+
+        if (!rows || (Array.isArray(rows) && rows.length === 0)) {
+            throw new NotFoundException(`Entrevista con id ${interviewId} no encontrada`);
+        }
+
+        const meetingDetail = Array.isArray(rows) ? rows[0] : rows;
+
+        // Si companyId viene en 0 (sala pública del candidato), buscamos a qué empresa pertenece la entrevista
+        let effectiveCompanyId = Number(companyId);
+
+        if (!effectiveCompanyId || effectiveCompanyId === 0) {
+            const interviewPostulant = await this.prisma.entrevistasPostulantes.findUnique({
+                where: { id: interviewId },
+                select: {
+                    Entrevistas: {
+                        select: {
+                            company_id: true,
+                        },
+                    },
+                },
+            });
+
+            effectiveCompanyId = interviewPostulant?.Entrevistas?.company_id ?? 0;
+        }
+
+        // Obtener el tenant a partir de la empresa resuelta
+        let isAiEnabled = false;
+
+        if (effectiveCompanyId > 0) {
+            const empresa = await this.prisma.catEmpresas.findUnique({
+                where: { idEmpresa: effectiveCompanyId },
+                select: { idTenant: true },
+            });
+
+            if (empresa?.idTenant) {
+                // Validar la feature flag en TenantsService
+                isAiEnabled = await this.tenantsService.isAiFeatureEnabled(
+                    empresa.idTenant,
+                    'ai_video_interviews'
+                );
+            }
+        }
+
+        // Retornar los datos originales intactos + banderas de control de IA
+        return {
+            ...meetingDetail,
+            isAiEnabled
+        };
     }
 
     // Metodo para actualizar detalles de una entrevista programada

@@ -15,6 +15,7 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { MediaPathService } from 'src/common/services/media-path.service';
+import { TenantsService } from '../super-admin/tenants/tenants.service';
 
 
 @Injectable()
@@ -25,7 +26,7 @@ export class PostulationsService {
     private readonly integrationFactory: IntegrationsFactory,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
-    private readonly mediaPathService: MediaPathService
+    private readonly tenantsService: TenantsService,
   ) { }
 
   private readonly logger = new Logger(PostulationsService.name);
@@ -70,7 +71,7 @@ export class PostulationsService {
 
       const tenant = await this.prisma.catTenants.findUnique({
         where: { idTenant: empresa.idTenant },
-        select: { slug: true }
+        select: { idTenant: true, slug: true }
       });
       if (!tenant?.slug) {
         throw new BadRequestException('No se encontró el tenant asignado.');
@@ -112,20 +113,23 @@ export class PostulationsService {
       fs.writeFileSync(physicalPath, file.buffer);
       physicalPathToDelete = physicalPath;
 
-      // Buscamos si la empresa tiene una integración de IA activa
-      const activeAiIntegration = await this.prisma.integraciones.findFirst({
-        where: {
-          idEmpresa: companyId,
-          isConnected: true,
-          CatIntegracionesProvedores: {
-            type: 'ai',
-            isActive: true
-          }
-        },
-        include: {
-          CatIntegracionesProvedores: true
-        }
-      });
+      // Buscamos si la empresa tiene una integración de IA activa y si tiene la funcion de perfilador de CV habilitada
+      const [isAiCvProfilerEnabled, activeAiIntegration] = await Promise.all([
+        this.tenantsService.isAiFeatureEnabled(tenant.idTenant, 'ai_cv_profiler'),
+        this.prisma.integraciones.findFirst({
+          where: {
+            idEmpresa: companyId,
+            isConnected: true,
+            CatIntegracionesProvedores: {
+              type: 'ai',
+              isActive: true,
+            },
+          },
+          include: {
+            CatIntegracionesProvedores: true,
+          },
+        }),
+      ]);
 
       // 4. Transacción en base de datos
       const [postulation, log] = await this.prisma.$transaction(async (tx) => {
@@ -160,23 +164,28 @@ export class PostulationsService {
         return [newPostulation, newLog];
       });
 
-      if (!activeAiIntegration) {
-        throw new BadRequestException('La empresa no cuenta con una integración de Inteligencia Artificial activa.');
-      }
-
       // 5. Disparo asíncrono para análisis de IA
-      const providerId = activeAiIntegration.providerId;
-      this.integrationFactory.getProvider(providerId).then((aiProvider) => {
-        return aiProvider.analyzeCV(
-          companyId,
-          postulation.idPostulacion,
-          vacante.idVacante,
-          file.buffer,
-          vacante.InformacionExtra || ''
+      if (isAiCvProfilerEnabled && activeAiIntegration) {
+        const providerId = activeAiIntegration.providerId;
+        this.integrationFactory
+          .getProvider(providerId)
+          .then((aiProvider) => {
+            return aiProvider.analyzeCV(
+              companyId,
+              postulation.idPostulacion,
+              vacante.idVacante,
+              file.buffer,
+              vacante.InformacionExtra || ''
+            );
+          })
+          .catch((aiError) => {
+            this.logger.error('Error asíncrono en el procesamiento de la IA para el CV:', aiError);
+          });
+      } else {
+        this.logger.log(
+          `Postulación ${postulation.idPostulacion} creada sin scoring de IA (Feature ai_cv_profiler: ${isAiCvProfilerEnabled}, Proveedor activo: ${Boolean(activeAiIntegration)})`
         );
-      }).catch((aiError) => {
-        this.logger.error('Error asíncrono en el procesamiento de la IA para el CV:', aiError);
-      });
+      }
 
       return { message: "Postulación aplicada correctamente" };
 
@@ -214,10 +223,11 @@ export class PostulationsService {
       );
 
       if (!rows || rows.length === 0) {
-        throw new NotFoundException(`No se encontró la evaluación de la postulación con ID ${postulationId}`);
+        throw new NotFoundException(`No se encontró la postulación con ID ${postulationId}`);
       }
 
       const rawData = rows[0];
+      const hasAiEvaluation = rawData.score_global !== null && rawData.score_global !== undefined;
 
       const safeJsonParse = (str: string | null, defaultValue: any) => {
         if (!str) return defaultValue;
@@ -228,49 +238,58 @@ export class PostulationsService {
         }
       };
 
-      // 1. Parseamos los índices técnicos y competenciales
-      let indices = safeJsonParse(rawData.indices, {});
-      if (indices && Object.keys(indices).length > 0) {
-        // Aplicamos tu helper de porcentaje tal como se hacía en Python
-        indices['indice_ajuste_tecnico'] = calculatePercentage(indices['indice_ajuste_tecnico']);
-        indices['indice_ajuste_competencial'] = calculatePercentage(indices['indice_ajuste_competencial']);
-      }
+      let indices = {};
+      let detalle_por_categoria: any[] = [];
+      let fortalezas_clave: any[] = [];
+      let brechas_criticas: any[] = [];
+      let requisitos_knockout: any[] = [];
 
-      const categoriasRaw = safeJsonParse(rawData.detalle_por_categoria, []);
-      const fortalezas_clave = safeJsonParse(rawData.fortalezas_clave, []);
-      const brechas_criticas = safeJsonParse(rawData.brechas_criticas, []);
-      const requisitos_knockout = safeJsonParse(rawData.requisitos_knockout, []);
+      if (hasAiEvaluation) {
+        // 1. Parseamos los índices técnicos y competenciales solo si hay IA
+        indices = safeJsonParse(rawData.indices, {});
+        if (indices && Object.keys(indices).length > 0) {
+          indices['indice_ajuste_tecnico'] = calculatePercentage(indices['indice_ajuste_tecnico']);
+          indices['indice_ajuste_competencial'] = calculatePercentage(indices['indice_ajuste_competencial']);
+        }
 
-      // 2. Parseamos y aplicamos el helper a cada categoría del desglose
-      const detalle_por_categoria = Array.isArray(categoriasRaw)
-        ? categoriasRaw.map((c: any) => {
-          return {
+        const categoriasRaw = safeJsonParse(rawData.detalle_por_categoria, []);
+        fortalezas_clave = safeJsonParse(rawData.fortalezas_clave, []);
+        brechas_criticas = safeJsonParse(rawData.brechas_criticas, []);
+        requisitos_knockout = safeJsonParse(rawData.requisitos_knockout, []);
+
+        // 2. Parseamos y aplicamos el helper a cada categoría del desglose
+        detalle_por_categoria = Array.isArray(categoriasRaw)
+          ? categoriasRaw.map((c: any) => ({
             ...c,
-            // Pasamos por el helper los valores numéricos de cumplimiento y score ponderado
             porcentaje_cumplimiento: calculatePercentage(c.porcentaje_cumplimiento),
             score_ponderado: calculatePercentage(c.score_ponderado),
-          };
-        })
-        : [];
+          }))
+          : [];
+      }
 
       return {
         profile_data: {
+          idPostulacion: typeof rawData.idPostulacion === 'bigint' ? Number(rawData.idPostulacion) : rawData.idPostulacion,
           nombre: rawData.nombre,
           primerApellido: rawData.primerApellido,
           segundoApellido: rawData.segundoApellido,
+          correo: rawData.correo,
+          telefono: rawData.telefono,
+          rutaCV: rawData.rutaCV,
           NombrePuesto: rawData.NombrePuesto,
           fechaRegistro: rawData.fechaRegistro,
-          resumen: rawData.resumen,
-          estado_proceso: rawData.estado_proceso,
+          resumen: rawData.resumen || null,
+          estado_proceso: rawData.estado_proceso || 'PENDIENTE',
           estatus_vacante: rawData.estatus_postulacion,
-          score_global: rawData.score_global ? Number(rawData.score_global) : null,
-          clasificacion: rawData.clasificacion,
-          decision: rawData.decision,
-          indices,
+          score_global: hasAiEvaluation ? Number(rawData.score_global) : null,
+          clasificacion: rawData.clasificacion || null,
+          decision: rawData.decision || null,
+          indices: hasAiEvaluation ? indices : null,
           detalle_por_categoria,
           fortalezas_clave,
           brechas_criticas,
-          requisitos_knockout
+          requisitos_knockout,
+          hasAiEvaluation, // Flag útil para que la vista renderice la sección de IA o solo el CV
         }
       };
 
