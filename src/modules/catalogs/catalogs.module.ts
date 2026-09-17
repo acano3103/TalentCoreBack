@@ -14,7 +14,7 @@ import { PublicCatalogsService } from './public-catalogs.service';
   providers: [
     CatalogsService,
     PublicCatalogsService,
-    //CatalogsSeedService,
+    // CatalogsSeedService,
     SalaryLevelsCatalogService,
     PatronalRecordsService,
     OperatingUnitsService
