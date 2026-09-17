@@ -5,7 +5,8 @@ import { HttpModule } from '@nestjs/axios';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { MediaPathModule } from 'src/common/services/media-path.module';   
+import { MediaPathModule } from 'src/common/services/media-path.module';
+import { TenantsModule } from '../super-admin/tenants/tenants.module';
 
 @Module({
     imports: [HttpModule,
@@ -17,7 +18,8 @@ import { MediaPathModule } from 'src/common/services/media-path.module';
             }),
             inject: [ConfigService],
         }),
-        MediaPathModule,  
+        MediaPathModule,
+        TenantsModule
     ],
     controllers: [PostulationsController],
     providers: [PostulationsService]

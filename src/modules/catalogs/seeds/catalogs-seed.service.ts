@@ -570,16 +570,31 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 23, Descripcion: 'Control de vencimientos', Codigo: 'due-date-tracking', idPadre: 19, Activo: true },
             { idModulo: 24, Descripcion: 'Administración de personal', Codigo: 'personnel-administration', idPadre: null, Activo: true },
             { idModulo: 25, Descripcion: 'Empleados', Codigo: 'employees', idPadre: 24, Activo: true },
-            { idModulo: 26, Descripcion: 'Movimientos internos', Codigo: 'internal-movements', idPadre: 24, Activo: true },
-            { idModulo: 27, Descripcion: 'Solicitudes pendientes', Codigo: 'pending-requests', idPadre: 24, Activo: true },
-            { idModulo: 28, Descripcion: 'Control de asistencia', Codigo: 'attendance-tracking', idPadre: null, Activo: true },
-            { idModulo: 29, Descripcion: 'Geocercas', Codigo: 'geofences', idPadre: 28, Activo: true },
-            { idModulo: 30, Descripcion: 'Capacitación', Codigo: 'training', idPadre: null, Activo: true },
-            { idModulo: 31, Descripcion: 'Cursos', Codigo: 'courses', idPadre: 30, Activo: true },
-            { idModulo: 32, Descripcion: 'Cursos por Puesto', Codigo: 'job-courses', idPadre: 30, Activo: true },
-            { idModulo: 33, Descripcion: 'Matriz de Habilidades', Codigo: 'skills-matrix', idPadre: 30, Activo: true },
-            { idModulo: 34, Descripcion: 'Roleplays IA', Codigo: 'ai-roleplay', idPadre: 30, Activo: true },
-            { idModulo: 35, Descripcion: 'Plan de Carrera', Codigo: 'career-plan', idPadre: 30, Activo: true },
+            { idModulo: 26, Descripcion: 'Incidencias', Codigo: 'incidents', idPadre: 24, Activo: true },
+            { idModulo: 27, Descripcion: 'Levantar incidencia', Codigo: 'log-an-incident', idPadre: 24, Activo: true },
+            { idModulo: 28, Descripcion: 'Movimientos internos', Codigo: 'internal-movements', idPadre: 24, Activo: true },
+            { idModulo: 29, Descripcion: 'Solicitudes pendientes', Codigo: 'pending-requests', idPadre: 24, Activo: true },
+            { idModulo: 30, Descripcion: 'Control de asistencia', Codigo: 'attendance-tracking', idPadre: null, Activo: true },
+            { idModulo: 31, Descripcion: 'Dashboard', Codigo: 'attendance-dashboard', idPadre: 30, Activo: true },
+            { idModulo: 32, Descripcion: 'Bitácora', Codigo: 'logbook', idPadre: 30, Activo: true },
+            { idModulo: 33, Descripcion: 'Jornadas', Codigo: 'work-shifts', idPadre: 30, Activo: true },
+            { idModulo: 34, Descripcion: 'Geocercas', Codigo: 'geofences', idPadre: 30, Activo: true },
+            { idModulo: 35, Descripcion: 'Jornada legal', Codigo: 'legal-workday', idPadre: 30, Activo: true },
+            { idModulo: 36, Descripcion: 'Capacitación', Codigo: 'training', idPadre: null, Activo: true },
+            { idModulo: 37, Descripcion: 'Cursos', Codigo: 'courses', idPadre: 36, Activo: true },
+            { idModulo: 38, Descripcion: 'Asignación por Puesto', Codigo: 'job-courses', idPadre: 36, Activo: true },
+            { idModulo: 39, Descripcion: 'Matriz de Habilidades', Codigo: 'skills-matrix', idPadre: 36, Activo: true },
+            { idModulo: 40, Descripcion: 'Roleplays IA', Codigo: 'ai-roleplay', idPadre: 36, Activo: true },
+            { idModulo: 41, Descripcion: 'Plan de Carrera', Codigo: 'career-plan', idPadre: 36, Activo: true },
+            { idModulo: 42, Descripcion: 'Configuración', Codigo: 'configuration', idPadre: null, Activo: true },
+            { idModulo: 43, Descripcion: 'Roles y permisos', Codigo: 'roles-permissions', idPadre: 42, Activo: true },
+            { idModulo: 44, Descripcion: 'Admin. de usuarios', Codigo: 'user-administration', idPadre: 42, Activo: true },
+            { idModulo: 45, Descripcion: 'Integraciones', Codigo: 'integrations', idPadre: 42, Activo: true },
+            { idModulo: 46, Descripcion: 'Aprobadores', Codigo: 'approval-assignments', idPadre: 42, Activo: true },
+            { idModulo: 47, Descripcion: 'Plantillas Documentos', Codigo: 'document-templates', idPadre: 42, Activo: true },
+            { idModulo: 48, Descripcion: 'Documentos Generados', Codigo: 'document-templates-generated', idPadre: 42, Activo: true },
+            { idModulo: 49, Descripcion: 'Plan de Carrera', Codigo: 'career-plan', idPadre: 42, Activo: true },
+
         ];
 
         for (const module of modules) {
@@ -613,7 +628,7 @@ export class CatalogsSeedService implements OnModuleInit {
         }
     }
 
-    // Seeds initial location types into the database.
+    // Seeds initial role permissions into the database.
     private async seedRolesPermisos() {
         const permisos = [
             // =========================================================================
@@ -641,19 +656,35 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 1, idModulo: 20, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Documentos requeridos
             { idRol: 1, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Expedientes
             { idRol: 1, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Contratos digitales
-            { idRol: 1, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Mis contratos
+            { idRol: 1, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Control de vencimientos
             { idRol: 1, idModulo: 24, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Administración de personal (Padre)
             { idRol: 1, idModulo: 25, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Empleados
-            { idRol: 1, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Movimientos internos
-            { idRol: 1, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Solicitudes pendientes
-            { idRol: 1, idModulo: 28, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Control de asistencia (Padre)
-            { idRol: 1, idModulo: 29, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Geocercas
-            { idRol: 1, idModulo: 30, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Capacitación (Padre)
-            { idRol: 1, idModulo: 31, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Cursos
-            { idRol: 1, idModulo: 32, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Cursos por Puesto
-            { idRol: 1, idModulo: 33, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Matriz de Habilidades
-            { idRol: 1, idModulo: 34, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Roleplays IA
-            { idRol: 1, idModulo: 35, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plan de Carrera
+            { idRol: 1, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Incidencias
+            { idRol: 1, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Levantar incidencia
+            { idRol: 1, idModulo: 28, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Movimientos internos
+            { idRol: 1, idModulo: 29, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Solicitudes pendientes
+            { idRol: 1, idModulo: 30, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Control de asistencia (Padre)
+            { idRol: 1, idModulo: 31, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Dashboard
+            { idRol: 1, idModulo: 32, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Bitácora
+            { idRol: 1, idModulo: 33, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Jornadas
+            { idRol: 1, idModulo: 34, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Geocercas
+            { idRol: 1, idModulo: 35, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Jornada legal
+            { idRol: 1, idModulo: 36, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Capacitación (Padre)
+            { idRol: 1, idModulo: 37, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Cursos
+            { idRol: 1, idModulo: 38, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Asignación por Puesto
+            { idRol: 1, idModulo: 39, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Matriz de Habilidades
+            { idRol: 1, idModulo: 40, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Roleplays IA
+            { idRol: 1, idModulo: 41, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plan de Carrera (Capacitación)
+            { idRol: 1, idModulo: 42, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Configuración (Padre)
+            { idRol: 1, idModulo: 43, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Roles y permisos
+            { idRol: 1, idModulo: 44, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Admin. de usuarios
+            { idRol: 1, idModulo: 45, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Integraciones
+            { idRol: 1, idModulo: 46, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Aprobadores
+            { idRol: 1, idModulo: 47, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plantillas Documentos
+            { idRol: 1, idModulo: 48, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Documentos Generados
+            { idRol: 1, idModulo: 49, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plan de Carrera (Configuración)
+
+
             // =========================================================================
             // ROL: RH (idRol: 2)
             // =========================================================================
@@ -679,19 +710,33 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 2, idModulo: 20, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Documentos requeridos
             { idRol: 2, idModulo: 21, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Expedientes
             { idRol: 2, idModulo: 22, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Contratos digitales
-            { idRol: 2, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 2, idModulo: 23, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Control de vencimientos
             { idRol: 2, idModulo: 24, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
             { idRol: 2, idModulo: 25, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Empleados
-            { idRol: 2, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Movimientos internos
-            { idRol: 2, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Solicitudes pendientes
-            { idRol: 2, idModulo: 28, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
-            { idRol: 2, idModulo: 29, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Geocercas
-            { idRol: 2, idModulo: 30, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },
-            { idRol: 2, idModulo: 31, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },
-            { idRol: 2, idModulo: 32, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },
-            { idRol: 2, idModulo: 33, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },
-            { idRol: 2, idModulo: 34, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },
-            { idRol: 2, idModulo: 35, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },
+            { idRol: 2, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Incidencias
+            { idRol: 2, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Levantar incidencia
+            { idRol: 2, idModulo: 28, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 2, idModulo: 29, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 2, idModulo: 30, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 2, idModulo: 31, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Dashboard
+            { idRol: 2, idModulo: 32, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Bitácora
+            { idRol: 2, idModulo: 33, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Jornadas
+            { idRol: 2, idModulo: 34, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Geocercas
+            { idRol: 2, idModulo: 35, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Jornada legal
+            { idRol: 2, idModulo: 36, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Capacitación (Padre)
+            { idRol: 2, idModulo: 37, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Cursos
+            { idRol: 2, idModulo: 38, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Asignación por Puesto
+            { idRol: 2, idModulo: 39, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Matriz de Habilidades
+            { idRol: 2, idModulo: 40, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Roleplays IA
+            { idRol: 2, idModulo: 41, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true }, // Plan de Carrera (Capacitación)
+            { idRol: 2, idModulo: 42, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true }, // Configuración (Padre)
+            { idRol: 2, idModulo: 43, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Roles y permisos
+            { idRol: 2, idModulo: 44, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Admin. de usuarios
+            { idRol: 2, idModulo: 45, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Integraciones
+            { idRol: 2, idModulo: 46, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Aprobadores
+            { idRol: 2, idModulo: 47, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Plantillas Documentos
+            { idRol: 2, idModulo: 48, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Documentos Generados
+            { idRol: 2, idModulo: 49, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Plan de Carrera (Configuración)
 
             // =========================================================================
             // ROL: FINANZAS (idRol: 3)
@@ -718,19 +763,34 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 3, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
             { idRol: 3, idModulo: 21, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
             { idRol: 3, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
-            { idRol: 3, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
+            { idRol: 3, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Control de vencimientos
             { idRol: 3, idModulo: 24, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
             { idRol: 3, idModulo: 25, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
-            { idRol: 3, idModulo: 26, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
-            { idRol: 3, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
-            { idRol: 3, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
-            { idRol: 3, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
-            { idRol: 3, idModulo: 30, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 3, idModulo: 31, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 3, idModulo: 32, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 3, idModulo: 33, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 3, idModulo: 34, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 3, idModulo: 35, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
+            { idRol: 3, idModulo: 26, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Incidencias
+            { idRol: 3, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Levantar incidencia
+            { idRol: 3, idModulo: 28, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 3, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 3, idModulo: 30, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 3, idModulo: 31, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Dashboard
+            { idRol: 3, idModulo: 32, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bitácora
+            { idRol: 3, idModulo: 33, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Jornadas
+            { idRol: 3, idModulo: 34, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
+            { idRol: 3, idModulo: 35, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Jornada legal
+            { idRol: 3, idModulo: 36, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Capacitación (Padre)
+            { idRol: 3, idModulo: 37, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Cursos
+            { idRol: 3, idModulo: 38, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Asignación por Puesto
+            { idRol: 3, idModulo: 39, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Matriz de Habilidades
+            { idRol: 3, idModulo: 40, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Roleplays IA
+            { idRol: 3, idModulo: 41, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plan de Carrera (Capacitación)
+            { idRol: 3, idModulo: 42, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Configuración (Padre)
+            { idRol: 3, idModulo: 43, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Roles y permisos
+            { idRol: 3, idModulo: 44, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Admin. de usuarios
+            { idRol: 3, idModulo: 45, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Integraciones
+            { idRol: 3, idModulo: 46, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Aprobadores
+            { idRol: 3, idModulo: 47, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plantillas Documentos
+            { idRol: 3, idModulo: 48, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Documentos Generados
+            { idRol: 3, idModulo: 49, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plan de Carrera (Configuración)
+
 
             // =========================================================================
             // ROL: RECLUTADOR (idRol: 4)
@@ -756,20 +816,35 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 4, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
             { idRol: 4, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
             { idRol: 4, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
-            { idRol: 2, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Contratos digitales
-            { idRol: 4, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Mis contratos
+            { idRol: 4, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Contratos digitales
+            { idRol: 4, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de vencimientos
             { idRol: 4, idModulo: 24, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
             { idRol: 4, idModulo: 25, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
-            { idRol: 4, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
-            { idRol: 4, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
-            { idRol: 4, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
-            { idRol: 4, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
-            { idRol: 4, idModulo: 30, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 4, idModulo: 31, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 4, idModulo: 32, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 4, idModulo: 33, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 4, idModulo: 34, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 4, idModulo: 35, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
+            { idRol: 4, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Incidencias
+            { idRol: 4, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Levantar incidencia
+            { idRol: 4, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 4, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 4, idModulo: 30, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 4, idModulo: 31, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Dashboard
+            { idRol: 4, idModulo: 32, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bitácora
+            { idRol: 4, idModulo: 33, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Jornadas
+            { idRol: 4, idModulo: 34, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
+            { idRol: 4, idModulo: 35, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Jornada legal
+            { idRol: 4, idModulo: 36, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Capacitación (Padre)
+            { idRol: 4, idModulo: 37, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Cursos
+            { idRol: 4, idModulo: 38, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Asignación por Puesto
+            { idRol: 3, idModulo: 39, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },   // Matriz de Habilidades
+            { idRol: 4, idModulo: 40, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Roleplays IA
+            { idRol: 4, idModulo: 41, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plan de Carrera (Capacitación)
+            { idRol: 4, idModulo: 42, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Configuración (Padre)
+            { idRol: 4, idModulo: 43, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Roles y permisos
+            { idRol: 4, idModulo: 44, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Admin. de usuarios
+            { idRol: 4, idModulo: 45, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Integraciones
+            { idRol: 4, idModulo: 46, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Aprobadores
+            { idRol: 4, idModulo: 47, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },   // Plantillas Documentos
+            { idRol: 4, idModulo: 48, puedeVer: true, puedeCrear: true, puedeActualizar: false, puedeEliminar: false, activo: true },  // Documentos Generados
+            { idRol: 4, idModulo: 49, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plan de Carrera (Configuración)
+
             // =========================================================================
             // ROL: MANAGER (idRol: 5)
             // =========================================================================
@@ -795,19 +870,35 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 5, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
             { idRol: 5, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
             { idRol: 5, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
-            { idRol: 5, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
+            { idRol: 5, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Control de vencimientos
             { idRol: 5, idModulo: 24, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Administración de personal (Padre)
             { idRol: 5, idModulo: 25, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
-            { idRol: 5, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Movimientos internos
-            { idRol: 5, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Solicitudes pendientes
-            { idRol: 5, idModulo: 28, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
-            { idRol: 5, idModulo: 29, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas (Solo lectura)
-            { idRol: 5, idModulo: 30, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 5, idModulo: 31, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 5, idModulo: 32, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 5, idModulo: 33, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 5, idModulo: 34, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 5, idModulo: 35, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
+            { idRol: 5, idModulo: 26, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Incidencias
+            { idRol: 5, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Levantar incidencia
+            { idRol: 5, idModulo: 28, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Movimientos internos
+            { idRol: 5, idModulo: 29, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Solicitudes pendientes
+            { idRol: 5, idModulo: 30, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 5, idModulo: 31, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Dashboard
+            { idRol: 5, idModulo: 32, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bitácora
+            { idRol: 5, idModulo: 33, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Jornadas
+            { idRol: 5, idModulo: 34, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas (Solo lectura)
+            { idRol: 5, idModulo: 35, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Jornada legal
+            { idRol: 5, idModulo: 36, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Capacitación (Padre)
+            { idRol: 5, idModulo: 37, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Cursos
+            { idRol: 5, idModulo: 38, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Asignación por Puesto
+            { idRol: 5, idModulo: 39, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Matriz de Habilidades
+            { idRol: 5, idModulo: 40, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Roleplays IA
+            { idRol: 5, idModulo: 41, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },  // Plan de Carrera (Capacitación)
+            { idRol: 5, idModulo: 42, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Configuración (Padre)
+            { idRol: 5, idModulo: 43, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Roles y permisos
+            { idRol: 5, idModulo: 44, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Admin. de usuarios
+            { idRol: 5, idModulo: 45, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Integraciones
+            { idRol: 5, idModulo: 46, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Aprobadores
+            { idRol: 5, idModulo: 47, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plantillas Documentos
+            { idRol: 5, idModulo: 48, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Documentos Generados
+            { idRol: 5, idModulo: 49, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Plan de Carrera (Configuración)
+
+
             // =========================================================================
             // ROL: EMPLEADO (idRol: 6)
             // =========================================================================
@@ -829,23 +920,38 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 6, idModulo: 16, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Bolsa de trabajo
             { idRol: 6, idModulo: 17, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Vacantes
             { idRol: 6, idModulo: 18, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Entrevistas
-            { idRol: 6, idModulo: 19, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes digitales (Padre)
+            { idRol: 6, idModulo: 19, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes digitales (Padre)
             { idRol: 6, idModulo: 20, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos requeridos
-            { idRol: 6, idModulo: 21, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Expedientes
-            { idRol: 6, idModulo: 22, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
-            { idRol: 6, idModulo: 23, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Mis contratos
-            { idRol: 6, idModulo: 24, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
+            { idRol: 6, idModulo: 21, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Expedientes
+            { idRol: 6, idModulo: 22, puedeVer: false, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Contratos digitales
+            { idRol: 6, idModulo: 23, puedeVer: false, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Control de vencimientos
+            { idRol: 6, idModulo: 24, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Administración de personal (Padre)
             { idRol: 6, idModulo: 25, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Empleados
-            { idRol: 6, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
-            { idRol: 6, idModulo: 27, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
-            { idRol: 6, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
-            { idRol: 6, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
-            { idRol: 6, idModulo: 30, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 6, idModulo: 31, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 6, idModulo: 32, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 6, idModulo: 33, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 6, idModulo: 34, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
-            { idRol: 6, idModulo: 35, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },
+            { idRol: 6, idModulo: 26, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Incidencias
+            { idRol: 6, idModulo: 27, puedeVer: true, puedeCrear: true, puedeActualizar: false, puedeEliminar: false, activo: true },  // Levantar incidencia
+            { idRol: 6, idModulo: 28, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Movimientos internos
+            { idRol: 6, idModulo: 29, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Solicitudes pendientes
+            { idRol: 6, idModulo: 30, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Control de asistencia (Padre)
+            { idRol: 6, idModulo: 31, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Dashboard
+            { idRol: 6, idModulo: 32, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Bitácora
+            { idRol: 6, idModulo: 33, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Jornadas
+            { idRol: 6, idModulo: 34, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Geocercas
+            { idRol: 6, idModulo: 35, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Jornada legal
+            { idRol: 6, idModulo: 36, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Capacitación (Padre)
+            { idRol: 6, idModulo: 37, puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false, activo: true },  // Cursos (Ver y completar)
+            { idRol: 6, idModulo: 38, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Asignación por Puesto
+            { idRol: 6, idModulo: 39, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Matriz de Habilidades (Ver las propias)
+            { idRol: 6, idModulo: 40, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false, activo: true },   // Roleplays IA (Practicar)
+            { idRol: 6, idModulo: 41, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Plan de Carrera (Capacitación - Ver el propio)
+            { idRol: 6, idModulo: 42, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Configuración (Padre)
+            { idRol: 6, idModulo: 43, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Roles y permisos
+            { idRol: 6, idModulo: 44, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Admin. de usuarios
+            { idRol: 6, idModulo: 45, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Integraciones
+            { idRol: 6, idModulo: 46, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Aprobadores
+            { idRol: 6, idModulo: 47, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plantillas Documentos
+            { idRol: 6, idModulo: 48, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos Generados
+            { idRol: 6, idModulo: 49, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plan de Carrera (Configuración)
+
         ];
 
         for (const permiso of permisos) {

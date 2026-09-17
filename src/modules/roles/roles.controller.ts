@@ -3,6 +3,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -15,15 +17,20 @@ export class RolesController {
     @ApiOperation({ summary: 'Get all roles permissions', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Roles permissions obtained successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-    async getRoles() {
-        return this.rolesService.findAll();
+    async getRoles(
+        @GetActiveUser() user: ActiveUserDto
+    ) {
+        return this.rolesService.findAll(user);
     }
 
     @Get(':id')
     @ApiOperation({ summary: 'Get a role by id', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Role obtained successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-    async getRole(@Param('id') id: string) {
-        return this.rolesService.findOne(Number(id));
+    async getRole(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('id') id: string
+    ) {
+        return this.rolesService.findOne(user, Number(id));
     }
 }

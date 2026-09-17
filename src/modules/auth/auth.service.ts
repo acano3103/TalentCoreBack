@@ -50,7 +50,7 @@ export class AuthService {
         // 1. System users (Staff / auth_user)
         const userSystem = await this.dataService.getUserSystem(username);
         if (!userSystem) {
-            throw new UnauthorizedException('El usuario no existe o las credenciales son inválidas');
+            throw new UnauthorizedException('El usuario ingresado no existe');
         }
 
         if (!userSystem.is_active) throw new UnauthorizedException('El usuario no está activo');
@@ -256,7 +256,7 @@ export class AuthService {
             isSuperuser = Boolean(user?.is_superuser);
             idTenant = (user as any)?.idTenant || null;
 
-            userData = await this.dataService.getStaffData(userId, fullName);
+            userData = await this.dataService.getStaffData(userId, fullName, idTenant);
 
             // Inyectamos is_superuser e idTenant al objeto de respuesta para el front
             userData.is_superuser = isSuperuser;

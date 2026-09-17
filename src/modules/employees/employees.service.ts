@@ -22,6 +22,7 @@ export class EmployeesService {
     const employeePromise = this.prisma.$queryRaw<EmployeeQueryResult[]>`
     SELECT 
       ep.idEmpleado,
+      ep.numeroEmpleado,
       ep.nombre,
       ep.primerApellido,
       ep.segundoApellido,

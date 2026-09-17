@@ -7,7 +7,6 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
-import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard)
@@ -16,10 +15,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
   @Get()
-  @ApiOperation({
-    summary: 'Get all users',
-    description: 'Returns the list of system users (auth_user table). Does not include passwords. Includes idRol and rol_descripcion via relUsuarioRol.',
-  })
+  @ApiOperation({ summary: 'Get all users', description: 'Returns the list of system users (auth_user table). Does not include passwords. Includes idRol and rol_descripcion via relUsuarioRol.', })
   @ApiResponse({ status: 200, description: 'List of users successfully retrieved.' })
   findAll(
     @GetActiveUser() user: ActiveUserDto,
@@ -32,10 +28,7 @@ export class UsersController {
 
   @Get(':id')
   @ApiParam({ name: 'id', type: Number, description: 'User ID' })
-  @ApiOperation({
-    summary: 'Get user by ID',
-    description: 'Returns a specific user by their ID. Does not include password. Includes idRol and rol_descripcion via relUsuarioRol.',
-  })
+  @ApiOperation({ summary: 'Get user by ID', description: 'Returns a specific user by their ID. Does not include password. Includes idRol and rol_descripcion via relUsuarioRol.', })
   @ApiResponse({ status: 200, description: 'User found.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
   async findOne(@Param('id', ParseIntPipe) id: number): Promise<AuthUserRow> {
@@ -46,10 +39,7 @@ export class UsersController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Create a new user',
-    description: 'Creates a user in auth_user with a hashed password (Django-compatible PBKDF2-SHA256) and assigns their role in relUsuarioRol. Both operations are atomic ($transaction).',
-  })
+  @ApiOperation({ summary: 'Create a new user', description: 'Creates a user in auth_user with a hashed password (Django-compatible PBKDF2-SHA256) and assigns their role in relUsuarioRol. Both operations are atomic ($transaction).', })
   @ApiResponse({ status: 201, description: 'User successfully created.' })
   @ApiResponse({ status: 409, description: 'Username already exists.' })
   @ApiResponse({ status: 400, description: 'Invalid data.' })
@@ -62,10 +52,7 @@ export class UsersController {
 
   @Put(':id')
   @ApiParam({ name: 'id', type: Number, description: 'ID of the user to edit' })
-  @ApiOperation({
-    summary: 'Update user',
-    description: 'Updates user data (first_name, last_name, email, is_active) and/or their role. Only the fields sent in the body are modified.',
-  })
+  @ApiOperation({ summary: 'Update user', description: 'Updates user data (first_name, last_name, email, is_active) and/or their role. Only the fields sent in the body are modified.', })
   @ApiResponse({ status: 200, description: 'User successfully updated.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiResponse({ status: 400, description: 'Invalid data.' })
@@ -76,9 +63,8 @@ export class UsersController {
     return this.usersService.update(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  @ApiOperation({ summary: 'Disable a user', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiOperation({ summary: 'Disable a user', description: 'Set the status of the user to false' })
   @ApiResponse({ status: 200, description: 'User disabled successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
@@ -88,9 +74,8 @@ export class UsersController {
     return this.usersService.changeStatus(id, false);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch(':id/reactivate')
-  @ApiOperation({ summary: 'Reactivate a user', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiOperation({ summary: 'Reactivate a user', description: 'Set the status of the user to true' })
   @ApiResponse({ status: 200, description: 'User reactivated successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })

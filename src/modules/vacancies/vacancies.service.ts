@@ -237,8 +237,10 @@ export class VacanciesService {
             const rows = await VacanciesQueries.getVacancyPostulantsSummary(this.prisma, companyId, Number(vacancyId)) as any[];
 
             const postulantes = rows.map((p) => {
+                const hasAiProfile = p.score_global !== null && p.score_global !== undefined;
+
                 let indices = p.indices ? (typeof p.indices === 'string' ? JSON.parse(p.indices) : p.indices) : {};
-                if (indices && Object.keys(indices).length > 0) {
+                if (hasAiProfile && indices && Object.keys(indices).length > 0) {
                     indices['indice_ajuste_tecnico'] = calculatePercentage(indices['indice_ajuste_tecnico']);
                     indices['indice_ajuste_competencial'] = calculatePercentage(indices['indice_ajuste_competencial']);
                 }
@@ -247,7 +249,7 @@ export class VacanciesService {
                     ? (typeof p.detalle_por_categoria === 'string' ? JSON.parse(p.detalle_por_categoria) : p.detalle_por_categoria)
                     : [];
 
-                if (Array.isArray(categorias)) {
+                if (hasAiProfile && Array.isArray(categorias)) {
                     categorias = categorias.map((c: any) => {
                         const { peso, justificacion, score_ponderado, ...rest } = c;
                         return {
@@ -260,10 +262,13 @@ export class VacanciesService {
                 return {
                     ...p,
                     idPostulacion: typeof p.idPostulacion === 'bigint' ? Number(p.idPostulacion) : p.idPostulacion,
-                    indices,
-                    detalle_por_categoria: categorias,
+                    score_global: hasAiProfile ? Number(p.score_global) : null,
+                    estado_proceso: p.estado_proceso || 'Pendiente de evaluación',
+                    indices: hasAiProfile ? indices : null,
+                    detalle_por_categoria: hasAiProfile ? categorias : [],
                     rutaCV: p.rutaCV,
-                    semaforo_global: getScoreTrafficLight(Number(p.score_global)),
+                    semaforo_global: hasAiProfile ? getScoreTrafficLight(Number(p.score_global)) : 'sin_evaluar',
+                    hasAiProfile, // Flag para que el frontend distinga si muestra el dashboard o solo el visor tradicional de CV
                 };
             });
 

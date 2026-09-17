@@ -11,32 +11,35 @@ export class PostulationsQueries {
     postulationId: number,
   ): Promise<any[]> {
     return await prisma.$queryRaw`
-            SELECT
-                p.idPostulacion,
-                p.nombre,
-                p.primerApellido,
-                p.segundoApellido,
-                p.fechaRegistro,
-                c.NombrePuesto,
-                ep.descripcion AS estatus_postulacion,
-                pp.resumen,
-                pp.estado_proceso,
-                pp.score_global,
-                pp.clasificacion,
-                pp.decision,
-                pp.indices,
-                pp.detalle_por_categoria,
-                pp.fortalezas_clave,
-                pp.brechas_criticas,
-                pp.requisitos_knockout                   
-            FROM PerfilPostulante pp
-            INNER JOIN Postulaciones p ON p.idPostulacion = pp.idPostulacion
-            INNER JOIN Vacantes v ON p.idVacante = v.idVacante
-            INNER JOIN CatPuestos c ON v.idPuesto = c.idPuesto
-            LEFT JOIN CatEstatusPostulacion ep ON p.idEstatus = ep.idEstatusPostulacion
-            WHERE pp.idPostulacion = ${postulationId}
-              AND v.idEmpresa = ${companyId};
-        `;
+      SELECT
+        p.idPostulacion,
+        p.nombre,
+        p.primerApellido,
+        p.segundoApellido,
+        p.correo,
+        p.telefono,
+        p.rutaCV,
+        p.fechaRegistro,
+        c.NombrePuesto,
+        ep.descripcion AS estatus_postulacion,
+        pp.resumen,
+        pp.estado_proceso,
+        pp.score_global,
+        pp.clasificacion,
+        pp.decision,
+        pp.indices,
+        pp.detalle_por_categoria,
+        pp.fortalezas_clave,
+        pp.brechas_criticas,
+        pp.requisitos_knockout                   
+      FROM Postulaciones p
+      INNER JOIN Vacantes v ON p.idVacante = v.idVacante
+      INNER JOIN CatPuestos c ON v.idPuesto = c.idPuesto
+      LEFT JOIN CatEstatusPostulacion ep ON p.idEstatus = ep.idEstatusPostulacion
+      LEFT JOIN PerfilPostulante pp ON p.idPostulacion = pp.idPostulacion
+      WHERE p.idPostulacion = ${postulationId}
+        AND v.idEmpresa = ${companyId};
+    `;
   }
 }
 

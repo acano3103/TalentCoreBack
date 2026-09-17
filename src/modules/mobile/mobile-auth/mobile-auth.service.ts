@@ -238,7 +238,7 @@ export class MobileAuthService {
             isSuperuser = Boolean(user?.is_superuser);
             idTenant = (user as any)?.idTenant || null;
 
-            userData = await this.dataService.getStaffData(userId, fullName);
+            userData = await this.dataService.getStaffData(userId, fullName, idTenant);
             userData.is_superuser = isSuperuser;
             userData.idTenant = idTenant;
         } else {
