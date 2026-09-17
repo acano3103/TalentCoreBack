@@ -584,7 +584,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 37, Descripcion: 'Cursos', Codigo: 'courses', idPadre: 36, Activo: true },
             { idModulo: 38, Descripcion: 'Asignación por Puesto', Codigo: 'job-courses', idPadre: 36, Activo: true },
             { idModulo: 39, Descripcion: 'Matriz de Habilidades', Codigo: 'skills-matrix', idPadre: 36, Activo: true },
-            { idModulo: 40, Descripcion: 'Roleplays IA', Codigo: 'ai-roleplays', idPadre: 36, Activo: true },
+            { idModulo: 40, Descripcion: 'Roleplays IA', Codigo: 'ai-roleplay', idPadre: 36, Activo: true },
             { idModulo: 41, Descripcion: 'Plan de Carrera', Codigo: 'career-plan', idPadre: 36, Activo: true },
             { idModulo: 42, Descripcion: 'Configuración', Codigo: 'configuration', idPadre: null, Activo: true },
             { idModulo: 43, Descripcion: 'Roles y permisos', Codigo: 'roles-permissions', idPadre: 42, Activo: true },
@@ -594,6 +594,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idModulo: 47, Descripcion: 'Plantillas Documentos', Codigo: 'document-templates', idPadre: 42, Activo: true },
             { idModulo: 48, Descripcion: 'Documentos Generados', Codigo: 'document-templates-generated', idPadre: 42, Activo: true },
             { idModulo: 49, Descripcion: 'Plan de Carrera', Codigo: 'career-plan', idPadre: 42, Activo: true },
+
         ];
 
         for (const module of modules) {
@@ -682,6 +683,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 1, idModulo: 47, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plantillas Documentos
             { idRol: 1, idModulo: 48, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Documentos Generados
             { idRol: 1, idModulo: 49, puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true, activo: true }, // Plan de Carrera (Configuración)
+
 
             // =========================================================================
             // ROL: RH (idRol: 2)
@@ -789,6 +791,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 3, idModulo: 48, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Documentos Generados
             { idRol: 3, idModulo: 49, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plan de Carrera (Configuración)
 
+
             // =========================================================================
             // ROL: RECLUTADOR (idRol: 4)
             // =========================================================================
@@ -895,6 +898,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 5, idModulo: 48, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Documentos Generados
             { idRol: 5, idModulo: 49, puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true },  // Plan de Carrera (Configuración)
 
+
             // =========================================================================
             // ROL: EMPLEADO (idRol: 6)
             // =========================================================================
@@ -947,6 +951,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { idRol: 6, idModulo: 47, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plantillas Documentos
             { idRol: 6, idModulo: 48, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Documentos Generados
             { idRol: 6, idModulo: 49, puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false, activo: true }, // Plan de Carrera (Configuración)
+
         ];
 
         for (const permiso of permisos) {

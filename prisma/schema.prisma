@@ -1869,6 +1869,7 @@ model RolePlayLlamadas {
   @@index([idTenant], map: "idx_rolellamadas_idTenant")
 }
 
+
 model RolePlays {
   idRolePlay           Int                  @id @default(autoincrement())
   idTenant             Int

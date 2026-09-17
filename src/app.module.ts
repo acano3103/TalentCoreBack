@@ -31,6 +31,7 @@ import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CoursesModule } from './modules/courses/courses.module';
+import { RoleplaysModule } from './modules/roleplays/roleplays.module';
 import { CareerPlanModule } from './modules/career-plan/career-plan.module';
 import { ConfigurationModule } from './modules/configuration/configuration.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
@@ -84,6 +85,7 @@ import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashb
     EmployeesModule,
     InternalMovementsModule,
     CoursesModule,
+    RoleplaysModule,
     CareerPlanModule,
     ConfigurationModule,
     SuperAdminModule,
