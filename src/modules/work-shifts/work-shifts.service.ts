@@ -240,6 +240,119 @@ export class WorkShiftsService {
         };
     }
 
+
+        async findMine(user: ActiveUserDto, companyId: number, startDateStr?: string) {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+
+        const authUser = await this.prisma.auth_user.findUnique({
+            where: { id: user.id },
+            include: { Empleados: { select: { idEmpleado: true }, take: 1 } },
+        });
+
+        if (!authUser?.Empleados?.[0]?.idEmpleado) {
+            throw new InternalServerErrorException('El usuario no tiene un empleado asociado.');
+        }
+
+        const empId = authUser.Empleados[0].idEmpleado;
+        const { lunes, domingo, diasSemanaFechas } = this.getWeekRange(startDateStr);
+        const anioConsulta = lunes.getFullYear();
+
+        let horasSemanalesLimite = 48.0;
+        let isReformaActiva = false;
+
+        const configLegal = await this.prisma.configuracionJornadaLegal.findFirst({
+            where: { idEmpresa: companyId, idTenant: user.idTenant, anio: anioConsulta, activo: true },
+            select: { horasSemana: true },
+        });
+
+        if (configLegal && configLegal.horasSemana) {
+            horasSemanalesLimite = Number(configLegal.horasSemana);
+            isReformaActiva = true;
+        }
+
+        const limiteMinutosLegal = Math.round(horasSemanalesLimite * 60);
+
+        const empleado = await this.prisma.$queryRaw<any[]>`
+            SELECT 
+                ep.idEmpleado,
+                ep.numeroEmpleado,
+                TRIM(CONCAT(ep.nombre, ' ', ep.primerApellido, ' ', COALESCE(ep.segundoApellido, ''))) AS nombreCompleto,
+                p.NombrePuesto AS puesto,
+                COALESCE(cm.Descripcion, 'Turno Estándar') AS turno
+            FROM Empleados ep
+            LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+            LEFT JOIN CatModalidad cm ON cm.idModalidad = ep.idModalidad
+            WHERE ep.idEmpleado = ${empId} AND ep.idEmpresa = ${companyId} AND ep.idTenant = ${user.idTenant}
+        `;
+
+        if (empleado.length === 0) {
+            throw new InternalServerErrorException('No se encontró el registro de empleado.');
+        }
+
+        const fechaInicioStr = lunes.toISOString().split('T')[0];
+        const fechaFinStr = domingo.toISOString().split('T')[0];
+
+        const jornadas = await this.prisma.$queryRaw<any[]>`
+            SELECT idJornada, idEmpleado, DATE_FORMAT(fecha, '%Y-%m-%d') as fecha,
+                   horaEntradaReal, horaSalidaReal, minutosTrabajados, minutosRetardo, estatusJornada
+            FROM JornadasEmpleado
+            WHERE idEmpleado = ${empId} AND fecha >= ${fechaInicioStr} AND fecha <= ${fechaFinStr}
+        `;
+
+        const horariosProgramados = await this.prisma.horariosEmpleado.findMany({
+            where: { idEmpleado: empId },
+            select: { DiaSemana: true },
+        });
+
+        let totalMinutosSemana = 0;
+        const semanaDias = diasSemanaFechas.map(({ fechaStr, diaNombre }) => {
+            const jornadaDia = jornadas.find(j => j.fecha === fechaStr);
+            const tieneHorarioConfigurado = horariosProgramados.some(h => h.DiaSemana === diaNombre);
+
+            if (jornadaDia) {
+                const minutos = Number(jornadaDia.minutosTrabajados) || 0;
+                totalMinutosSemana += minutos;
+                let displayTexto = this.formatMinutosAHora(minutos);
+                let variant: string = 'cerrada';
+                if (jornadaDia.estatusJornada === 'CIERRE_AUTOMATICO') { displayTexto = `${displayTexto} auto`; variant = 'cierre_automatico'; }
+                else if (jornadaDia.estatusJornada === 'ABIERTA' || jornadaDia.estatusJornada === 'INCOMPLETA') { displayTexto = 'Sin salida'; variant = 'incompleta'; }
+                else if (jornadaDia.estatusJornada === 'FALTA') { displayTexto = 'Falta'; variant = 'falta'; }
+
+                return { fecha: fechaStr, dia: diaNombre, texto: displayTexto, minutos, estatus: jornadaDia.estatusJornada, variant, minutosRetardo: Number(jornadaDia.minutosRetardo) || 0, horaEntrada: jornadaDia.horaEntradaReal, horaSalida: jornadaDia.horaSalidaReal };
+            }
+
+            if (!tieneHorarioConfigurado) {
+                               return { fecha: fechaStr, dia: diaNombre, texto: 'Descanso', minutos: 0, estatus: 'DESCANSO', variant: 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
+            }
+
+            const yaPaso = new Date(`${fechaStr}T23:59:59`) < new Date();
+                    return { fecha: fechaStr, dia: diaNombre, texto: yaPaso ? 'Falta' : '-', minutos: 0, estatus: yaPaso ? 'FALTA' : 'PENDIENTE', variant: yaPaso ? 'falta' : 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
+        });
+
+        const porcentajeCumplimiento = Number(((totalMinutosSemana / limiteMinutosLegal) * 100).toFixed(1));
+
+        return {
+            idEmpleado: empId,
+            numeroEmpleado: empleado[0].numeroEmpleado,
+            nombreCompleto: empleado[0].nombreCompleto,
+            puesto: empleado[0].puesto,
+            turno: empleado[0].turno,
+            dias: semanaDias,
+            totalHorasSemana: this.formatMinutosAHora(totalMinutosSemana),
+            totalMinutosSemana,
+            porcentajeCumplimiento,
+            semana: {
+                inicio: fechaInicioStr,
+                fin: fechaFinStr,
+                anio: anioConsulta,
+                horasLimiteLegal: horasSemanalesLimite,
+                reformaActiva: isReformaActiva,
+            },
+        };
+    }
+
     private getWeekRange(startDateStr?: string) {
         let baseDate = startDateStr ? new Date(`${startDateStr}T00:00:00`) : new Date();
         if (isNaN(baseDate.getTime())) baseDate = new Date();

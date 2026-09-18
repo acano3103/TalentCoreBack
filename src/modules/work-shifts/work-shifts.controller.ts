@@ -13,6 +13,21 @@ export class WorkShiftsController {
   constructor(private readonly workShiftsService: WorkShiftsService) { }
 
   // This endpoint returns all paginated work shifts for a company
+
+
+  @Get('mine')
+  @ApiOperation({ summary: 'Get my work shifts', description: 'Returns the current week work shift for the logged-in employee.' })
+  @ApiResponse({ status: 200, description: 'Weekly work shift data for the logged-in employee.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findMine(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('startDate') startDate?: string,
+  ) {
+    return this.workShiftsService.findMine(user, companyId, startDate);
+  }
+
+
   @Get()
   @ApiOperation({ summary: 'Get all work shifts', description: 'Returns the list of system work shifts for a company.' })
   @ApiResponse({ status: 200, description: 'List of work shifts successfully retrieved.' })
