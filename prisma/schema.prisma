@@ -2029,6 +2029,18 @@ model TenantAiFeatures {
   @@index([idTenant, activo], map: "idx_tenant_ai_lookup")
 }
 
+model TenantConfiguracionesModulos {
+  idConfiguracion Int      @id @default(autoincrement())
+  idTenant        Int
+  moduloCodigo    String   @db.VarChar(100)
+  configuracion   Json
+  activo          Boolean  @default(true)
+  fechaCreacion   DateTime @default(now()) @db.DateTime(0)
+  fechaModif      DateTime @default(now()) @db.DateTime(0)
+
+  @@unique([idTenant, moduloCodigo], map: "uq_tenant_modulo_config")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA

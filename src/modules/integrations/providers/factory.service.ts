@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ZoomProvider } from './communication/zoom.provider';
 import { OpenAiProvider } from './ia/openai.provider';
+import { ElevenLabsProvider } from './ia/elevenlabs.provider';
 import { ArtemisProvider } from './workforce-management/artemis/artemis.provider';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class IntegrationsFactory {
         private prisma: PrismaService,
         private zoomProvider: ZoomProvider,
         private openAiProvider: OpenAiProvider,
+        private elevenLabsProvider: ElevenLabsProvider, 
         private artemisProvider: ArtemisProvider
     ) { }
 
@@ -29,6 +31,8 @@ export class IntegrationsFactory {
                 throw new BadRequestException('Proveedor Teams aún no implementado');
             case 'OPENAI':
                 return this.openAiProvider;
+            case 'ELEVENLABS':                                 
+                return this.elevenLabsProvider;               
             case 'GEMINI':
                 throw new BadRequestException('Proveedor Gemini aún no implementado');
             case 'ARTEMIS':

@@ -68,8 +68,21 @@ export class ArtemisService {
             canal = 'NFC';
         }
 
-        // 4. Fechas y día de la semana
-        const fechaChecadaDate = new Date(dto.FechaChecada);
+        // 4. Fechas y día de la semana (Sanitización y forzado a UTC)
+        let fechaRaw = (dto.FechaChecada || '').trim();
+
+        // Si viene sin indicador de zona horaria ('Z' o '+/-HH:mm'), forzamos UTC
+        if (!fechaRaw.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(fechaRaw)) {
+            if (fechaRaw.includes('.')) {
+                const [fechaParte, decimales] = fechaRaw.split('.');
+                // JS Date solo acepta hasta 3 dígitos de milisegundos
+                fechaRaw = `${fechaParte}.${decimales.slice(0, 3)}Z`;
+            } else {
+                fechaRaw = `${fechaRaw}Z`;
+            }
+        }
+
+        const fechaChecadaDate = new Date(fechaRaw);
         if (isNaN(fechaChecadaDate.getTime())) {
             throw new BadRequestException('FechaChecada inválida');
         }
