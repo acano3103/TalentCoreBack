@@ -21,7 +21,6 @@ import { EventsModule } from './modules/events/events.module';
 import { OrganizationChartModule } from './modules/positions/organization-chart/organization-chart.module';
 import { HeadcountModule } from './modules/headcount/headcount.module';
 import { RolesModule } from './modules/roles/roles.module';
-import { VacanciesController } from './modules/vacancies/vacancies.controller';
 import { VacanciesModule } from './modules/vacancies/vacancies.module';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
 import { DigitalFilesModule } from './modules/digital-files/digital-files.module';
@@ -42,6 +41,8 @@ import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
 import { LegalWorkdayModule } from './modules/legal-workday/legal-workday.module';
 import { LogbookModule } from './modules/logbook/logbook.module';
 import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashboard/attendance-dashboard.module';
+import { AttendanceTrackingConfigModule } from './modules/config/attendance-config/attendance-config.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
 
 @Module({
   imports: [
@@ -50,16 +51,16 @@ import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashb
       validationSchema: envValidationSchema,
     }),
     ScheduleModule.forRoot(),
-  ServeStaticModule.forRoot(
-  {
-    rootPath: join(process.cwd(), 'public'),
-    serveRoot: '/public',
-  },
-  {
-    rootPath: process.env.MEDIA_ROOT_PATH || join(process.cwd(), 'media'),
-    serveRoot: '/media',
-  }
-),
+    ServeStaticModule.forRoot(
+      {
+        rootPath: join(process.cwd(), 'public'),
+        serveRoot: '/public',
+      },
+      {
+        rootPath: process.env.MEDIA_ROOT_PATH || join(process.cwd(), 'media'),
+        serveRoot: '/media',
+      }
+    ),
     PrismaModule,
     AuthModule,
     PositionsModule,
@@ -94,7 +95,9 @@ import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashb
     WorkShiftsModule,
     LegalWorkdayModule,
     LogbookModule,
-    AttendanceDashboardModule
+    AttendanceDashboardModule,
+    AttendanceTrackingConfigModule,
+    AttendanceModule
   ],
   controllers: [],
   providers: [AreasService, GeofencesService],
