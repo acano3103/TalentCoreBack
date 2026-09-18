@@ -66,7 +66,7 @@ export class AttendanceTrackingConfigService {
             });
 
             this.logger.log(
-                `Configuración de asistencias actualizada exitosamente para tenant ${idTenant} (Empresa: ${companyId})`,
+                `Configuración de asistencias actualizada exitosamente para tenant ${idTenant}`,
             );
 
             return {
