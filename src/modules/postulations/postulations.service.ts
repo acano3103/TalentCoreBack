@@ -302,7 +302,13 @@ export class PostulationsService {
   }
 
   // Esta función actualiza el estatus de una postulación por su id
-  async updateStatus(companyId: number, postulationId: number, dto: UpdatePostulationStatusDto, user: ActiveUserDto, files: Express.Multer.File[]) {
+  async updateStatus(
+    companyId: number,
+    postulationId: number,
+    dto: UpdatePostulationStatusDto,
+    user: ActiveUserDto,
+    files: Express.Multer.File[]
+  ) {
     try {
       const postulation = await this.prisma.postulaciones.findFirst({
         where: { idPostulacion: postulationId }
@@ -316,6 +322,7 @@ export class PostulationsService {
       // Obtenemos el status actual y el nuevo status
       const currentStatus = postulation.idEstatus || 1;
       const nextStatus = dto.statusId;
+
       // Validamos que la transición sea permitida
       const allowedTransitions = ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
       if (!allowedTransitions.includes(nextStatus)) {
@@ -325,7 +332,7 @@ export class PostulationsService {
         throw new BadRequestException(`No se puede cambiar de ${currentStatusName} a ${nextStatusName}. Estado actual: ${currentStatusName}, Estados permitidos: ${allowedNames.join(', ')}`);
       }
 
-      // Si el nuevo estatus es contratado
+      // Si el nuevo estatus es contratado/reclutado
       if (dto.statusId === 6) {
         const vacancy = await this.prisma.vacantes.findFirst({
           where: { idVacante: postulation.idVacante }
@@ -336,6 +343,26 @@ export class PostulationsService {
           throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
+        // Parseamos la data extra que viene del front
+        let extraData: any = {};
+        if (dto.extra_data) {
+          try {
+            extraData = typeof dto.extra_data === 'string' ? JSON.parse(dto.extra_data) : dto.extra_data;
+          } catch (e) {
+            throw new BadRequestException('Formato inválido en extra_data');
+          }
+        }
+
+        // Formateamos horarios si vienen
+        const formattedSchedules = Array.isArray(extraData.schedules)
+          ? extraData.schedules.map((s: any) => ({
+            dia: s.dia,
+            horaEntrada: s.horaEntrada,
+            horaSalida: s.horaSalida,
+            modalidad: s.modalidad ? String(s.modalidad).toUpperCase() : 'PRESENCIAL',
+          }))
+          : [];
+
         // Creamos el registro de empleado y el link para que pueda subir su info y documentación
         await generateEmployeeAndLink(
           {
@@ -344,10 +371,16 @@ export class PostulationsService {
             nombre: postulation.nombre,
             apellido1: postulation.primerApellido,
             apellido2: postulation.segundoApellido || '',
-            curp: postulation.curp,
+            curp: postulation.curp.toUpperCase().trim(),
             correo: postulation.correo,
             telefono: postulation.telefono,
-            numeroEmpleado: null,
+            // Valores dinámicos tomados de extraData
+            numeroEmpleado: extraData.numeroEmpleado ? String(extraData.numeroEmpleado).trim() : null,
+            fechaIngreso: extraData.fechaIngreso || new Date().toISOString().split('T')[0],
+            idModalidad: extraData.idModalidad ? Number(extraData.idModalidad) : 1,
+            schedules: formattedSchedules,
+            additionalDocuments: extraData.additionalDocuments ?? [],
+            // Datos de la vacante y empresa
             idPuesto: vacancy.idPuesto,
             idUsuario: user.uuid,
             idCampania: dto.campaignId || null,
@@ -355,7 +388,6 @@ export class PostulationsService {
             idTenant: user.idTenant,
             idJefeInmediato: vacancy.idJefeInmediato,
             idSite: vacancy.idSite,
-            idModalidad: 1,
           },
           files ?? [],
           this.prisma,
@@ -390,6 +422,6 @@ export class PostulationsService {
       this.logger.error(error);
       throw error;
     }
-
   }
+
 }

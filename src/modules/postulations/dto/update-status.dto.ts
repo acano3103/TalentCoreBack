@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional } from 'class-validator';
+import { IsInt, IsOptional, IsString } from 'class-validator';
 
 export class UpdatePostulationStatusDto {
     @ApiProperty({
@@ -20,4 +20,8 @@ export class UpdatePostulationStatusDto {
     @IsInt()
     @IsOptional()
     campaignId?: number;
+
+    @IsOptional()
+    @IsString()
+    extra_data?: string;
 }

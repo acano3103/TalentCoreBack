@@ -1498,6 +1498,7 @@ export class DigitalFilesService {
         correo: data.correo,
         telefono: data.telefono,
         numeroEmpleado: data.numeroEmpleado ? String(data.numeroEmpleado).trim() : null,
+        fechaIngreso: data.fechaIngreso || new Date().toISOString().split('T')[0],
         idPuesto: Number(data.idPuesto),
         idUsuario: activeUser.uuid,
         idCampania: data.idCampania ? Number(data.idCampania) : null,

@@ -54,6 +54,7 @@ export async function createEmployee(
     correo: string;
     telefono: string;
     numeroEmpleado: string | null;
+    fechaIngreso: string;
     idPuesto: number;
     idUsuario: string;
     idCampania: number | null;
@@ -65,7 +66,7 @@ export async function createEmployee(
   },
   prisma: PrismaClient
 ) {
-  const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, numeroEmpleado, idPuesto, idUsuario, idCampania, idEmpresa, idTenant, idJefeInmediato, idSite, idModalidad } = data;
+  const { jwtService, frontUrl, nombre, apellido1, apellido2, curp, correo, telefono, numeroEmpleado, fechaIngreso, idPuesto, idUsuario, idCampania, idEmpresa, idTenant, idJefeInmediato, idSite, idModalidad } = data;
 
   return await prisma.$transaction(async (tx) => {
     let finalNumeroEmpleado = numeroEmpleado ? numeroEmpleado.trim() : null;
@@ -91,10 +92,13 @@ export async function createEmployee(
       finalNumeroEmpleado = await generateUniqueEmployeeNumber(tx, idTenant, idEmpresa);
     }
 
+    // Aseguramos formato Date para evitar desajustes de zona horaria al guardar
+    const parsedFechaIngreso = new Date(`${fechaIngreso}T00:00:00`);
+
     await tx.$executeRaw`
       INSERT INTO Empleados (
         idEmpresa, idTenant, idPuesto, idJefeInmediato, idSite, numeroEmpleado, nombre, primerApellido, segundoApellido, idCampania,
-        curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro, idModalidad
+        fechaIngreso, curp, correo, telefonoMovil, FechaRegistro, usuarioRegistro, idModalidad
       ) VALUES (
         ${idEmpresa},
         ${idTenant},
@@ -106,6 +110,7 @@ export async function createEmployee(
         ${apellido1.trim()},
         ${apellido2.trim()},
         ${idCampania},
+        ${parsedFechaIngreso},
         ${curp.trim()},
         ${correo},
         ${telefono},

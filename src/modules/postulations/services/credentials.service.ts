@@ -22,6 +22,7 @@ export async function generateEmployeeAndLink(
         correo: string,
         telefono: string,
         numeroEmpleado: string | null,
+        fechaIngreso: string,
         idPuesto: number,
         idUsuario: string,
         idCampania: number | null,
@@ -88,6 +89,39 @@ export async function generateEmployeeAndLink(
         nombre: row.Documento,
         obligatorio: Number(row.esObligatorio) === 1
     }));
+
+    // Si RH marcó documentos adicionales, los consultamos y los agregamos a la lista del correo
+    if (data.additionalDocuments && data.additionalDocuments.length > 0) {
+        const idsAdicionales = data.additionalDocuments;
+
+        const docsAdicionalesRaw = await prisma.catDocumentos.findMany({
+            where: {
+                IdDocumento: { in: idsAdicionales },
+                Activo: true,
+            },
+            select: {
+                Descripcion: true,
+                IdDocumento: true,
+            },
+        });
+
+        // Evitamos duplicados en caso de que alguno ya estuviera en los del puesto
+        const documentosExistentesSet = new Set(documentos.map(d => d.nombre.toLowerCase().trim()));
+
+        for (const docExtra of docsAdicionalesRaw) {
+            if (!docExtra.Descripcion) continue;
+
+            const descripcionNormalizada = docExtra.Descripcion.toLowerCase().trim();
+
+            if (!documentosExistentesSet.has(descripcionNormalizada)) {
+                documentos.push({
+                    nombre: docExtra.Descripcion,
+                    obligatorio: true,
+                });
+                documentosExistentesSet.add(descripcionNormalizada);
+            }
+        }
+    }
 
     const docsEmpresaAdjuntos: string[] = [];
 
