@@ -328,6 +328,7 @@ export class EmployeesService {
     page: number,
     search: string,
     limit: number,
+    withoutManager: boolean = false,
   ) {
     const skip = (page - 1) * limit;
 
@@ -342,60 +343,68 @@ export class EmployeesService {
       )`
       : Prisma.empty;
 
+    // Condición opcional para empleados sin jefe inmediato asignado
+    const withoutManagerCondition = withoutManager
+      ? Prisma.sql`AND (ep.idJefeInmediato IS NULL OR ep.idJefeInmediato = 0)`
+      : Prisma.empty;
+
     // 1. Obtener registros paginados
     const employeesPromise = this.prisma.$queryRaw`
-    SELECT 
-      ep.idEmpleado,
-      ep.nombre,
-      ep.primerApellido,
-      ep.segundoApellido,
-      ep.correo,
-      ep.telefonoMovil,
-      p.idPuesto,
-      p.nombrePuesto,
-      a.idArea,
-      a.Descripcion AS area,
-      s.idSite,
-      s.Descripcion AS site,
-      ex.idEstatus,
-      ex.fechaActualizacion AS fechaExpedienteCompleto,
-      ep.artemisUserId, 
-      ep.artemisSyncedAt
-    FROM Empleados ep
-    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-    LEFT JOIN CatAreas a ON a.idArea = p.idArea
-    LEFT JOIN CatSites s ON s.idSite = ep.idSite
-    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-    WHERE ep.idEmpresa = ${companyId}
-      AND ep.idTenant = ${activeUser.idTenant}
-      AND ep.activo = 1
-      AND ex.idEstatus = 4
-      ${searchCondition}
-    ORDER BY ep.nombre ASC
-    LIMIT ${limit} OFFSET ${skip};
-  `;
+      SELECT 
+        ep.idEmpleado,
+        ep.nombre,
+        ep.primerApellido,
+        ep.segundoApellido,
+        ep.correo,
+        ep.telefonoMovil,
+        p.idPuesto,
+        p.nombrePuesto,
+        a.idArea,
+        a.Descripcion AS area,
+        s.idSite,
+        s.Descripcion AS site,
+        ex.idEstatus,
+        ex.fechaActualizacion AS fechaExpedienteCompleto,
+        ep.artemisUserId, 
+        ep.artemisSyncedAt, 
+        ep.idJefeInmediato
+      FROM Empleados ep
+      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatSites s ON s.idSite = ep.idSite
+      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+      WHERE ep.idEmpresa = ${companyId}
+        AND ep.idTenant = ${activeUser.idTenant}
+        AND ep.activo = 1
+        -- AND ex.idEstatus = 4
+        ${searchCondition}
+        ${withoutManagerCondition}
+      ORDER BY ep.nombre ASC
+      LIMIT ${limit} OFFSET ${skip};
+    `;
 
     // 2. Obtener el total y los no sincronizados en la misma consulta
     const metricsPromise = this.prisma.$queryRaw<{ total: number | bigint; unassignedSync: number | bigint }[]>`
-    SELECT 
-      COUNT(ep.idEmpleado) AS total,
-      SUM(
-        CASE 
-          WHEN (ep.artemisUserId IS NULL OR ep.artemisUserId = '') 
-            OR ep.artemisSyncedAt IS NULL 
-          THEN 1 
-          ELSE 0 
-        END
-      ) AS unassignedSync
-    FROM Empleados ep
-    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-    WHERE ep.idEmpresa = ${companyId}
-      AND ep.idTenant = ${activeUser.idTenant}
-      AND ep.activo = 1
-      AND ex.idEstatus = 4
-      ${searchCondition};
-  `;
+      SELECT 
+        COUNT(ep.idEmpleado) AS total,
+        SUM(
+          CASE 
+            WHEN (ep.artemisUserId IS NULL OR ep.artemisUserId = '') 
+              OR ep.artemisSyncedAt IS NULL 
+            THEN 1 
+            ELSE 0 
+          END
+        ) AS unassignedSync
+      FROM Empleados ep
+      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+      WHERE ep.idEmpresa = ${companyId}
+        AND ep.idTenant = ${activeUser.idTenant}
+        AND ep.activo = 1
+        -- AND ex.idEstatus = 4
+        ${searchCondition}
+        ${withoutManagerCondition};
+    `;
 
     // Ejecución paralela
     const [employees, metricsResult] = await Promise.all([
@@ -709,5 +718,126 @@ export class EmployeesService {
         message: 'Configuración de asistencia actualizada correctamente',
       };
     });
+  }
+
+  // Obtiene la lista de colaboradores disponibles para ser jefe inmediato según el puesto.
+  async getImmediateBossOptions(
+    companyId: number,
+    positionId: number,
+    user: ActiveUserDto,
+  ) {
+    if (!user.idTenant) throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+
+    // Buscamos el puesto para conocer el ID del puesto superior / jefe configurado
+    const puesto = await this.prisma.catPuestos.findFirst({
+      where: {
+        idPuesto: positionId,
+        idEmpresa: companyId,
+        idTenant: user.idTenant,
+      },
+      select: {
+        idPuesto: true,
+        NombrePuesto: true,
+        idJefeInmediato: true,
+      },
+    });
+
+    if (!puesto) throw new NotFoundException('El puesto indicado no existe.');
+
+    // Si el puesto no tiene configurado un puesto jefe superior (es puesto raíz)
+    if (!puesto.idJefeInmediato || puesto.idJefeInmediato === 0) return [];
+
+    // Buscamos a los empleados activos que ocupan ese puesto superior
+    const bossEmployees = await this.prisma.empleados.findMany({
+      where: {
+        idEmpresa: companyId,
+        idTenant: user.idTenant,
+        idPuesto: puesto.idJefeInmediato,
+        activo: true,
+      },
+      select: {
+        idEmpleado: true,
+        nombre: true,
+        primerApellido: true,
+        segundoApellido: true,
+      },
+      orderBy: {
+        nombre: 'asc',
+      },
+    });
+
+    const imediatePosition = await this.prisma.catPuestos.findFirst({
+      where: {
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        idPuesto: puesto.idJefeInmediato,
+      },
+      select: {
+        NombrePuesto: true,
+      },
+    });
+
+    return bossEmployees.map((b) => ({
+      idEmpleado: b.idEmpleado,
+      nombreCompleto: [b.nombre, b.primerApellido, b.segundoApellido].filter(Boolean).join(' '),
+      puesto: imediatePosition?.NombrePuesto || 'Puesto no asignado',
+    }));
+  }
+
+  // Actualiza el idJefeInmediato del empleado.
+  async updateEmployeeImmediateBoss(
+    companyId: number,
+    employeeId: number,
+    immediateBossId: number,
+    user: ActiveUserDto,
+  ) {
+    if (!user.idTenant) throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+
+    // Validar que el empleado no sea su propio jefe
+    if (employeeId === immediateBossId) {
+      throw new BadRequestException('Un empleado no puede asignarse a sí mismo como su propio jefe inmediato.');
+    }
+
+    // Validar que el empleado objetivo exista en la empresa y tenant
+    const employee = await this.prisma.empleados.findFirst({
+      where: {
+        idEmpleado: employeeId,
+        idEmpresa: companyId,
+        idTenant: user.idTenant,
+        activo: true,
+      },
+      select: { idEmpleado: true, nombre: true, primerApellido: true },
+    });
+
+    if (!employee) throw new NotFoundException('Empleado no encontrado.');
+
+    // Validar que el jefe inmediato seleccionado exista y esté activo en la misma empresa
+    const boss = await this.prisma.empleados.findFirst({
+      where: {
+        idEmpleado: immediateBossId,
+        idEmpresa: companyId,
+        idTenant: user.idTenant,
+        activo: true,
+      },
+      select: { idEmpleado: true, nombre: true, primerApellido: true },
+    });
+
+    if (!boss) {
+      throw new NotFoundException('El colaborador seleccionado como jefe inmediato no existe o no está activo.');
+    }
+
+    // 4. Actualizar el registro del empleado
+    await this.prisma.$executeRaw`
+      UPDATE Empleados
+      SET idJefeInmediato = ${immediateBossId}
+      WHERE idEmpleado = ${employeeId}
+        AND idEmpresa = ${companyId}
+        AND idTenant = ${user.idTenant};
+    `;
+
+    return {
+      success: true,
+      message: `Jefe inmediato asignado correctamente a ${employee.nombre} ${employee.primerApellido}.`,
+    };
   }
 }

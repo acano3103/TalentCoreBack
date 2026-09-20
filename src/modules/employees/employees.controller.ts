@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe, Put, ParseBoolPipe } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -8,6 +8,7 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
+import { UpdateImmediateBossDto } from './dto/update-immediate-boss.dto';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -34,10 +35,11 @@ export class EmployeesController {
     @Param('companyId', ParseIntPipe) companyId: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('without_manager', new DefaultValuePipe(false), ParseBoolPipe) withoutManager?: boolean,
   ) {
     const querySearch = search || '';
-    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit);
+    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager);
   }
 
   // Endpint para obtener un empleado por su id
@@ -62,6 +64,21 @@ export class EmployeesController {
     @Param('companyId', ParseIntPipe) companyId: number,
   ) {
     return this.employeesService.getLocationsForAttendance(companyId, activeUser);
+  }
+
+  // Endpoint para obtener los candidatos a jefe inmediato según el puesto
+  @UseGuards(JwtAuthGuard)
+  @Get('positions/:positionId/bosses/options')
+  @ApiOperation({ summary: 'Get available immediate boss candidates for a position', description: 'Returns active employees currently holding the supervisor position defined for this job position' })
+  @ApiResponse({ status: 200, description: 'Boss options retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Position not found' })
+  async getImmediateBossOptions(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('positionId', ParseIntPipe) positionId: number,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.employeesService.getImmediateBossOptions(companyId, positionId, activeUser);
   }
 
   // Endpoint que sincroniza los empleados pendientes de la empresa con artemis
@@ -105,6 +122,24 @@ export class EmployeesController {
     return this.employeesService.updateSchedule(activeUser, companyId, employeeId, scheduleData);
   }
 
+  // Endpoint para asignar o actualizar el jefe inmediato de un empleado
+  @UseGuards(JwtAuthGuard)
+  @Patch(':employeeId/immediate-boss')
+  @ApiOperation({ summary: 'Update employee immediate boss', description: 'Updates the immediate boss (idJefeInmediato) of a specific employee', })
+  @ApiResponse({ status: 200, description: 'Immediate boss updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid boss or business logic validation failed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Employee or boss not found' })
+  async updateEmployeeImmediateBoss(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() dto: UpdateImmediateBossDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.employeesService.updateEmployeeImmediateBoss(companyId, employeeId, dto.immediateBossId, activeUser);
+  }
+
+  // Endpoint para actualizar las sedes autorizadas y excepciones de DIDs del empleado
   @Put(':employeeId/attendance-config')
   @ApiOperation({ summary: 'Actualizar sedes autorizadas y excepciones de DIDs del empleado', description: 'Sincroniza las sedes donde el empleado puede pasar lista y los números telefónicos habilitados para IVR' })
   @ApiResponse({ status: 200, description: 'Configuración de asistencia actualizada exitosamente' })

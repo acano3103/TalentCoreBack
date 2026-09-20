@@ -14,6 +14,7 @@ import { Cron } from '@nestjs/schedule';
 import { generateEmployeeAndLink } from '../postulations/services/credentials.service';
 import JSZip = require('jszip');
 import { MediaPathService } from 'src/common/services/media-path.service';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class DigitalFilesService {
@@ -1578,6 +1579,351 @@ export class DigitalFilesService {
     });
 
     return { success: true, message: 'Link de acceso regenerado y correo reenviado correctamente.' };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GENERAR PLANTILLA EXCEL CON CATÁLOGOS DINÁMICOS
+  // ─────────────────────────────────────────────────────────────
+  async generateBulkTemplate(companyId: number, user: ActiveUserDto): Promise<Buffer> {
+    if (!user.idTenant) throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+
+    // Consultamos puestos y sites activos de la empresa
+    const [puestos, sites] = await Promise.all([
+      this.prisma.catPuestos.findMany({
+        where: { idEmpresa: companyId, idTenant: user.idTenant, Activo: true },
+        select: { idPuesto: true, NombrePuesto: true, idModalidad: true },
+        orderBy: { NombrePuesto: 'asc' },
+      }),
+      this.prisma.catSites.findMany({
+        where: { idEmpresa: companyId, idTenant: user.idTenant, Activo: true },
+        select: { idSite: true, Descripcion: true },
+        orderBy: { Descripcion: 'asc' },
+      }),
+    ]);
+
+    if (!puestos.length) throw new BadRequestException('No hay puestos activos registrados para esta empresa.');
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Talent Core';
+    workbook.created = new Date();
+
+    // ── Hoja 2: Catálogos (Referencia para dropdowns) ──
+    const catSheet = workbook.addWorksheet('Catalogos');
+    catSheet.state = 'veryHidden'; // Oculta para no distraer al usuario
+
+    catSheet.getCell('A1').value = 'Puestos';
+    puestos.forEach((p, idx) => {
+      catSheet.getCell(`A${idx + 2}`).value = p.NombrePuesto;
+    });
+
+    catSheet.getCell('B1').value = 'Sites';
+    sites.forEach((s, idx) => {
+      catSheet.getCell(`B${idx + 2}`).value = s.Descripcion;
+    });
+
+    // ── Hoja 1: Expedientes ──
+    const mainSheet = workbook.addWorksheet('Expedientes');
+
+    mainSheet.columns = [
+      { header: 'Nombre *', key: 'nombre', width: 20 },
+      { header: 'Primer Apellido *', key: 'apellido1', width: 20 },
+      { header: 'Segundo Apellido', key: 'apellido2', width: 20 },
+      { header: 'CURP *', key: 'curp', width: 22 },
+      { header: 'Correo Electrónico *', key: 'correo', width: 30 },
+      { header: 'Teléfono Móvil *', key: 'telefono', width: 18 },
+      { header: 'Puesto *', key: 'puesto', width: 32 },
+      { header: 'Ubicación / Site *', key: 'site', width: 24 },
+      { header: 'Número de Empleado (Opcional)', key: 'numeroEmpleado', width: 28 },
+      { header: 'Fecha de Ingreso (YYYY-MM-DD)', key: 'fechaIngreso', width: 30 },
+    ];
+
+    // Estilo para la fila de encabezados
+    const headerRow = mainSheet.getRow(1);
+    headerRow.height = 28;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1E293B' }, // Slate 800
+      };
+      cell.font = {
+        name: 'Calibri',
+        size: 11,
+        bold: true,
+        color: { argb: 'FFFFFFFF' },
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    // Fila 2 con datos de ejemplo
+    const sampleRow = mainSheet.addRow({
+      nombre: 'Juan Carlos',
+      apellido1: 'Pérez',
+      apellido2: 'García',
+      curp: 'PEGC850101HDFRRN09',
+      correo: 'juan.perez@ejemplo.com',
+      telefono: '5512345678',
+      puesto: puestos[0]?.NombrePuesto || '',
+      site: sites[0]?.Descripcion || '',
+      numeroEmpleado: 'EMP-001',
+      fechaIngreso: new Date().toISOString().split('T')[0],
+    });
+
+    sampleRow.font = { italic: true, color: { argb: 'FF64748B' } };
+
+    // Validaciones de lista desplegable (filas 2 a 500)
+    const totalPuestos = puestos.length;
+    const totalSites = sites.length;
+
+    for (let row = 2; row <= 500; row++) {
+      // Columna G: Puesto (Columna 7)
+      if (totalPuestos > 0) {
+        mainSheet.getCell(`G${row}`).dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`Catalogos!$A$2:$A$${totalPuestos + 1}`],
+          showErrorMessage: true,
+          errorTitle: 'Puesto inválido',
+          error: 'Por favor selecciona un puesto válido de la lista.',
+        };
+      }
+
+      // Columna H: Site (Columna 8)
+      if (totalSites > 0) {
+        mainSheet.getCell(`H${row}`).dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`Catalogos!$B$2:$B$${totalSites + 1}`],
+          showErrorMessage: true,
+          errorTitle: 'Site inválido',
+          error: 'Por favor selecciona un site válido de la lista.',
+        };
+      }
+    }
+
+    const uint8Array = await workbook.xlsx.writeBuffer();
+    return Buffer.from(uint8Array);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // PROCESAR ARCHIVO EXCEL CARGADO
+  // ─────────────────────────────────────────────────────────────
+  async processBulkExpedientes(
+    companyId: number,
+    file: Express.Multer.File,
+    user: ActiveUserDto,
+  ) {
+    if (!user.idTenant) throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    if (!file) throw new BadRequestException('Se requiere adjuntar un archivo Excel para la carga masiva.');
+
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(file.buffer as any);
+    } catch {
+      throw new BadRequestException('El archivo subido no es un archivo Excel válido o está dañado.');
+    }
+
+    const sheet = workbook.getWorksheet('Expedientes') || workbook.worksheets[0];
+    if (!sheet) throw new BadRequestException('El archivo Excel no contiene hojas de trabajo.');
+
+    // Obtenemos catálogos para mapear nombres a IDs
+    const [puestos, sites, modalidades] = await Promise.all([
+      this.prisma.catPuestos.findMany({
+        where: { idEmpresa: companyId, idTenant: user.idTenant, Activo: true },
+        select: { idPuesto: true, NombrePuesto: true, idModalidad: true },
+      }),
+      this.prisma.catSites.findMany({
+        where: { idEmpresa: companyId, idTenant: user.idTenant, Activo: true },
+        select: { idSite: true, Descripcion: true },
+      }),
+      this.prisma.catModalidad.findMany({
+        where: { Activo: true },
+        select: { idModalidad: true, Descripcion: true },
+      }),
+    ]);
+
+    const puestosMap = new Map<string, typeof puestos[0]>();
+    puestos.forEach((p) => puestosMap.set(p.NombrePuesto?.toLowerCase().trim() || '', p));
+
+    const sitesMap = new Map<string, number>();
+    sites.forEach((s) => sitesMap.set(s.Descripcion?.toLowerCase().trim() || '', s.idSite));
+
+    const modalidadMap = new Map<number, string>();
+    modalidades.forEach((m) => {
+      modalidadMap.set(m.idModalidad, m.Descripcion?.toUpperCase().trim() || '');
+    });
+
+    const errors: { row: number; error: string }[] = [];
+    let successCount = 0;
+    let totalProcessed = 0;
+
+    const curpRegex = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$/i;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Recorremos las filas omitiendo el header (fila 1)
+    const rowCount = sheet.rowCount;
+
+    for (let rowNumber = 2; rowNumber <= rowCount; rowNumber++) {
+      const row = sheet.getRow(rowNumber);
+
+      const rawNombre = row.getCell(1).text?.trim();
+      const rawApellido1 = row.getCell(2).text?.trim();
+      const rawApellido2 = row.getCell(3).text?.trim() || '';
+      const rawCurp = row.getCell(4).text?.trim().toUpperCase();
+      const rawCorreo = row.getCell(5).text?.trim().toLowerCase();
+      const rawTelefono = row.getCell(6).text?.trim();
+      const rawPuesto = row.getCell(7).text?.trim();
+      const rawSite = row.getCell(8).text?.trim();
+      const rawNumeroEmpleado = row.getCell(9).text?.trim() || null;
+      let rawFechaIngreso = row.getCell(10).text?.trim();
+
+      // Si la fila está completamente en blanco, la omitimos
+      if (!rawNombre && !rawApellido1 && !rawCurp && !rawCorreo) {
+        continue;
+      }
+
+      totalProcessed++;
+
+      // Validaciones básicas de campos obligatorios
+      if (!rawNombre) {
+        errors.push({ row: rowNumber, error: 'El nombre es obligatorio.' });
+        continue;
+      }
+      if (!rawApellido1) {
+        errors.push({ row: rowNumber, error: 'El primer apellido es obligatorio.' });
+        continue;
+      }
+      if (!rawCurp) {
+        errors.push({ row: rowNumber, error: 'La CURP es obligatoria.' });
+        continue;
+      }
+      if (!curpRegex.test(rawCurp)) {
+        errors.push({ row: rowNumber, error: `La CURP "${rawCurp}" no tiene un formato válido.` });
+        continue;
+      }
+      if (!rawCorreo || !emailRegex.test(rawCorreo)) {
+        errors.push({ row: rowNumber, error: `El correo "${rawCorreo || ''}" no es válido.` });
+        continue;
+      }
+      if (!rawTelefono) {
+        errors.push({ row: rowNumber, error: 'El teléfono es obligatorio.' });
+        continue;
+      }
+
+      // Validar Puesto
+      const puestoObj = puestosMap.get((rawPuesto || '').toLowerCase().trim());
+      if (!puestoObj) {
+        errors.push({ row: rowNumber, error: `El puesto "${rawPuesto}" no existe o no está activo en la empresa.` });
+        continue;
+      }
+
+      // Validar Site
+      const idSite = sitesMap.get((rawSite || '').toLowerCase().trim());
+      if (!idSite) {
+        errors.push({ row: rowNumber, error: `La ubicación / site "${rawSite}" no existe o no está activa.` });
+        continue;
+      }
+
+      // Formatear Fecha de Ingreso (fallback a hoy si está vacía o inválida)
+      if (!rawFechaIngreso || isNaN(Date.parse(rawFechaIngreso))) {
+        rawFechaIngreso = new Date().toISOString().split('T')[0];
+      } else {
+        rawFechaIngreso = new Date(rawFechaIngreso).toISOString().split('T')[0];
+      }
+
+      // Verificar que el empleado no exista ya por CURP
+      const exists = await this.prisma.empleados.findFirst({
+        where: { curp: rawCurp },
+        select: { idEmpleado: true },
+      });
+      if (exists) {
+        errors.push({ row: rowNumber, error: `La CURP ${rawCurp} ya está registrada en el sistema.` });
+        continue;
+      }
+
+      // ── Modalidad calculada según el puesto ──
+      const modalidadPuestoDesc = modalidadMap.get(puestoObj.idModalidad || 1) || '';
+      const modalidadDiaCalculada = modalidadPuestoDesc.includes('REMOTO') ? 'REMOTO' : 'PRESENCIAL';
+
+      // ── Traer horarios base del puesto ──
+      const scheduleConfig = await this.prisma.horariosPuesto.findMany({
+        where: { idPuesto: puestoObj.idPuesto },
+      });
+
+      let formattedSchedules: {
+        dia: string;
+        horaEntrada: string;
+        horaSalida: string;
+        modalidad: string;
+      }[] = [];
+
+      if (scheduleConfig.length > 0) {
+        formattedSchedules = scheduleConfig
+          .filter((h) => Boolean(h.DiaSemana))
+          .map((h) => ({
+            dia: String(h.DiaSemana).trim(),
+            horaEntrada: h.HoraEntrada ? String(h.HoraEntrada).substring(0, 5) : '09:00',
+            horaSalida: h.HoraSalida ? String(h.HoraSalida).substring(0, 5) : '18:00',
+            modalidad: modalidadDiaCalculada,
+          }));
+      }
+
+      // Si el puesto no tiene horarios configurados o quedaron vacíos, asignamos el estándar (Lunes a Viernes 9 a 6)
+      if (formattedSchedules.length === 0) {
+        const diasSemana = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
+        formattedSchedules = diasSemana.map((dia) => ({
+          dia,
+          horaEntrada: '09:00',
+          horaSalida: '18:00',
+          modalidad: modalidadDiaCalculada,
+        }));
+      }
+
+      try {
+        await generateEmployeeAndLink(
+          {
+            jwtService: this.jwtService,
+            frontUrl: this.configService.get<string>('FRONT_URL') || '',
+            nombre: rawNombre,
+            apellido1: rawApellido1,
+            apellido2: rawApellido2,
+            curp: rawCurp,
+            correo: rawCorreo,
+            telefono: rawTelefono,
+            numeroEmpleado: rawNumeroEmpleado,
+            fechaIngreso: rawFechaIngreso,
+            idPuesto: puestoObj.idPuesto,
+            idUsuario: user.uuid,
+            idCampania: null,
+            idEmpresa: companyId,
+            idTenant: user.idTenant,
+            idJefeInmediato: null,
+            idSite: idSite,
+            idModalidad: puestoObj.idModalidad || 1,
+            schedules: formattedSchedules,
+            additionalDocuments: [],
+          },
+          [],
+          this.prisma,
+          this.notifications.notify.bind(this.notifications),
+        );
+
+        successCount++;
+      } catch (err: any) {
+        errors.push({
+          row: rowNumber,
+          error: err?.message || 'Error inesperado al generar el expediente.',
+        });
+      }
+    }
+
+    return {
+      success: true,
+      message: `Carga masiva completada: ${successCount} expedientes creados exitosamente.`,
+      successCount,
+      totalProcessed,
+      errors,
+    };
   }
 
 }

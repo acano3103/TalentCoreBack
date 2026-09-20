@@ -60,7 +60,7 @@ export async function createEmployee(
     idCampania: number | null;
     idEmpresa: number;
     idTenant: number;
-    idJefeInmediato: number;
+    idJefeInmediato: number | null;
     idSite: number;
     idModalidad: number;
   },

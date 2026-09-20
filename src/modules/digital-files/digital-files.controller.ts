@@ -1,9 +1,9 @@
-import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, Post, Query, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiConsumes, ApiBody, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DigitalFilesService } from './digital-files.service';
 import { DocumentoRequeridoDto, ExpedienteResponseDto } from './dto/expediente-response.dto';
-import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { UpdateExpedienteStatusDto } from './dto/update-status.dto';
@@ -75,6 +75,26 @@ export class DigitalFilesController {
     return this.digitalFilesService.getExpediente(companyId, employeeId, activeUser);
   }
 
+  // Endpoint para descargar la plantilla Excel con catálogos dinámicos
+  @UseGuards(JwtAuthGuard)
+  @Get('bulk/template')
+  @ApiOperation({ summary: 'Download bulk upload Excel template', description: 'Generates and streams an Excel template with required fields and active company catalogs (positions, sites, etc.)' })
+  @ApiResponse({ status: 200, description: 'Template generated and downloaded successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  async downloadBulkTemplate(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.digitalFilesService.generateBulkTemplate(companyId, activeUser);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="Plantilla_Expedientes_${companyId}.xlsx"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  }
+
   // Endpoint publico para que el candidato pueda subir sus documentos
   @Get(':token/public')
   @ApiOperation({
@@ -138,6 +158,35 @@ export class DigitalFilesController {
     @GetActiveUser() activeUser: ActiveUserDto
   ) {
     return await this.digitalFilesService.insertEmployeeWithFiles(empleadoJsonRaw, documentoMapRaw, idCampania, files, activeUser);
+  }
+
+  // Endpoint para procesar el archivo Excel de expedientes masivos
+  @UseGuards(JwtAuthGuard)
+  @Post('bulk/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload and process bulk expedientes Excel file', description: 'Parses the uploaded Excel file, validates rows, creates employees, and generates digital file access links', })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Archivo Excel (.xlsx, .xls) con el formato de la plantilla',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Bulk file processed successfully' })
+  @ApiResponse({ status: 400, description: 'No file uploaded or invalid file format' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  async uploadBulkExpedientes(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.digitalFilesService.processBulkExpedientes(companyId, file, activeUser);
   }
 
   // Endpoint público para que el candidato guarde su información y documentos (sin sesión, valida el token)
