@@ -193,6 +193,11 @@ export class EmployeesService {
 
       if (obj instanceof Date) return obj;
 
+      // Detecta objetos Decimal de Prisma/decimal.js (tienen método toNumber)
+      if (typeof obj === 'object' && typeof obj.toNumber === 'function') {
+        return obj.toNumber();
+      }
+
       if (typeof obj === 'object') {
         const result: any = {};
         for (const [key, value] of Object.entries(obj)) {
