@@ -12,9 +12,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class WorkShiftsController {
   constructor(private readonly workShiftsService: WorkShiftsService) { }
 
-  // This endpoint returns all paginated work shifts for a company
-
-
+  // Regresa todos los turnos por dia para el empleado logueado
   @Get('mine')
   @ApiOperation({ summary: 'Get my work shifts', description: 'Returns the current week work shift for the logged-in employee.' })
   @ApiResponse({ status: 200, description: 'Weekly work shift data for the logged-in employee.' })
@@ -27,7 +25,7 @@ export class WorkShiftsController {
     return this.workShiftsService.findMine(user, companyId, startDate);
   }
 
-
+  // Regresa todos los turnos por dia paginados
   @Get()
   @ApiOperation({ summary: 'Get all work shifts', description: 'Returns the list of system work shifts for a company.' })
   @ApiResponse({ status: 200, description: 'List of work shifts successfully retrieved.' })

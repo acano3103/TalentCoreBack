@@ -68,7 +68,7 @@ export class WorkShiftsService {
             WHERE ep.idEmpresa = ${companyId}
                 AND ep.idTenant = ${user.idTenant}
                 AND ep.activo = 1
-                AND exp.idEstatus = 4
+                -- AND exp.idEstatus = 4
                 ${searchFilter}
         `;
         const total = countResult[0]?.total ? Number(countResult[0].total) : 0;
@@ -105,7 +105,7 @@ export class WorkShiftsService {
             WHERE ep.idEmpresa = ${companyId}
                 AND ep.idTenant = ${user.idTenant}
                 AND ep.activo = 1
-                AND exp.idEstatus = 4
+                -- AND exp.idEstatus = 4
                 ${searchFilter}
             ORDER BY ep.primerApellido ASC, ep.nombre ASC
             LIMIT ${limit} OFFSET ${offset}
@@ -241,7 +241,7 @@ export class WorkShiftsService {
     }
 
 
-        async findMine(user: ActiveUserDto, companyId: number, startDateStr?: string) {
+    async findMine(user: ActiveUserDto, companyId: number, startDateStr?: string) {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
@@ -324,11 +324,11 @@ export class WorkShiftsService {
             }
 
             if (!tieneHorarioConfigurado) {
-                               return { fecha: fechaStr, dia: diaNombre, texto: 'Descanso', minutos: 0, estatus: 'DESCANSO', variant: 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
+                return { fecha: fechaStr, dia: diaNombre, texto: 'Descanso', minutos: 0, estatus: 'DESCANSO', variant: 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
             }
 
             const yaPaso = new Date(`${fechaStr}T23:59:59`) < new Date();
-                    return { fecha: fechaStr, dia: diaNombre, texto: yaPaso ? 'Falta' : '-', minutos: 0, estatus: yaPaso ? 'FALTA' : 'PENDIENTE', variant: yaPaso ? 'falta' : 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
+            return { fecha: fechaStr, dia: diaNombre, texto: yaPaso ? 'Falta' : '-', minutos: 0, estatus: yaPaso ? 'FALTA' : 'PENDIENTE', variant: yaPaso ? 'falta' : 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
         });
 
         const porcentajeCumplimiento = Number(((totalMinutosSemana / limiteMinutosLegal) * 100).toFixed(1));

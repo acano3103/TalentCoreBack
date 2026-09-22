@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { DjangoPasswordHasher } from 'src/common/utils/django-password.util';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -7,6 +7,7 @@ import { AuthUserRow } from './interfaces/auth-user.interface';
 import { UsersQueries } from './queries/users.queries';
 import { randomUUID } from 'crypto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class UsersService {
@@ -385,6 +386,61 @@ export class UsersService {
 
     return {
       message: active ? 'Usuario activado correctamente' : 'Usuario desactivado correctamente'
+    };
+  }
+
+  async changePassword(activeUser: ActiveUserDto, dto: ChangePasswordDto) {
+    // Obtener el usuario actual
+    const user = await this.prisma.auth_user.findUnique({
+      where: { id: activeUser.id },
+      select: { id: true, password: true, username: true, is_active: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('El usuario no existe en el sistema.');
+    }
+
+    if (!user.is_active) {
+      throw new BadRequestException('Tu cuenta de usuario se encuentra inactiva.');
+    }
+
+    // Si se proporciona la contraseña actual, validarla
+    if (dto.currentPassword) {
+      const isCurrentValid = DjangoPasswordHasher.verify(
+        dto.currentPassword,
+        user.password,
+      );
+
+      if (!isCurrentValid) {
+        throw new BadRequestException('La contraseña actual es incorrecta.');
+      }
+    }
+
+    // 3. Evitar que la nueva contraseña sea idéntica a la actual
+    const isSamePassword = DjangoPasswordHasher.verify(
+      dto.newPassword,
+      user.password,
+    );
+    if (isSamePassword) {
+      throw new BadRequestException(
+        'La nueva contraseña no puede ser igual a la contraseña actual.',
+      );
+    }
+
+    // Hashear la nueva contraseña con el formato Django PBKDF2-SHA256
+    const hashedPassword = DjangoPasswordHasher.hash(dto.newPassword);
+
+    // Actualizar en la base de datos
+    await this.prisma.auth_user.update({
+      where: { id: activeUser.id },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Contraseña actualizada correctamente.',
     };
   }
 }
