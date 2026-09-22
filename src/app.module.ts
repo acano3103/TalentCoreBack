@@ -43,6 +43,12 @@ import { LogbookModule } from './modules/logbook/logbook.module';
 import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashboard/attendance-dashboard.module';
 import { AttendanceTrackingConfigModule } from './modules/config/attendance-config/attendance-config.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
+import { existsSync } from 'fs';
+
+// Determina dinámicamente la ruta correcta de public
+const publicDistPath = join(process.cwd(), 'dist', 'public');
+const publicSrcPath = join(process.cwd(), 'src', 'public');
+const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrcPath;
 
 @Module({
   imports: [
@@ -53,8 +59,15 @@ import { AttendanceModule } from './modules/attendance/attendance.module';
     ScheduleModule.forRoot(),
     ServeStaticModule.forRoot(
       {
-        rootPath: join(process.cwd(), 'public'),
+        rootPath: staticPublicPath,
         serveRoot: '/public',
+        exclude: ['/api/(.*)'],
+        serveStaticOptions: {
+          index: false,
+          fallthrough: false, // Evita buscar index.html cuando no existe el archivo
+          cacheControl: true,
+          maxAge: '7d',
+        },
       },
       {
         rootPath: process.env.MEDIA_ROOT_PATH || join(process.cwd(), 'media'),
