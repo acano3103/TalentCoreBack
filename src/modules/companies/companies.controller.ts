@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -8,14 +8,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { Response } from 'express';
 
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @ApiTags('Companies')
 @Controller('companies')
 export class CompaniesController {
     constructor(private readonly companiesService: CompaniesService) { }
 
-    // (GET) /companies
-    @UseGuards(JwtAuthGuard)
+    // Obtiene todas las empresas paginadas de un tenant especifico
     @Get()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get all companies paginated', description: SWAGGER_AUTH_DESCRIPTION })
@@ -33,10 +35,8 @@ export class CompaniesController {
         return this.companiesService.findAll(pageNumber, search, limitNumber, activeUser);
     }
 
-    // (GET) /companies/{id}
-    @UseGuards(JwtAuthGuard)
+    // Obtiene una empresa por id de un tenant especifico
     @Get(':id')
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Get company by id', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Company obtained correctly' })
     @ApiResponse({ status: 404, description: 'Company not found' })
@@ -48,10 +48,26 @@ export class CompaniesController {
         return this.companiesService.findOne(id, activeUser);
     }
 
-    // (POST) /companies
-    @UseGuards(JwtAuthGuard)
+    // Descarga una plantilla para crear empresas masivamente
+    @Get('bulk/template')
+    @ApiOperation({ summary: 'Download bulk upload Excel template for companies', description: 'Generates and streams an Excel template with corporate and address fields for bulk company creation' })
+    @ApiResponse({ status: 200, description: 'Template generated and downloaded successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async downloadBulkTemplate(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Res() res: Response
+    ) {
+        const buffer = await this.companiesService.generateBulkTemplate(activeUser);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename="Plantilla_Empresas.xlsx"',
+            'Content-Length': buffer.length,
+        });
+        res.send(buffer);
+    }
+
+    // Crea una nueva empresa en un tenant especifico
     @Post()
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Create a new company', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 201, description: 'Company created successfully' })
     @ApiResponse({ status: 400, description: 'Invalid input data' })
@@ -65,10 +81,23 @@ export class CompaniesController {
         return this.companiesService.create(createCompanyDto, file, activeUser);
     }
 
-    // (PUT) /companies/{id}
-    @UseGuards(JwtAuthGuard)
+    // Procesa el archivo Excel de empresas cargado
+    @Post('bulk/upload')
+    @UseInterceptors(FileInterceptor('file'))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Upload and process bulk companies Excel file', description: 'Parses the uploaded Excel file, validates RFC, and creates companies along with their fiscal address in bulk' })
+    @ApiResponse({ status: 200, description: 'Bulk file processed successfully' })
+    @ApiResponse({ status: 400, description: 'No file uploaded or invalid file format' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async uploadBulkCompanies(
+        @UploadedFile() file: Express.Multer.File,
+        @GetActiveUser() activeUser: ActiveUserDto
+    ) {
+        return await this.companiesService.processBulkCompanies(file, activeUser);
+    }
+
+    // Actualiza una empresa de un tenant especifico
     @Put(':id')
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Update a company', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Company updated successfully' })
     @ApiResponse({ status: 404, description: 'Company not found' })
@@ -83,9 +112,8 @@ export class CompaniesController {
         return this.companiesService.update(id, updateCompanyDto, file, activeUser);
     }
 
-    @UseGuards(JwtAuthGuard)
+    // Desactiva una empresa de un tenant especifico
     @Delete(':id')
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Disable a company', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Company disabled successfully' })
     @ApiResponse({ status: 404, description: 'Company not found' })
@@ -97,9 +125,8 @@ export class CompaniesController {
         return this.companiesService.changeStatus(id, false, activeUser);
     }
 
-    @UseGuards(JwtAuthGuard)
+    // Reactiva una empresa de un tenant especifico
     @Patch(':id/reactivate')
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Reactivate a company', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Company reactivated successfully' })
     @ApiResponse({ status: 404, description: 'Company not found' })
