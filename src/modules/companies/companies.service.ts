@@ -7,6 +7,7 @@ import * as path from 'path';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { MediaPathService } from 'src/common/services/media-path.service';
 import * as ExcelJS from 'exceljs';
+import { seedDocumentosEmpresa } from './seeds/default-documentos.seed';
 
 @Injectable()
 export class CompaniesService {
@@ -118,6 +119,7 @@ export class CompaniesService {
                 throw new InternalServerErrorException(`Failed to save logo file: ${fileError.message}`);
             }
         }
+
         try {
             await this.prismaService.$transaction(async (tx) => {
                 const nuevaEmpresa = await tx.catEmpresas.create({
@@ -147,6 +149,13 @@ export class CompaniesService {
                         numero_interior: dto.numero_interior_empresa || '',
                         usuarioRegistro: user?.uuid,
                     },
+                });
+
+                // Sembrar documentos base por empresa
+                await seedDocumentosEmpresa(tx, {
+                    idTenant: idTenant,
+                    idEmpresa: nuevaEmpresa.idEmpresa,
+                    usuarioRegistro: user?.uuid || 'system_seed',
                 });
             });
 
@@ -494,6 +503,12 @@ export class CompaniesService {
                             numero_interior: rawNumInterior,
                             usuarioRegistro: user.uuid,
                         },
+                    });
+                    // SEMBRADO DE DOCUMENTOS BASE por empresa
+                    await seedDocumentosEmpresa(tx, {
+                        idTenant: idTenant,
+                        idEmpresa: nuevaEmpresa.idEmpresa,
+                        usuarioRegistro: user.uuid || 'system_seed',
                     });
                 });
 
