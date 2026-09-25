@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ArtemisClockInDto } from './dto/artemis-clock-in.dto';
+import { ArtemisDeviceItemDto, TipoDispositivoEnum } from './dto/artemis-device.dto';
 
 const DIAS_MAP: Record<number, string> = {
     0: 'Domingo',
@@ -18,10 +19,11 @@ export class ArtemisService {
 
     constructor(private readonly prisma: PrismaService) { }
 
+    // Procesa el registro de asistencia desde Artemis
     async clockIn(dto: ArtemisClockInDto) {
         const idExternoBigInt = BigInt(dto.IdAsistencia);
 
-        // 1. Idempotencia: validar si este registro de Artemis ya fue recibido
+        // Idempotencia: validar si este registro de Artemis ya fue recibido
         const yaExiste = await this.prisma.registrosAsistencia.findFirst({
             where: { idExternoArtemis: idExternoBigInt },
             select: { idRegistro: true, tipo: true, idJornada: true },
@@ -38,7 +40,7 @@ export class ArtemisService {
             };
         }
 
-        // 2. Buscar al empleado por su número de empleado (ExternalUserId)
+        // Buscar al empleado por su número de empleado (ExternalUserId)
         const numeroEmpleado = dto.ExternalUserId.trim();
         const empleado = await this.prisma.empleados.findFirst({
             where: {
@@ -59,7 +61,7 @@ export class ArtemisService {
             throw new NotFoundException(`No se encontró un empleado activo con el número de colaborador "${numeroEmpleado}".`);
         }
 
-        // 3. Normalizar canal según FuenteAsistencia
+        // Normalizar canal según FuenteAsistencia
         let canal: 'IVR' | 'BIOMETRICO' | 'NFC' = 'BIOMETRICO';
         const fuenteUpper = (dto.FuenteAsistencia || '').toUpperCase();
         if (fuenteUpper.includes('IVR')) {
@@ -68,7 +70,7 @@ export class ArtemisService {
             canal = 'NFC';
         }
 
-        // 4. Fechas y día de la semana (Sanitización y forzado a UTC)
+        // Fechas y día de la semana (Sanitización y forzado a UTC)
         let fechaRaw = (dto.FechaChecada || '').trim();
 
         // Si viene sin indicador de zona horaria ('Z' o '+/-HH:mm'), forzamos UTC
@@ -93,7 +95,7 @@ export class ArtemisService {
         const diaSemanaNombre = DIAS_MAP[fechaChecadaDate.getUTCDay()];
 
         return await this.prisma.$transaction(async (tx: any) => {
-            // 5. Buscar si existe un horario programado para el día de hoy
+            // Buscar si existe un horario programado para el día de hoy
             const horarioDia = await tx.horariosEmpleado.findFirst({
                 where: {
                     idEmpleado: empleado.idEmpleado,
@@ -101,7 +103,7 @@ export class ArtemisService {
                 },
             });
 
-            // 6. Buscar si ya existe una jornada para este empleado en esta fecha
+            // Buscar si ya existe una jornada para este empleado en esta fecha
             let jornada = await tx.jornadasEmpleado.findFirst({
                 where: {
                     idEmpleado: empleado.idEmpleado,
@@ -166,7 +168,7 @@ export class ArtemisService {
                 });
             }
 
-            // 7. Guardar el registro puntual de asistencia
+            // Guardar el registro puntual de asistencia
             const nuevoRegistro = await tx.registrosAsistencia.create({
                 data: {
                     idTenant: empleado.idTenant,
@@ -197,5 +199,55 @@ export class ArtemisService {
                 fechaHora: fechaChecadaDate,
             };
         });
+    }
+
+    // Sincroniza los dispositivos de Artemis a la base de datos de Talent Core
+    async syncDevices(dispositivos: ArtemisDeviceItemDto[], idTenant: number = 0) {
+        if (!dispositivos || dispositivos.length === 0) {
+            throw new BadRequestException('No se proporcionaron dispositivos para procesar.');
+        }
+
+        this.logger.log(`Iniciando sincronización de ${dispositivos.length} dispositivos para el tenant ${idTenant}...`);
+
+        const resultados = await this.prisma.$transaction(async (tx: any) => {
+            const operaciones = dispositivos.map((disp) => {
+                // Normalizar mayúsculas por si mandan 'Biometrico' en lugar de 'BIOMETRICO'
+                const tipoNormalizado = disp.tipo.toUpperCase() as TipoDispositivoEnum;
+
+                return tx.catDispositivos.upsert({
+                    where: {
+                        UQ_Dispositivo_Tenant_Artemis: {
+                            idTenant: idTenant,
+                            idDispositivoArtemis: disp.idDispositivo,
+                        },
+                    },
+                    update: {
+                        tipo: tipoNormalizado,
+                        alias: disp.alias.trim(),
+                        modelo: disp.modelo?.trim() ?? null,
+                        Activo: true,
+                    },
+                    create: {
+                        idTenant: idTenant,
+                        idDispositivoArtemis: disp.idDispositivo,
+                        tipo: tipoNormalizado,
+                        alias: disp.alias.trim(),
+                        modelo: disp.modelo?.trim() ?? null,
+                        Activo: true,
+                        UsuarioRegistro: 'artemis_sync',
+                    },
+                });
+            });
+
+            return Promise.all(operaciones);
+        });
+
+        this.logger.log(`Sincronización completada exitosamente. Total procesados: ${resultados.length}`);
+
+        return {
+            success: true,
+            message: `Dispositivos sincronizados exitosamente. Total: ${resultados.length}`,
+            totalSincronizados: resultados.length,
+        };
     }
 }

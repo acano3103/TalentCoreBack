@@ -360,6 +360,7 @@ model CatSites {
   Activo                Boolean?                 @default(true)
   FechaRegistro         DateTime?                @db.DateTime(0)
   TipoAsistencia        CatSites_TipoAsistencia?
+  CatDispositivos       CatDispositivos[]
   CatGeocercas          CatGeocercas[]
   CatPuestos            CatPuestos[]
   CatTiposUbicacion     CatTiposUbicacion        @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
@@ -2041,6 +2042,27 @@ model TenantConfiguracionesModulos {
   @@unique([idTenant, moduloCodigo], map: "uq_tenant_modulo_config")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatDispositivos {
+  idDispositivo        Int                  @id @default(autoincrement())
+  idDispositivoArtemis Int
+  idTenant             Int                  @default(0)
+  idEmpresa            Int?
+  idSite               Int?
+  tipo                 CatDispositivos_tipo
+  alias                String               @db.VarChar(150)
+  modelo               String?              @db.VarChar(100)
+  Activo               Boolean              @default(true)
+  FechaRegistro        DateTime             @default(now()) @db.DateTime(0)
+  FechaModificacion    DateTime?            @db.DateTime(0)
+  UsuarioRegistro      String?              @default("artemis_sync") @db.VarChar(100)
+  CatSites             CatSites?            @relation(fields: [idSite], references: [idSite], map: "FK_Dispositivos_Site")
+
+  @@unique([idTenant, idDispositivoArtemis], map: "UQ_Dispositivo_Tenant_Artemis")
+  @@index([idEmpresa], map: "FK_Dispositivos_Empresa")
+  @@index([idSite], map: "FK_Dispositivos_Site")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -2159,4 +2181,10 @@ enum RegistrosAsistencia_estatusProcesamiento {
   PROCESADO
   DUPLICADO
   RECHAZADO
+}
+
+enum CatDispositivos_tipo {
+  BIOMETRICO
+  IVR
+  NFC
 }
