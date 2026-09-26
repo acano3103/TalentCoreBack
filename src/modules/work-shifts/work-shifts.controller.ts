@@ -31,6 +31,13 @@ export class WorkShiftsController {
   @ApiResponse({ status: 200, description: 'List of work shifts successfully retrieved.' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
+
+    // Regresa todos los turnos por dia paginados
+  @Get()
+  @ApiOperation({ summary: 'Get all work shifts', description: 'Returns the list of system work shifts for a company.' })
+  @ApiResponse({ status: 200, description: 'List of work shifts successfully retrieved.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   findAll(
     @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
@@ -38,7 +45,9 @@ export class WorkShiftsController {
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('startDate') startDate?: string,
     @Query('search') search?: string,
+    @Query('idSite') idSite?: string,
+    @Query('idUnidadOperativa') idUnidadOperativa?: string,
   ) {
-    return this.workShiftsService.findAll(user, companyId, page, limit, startDate, search);
+    return this.workShiftsService.findAll(user, companyId, page, limit, startDate, search, idSite, idUnidadOperativa);
   }
-}
+ }

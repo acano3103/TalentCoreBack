@@ -17,16 +17,50 @@ export class LogbookService {
         limit: number,
         startDate?: string,
         search?: string,
+        idSite?: string,
+        idUnidadOperativa?: string,
     ): Promise<PaginatedLogbookResponseDto> {
         const skip = (page - 1) * limit;
 
-        // Condición base: Tenant/Empresa del tenant actual y Empleado activo = true (1)
+        // Filtro por ubicación / unidad operativa (idSite gana si vienen ambos)
+        let siteFilter: number[] | undefined;
+
+        if (idSite && !isNaN(Number(idSite))) {
+            siteFilter = [Number(idSite)];
+        } else if (idUnidadOperativa && !isNaN(Number(idUnidadOperativa))) {
+            const sites = await this.prisma.catSites.findMany({
+                where: {
+                    idUnidadOperativa: Number(idUnidadOperativa),
+                    ...(user.idTenant && { idTenant: user.idTenant }),
+                },
+                select: { idSite: true },
+            });
+            // Si la unidad no tiene ubicaciones, queda [] y no regresa registros
+            siteFilter = sites.map((s) => Number(s.idSite));
+        }
+
+        // Condiciones sobre el empleado: activo + ubicación + búsqueda (combinadas)
+        const empleadoWhere: Prisma.EmpleadosWhereInput = {
+            activo: true, // Filtro obligatorio: solo empleados activos
+            ...(siteFilter && { idSite: { in: siteFilter } }),
+        };
+
+        // Filtro de búsqueda (nombre, apellidos o número de empleado)
+        if (search && search.trim() !== '') {
+            const term = search.trim();
+            empleadoWhere.OR = [
+                { numeroEmpleado: { contains: term } },
+                { nombre: { contains: term } },
+                { primerApellido: { contains: term } },
+                { segundoApellido: { contains: term } },
+            ];
+        }
+
+        // Condición base: Tenant/Empresa del tenant actual + condiciones del empleado
         const where: Prisma.RegistrosAsistenciaWhereInput = {
             idEmpresa: companyId,
             ...(user.idTenant && { idTenant: user.idTenant }),
-            Empleados: {
-                activo: true, // Filtro obligatorio: solo empleados activos
-            },
+            Empleados: { is: empleadoWhere },
         };
 
         // Filtro por fecha inicial (o rango del día si se envía YYYY-MM-DD)
@@ -37,23 +71,6 @@ export class LogbookService {
                     gte: parsedDate,
                 };
             }
-        }
-
-        // Filtro de búsqueda (nombre, apellidos o número de empleado)
-        if (search && search.trim() !== '') {
-            const term = search.trim();
-
-            where.Empleados = {
-                is: {
-                    activo: true,
-                    OR: [
-                        { numeroEmpleado: { contains: term } },
-                        { nombre: { contains: term } },
-                        { primerApellido: { contains: term } },
-                        { segundoApellido: { contains: term } },
-                    ],
-                },
-            };
         }
 
         try {

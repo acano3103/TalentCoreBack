@@ -61,7 +61,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
       {
         rootPath: staticPublicPath,
         serveRoot: '/public',
-        exclude: ['/api/(.*)'],
+        exclude: ['/api/{*path}'],
         serveStaticOptions: {
           index: false,
           fallthrough: false, // Evita buscar index.html cuando no existe el archivo
