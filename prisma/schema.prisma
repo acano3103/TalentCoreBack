@@ -1127,8 +1127,8 @@ model Empleados {
   numeroInfonavit                                   String?               @db.VarChar(30)
   numeroHijos                                       Int?
   imagenFirmaAutografa                              String?               @db.VarChar(500)
-  uploadLink                                        String?               @db.VarChar(100)
-  token                                             String?               @db.VarChar(100)
+  uploadLink                                        String?               @db.VarChar(500)
+  token                                             String?               @db.VarChar(500)
   activo                                            Boolean               @default(true)
   artemisUserId                                     String?               @db.VarChar(50)
   artemisSyncedAt                                   DateTime?             @db.DateTime(0)
@@ -2152,12 +2152,6 @@ enum RelEmpleadosSites_MetodoAsistencia {
   CUALQUIERA
 }
 
-enum CatSites_TipoAsistencia {
-  IVR
-  BIOMETRICO
-  APP_MOVIL
-}
-
 enum RegistrosAsistencia_canal {
   APP_MOVIL
   IVR
@@ -2199,5 +2193,12 @@ enum RegistrosAsistencia_estatusProcesamiento {
 enum CatDispositivos_tipo {
   BIOMETRICO
   IVR
+  NFC
+}
+
+enum CatSites_TipoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
   NFC
 }
