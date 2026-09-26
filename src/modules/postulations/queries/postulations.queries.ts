@@ -94,6 +94,8 @@ export async function createEmployee(
 
     // Aseguramos formato Date para evitar desajustes de zona horaria al guardar
     const parsedFechaIngreso = new Date(`${fechaIngreso}T00:00:00`);
+    // Si viene idJefeInmediato en 0 o no viene, lo dejamos como null
+    const parsedJefeInmediato = idJefeInmediato && Number(idJefeInmediato) > 0 ? Number(idJefeInmediato) : null;
 
     await tx.$executeRaw`
       INSERT INTO Empleados (
@@ -103,7 +105,7 @@ export async function createEmployee(
         ${idEmpresa},
         ${idTenant},
         ${idPuesto},
-        ${idJefeInmediato},
+        ${parsedJefeInmediato},
         ${idSite},
         ${finalNumeroEmpleado},
         ${nombre},
