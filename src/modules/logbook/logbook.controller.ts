@@ -25,7 +25,9 @@ export class LogbookController {
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('startDate') startDate?: string,
     @Query('search') search?: string,
+    @Query('idSite') idSite?: string,
+    @Query('idUnidadOperativa') idUnidadOperativa?: string,
   ) {
-    return this.logbookService.findAll(user, companyId, page, limit, startDate, search);
+    return this.logbookService.findAll(user, companyId, page, limit, startDate, search, idSite, idUnidadOperativa);
   }
 }
