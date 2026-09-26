@@ -14,6 +14,8 @@ import { CreateOperatingUnitDto } from './dto/create-operating-unit.dto';
 import { UpdateOperatingUnitDto } from './dto/update-operating-unit.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ScheduleCatalogsService } from './sub-services/schedule-catalogs.service';
+import { CreateScheduleCatalogDto } from './dto/create-schedule-catalog.dto';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Catalogs')
@@ -24,6 +26,7 @@ export class CatalogsController {
     private readonly salaryLevelsCatalogService: SalaryLevelsCatalogService,
     private readonly patronalRecordsService: PatronalRecordsService,
     private readonly operatingUnitsService: OperatingUnitsService,
+    private readonly scheduleCatalogsService: ScheduleCatalogsService,
   ) { }
 
   // Obtiene un catálogo genérico
@@ -165,8 +168,8 @@ export class CatalogsController {
     @Query('search') search?: string,
   ) {
     const querySearch = search || '';
-    return this.patronalRecordsService.findAll(companyId, page, limit, querySearch, user);  
-}
+    return this.patronalRecordsService.findAll(companyId, page, limit, querySearch, user);
+  }
 
   // Obtiene un registro patronal por id
   @Get('patronal-records/:id')
@@ -181,7 +184,7 @@ export class CatalogsController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.patronalRecordsService.findOne(companyId, id, user);   // <-- user agregado
-}
+  }
 
   // Crea un registro patronal
   @Post('patronal-records')
@@ -194,8 +197,8 @@ export class CatalogsController {
     @Param('companyId', ParseIntPipe) companyId: number,
     @Body() createPatronalRecordDto: CreatePatronalRecordDto
   ) {
-     return this.patronalRecordsService.create(companyId, createPatronalRecordDto, user);   
-}
+    return this.patronalRecordsService.create(companyId, createPatronalRecordDto, user);
+  }
 
   // Actualiza un registro patronal
   @Put('patronal-records/:id')
@@ -346,6 +349,61 @@ export class CatalogsController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.operatingUnitsService.changeStatus(companyId, id, true, user);
+  }
+
+  // ==========================================
+  // ENDPOINTS: Subservicio de catalogo de horarios
+  // ==========================================
+
+  // Obtiene todos los horarios paginados
+  @Get('schedule-catalogs')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all schedules', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Schedules obtained successfully' })
+  @ApiResponse({ status: 404, description: 'Schedules not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async findAllSchedules(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+  ) {
+    const querySearch = search || '';
+    return this.scheduleCatalogsService.findAllSchedules(activeUser, page, limit, querySearch);
+  }
+
+  // Crear un nuevo horario en el catálogo
+  @Post('schedule-catalogs')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new schedule catalog', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 201, description: 'Schedule catalog created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid data or schedule name already exists' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async createSchedule(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Body() dto: CreateScheduleCatalogDto,
+  ) {
+    return this.scheduleCatalogsService.createSchedule(activeUser, dto);
+  }
+
+  // Actualizar un horario en el catálogo
+  @Put('schedule-catalogs/:currentScheduleName')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a schedule catalog', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Schedule catalog updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid data or schedule name already exists' })
+  @ApiResponse({ status: 404, description: 'Schedule catalog to update not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async updateSchedule(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('currentScheduleName') currentScheduleName: string,
+    @Body() dto: CreateScheduleCatalogDto,
+  ) {
+    // Decodificar por si el nombre incluye espacios o acentos desde la URL
+    const decodedName = decodeURIComponent(currentScheduleName);
+    return this.scheduleCatalogsService.updateSchedule(activeUser, decodedName, dto);
   }
 
 }
