@@ -1,8 +1,9 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AttendanceModuleConfig, DEFAULT_ATTENDANCE_CONFIG } from './interfaces/attendance-config.interface';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
+import { AssignDeviceSiteDto } from './dto/assign-device-site.dto';
 
 @Injectable()
 export class AttendanceTrackingConfigService {
@@ -81,6 +82,103 @@ export class AttendanceTrackingConfigService {
             throw new InternalServerErrorException(
                 'Ocurrió un error al intentar guardar la configuración del módulo.',
             );
+        }
+    }
+
+    // Obtener todos los dispositivos registrados para la empresa y tenant
+    async getDispositivos(idTenant: number, companyId: number) {
+        try {
+            const dispositivos = await this.prisma.catDispositivos.findMany({
+                where: {
+                    idTenant,
+                    OR: [
+                        { idEmpresa: companyId },
+                        { idEmpresa: null },
+                    ],
+                },
+                include: {
+                    CatSites: {
+                        select: {
+                            idSite: true,
+                            Descripcion: true,
+                        },
+                    },
+                },
+                orderBy: {
+                    FechaRegistro: 'desc',
+                },
+            });
+
+            return {
+                message: 'Dispositivos obtenidos correctamente',
+                data: dispositivos,
+            };
+        } catch (error) {
+            this.logger.error(
+                `Error al consultar dispositivos para tenant ${idTenant} y empresa ${companyId}`,
+                error?.stack || error,
+            );
+            throw new InternalServerErrorException('Error al obtener el catálogo de dispositivos.');
+        }
+    }
+
+    // Asignar o cambiar de sede (Site) a un dispositivo
+    async assignDeviceSite(
+        idTenant: number,
+        companyId: number,
+        idDispositivo: number,
+        dto: AssignDeviceSiteDto,
+    ) {
+        try {
+            const dispositivo = await this.prisma.catDispositivos.findFirst({
+                where: {
+                    idDispositivo,
+                    idTenant,
+                },
+            });
+
+            if (!dispositivo) {
+                throw new NotFoundException('El dispositivo especificado no existe o no pertenece a este tenant.');
+            }
+
+            // Validar si la sede existe y pertenece a la empresa/tenant en caso de enviar idSite
+            if (dto.idSite) {
+                const site = await this.prisma.catSites.findFirst({
+                    where: {
+                        idSite: dto.idSite,
+                        idTenant,
+                    },
+                });
+
+                if (!site) {
+                    throw new BadRequestException('La sede seleccionada no es válida.');
+                }
+            }
+
+            const updated = await this.prisma.catDispositivos.update({
+                where: { idDispositivo },
+                data: {
+                    idSite: dto.idSite ?? null,
+                    idEmpresa: companyId,
+                },
+                include: {
+                    CatSites: true,
+                },
+            });
+
+            return {
+                message: dto.idSite ? 'Dispositivo asignado a la sede exitosamente.' : 'Dispositivo desvinculado de la sede.',
+                data: updated,
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
+                throw error;
+            }
+            this.logger.error(
+                `Error al asignar sede al dispositivo ${idDispositivo}`,
+                error?.stack || error,
+            );
+            throw new InternalServerErrorException('Error al actualizar la sede del dispositivo.');
         }
     }
 }
