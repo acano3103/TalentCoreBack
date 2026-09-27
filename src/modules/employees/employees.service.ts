@@ -441,7 +441,7 @@ export class EmployeesService {
         idEmpresa: companyId,
         idTenant: activeUser.idTenant,
         activo: true,
-        Expedientes: { some: { idEstatus: 4 } },
+        // Expedientes: { some: { idEstatus: 4 } },
         OR: [
           { artemisUserId: null },
           { artemisUserId: '' },
