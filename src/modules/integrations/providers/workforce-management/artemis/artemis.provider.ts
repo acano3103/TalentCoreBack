@@ -94,7 +94,7 @@ export class ArtemisProvider implements IArtemisProvider {
             diaId: mapDayToArtemisId(schedule.DiaSemana),
             horaInicio: formatTimeToHHMMSS(schedule.HoraEntrada),
             horaFin: formatTimeToHHMMSS(schedule.HoraSalida),
-            modalidad: schedule.Modalidad.toUpperCase(),
+            modalidad: schedule.Modalidad?.toUpperCase() ?? 'PRESENCIAL',
         }));
 
         const payload = {
