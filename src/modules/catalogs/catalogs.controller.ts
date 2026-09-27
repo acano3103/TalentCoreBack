@@ -1,5 +1,5 @@
-import { Body, Controller, DefaultValuePipe, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, DefaultValuePipe, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Put, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { CatalogsService, CatalogKey } from './catalogs.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
@@ -16,6 +16,8 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { ScheduleCatalogsService } from './sub-services/schedule-catalogs.service';
 import { CreateScheduleCatalogDto } from './dto/create-schedule-catalog.dto';
+import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -363,6 +365,25 @@ export class CatalogsController {
     return this.scheduleCatalogsService.findAllSchedulesUnpaginated(activeUser);
   }
 
+  // Descarga una plantilla para crear horarios masivamente
+  @Get('schedule-catalogs/bulk/template')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Download bulk upload Excel template for schedule catalogs', description: 'Generates and streams an Excel template with schedule names, days and hours for bulk schedule creation' })
+  @ApiResponse({ status: 200, description: 'Template generated and downloaded successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async downloadBulkScheduleTemplate(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.scheduleCatalogsService.generateBulkTemplate(activeUser);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="Plantilla_Horarios_Catalogo.xlsx"',
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  }
+
   // Crear un nuevo horario en el catálogo
   @Post('schedule-catalogs')
   @HttpCode(HttpStatus.CREATED)
@@ -375,6 +396,22 @@ export class CatalogsController {
     @Body() dto: CreateScheduleCatalogDto,
   ) {
     return this.scheduleCatalogsService.createSchedule(activeUser, dto);
+  }
+
+  // Procesa el archivo Excel de horarios cargado
+  @Post('schedule-catalogs/bulk/upload')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload and process bulk schedule catalogs Excel file', description: 'Parses the uploaded Excel file, validates schedule names, duplicates days and times, creating schedules in bulk' })
+  @ApiResponse({ status: 200, description: 'Bulk schedule file processed successfully' })
+  @ApiResponse({ status: 400, description: 'No file uploaded or invalid file format' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async uploadBulkSchedules(
+    @UploadedFile() file: Express.Multer.File,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.scheduleCatalogsService.processBulkSchedules(file, activeUser);
   }
 
   // Actualizar un horario en el catálogo
