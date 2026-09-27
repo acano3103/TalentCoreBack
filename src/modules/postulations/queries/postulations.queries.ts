@@ -31,7 +31,8 @@ export class PostulationsQueries {
         pp.detalle_por_categoria,
         pp.fortalezas_clave,
         pp.brechas_criticas,
-        pp.requisitos_knockout                   
+        pp.requisitos_knockout,
+        v.idSite                  
       FROM Postulaciones p
       INNER JOIN Vacantes v ON p.idVacante = v.idVacante
       INNER JOIN CatPuestos c ON v.idPuesto = c.idPuesto

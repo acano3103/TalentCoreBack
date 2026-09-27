@@ -369,6 +369,7 @@ model CatSites {
   RelAreasUbicaciones   RelAreasUbicaciones[]
   RelEmpleadosSites     RelEmpleadosSites[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
+  RelSitesHorarios      RelSitesHorarios[]
   RelUsuarioSite        RelUsuarioSite[]
   Vacantes              Vacantes[]
 
@@ -2074,6 +2075,22 @@ model CatHorarios {
   Activo          Boolean   @default(true)
   FechaRegistro   DateTime  @default(now()) @db.DateTime(0)
   UsuarioRegistro String?   @db.VarChar(100)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelSitesHorarios {
+  idRelSiteHorario Int      @id @default(autoincrement())
+  idTenant         Int      @default(0)
+  idEmpresa        Int?
+  idSite           Int
+  NombreHorario    String   @db.VarChar(150)
+  Activo           Boolean  @default(true)
+  FechaRegistro    DateTime @default(now()) @db.DateTime(0)
+  CatSites         CatSites @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_RelSitesHorarios_Site")
+
+  @@unique([idSite, NombreHorario], map: "UQ_RelSitesHorarios_Site_Nombre")
+  @@index([idTenant, idEmpresa], map: "FK_RelSitesHorarios_Tenant_Empresa")
+  @@index([NombreHorario], map: "IDX_RelSitesHorarios_Nombre")
 }
 
 enum Entrevistas_interview_type {

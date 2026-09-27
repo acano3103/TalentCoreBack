@@ -8,6 +8,7 @@ import {
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateScheduleCatalogDto } from '../dto/create-schedule-catalog.dto';
+import { ORDENDIAS } from './constants/constants';
 
 @Injectable()
 export class ScheduleCatalogsService {
@@ -125,9 +126,7 @@ export class ScheduleCatalogsService {
         }
     }
 
-    /**
-     * Obtener horarios paginados agrupados por Nombre
-     */
+    // Obtener horarios paginados agrupados por Nombre
     async findAllSchedules(
         activeUser: ActiveUserDto,
         page: number,
@@ -206,17 +205,6 @@ export class ScheduleCatalogsService {
                 orderBy: { idHorario: 'asc' },
             });
 
-            // Orden estándar de la semana para presentar al frontend
-            const ordenDias: Record<string, number> = {
-                Lunes: 1,
-                Martes: 2,
-                Miércoles: 3,
-                Jueves: 4,
-                Viernes: 5,
-                Sábado: 6,
-                Domingo: 7,
-            };
-
             // 3. Armar la respuesta estructurada agrupando por horario
             const schedulesMap = new Map<string, any>();
 
@@ -241,7 +229,7 @@ export class ScheduleCatalogsService {
             const data = Array.from(schedulesMap.values()).map((horario) => {
                 horario.dias.sort(
                     (a: any, b: any) =>
-                        (ordenDias[a.diaSemana] || 99) - (ordenDias[b.diaSemana] || 99),
+                        (ORDENDIAS[a.diaSemana] || 99) - (ORDENDIAS[b.diaSemana] || 99),
                 );
                 return horario;
             });
@@ -363,6 +351,87 @@ export class ScheduleCatalogsService {
             this.logger.error(`Error al actualizar horario: ${error.message}`);
             throw new InternalServerErrorException(
                 `Error al actualizar el horario en base de datos: ${error.message}`,
+            );
+        }
+    }
+
+    // Obtiene todos los horarios activos del tenant agrupados con su detalle de días (sin paginación)
+    async findAllSchedulesUnpaginated(activeUser: ActiveUserDto) {
+        const user = await this.prisma.auth_user.findUnique({
+            where: { id: activeUser.id },
+            select: { idTenant: true },
+        });
+
+        if (!user) throw new NotFoundException('No se encontró el usuario');
+        if (!user.idTenant) throw new BadRequestException('El usuario no tiene un tenant asignado');
+
+        const idTenant = user.idTenant;
+
+        try {
+            // 1. Obtenemos todos los registros activos ordenados alfabéticamente por Nombre
+            const registros = await this.prisma.catHorarios.findMany({
+                where: {
+                    idTenant,
+                    Activo: true,
+                },
+                select: {
+                    idHorario: true,
+                    Nombre: true,
+                    DiaSemana: true,
+                    HoraEntrada: true,
+                    HoraSalida: true,
+                    FechaRegistro: true,
+                },
+                orderBy: [
+                    { Nombre: 'asc' },
+                    { idHorario: 'asc' },
+                ],
+            });
+
+            if (registros.length === 0) {
+                return {
+                    data: [],
+                    total: 0,
+                };
+            }
+
+            // 2. Agrupación por Nombre en un solo recorrido
+            const schedulesMap = new Map<string, any>();
+
+            for (const reg of registros) {
+                if (!schedulesMap.has(reg.Nombre)) {
+                    schedulesMap.set(reg.Nombre, {
+                        nombre: reg.Nombre,
+                        fechaRegistro: reg.FechaRegistro,
+                        dias: [],
+                    });
+                }
+
+                schedulesMap.get(reg.Nombre).dias.push({
+                    idHorario: reg.idHorario,
+                    diaSemana: reg.DiaSemana,
+                    horaEntrada: this.formatTimeToHHmmss(reg.HoraEntrada),
+                    horaSalida: this.formatTimeToHHmmss(reg.HoraSalida),
+                });
+            }
+
+            // 3. Ordenar los días internos de cada grupo (Lunes -> Domingo)
+            const data = Array.from(schedulesMap.values()).map((horario) => {
+                horario.dias.sort(
+                    (a: any, b: any) =>
+                        (ORDENDIAS[a.diaSemana] || 99) - (ORDENDIAS[b.diaSemana] || 99),
+                );
+                return horario;
+            });
+
+            return {
+                data,
+                total: data.length,
+            };
+        } catch (error: any) {
+            this.logger.error(`Error al listar todos los horarios: ${error.message}`, error.stack);
+            throw new InternalServerErrorException(
+                `Error al obtener el catálogo completo de horarios: ${error.message}`,
             );
         }
     }

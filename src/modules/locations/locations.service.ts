@@ -101,6 +101,10 @@ export class LocationsService {
                         Activo: true,
                     },
                 },
+                RelSitesHorarios: {
+                    where: { Activo: true },
+                    select: { NombreHorario: true },
+                },
             },
         });
 
@@ -110,10 +114,12 @@ export class LocationsService {
 
         // Extraemos la lista en un array plano para el formulario del frontend
         const dids = location.CatSitesDids?.map((item: any) => item.Did) || [];
+        const schedules = location.RelSitesHorarios?.map((item: any) => item.NombreHorario).filter(Boolean) || [];
 
         return {
             ...location,
             dids,
+            schedules,
         };
     }
 
@@ -170,7 +176,7 @@ export class LocationsService {
                     },
                 });
 
-                // Inserción de DIDs autorizados (solo si el método elegido es IVR)
+                // 1. Inserción de DIDs autorizados (solo si el método elegido es IVR)
                 const didsModel = tx.catSitesDids || tx.CatSitesDids;
                 const cleanDids = dto.tipoAsistencia === 'IVR' ? (dto.dids || []).filter(Boolean) : [];
 
@@ -187,11 +193,34 @@ export class LocationsService {
                     });
                 }
 
+                // 2. Inserción de Horarios autorizados en la ubicación (RelSitesHorarios)
+                const schedulesModel = tx.relSitesHorarios || tx.RelSitesHorarios;
+                const cleanHorarios = Array.isArray(dto.horarios)
+                    ? [...new Set(dto.horarios.map((h: string) => h.trim()).filter(Boolean))]
+                    : [];
+
+                if (schedulesModel && cleanHorarios.length > 0) {
+                    await schedulesModel.createMany({
+                        data: cleanHorarios.map((nombre: string) => ({
+                            idTenant,
+                            idEmpresa: companyId,
+                            idSite: site.idSite,
+                            NombreHorario: nombre,
+                            Activo: true,
+                            FechaRegistro: new Date(),
+                        })),
+                        skipDuplicates: true,
+                    });
+                }
+
                 const userFullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || `Usuario #${user.id}`;
                 const historyModel = tx.historicoMovimientos || tx.HistoricoMovimientos;
 
                 if (historyModel) {
                     const asistenciaDesc = dto.tipoAsistencia ? ` (Método: ${dto.tipoAsistencia})` : ' (Sin asistencia)';
+                    const schedulesDesc = cleanHorarios.length ? ` con ${cleanHorarios.length} horario(s)` : '';
+                    const didsDesc = cleanDids.length ? ` con ${cleanDids.length} DID(s)` : '';
+
                     await historyModel.create({
                         data: {
                             idUsuario: user.id,
@@ -199,7 +228,7 @@ export class LocationsService {
                             accion: 'CREAR',
                             tablaOrigen: 'CatSites',
                             idRegistro: String(site.idSite),
-                            descripcion: `Ubicación "${site.Descripcion}" creada por ${userFullName}${asistenciaDesc}${cleanDids.length ? ` con ${cleanDids.length} DID(s)` : ''}`,
+                            descripcion: `Ubicación "${site.Descripcion}" creada por ${userFullName}${asistenciaDesc}${didsDesc}${schedulesDesc}`,
                             fechaCreacion: new Date(),
                         },
                     });
@@ -208,6 +237,7 @@ export class LocationsService {
                 return {
                     ...site,
                     dids: cleanDids,
+                    horarios: cleanHorarios,
                 };
             });
 
@@ -278,25 +308,22 @@ export class LocationsService {
                     },
                 });
 
-                // Sincronización de DIDs según el TipoAsistencia actual o enviado
+                // 1. Sincronización de DIDs según el TipoAsistencia actual o enviado
                 const didsModel = tx.catSitesDids || tx.CatSitesDids;
                 let finalDids: string[] = [];
 
                 if (didsModel) {
                     const resolvedTipoAsistencia = dto.tipoAsistencia !== undefined ? dto.tipoAsistencia : site.TipoAsistencia;
 
-                    // Si el método no es IVR (es BIOMETRICO, APP_MOVIL o null), eliminamos DIDs existentes
                     if (resolvedTipoAsistencia !== 'IVR') {
                         await didsModel.deleteMany({
                             where: { idSite: locationId },
                         });
                         finalDids = [];
                     } else if (Array.isArray(dto.dids)) {
-                        // Si es IVR y enviaron la lista de DIDs, sincronizamos
                         const cleanDids = dto.dids.map((d: string) => d.trim()).filter(Boolean);
                         finalDids = cleanDids;
 
-                        // 1. Eliminar los que ya no vienen en la lista
                         await didsModel.deleteMany({
                             where: {
                                 idSite: locationId,
@@ -304,7 +331,6 @@ export class LocationsService {
                             },
                         });
 
-                        // 2. Insertar los nuevos evitando duplicados
                         if (cleanDids.length > 0) {
                             await didsModel.createMany({
                                 data: cleanDids.map((numero: string) => ({
@@ -319,7 +345,6 @@ export class LocationsService {
                             });
                         }
                     } else {
-                        // Si es IVR pero no enviaron el campo dids, conservamos los existentes para el retorno
                         const existing = await didsModel.findMany({
                             where: { idSite: locationId, Activo: true },
                             select: { Did: true },
@@ -328,10 +353,52 @@ export class LocationsService {
                     }
                 }
 
+                // 2. Sincronización de Horarios en RelSitesHorarios
+                const schedulesModel = tx.relSitesHorarios || tx.RelSitesHorarios;
+                let finalHorarios: string[] = [];
+
+                if (schedulesModel) {
+                    if (Array.isArray(dto.horarios)) {
+                        const cleanHorarios = [...new Set(dto.horarios.map((h: string) => h.trim()).filter(Boolean))];
+                        finalHorarios = cleanHorarios;
+
+                        // Elimina los que ya no están en la lista seleccionada
+                        await schedulesModel.deleteMany({
+                            where: {
+                                idSite: locationId,
+                                NombreHorario: { notIn: cleanHorarios },
+                            },
+                        });
+
+                        // Inserta los nuevos evitando duplicados
+                        if (cleanHorarios.length > 0) {
+                            await schedulesModel.createMany({
+                                data: cleanHorarios.map((nombre: string) => ({
+                                    idTenant,
+                                    idEmpresa: companyId,
+                                    idSite: locationId,
+                                    NombreHorario: nombre,
+                                    Activo: true,
+                                    FechaRegistro: new Date(),
+                                })),
+                                skipDuplicates: true,
+                            });
+                        }
+                    } else {
+                        // Si no enviaron el campo horarios en el payload, se conservan los existentes
+                        const existing = await schedulesModel.findMany({
+                            where: { idSite: locationId, Activo: true },
+                            select: { NombreHorario: true },
+                        });
+                        finalHorarios = existing.map((e: any) => e.NombreHorario);
+                    }
+                }
+
                 const userFullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || `Usuario #${user.id}`;
                 const historyModel = tx.historicoMovimientos || tx.HistoricoMovimientos;
 
                 if (historyModel) {
+                    const asistenciaDesc = site.TipoAsistencia ? ` (Método: ${site.TipoAsistencia})` : ' (Sin asistencia)';
                     await historyModel.create({
                         data: {
                             idUsuario: user.id,
@@ -339,7 +406,7 @@ export class LocationsService {
                             accion: 'EDITAR',
                             tablaOrigen: 'CatSites',
                             idRegistro: String(locationId),
-                            descripcion: `Ubicación "${site.Descripcion}" actualizada por ${userFullName}`,
+                            descripcion: `Ubicación "${site.Descripcion}" actualizada por ${userFullName}${asistenciaDesc}`,
                             fechaCreacion: new Date(),
                         },
                     });
@@ -348,6 +415,7 @@ export class LocationsService {
                 return {
                     ...site,
                     dids: finalDids,
+                    horarios: finalHorarios,
                 };
             });
 
@@ -915,5 +983,81 @@ export class LocationsService {
             details: { createdSites, createdRP, createdUO },
             errors,
         };
+    }
+
+    async getLocationSchedules(companyId: number, locationId: number, activeUser: ActiveUserDto) {
+        if (!activeUser.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+
+        // 1. Obtenemos los nombres de horarios vinculados a la sucursal
+        const location = await this.prismaService.catSites.findFirst({
+            where: {
+                idSite: locationId,
+                idEmpresa: companyId,
+                idTenant: activeUser.idTenant,
+            },
+            include: {
+                RelSitesHorarios: {
+                    where: { Activo: true },
+                    select: { NombreHorario: true },
+                },
+            },
+        });
+
+        if (!location) {
+            throw new NotFoundException('La ubicación especificada no existe.');
+        }
+
+        const scheduleNames = (location.RelSitesHorarios || [])
+            .map((item) => item.NombreHorario)
+            .filter((name): name is string => Boolean(name));
+
+        if (scheduleNames.length === 0) {
+            return [];
+        }
+
+        // 2. Consultamos directamente CatHorarios con los nombres asignados
+        const records = await this.prismaService.catHorarios.findMany({
+            where: {
+                Nombre: { in: scheduleNames },
+                idTenant: activeUser.idTenant,
+                Activo: true,
+            },
+            orderBy: { idHorario: 'asc' },
+        });
+
+        // Helper para formatear horas a "HH:mm" (idéntico a getSchedule de Puestos)
+        const formatearHora = (fecha: Date | string | null): string => {
+            if (!fecha) return '';
+            if (typeof fecha === 'string') {
+                return fecha.length >= 5 ? fecha.substring(0, 5) : fecha;
+            }
+            const d = new Date(fecha);
+            const horas = String(d.getUTCHours()).padStart(2, '0');
+            const minutos = String(d.getUTCMinutes()).padStart(2, '0');
+            return `${horas}:${minutos}`;
+        };
+
+        // 3. Agrupamos los registros por el campo Nombre
+        const agrupados = new Map<string, Array<{ dia: string; horaEntrada: string; horaSalida: string }>>();
+
+        for (const item of records) {
+            if (!agrupados.has(item.Nombre)) {
+                agrupados.set(item.Nombre, []);
+            }
+
+            agrupados.get(item.Nombre)!.push({
+                dia: item.DiaSemana ?? '',
+                horaEntrada: formatearHora(item.HoraEntrada),
+                horaSalida: formatearHora(item.HoraSalida),
+            });
+        }
+
+        // 4. Retornamos la lista con la misma estructura requerida por el frontend
+        return Array.from(agrupados.entries()).map(([nombre, horariosList]) => ({
+            nombre,
+            horariosList,
+        }));
     }
 }
