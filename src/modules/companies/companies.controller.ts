@@ -9,13 +9,14 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { Response } from 'express';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @ApiTags('Companies')
 @Controller('companies')
 export class CompaniesController {
-    constructor(private readonly companiesService: CompaniesService) { }
+    constructor(private readonly companiesService: CompaniesService, private readonly excelExportService: ExcelExportService) { }
 
     // Obtiene todas las empresas paginadas de un tenant especifico
     @Get()
@@ -35,6 +36,22 @@ export class CompaniesController {
         return this.companiesService.findAll(pageNumber, search, limitNumber, activeUser);
     }
 
+    
+    @Get('export')
+    @ApiOperation({ summary: 'Export companies to Excel', description: 'Exports all companies of the tenant matching the filters (no pagination)' })
+    @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+    async exportCompanies(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Res() res: Response,
+        @Query('search') search?: string,
+        @Query('activo') activo?: string,
+        @Query('fechaDesde') fechaDesde?: string,
+        @Query('fechaHasta') fechaHasta?: string,
+    ) {
+        const buffer = await this.companiesService.exportCompanies(activeUser, { search, activo, fechaDesde, fechaHasta });
+        this.excelExportService.send(res, buffer, 'Empresas');
+    }
+
     // Obtiene una empresa por id de un tenant especifico
     @Get(':id')
     @ApiOperation({ summary: 'Get company by id', description: SWAGGER_AUTH_DESCRIPTION })
@@ -47,6 +64,8 @@ export class CompaniesController {
     ) {
         return this.companiesService.findOne(id, activeUser);
     }
+
+   
 
     // Descarga una plantilla para crear empresas masivamente
     @Get('bulk/template')
@@ -65,6 +84,8 @@ export class CompaniesController {
         });
         res.send(buffer);
     }
+
+     
 
     // Crea una nueva empresa en un tenant especifico
     @Post()
