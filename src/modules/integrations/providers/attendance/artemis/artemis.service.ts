@@ -139,8 +139,8 @@ export class ArtemisService {
         }
 
         // Caso 2: IVR (por número telefónico)
-        if (dto.NumeroTelefono) {
-            const telefonoLimpio = dto.NumeroTelefono.trim();
+        if (dto.NumeroTelefonoOrigen) {
+            const telefonoLimpio = dto.NumeroTelefonoOrigen.trim();
 
             // A. Primero verificamos si es un número personalizado (EXTRA) asignado al empleado
             const excepcionExtra = await this.prisma.relEmpleadosDidsExcepciones.findFirst({
