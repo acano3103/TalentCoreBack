@@ -50,5 +50,10 @@ export class ArtemisClockInDto {
     @ApiPropertyOptional({ example: '5512345678', description: 'Número telefónico desde el cual marcó el empleado (obligatorio para origen IVR)' })
     @IsOptional()
     @IsString()
-    NumeroTelefono?: string;
+    NumeroTelefonoOrigen?: string;
+
+    @ApiPropertyOptional({ example: '7223524316', description: 'Número telefónico destino (obligatorio para origen IVR)' })
+    @IsOptional()
+    @IsString()
+    NumeroTelefonoDestino?: string;
 }
