@@ -1,5 +1,5 @@
-import { Body, Controller, DefaultValuePipe, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, DefaultValuePipe, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Put, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { CatalogsService, CatalogKey } from './catalogs.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
@@ -14,7 +14,12 @@ import { CreateOperatingUnitDto } from './dto/create-operating-unit.dto';
 import { UpdateOperatingUnitDto } from './dto/update-operating-unit.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ScheduleCatalogsService } from './sub-services/schedule-catalogs.service';
+import { CreateScheduleCatalogDto } from './dto/create-schedule-catalog.dto';
+import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @ApiTags('Catalogs')
 @Controller('companies/:companyId/')
@@ -24,6 +29,7 @@ export class CatalogsController {
     private readonly salaryLevelsCatalogService: SalaryLevelsCatalogService,
     private readonly patronalRecordsService: PatronalRecordsService,
     private readonly operatingUnitsService: OperatingUnitsService,
+    private readonly scheduleCatalogsService: ScheduleCatalogsService,
   ) { }
 
   // Obtiene un catálogo genérico
@@ -55,7 +61,6 @@ export class CatalogsController {
 
   // Obtiene todos los niveles salariales paginados
   @Get('salary-levels')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all salary levels', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Salary levels obtained successfully' })
   @ApiResponse({ status: 404, description: 'Salary levels not found' })
@@ -73,7 +78,6 @@ export class CatalogsController {
 
   // Obtiene un nivel salarial por id
   @Get('salary-levels/:salaryLevelId')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get one salary level', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Salary level obtained successfully' })
   @ApiResponse({ status: 404, description: 'Salary level not found' })
@@ -88,7 +92,6 @@ export class CatalogsController {
 
   // Crea un nivel salarial
   @Post('salary-levels')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create salary level', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Salary level created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
@@ -102,7 +105,6 @@ export class CatalogsController {
 
   // Actualiza un nivel salarial
   @Put('salary-levels/:salaryLevelId')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update salary level', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Salary level updated successfully' })
   @ApiResponse({ status: 404, description: 'Salary level not found' })
@@ -118,7 +120,6 @@ export class CatalogsController {
 
   // Desactiva un nivel salarial
   @Delete('salary-levels/:salaryLevelId')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable salary level', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Salary level disabled successfully' })
   @ApiResponse({ status: 404, description: 'Salary level not found' })
@@ -133,7 +134,6 @@ export class CatalogsController {
 
   // Reactiva un nivel salarial
   @Patch('salary-levels/:salaryLevelId/reactivate')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Reactivate salary level', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Salary level reactivated successfully' })
   @ApiResponse({ status: 404, description: 'Salary level not found' })
@@ -152,7 +152,6 @@ export class CatalogsController {
 
   // Obtiene todos los registros patronales paginados
   @Get('patronal-records')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all patronal records', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Patronal records obtained successfully' })
   @ApiResponse({ status: 404, description: 'Patronal records not found' })
@@ -165,12 +164,11 @@ export class CatalogsController {
     @Query('search') search?: string,
   ) {
     const querySearch = search || '';
-    return this.patronalRecordsService.findAll(companyId, page, limit, querySearch, user);  
-}
+    return this.patronalRecordsService.findAll(companyId, page, limit, querySearch, user);
+  }
 
   // Obtiene un registro patronal por id
   @Get('patronal-records/:id')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all patronal records', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Patronal records obtained successfully' })
   @ApiResponse({ status: 404, description: 'Patronal records not found' })
@@ -181,11 +179,10 @@ export class CatalogsController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.patronalRecordsService.findOne(companyId, id, user);   // <-- user agregado
-}
+  }
 
   // Crea un registro patronal
   @Post('patronal-records')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create patronal record', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Patronal record created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
@@ -194,12 +191,11 @@ export class CatalogsController {
     @Param('companyId', ParseIntPipe) companyId: number,
     @Body() createPatronalRecordDto: CreatePatronalRecordDto
   ) {
-     return this.patronalRecordsService.create(companyId, createPatronalRecordDto, user);   
-}
+    return this.patronalRecordsService.create(companyId, createPatronalRecordDto, user);
+  }
 
   // Actualiza un registro patronal
   @Put('patronal-records/:id')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update patronal record', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Patronal record updated successfully' })
   @ApiResponse({ status: 400, description: 'Bad Request: Invalid input data' })
@@ -216,7 +212,6 @@ export class CatalogsController {
 
   // Desactiva un registro patronal
   @Delete('patronal-records/:id')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable patronal record', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Patronal record disabled successfully' })
   @ApiResponse({ status: 404, description: 'Patronal record not found' })
@@ -231,7 +226,6 @@ export class CatalogsController {
 
   // Reactiva un registro patronal
   @Patch('patronal-records/:id/reactivate')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Reactivate patronal record', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Patronal record reactivated successfully' })
   @ApiResponse({ status: 404, description: 'Patronal record not found' })
@@ -249,7 +243,6 @@ export class CatalogsController {
   // ==========================================
 
   @Get('operating-units')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all operating units', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 200, description: 'Operating units obtained successfully' })
   @ApiResponse({ status: 404, description: 'Operating units not found' })
@@ -267,7 +260,6 @@ export class CatalogsController {
 
   // Obtiene una unidad operativa por id
   @Get('operating-units/:id')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Obtener una unidad operativa por ID' })
   @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
   @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
@@ -284,7 +276,6 @@ export class CatalogsController {
   // Crea una unidad operativa
   @Post('operating-units')
   @HttpCode(HttpStatus.CREATED)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Crear una nueva unidad operativa' })
   @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
   @ApiResponse({ status: 201, description: 'Unidad operativa creada exitosamente' })
@@ -299,7 +290,6 @@ export class CatalogsController {
 
   // Actualiza una unidad operativa
   @Put('operating-units/:id')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Actualizar una unidad operativa existente' })
   @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
   @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
@@ -316,7 +306,6 @@ export class CatalogsController {
 
   // Desactivar unidad operativa (Soft Delete)
   @Delete('operating-units/:id')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Disable operating unit', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
   @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
@@ -333,7 +322,6 @@ export class CatalogsController {
 
   // Reactivar unidad operativa
   @Patch('operating-units/:id/reactivate')
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Reactivate operating unit', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
   @ApiParam({ name: 'id', type: Number, description: 'ID de la unidad operativa' })
@@ -346,6 +334,101 @@ export class CatalogsController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.operatingUnitsService.changeStatus(companyId, id, true, user);
+  }
+
+  // ==========================================
+  // ENDPOINTS: Subservicio de catalogo de horarios
+  // ==========================================
+
+  // Obtiene todos los horarios paginados
+  @Get('schedule-catalogs')
+  @ApiOperation({ summary: 'Get all schedules', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Schedules obtained successfully' })
+  @ApiResponse({ status: 404, description: 'Schedules not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async findAllSchedules(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+  ) {
+    const querySearch = search || '';
+    return this.scheduleCatalogsService.findAllSchedules(activeUser, page, limit, querySearch);
+  }
+
+  // Obtiene todos los catálogos de horarios sin paginar para selectores y asignaciones
+  @Get('schedule-catalogs/all')
+  @ApiOperation({ summary: 'Get all schedule catalogs unpaginated', description: "Obtiene todos los horarios activos para usar en assignaciones de turnos" })
+  @ApiResponse({ status: 200, description: 'Catálogo completo de horarios obtenido exitosamente' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async findAllSchedulesUnpaginated(@GetActiveUser() activeUser: ActiveUserDto) {
+    return this.scheduleCatalogsService.findAllSchedulesUnpaginated(activeUser);
+  }
+
+  // Descarga una plantilla para crear horarios masivamente
+  @Get('schedule-catalogs/bulk/template')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Download bulk upload Excel template for schedule catalogs', description: 'Generates and streams an Excel template with schedule names, days and hours for bulk schedule creation' })
+  @ApiResponse({ status: 200, description: 'Template generated and downloaded successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async downloadBulkScheduleTemplate(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.scheduleCatalogsService.generateBulkTemplate(activeUser);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="Plantilla_Horarios_Catalogo.xlsx"',
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  }
+
+  // Crear un nuevo horario en el catálogo
+  @Post('schedule-catalogs')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new schedule catalog', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 201, description: 'Schedule catalog created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid data or schedule name already exists' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async createSchedule(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Body() dto: CreateScheduleCatalogDto,
+  ) {
+    return this.scheduleCatalogsService.createSchedule(activeUser, dto);
+  }
+
+  // Procesa el archivo Excel de horarios cargado
+  @Post('schedule-catalogs/bulk/upload')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload and process bulk schedule catalogs Excel file', description: 'Parses the uploaded Excel file, validates schedule names, duplicates days and times, creating schedules in bulk' })
+  @ApiResponse({ status: 200, description: 'Bulk schedule file processed successfully' })
+  @ApiResponse({ status: 400, description: 'No file uploaded or invalid file format' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async uploadBulkSchedules(
+    @UploadedFile() file: Express.Multer.File,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.scheduleCatalogsService.processBulkSchedules(file, activeUser);
+  }
+
+  // Actualizar un horario en el catálogo
+  @Put('schedule-catalogs/:currentScheduleName')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a schedule catalog', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Schedule catalog updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid data or schedule name already exists' })
+  @ApiResponse({ status: 404, description: 'Schedule catalog to update not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async updateSchedule(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('currentScheduleName') currentScheduleName: string,
+    @Body() dto: CreateScheduleCatalogDto,
+  ) {
+    const decodedName = decodeURIComponent(currentScheduleName);
+    return this.scheduleCatalogsService.updateSchedule(activeUser, decodedName, dto);
   }
 
 }

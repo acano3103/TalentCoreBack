@@ -35,6 +35,11 @@ export interface CanonicalCheck {
   versionApp?: string | null;
   nombreDispositivo?: string | null;
   idDispositivoArtemis?: number | null;
+  /**
+   * Sede resuelta por el canal antes de llamar al motor (dispositivo Artemis
+   * o DID del IVR). Los canales con GPS la dejan en null: la geocerca manda.
+   */
+  idSitioDetectado?: number | null;
   urlFoto?: string | null;
 }
 
@@ -43,6 +48,8 @@ export interface ResultadoCheck {
   idJornada: number;
   tipo: TipoChecada;
   duplicado: boolean;
+  /** Por qué se marcó duplicado. Ausente cuando duplicado es false. */
+  motivoDuplicado?: 'IDEMPOTENCIA' | 'ANTIREBOTE';
   resultadoGeocerca: string;
   distanciaGeocercaMetros: number | null;
   requiereRevision: boolean;

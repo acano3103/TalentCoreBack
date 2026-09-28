@@ -33,8 +33,10 @@ import {
 } from './state-machine';
 
 /**
- * Umbrales operativos que hoy no viven en AttendanceModuleConfig.
- * Conviene moverlos al DTO de configuración cuando se extienda.
+ * Umbrales operativos que no salen de AttendanceModuleConfig.
+ * La ventana de los canales de proveedor vive en config.antirebote.
+ * ANTIREBOTE_SEGUNDOS quedó reemplazada en registerCheck: solo la usa
+ * hayReboteSemantico, y sigue en 60 s.
  */
 const ANTIREBOTE_SEGUNDOS = 60;
 const PRECISION_GPS_MAXIMA_METROS = 100;
@@ -86,6 +88,8 @@ export interface ParametrosOperativos {
   precisionGpsMaximaMetros: number;
   desfaseRelojMaximoSegundos: number;
   antiguedadOfflineMaximaHoras: number;
+  ventanaProveedorSegundos: number;
+  ventanaMismoTipoSegundos: number;
 }
 
 export interface ContextoAsistencia {
@@ -124,6 +128,12 @@ interface EvaluacionUbicacion {
   bloqueada: boolean;
 }
 
+const CANALES_PROVEEDOR: ReadonlySet<CanonicalCheck['canal']> = new Set([
+  'BIOMETRICO',
+  'NFC',
+  'IVR',
+]);
+
 @Injectable()
 export class AttendanceEngineService {
   constructor(
@@ -146,6 +156,8 @@ export class AttendanceEngineService {
       precisionGpsMaximaMetros: PRECISION_GPS_MAXIMA_METROS,
       desfaseRelojMaximoSegundos: DESFASE_RELOJ_MAXIMO_SEGUNDOS,
       antiguedadOfflineMaximaHoras: ANTIGUEDAD_OFFLINE_MAXIMA_HORAS,
+      ventanaProveedorSegundos: config.antirebote.ventanaProveedorSegundos,
+      ventanaMismoTipoSegundos: config.antirebote.ventanaMismoTipoSegundos,
     };
   }
 
@@ -269,6 +281,22 @@ export class AttendanceEngineService {
       input.fechaHoraRegistro,
       input.canal,
     );
+
+    if (CANALES_PROVEEDOR.has(input.canal)) {
+      const previo = await this.reboteDeCanal(
+        input.idEmpleado,
+        input.fechaHoraRegistro,
+        ctx.config.antirebote.ventanaProveedorSegundos,
+      );
+      if (previo) {
+        return this.registrarDuplicadoSemantico(
+          input,
+          ctx,
+          previo.tipo as TipoChecada,
+        );
+      }
+    }
+
     const accion = await this.resolveNextType(
       input.idEmpleado,
       ctx.fechaJornada,
@@ -725,6 +753,42 @@ export class AttendanceEngineService {
     });
   }
 
+  /**
+   * Rebote en canales sin pantalla: cualquier marcaje dentro de la ventana
+   * cuenta como repetición del anterior, sea del tipo que sea. Va antes de
+   * inferir el tipo a propósito: si primero infiriéramos, el segundo dedo de
+   * una ENTRADA se leería como SALIDA y cerraría la jornada.
+   */
+  private async reboteDeCanal(
+    idEmpleado: number,
+    instante: Date,
+    ventanaSegundos: number,
+  ): Promise<{
+    idRegistro: bigint;
+    tipo: string;
+    fechaHoraRegistro: Date;
+  } | null> {
+    if (ventanaSegundos <= 0) return null;
+    const ventanaMs = ventanaSegundos * 1000;
+    const previo = await this.prisma.registrosAsistencia.findFirst({
+      where: {
+        idEmpleado,
+        estatusProcesamiento: 'PROCESADO',
+        fechaHoraRegistro: {
+          gte: new Date(instante.getTime() - ventanaMs),
+          lte: new Date(instante.getTime() + ventanaMs),
+        },
+      },
+      orderBy: { fechaHoraRegistro: 'desc' },
+      select: { idRegistro: true, tipo: true, fechaHoraRegistro: true },
+    });
+    if (!previo) return null;
+    const diff = Math.abs(
+      instante.getTime() - previo.fechaHoraRegistro.getTime(),
+    );
+    return diff < ventanaMs ? previo : null;
+  }
+
   private async hayReboteSemantico(
     idEmpleado: number,
     tipo: TipoChecada,
@@ -786,6 +850,7 @@ export class AttendanceEngineService {
       jornada,
       tipo,
       duplicado: true,
+      motivoDuplicado: 'ANTIREBOTE',
       resultadoGeocerca: 'NO_APLICA',
       distanciaGeocercaMetros: null,
       requiereRevision: false,
@@ -1185,6 +1250,7 @@ export class AttendanceEngineService {
       jornada,
       tipo: registro.tipo as TipoChecada,
       duplicado,
+      motivoDuplicado: duplicado ? 'IDEMPOTENCIA' : undefined,
       resultadoGeocerca: registro.resultadoGeocerca,
       distanciaGeocercaMetros: numeroONull(registro.distanciaGeocercaMetros),
       requiereRevision: false,
@@ -1207,6 +1273,7 @@ export class AttendanceEngineService {
     } | null;
     tipo: TipoChecada;
     duplicado: boolean;
+    motivoDuplicado?: 'IDEMPOTENCIA' | 'ANTIREBOTE';
     resultadoGeocerca: string;
     distanciaGeocercaMetros: number | null;
     requiereRevision: boolean;
@@ -1224,6 +1291,9 @@ export class AttendanceEngineService {
       idJornada: params.jornada?.idJornada ?? 0,
       tipo: params.tipo,
       duplicado: params.duplicado,
+      ...(params.motivoDuplicado
+        ? { motivoDuplicado: params.motivoDuplicado }
+        : {}),
       resultadoGeocerca: params.resultadoGeocerca,
       distanciaGeocercaMetros: params.distanciaGeocercaMetros,
       requiereRevision: params.requiereRevision || retardoExcesivo,
@@ -1273,7 +1343,8 @@ export class AttendanceEngineService {
         | 'NO_APLICA'
         | 'SIN_UBICACION'
         | 'PRECISION_INSUFICIENTE',
-      idSitioDetectado: extra.ubicacion.idSitioDetectado,
+      idSitioDetectado:
+        extra.ubicacion.idSitioDetectado ?? input.idSitioDetectado ?? null,
       idExternoArtemis: input.idExternoArtemis ?? null,
       idDispositivoArtemis: input.idDispositivoArtemis ?? null,
       nombreDispositivo: input.nombreDispositivo ?? null,

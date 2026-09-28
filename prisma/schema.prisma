@@ -360,6 +360,7 @@ model CatSites {
   Activo                Boolean?                 @default(true)
   FechaRegistro         DateTime?                @db.DateTime(0)
   TipoAsistencia        CatSites_TipoAsistencia?
+  zonaHoraria           String                   @default("America/Mexico_City") @db.VarChar(50)
   CatDispositivos       CatDispositivos[]
   CatGeocercas          CatGeocercas[]
   CatPuestos            CatPuestos[]
@@ -1145,9 +1146,11 @@ model Empleados {
   JornadasEmpleado                                  JornadasEmpleado[]
   MovimientosInternos                               MovimientosInternos[]
   RegistrosAsistencia                               RegistrosAsistencia[]
+  DispositivosAsistencia                            DispositivosAsistencia[]
   Vacantes                                          Vacantes[]
   Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]            @relation("Vacantes_idReclutadorAsignadoToEmpleados")
 
+  @@unique([idTenant, numeroEmpleado], map: "UK_Empleado_Tenant_Numero")
   @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
   @@index([idUsuario], map: "FK_Empleados_Usuarios")
   @@index([idPuesto], map: "FK_Empleados_CatPuestos_idx")
@@ -1958,8 +1961,12 @@ model JornadasEmpleado {
   horaSalidaTeorica   DateTime?                       @db.Time(0)
   horaEntradaReal     DateTime?                       @db.DateTime(0)
   horaSalidaReal      DateTime?                       @db.DateTime(0)
+  horaInicioComidaReal   DateTime?                    @db.DateTime(0)
+  horaFinComidaReal      DateTime?                    @db.DateTime(0)
   minutosTrabajados   Int                             @default(0)
   minutosRetardo      Int                             @default(0)
+  minutosComida          Int                          @default(0)
+  minutosComidaExcedidos Int                          @default(0)
   minutosExtraDobles  Int                             @default(0)
   minutosExtraTriples Int                             @default(0)
   estatusJornada      JornadasEmpleado_estatusJornada @default(ABIERTA)
@@ -1993,11 +2000,24 @@ model RegistrosAsistencia {
   urlFoto              String?                                  @db.VarChar(500)
   uuidCliente          String?                                  @unique(map: "UK_Idempotencia_Movil") @db.VarChar(64)
   estatusProcesamiento RegistrosAsistencia_estatusProcesamiento @default(PENDIENTE)
+  idDispositivo           Int?
+  idEvidencia             Int?
+  idGeocerca              Int?
+  precisionMetros         Decimal?                              @db.Decimal(7, 2)
+  distanciaGeocercaMetros Decimal?                              @db.Decimal(9, 2)
+  ubicacionSimulada       Boolean                               @default(false)
+  desfaseRelojSegundos    Int?
+  motivoFueraGeocerca     String?                               @db.VarChar(255)
+  versionApp              String?                               @db.VarChar(20)
+  zonaHoraria             String?                               @db.VarChar(50)
   Empleados            Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Registros_Empleados")
   JornadasEmpleado     JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: NoAction, map: "FK_Registros_Jornadas")
 
   @@index([idJornada], map: "FK_Registros_Jornadas")
   @@index([idEmpleado, fechaHoraRegistro], map: "IDX_Registros_Empleado_Fecha")
+  @@index([idEmpresa, fechaHoraRegistro], map: "IDX_Registros_Empresa_Fecha")
+  @@index([estatusProcesamiento], map: "IDX_Registros_Estatus")
+  @@index([idDispositivo], map: "IDX_Registros_Dispositivo")
 }
 
 model ConfiguracionJornadaLegal {
@@ -2213,6 +2233,8 @@ enum RegistrosAsistencia_resultadoGeocerca {
   FUERA_PERMITIDA
   FUERA_BLOQUEADA
   NO_APLICA
+  SIN_UBICACION
+  PRECISION_INSUFICIENTE
 }
 
 enum CatSites_TipoAsistencia {
@@ -2220,4 +2242,59 @@ enum CatSites_TipoAsistencia {
   BIOMETRICO
   APP_MOVIL
   NFC
+}
+
+model DispositivosAsistencia {
+  idDispositivo            Int                            @id @default(autoincrement())
+  idTenant                 Int
+  idEmpresa                Int
+  idEmpleado               Int
+  identificadorDispositivo String                         @db.VarChar(120)
+  plataforma               String?                        @db.VarChar(20)
+  modelo                   String?                        @db.VarChar(120)
+  versionApp               String?                        @db.VarChar(20)
+  pushToken                String?                        @db.VarChar(255)
+  estatus                  DispositivosAsistencia_estatus @default(PENDIENTE)
+  fechaRegistro            DateTime                       @default(now()) @db.DateTime(0)
+  fechaAprobacion          DateTime?                      @db.DateTime(0)
+  usuarioAprobacion        String?                        @db.VarChar(100)
+  ultimoUso                DateTime?                      @db.DateTime(0)
+  activo                   Boolean                        @default(true)
+  Empleados                Empleados                      @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Dispositivo_Empleado")
+
+  @@unique([idTenant, identificadorDispositivo], map: "UK_Dispositivo_Tenant_Ident")
+  @@index([idEmpleado, estatus], map: "IDX_Dispositivo_Empleado")
+  @@index([idEmpresa, estatus], map: "IDX_Dispositivo_Empresa")
+}
+
+model AsistenciaEvidencias {
+  idEvidencia   Int                       @id @default(autoincrement())
+  idTenant      Int
+  idEmpresa     Int
+  idEmpleado    Int
+  tipo          AsistenciaEvidencias_tipo @default(SELFIE)
+  rutaArchivo   String?                   @db.VarChar(500)
+  mimeType      String?                   @db.VarChar(100)
+  tamanioBytes  Int?
+  hashSha256    String?                   @db.VarChar(64)
+  fechaCaptura  DateTime?                 @db.DateTime(0)
+  fechaRegistro DateTime                  @default(now()) @db.DateTime(0)
+  consumida     Boolean                   @default(false)
+  fechaPurga    DateTime?                 @db.Date
+
+  @@index([idEmpleado, consumida], map: "IDX_Evidencia_Empleado")
+  @@index([fechaPurga], map: "IDX_Evidencia_Purga")
+}
+
+enum DispositivosAsistencia_estatus {
+  PENDIENTE
+  APROBADO
+  BLOQUEADO
+  BAJA
+}
+
+enum AsistenciaEvidencias_tipo {
+  SELFIE
+  FOTO
+  FIRMA
 }

@@ -22,7 +22,9 @@ export class AttendanceDashboardController {
     @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
     @Query('date') date?: string,
+    @Query('idSite') idSite?: string,
+    @Query('idUnidadOperativa') idUnidadOperativa?: string,
   ) {
-    return this.attendanceDashboardService.getMetrics(user, companyId, date);
+    return this.attendanceDashboardService.getMetrics(user, companyId, date, idSite, idUnidadOperativa);
   }
 }

@@ -1,7 +1,7 @@
-import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe, Post, Delete, Put } from '@nestjs/common';
+import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe, Post, Delete, Put, Res, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { CreatePositionDto } from './dto/create-position.dto';
@@ -9,6 +9,8 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreatePositionRequestDto } from './dto/create-position-request.dto';
 import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
+import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Positions')
 @UseGuards(JwtAuthGuard)
@@ -208,6 +210,25 @@ export class PositionsController {
         return this.service.generateAIPositionDescription(activeUser, companyId, positionId);
     }
 
+    // Endpoint para descargar la plantilla de carga masiva
+    @Get('bulk/template/general')
+    @ApiOperation({ summary: 'Download bulk template for positions and salary levels', description: 'Generates an Excel template with Salary Levels and Positions with catalog dropdown validations' })
+    @ApiResponse({ status: 200, description: 'Template generated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async downloadBulkTemplate(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.service.generateBulkTemplate(companyId, user);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': `attachment; filename="Plantilla_Puestos_${companyId}.xlsx"`,
+            'Content-Length': buffer.length,
+        });
+        res.send(buffer);
+    }
+
     // Crea el descriptivo de puesto completo
     @Post()
     @ApiBearerAuth()
@@ -221,6 +242,21 @@ export class PositionsController {
         @Body() data: CreatePositionDto,
     ) {
         return this.service.create(activeUser, companyId, data);
+    }
+
+    // Endpoint para procesar el archivo Excel
+    @Post('bulk/upload/general')
+    @UseInterceptors(FileInterceptor('file'))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Process bulk file for positions and salary levels', description: 'Creates Salary Levels, then registers Positions with their relations (schedules, languages, competencies, skills, documents)' })
+    @ApiResponse({ status: 200, description: 'Bulk positions file processed successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async uploadBulkPositions(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        return await this.service.processBulkPositions(companyId, file, user);
     }
 
     // Desactiva un puesto específico

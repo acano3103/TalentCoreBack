@@ -17,16 +17,50 @@ export class LogbookService {
         limit: number,
         startDate?: string,
         search?: string,
+        idSite?: string,
+        idUnidadOperativa?: string,
     ): Promise<PaginatedLogbookResponseDto> {
         const skip = (page - 1) * limit;
 
-        // Condición base: Tenant/Empresa del tenant actual y Empleado activo = true (1)
+        // Filtro por ubicación / unidad operativa (idSite gana si vienen ambos)
+        let siteFilter: number[] | undefined;
+
+        if (idSite && !isNaN(Number(idSite))) {
+            siteFilter = [Number(idSite)];
+        } else if (idUnidadOperativa && !isNaN(Number(idUnidadOperativa))) {
+            const sites = await this.prisma.catSites.findMany({
+                where: {
+                    idUnidadOperativa: Number(idUnidadOperativa),
+                    ...(user.idTenant && { idTenant: user.idTenant }),
+                },
+                select: { idSite: true },
+            });
+            // Si la unidad no tiene ubicaciones, queda [] y no regresa registros
+            siteFilter = sites.map((s) => Number(s.idSite));
+        }
+
+        // Condiciones sobre el empleado: solo activo y término de búsqueda
+        const empleadoWhere: Prisma.EmpleadosWhereInput = {
+            activo: true, // Filtro obligatorio: solo empleados activos
+        };
+
+        // Filtro de búsqueda (nombre, apellidos o número de empleado)
+        if (search && search.trim() !== '') {
+            const term = search.trim();
+            empleadoWhere.OR = [
+                { numeroEmpleado: { contains: term } },
+                { nombre: { contains: term } },
+                { primerApellido: { contains: term } },
+                { segundoApellido: { contains: term } },
+            ];
+        }
+
+        // Condición base: Tenant/Empresa del tenant actual + condiciones del empleado + SITIO DETECTADO
         const where: Prisma.RegistrosAsistenciaWhereInput = {
             idEmpresa: companyId,
             ...(user.idTenant && { idTenant: user.idTenant }),
-            Empleados: {
-                activo: true, // Filtro obligatorio: solo empleados activos
-            },
+            ...(siteFilter && { idSitioDetectado: { in: siteFilter } }), // <--- AQUÍ SE APLICA EL FILTRO DIRECTO AL REGISTRO
+            Empleados: { is: empleadoWhere },
         };
 
         // Filtro por fecha inicial (o rango del día si se envía YYYY-MM-DD)
@@ -37,23 +71,6 @@ export class LogbookService {
                     gte: parsedDate,
                 };
             }
-        }
-
-        // Filtro de búsqueda (nombre, apellidos o número de empleado)
-        if (search && search.trim() !== '') {
-            const term = search.trim();
-
-            where.Empleados = {
-                is: {
-                    activo: true,
-                    OR: [
-                        { numeroEmpleado: { contains: term } },
-                        { nombre: { contains: term } },
-                        { primerApellido: { contains: term } },
-                        { segundoApellido: { contains: term } },
-                    ],
-                },
-            };
         }
 
         try {
@@ -81,6 +98,32 @@ export class LogbookService {
                 }),
             ]);
 
+            // Obtener los nombres de las sedes a partir de idSitioDetectado
+            const siteIds = Array.from(
+                new Set(
+                    registros
+                        .map((r) => r.idSitioDetectado)
+                        .filter((id): id is number => id !== null && id !== undefined),
+                ),
+            );
+
+            const siteMap = new Map<number, string>();
+            if (siteIds.length > 0) {
+                const sites = await this.prisma.catSites.findMany({
+                    where: {
+                        idSite: { in: siteIds },
+                    },
+                    select: {
+                        idSite: true,
+                        Descripcion: true,
+                    },
+                });
+
+                sites.forEach((s) => {
+                    siteMap.set(s.idSite, s.Descripcion!);
+                });
+            }
+
             // Mapeo limpio para el frontend
             const data: LogbookItemDto[] = registros.map((reg) => {
                 const emp = reg.Empleados;
@@ -98,6 +141,14 @@ export class LogbookService {
                     syncLabel = 'Manual';
                 }
 
+                // Resolver el nombre de la ubicación:
+                // Prioridad 1: Nombre de la sede obtenida de CatSites (a través de idSitioDetectado)
+                // Prioridad 2: Fallback a nombreDispositivo (para registros legacy/previos)
+                // Prioridad 3: null
+                const nombreUbicacionSede = reg.idSitioDetectado
+                    ? (siteMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
+                    : (reg.nombreDispositivo ?? null);
+
                 return {
                     idRegistro: reg.idRegistro.toString(), // Conversión de BigInt a String
                     empleado: {
@@ -108,7 +159,7 @@ export class LogbookService {
                     fechaHoraRegistro: reg.fechaHoraRegistro,
                     tipo: reg.tipo,
                     canal: reg.canal,
-                    ubicacionDispositivo: reg.nombreDispositivo ?? (reg.idSitioDetectado ? `Sitio #${reg.idSitioDetectado}` : null),
+                    ubicacionDispositivo: nombreUbicacionSede,
                     geocerca: {
                         resultado: reg.resultadoGeocerca,
                         latitud: reg.latitud ? Number(reg.latitud) : null,

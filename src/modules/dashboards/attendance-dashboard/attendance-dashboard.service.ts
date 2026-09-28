@@ -2,30 +2,47 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AttendanceDashboardResponseDto } from './dto/attendance-dashboard-response.dto';
-
+import { Prisma } from 'generated/prisma/client';
 @Injectable()
 export class AttendanceDashboardService {
     private readonly logger = new Logger(AttendanceDashboardService.name);
 
     constructor(private readonly prisma: PrismaService) { }
 
-    async getMetrics(
+ async getMetrics(
         user: ActiveUserDto,
         companyId: number,
         targetDate?: string,
+        idSite?: string,
+        idUnidadOperativa?: string,
     ): Promise<AttendanceDashboardResponseDto> {
         const queryDate = targetDate || new Date().toISOString().split('T')[0];
         const startOfDay = `${queryDate} 00:00:00`;
         const endOfDay = `${queryDate} 23:59:59`;
 
         // 1. Obtener el día de la semana correspondiente a queryDate
-        // Usamos el desglose de partes para evitar desajustes de huso horario
         const [y, m, d] = queryDate.split('-').map(Number);
         const dateObj = new Date(y, m - 1, d);
         const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
         const diaSemana = diasSemana[dateObj.getDay()];
 
-        try {
+        // Resolver filtro de sites (ubicación/unidad operativa)
+               let siteFilter: number[] | undefined;
+        if (idSite) {
+            siteFilter = [Number(idSite)];
+        } else if (idUnidadOperativa) {
+            const sites = await this.prisma.catSites.findMany({
+                where: {
+                    idUnidadOperativa: Number(idUnidadOperativa),
+                    ...(user.idTenant && { idTenant: user.idTenant }),
+                },
+                select: { idSite: true },
+            });
+            siteFilter = sites.map(s => s.idSite);
+        }
+                
+
+          try {
             const [
                 resumenJornadas,
                 esperadosResult,
@@ -40,32 +57,36 @@ export class AttendanceDashboardService {
                         idEmpresa: companyId,
                         ...(user.idTenant && { idTenant: user.idTenant }),
                         fecha: new Date(`${queryDate}T00:00:00`),
-                        Empleados: { activo: true },
+                        Empleados: {
+                            activo: true,
+                            ...(siteFilter && { idSite: { in: siteFilter } }),
+                        },
                     },
                     _count: { idJornada: true },
                 }),
 
-                // 2. Empleados activos esperados hoy con turno presencial
-                this.prisma.$queryRaw<Array<{ totalEsperados: bigint }>>`
-          SELECT COUNT(DISTINCT h.idEmpleado) AS totalEsperados
-          FROM HorariosEmpleado h
-          INNER JOIN Empleados ep ON ep.idEmpleado = h.idEmpleado
-          WHERE ep.idEmpresa = ${companyId}
-            AND ep.idTenant = ${user.idTenant}
-            AND ep.activo = 1
-            AND h.DiaSemana = ${diaSemana}
-            AND h.HoraEntrada IS NOT NULL
-            AND (
-              h.Modalidad IS NULL 
-              OR (
-                LOWER(h.Modalidad) NOT LIKE '%remoto%' 
-                AND LOWER(h.Modalidad) NOT LIKE '%home%'
-              )
-            )
-        `,
+            // 2. Empleados activos esperados hoy con turno presencial
+                               this.prisma.$queryRaw<Array<{ totalEsperados: bigint }>>`
+                SELECT COUNT(DISTINCT h.idEmpleado) AS totalEsperados
+                FROM HorariosEmpleado h
+                INNER JOIN Empleados ep ON ep.idEmpleado = h.idEmpleado
+                WHERE ep.idEmpresa = ${companyId}
+                AND ep.idTenant = ${user.idTenant}
+                AND ep.activo = 1
+                AND h.DiaSemana = ${diaSemana}
+                AND h.HoraEntrada IS NOT NULL
+                AND (
+                    h.Modalidad IS NULL
+                    OR (
+                    LOWER(h.Modalidad) NOT LIKE '%remoto%'
+                    AND LOWER(h.Modalidad) NOT LIKE '%home%'
+                    )
+                )
+                ${siteFilter ? Prisma.sql`AND ep.idSite IN (${Prisma.join(siteFilter)})` : Prisma.empty}
+            `,
 
                 // 3. Distribución multicanal de marcas en el día
-                this.prisma.registrosAsistencia.groupBy({
+                               this.prisma.registrosAsistencia.groupBy({
                     by: ['canal'],
                     where: {
                         idEmpresa: companyId,
@@ -74,27 +95,32 @@ export class AttendanceDashboardService {
                             gte: new Date(startOfDay),
                             lte: new Date(endOfDay),
                         },
-                        Empleados: { activo: true },
+                        Empleados: {
+                            activo: true,
+                            ...(siteFilter && { idSite: { in: siteFilter } }),
+                        },
                     },
                     _count: { idRegistro: true },
                 }),
 
                 // 4. Actividad distribuida por hora (agrupada en SQL puro)
-                this.prisma.$queryRaw<Array<{ hora: number; tipo: string; total: bigint }>>`
-          SELECT 
-            HOUR(fechaHoraRegistro) as hora,
-            tipo,
-            COUNT(idRegistro) as total
-          FROM RegistrosAsistencia
-          WHERE idEmpresa = ${companyId}
-            AND idTenant = ${user.idTenant}
-            AND fechaHoraRegistro BETWEEN ${startOfDay} AND ${endOfDay}
-          GROUP BY HOUR(fechaHoraRegistro), tipo
-          ORDER BY hora ASC
-        `,
+                             this.prisma.$queryRaw<Array<{ hora: number; tipo: string; total: bigint }>>`
+                    SELECT
+                    HOUR(r.fechaHoraRegistro) as hora,
+                    r.tipo,
+                    COUNT(r.idRegistro) as total
+                    FROM RegistrosAsistencia r
+                    INNER JOIN Empleados ep ON ep.idEmpleado = r.idEmpleado
+                    WHERE r.idEmpresa = ${companyId}
+                    AND r.idTenant = ${user.idTenant}
+                    AND r.fechaHoraRegistro BETWEEN ${startOfDay} AND ${endOfDay}
+                    ${siteFilter ? Prisma.sql`AND ep.idSite IN (${Prisma.join(siteFilter)})` : Prisma.empty}
+                    GROUP BY HOUR(r.fechaHoraRegistro), r.tipo
+                    ORDER BY hora ASC
+                `,
 
                 // 5. Feed en vivo: últimos 7 registros procesados
-                this.prisma.registrosAsistencia.findMany({
+                             this.prisma.registrosAsistencia.findMany({
                     where: {
                         idEmpresa: companyId,
                         ...(user.idTenant && { idTenant: user.idTenant }),
@@ -102,7 +128,10 @@ export class AttendanceDashboardService {
                             gte: new Date(startOfDay),
                             lte: new Date(endOfDay),
                         },
-                        Empleados: { activo: true },
+                        Empleados: {
+                            activo: true,
+                            ...(siteFilter && { idSite: { in: siteFilter } }),
+                        },
                     },
                     take: 7,
                     orderBy: { fechaHoraRegistro: 'desc' },

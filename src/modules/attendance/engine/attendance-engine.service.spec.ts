@@ -295,6 +295,8 @@ describe('AttendanceEngineService', () => {
       precisionGpsMaximaMetros: 100,
       desfaseRelojMaximoSegundos: 300,
       antiguedadOfflineMaximaHoras: 72,
+      ventanaProveedorSegundos: config.antirebote.ventanaProveedorSegundos,
+      ventanaMismoTipoSegundos: config.antirebote.ventanaMismoTipoSegundos,
     });
   });
 
@@ -512,6 +514,7 @@ describe('AttendanceEngineService', () => {
     );
 
     expect(segunda.duplicado).toBe(true);
+    expect(segunda.motivoDuplicado).toBe('IDEMPOTENCIA');
     expect(segunda.idRegistro).toBe(primera.idRegistro);
     expect(memoria.registros).toHaveLength(1);
   });
@@ -552,6 +555,154 @@ describe('AttendanceEngineService', () => {
     expect(memoria.jornadas[0].fechaActualizacion?.getTime()).toBe(
       antes.fechaActualizacion,
     );
+  });
+
+  it('en checador, el segundo dedo a los 90 s no cierra la jornada y la salida real sí entra', async () => {
+    const entrada = await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'ALTERNANTE_SIMPLE',
+        uuidCliente: 'fila-entrada',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 0, 0),
+      }),
+    );
+    const repetida = await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'ALTERNANTE_SIMPLE',
+        uuidCliente: 'fila-rebote',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 1, 30),
+      }),
+    );
+
+    expect(entrada.tipo).toBe('ENTRADA');
+    expect(entrada.duplicado).toBe(false);
+    expect(repetida.duplicado).toBe(true);
+    expect(repetida.motivoDuplicado).toBe('ANTIREBOTE');
+    expect(repetida.tipo).toBe('ENTRADA');
+    expect(memoria.registros).toHaveLength(2);
+    expect(memoria.registros[1].estatusProcesamiento).toBe('DUPLICADO');
+    expect(memoria.registros[1].tipo).toBe('ENTRADA');
+    expect(memoria.jornadas[0].estatusJornada).toBe('ABIERTA');
+    expect(memoria.jornadas[0].horaSalidaReal).toBeNull();
+
+    const salida = await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'ALTERNANTE_SIMPLE',
+        uuidCliente: 'fila-salida',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 17, 0, 0),
+      }),
+    );
+
+    expect(salida.duplicado).toBe(false);
+    expect(salida.tipo).toBe('SALIDA');
+    expect(salida.jornada.estatusJornada).toBe('CERRADA');
+    expect(memoria.jornadas[0].estatusJornada).toBe('CERRADA');
+    expect(memoria.jornadas[0].horaSalidaReal).not.toBeNull();
+    expect(memoria.registros[2].estatusProcesamiento).toBe('PROCESADO');
+  });
+
+  it('un marcaje de proveedor a los 180 s ya no es rebote y se registra como SALIDA', async () => {
+    await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'ALTERNANTE_SIMPLE',
+        uuidCliente: 'ventana-entrada',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 0, 0),
+      }),
+    );
+    const salida = await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'ALTERNANTE_SIMPLE',
+        uuidCliente: 'ventana-salida',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 3, 0),
+      }),
+    );
+
+    expect(salida.duplicado).toBe(false);
+    expect(salida.motivoDuplicado).toBeUndefined();
+    expect(salida.tipo).toBe('SALIDA');
+    expect(memoria.registros).toHaveLength(2);
+    expect(memoria.registros[1].estatusProcesamiento).toBe('PROCESADO');
+    expect(memoria.jornadas[0].estatusJornada).toBe('CERRADA');
+    expect(memoria.jornadas[0].horaSalidaReal).not.toBeNull();
+  });
+
+  it('la app móvil registra INICIO_COMIDA 90 s después de la ENTRADA', async () => {
+    const inicio = enMexico(2026, 9, 21, 9, 0, 0);
+    await service.registerCheck(
+      checada({
+        canal: 'APP_MOVIL',
+        modoInferencia: 'EXPLICITO',
+        tipo: 'ENTRADA',
+        uuidCliente: 'movil-entrada',
+        fechaHoraRegistro: inicio,
+        ubicacion: { latitud: 19.43, longitud: -99.13, precisionMetros: 12 },
+      }),
+    );
+    const comida = await service.registerCheck(
+      checada({
+        canal: 'APP_MOVIL',
+        modoInferencia: 'EXPLICITO',
+        tipo: 'INICIO_COMIDA',
+        uuidCliente: 'movil-comida',
+        fechaHoraRegistro: new Date(inicio.getTime() + 90_000),
+        ubicacion: { latitud: 19.43, longitud: -99.13, precisionMetros: 12 },
+      }),
+    );
+
+    expect(comida.duplicado).toBe(false);
+    expect(comida.motivoDuplicado).toBeUndefined();
+    expect(comida.tipo).toBe('INICIO_COMIDA');
+    expect(memoria.registros[1].estatusProcesamiento).toBe('PROCESADO');
+    expect(memoria.registros[1].tipo).toBe('INICIO_COMIDA');
+    expect(memoria.jornadas[0].estatusJornada).toBe('ABIERTA');
+  });
+
+  it('con ventanaProveedorSegundos en 0 el mismo tipo a los 30 s sigue en el antirebote semántico', async () => {
+    config.antirebote.ventanaProveedorSegundos = 0;
+    const inicio = enMexico(2026, 9, 21, 8, 0, 0);
+
+    await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'EXPLICITO',
+        tipo: 'ENTRADA',
+        uuidCliente: 'cero-entrada',
+        fechaHoraRegistro: inicio,
+      }),
+    );
+    const mismoTipo = await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'EXPLICITO',
+        tipo: 'ENTRADA',
+        uuidCliente: 'cero-mismo',
+        fechaHoraRegistro: new Date(inicio.getTime() + 30_000),
+      }),
+    );
+
+    expect(mismoTipo.duplicado).toBe(true);
+    expect(mismoTipo.motivoDuplicado).toBe('ANTIREBOTE');
+    expect(mismoTipo.tipo).toBe('ENTRADA');
+    expect(memoria.registros[1].estatusProcesamiento).toBe('DUPLICADO');
+    expect(memoria.jornadas[0].horaSalidaReal).toBeNull();
+
+    const salida = await service.registerCheck(
+      checada({
+        canal: 'BIOMETRICO',
+        modoInferencia: 'EXPLICITO',
+        tipo: 'SALIDA',
+        uuidCliente: 'cero-salida',
+        fechaHoraRegistro: new Date(inicio.getTime() + 45_000),
+      }),
+    );
+
+    expect(salida.duplicado).toBe(false);
+    expect(salida.tipo).toBe('SALIDA');
+    expect(memoria.jornadas[0].estatusJornada).toBe('CERRADA');
   });
 
   it('aplica la tolerancia de entrada: 08:12 con 15 min de tolerancia no es retardo', async () => {

@@ -32,6 +32,15 @@ export class AttendanceSiteItemDto {
 }
 
 export class AttendanceDidExceptionItemDto {
+    @ApiPropertyOptional({
+        example: 2,
+        description: 'ID de la sede a la que pertenece o aplica esta excepción',
+    })
+    @IsOptional()
+    @IsInt()
+    @IsPositive()
+    idSite?: number;
+
     @ApiProperty({
         example: '5512345678',
         description: 'Número telefónico DID afectado (10 a 15 dígitos)',

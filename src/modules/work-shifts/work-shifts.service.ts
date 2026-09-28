@@ -16,6 +16,8 @@ export class WorkShiftsService {
         limit: number,
         startDateStr?: string,
         search?: string,
+         idSite?: string,
+        idUnidadOperativa?: string,
     ) {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
@@ -60,6 +62,28 @@ export class WorkShiftsService {
             )`
             : Prisma.empty;
 
+        // 3.1 Filtro por ubicación / unidad operativa (idSite gana si vienen ambos)
+        let siteFilterSql = Prisma.empty;
+
+        if (idSite && !isNaN(Number(idSite))) {
+            siteFilterSql = Prisma.sql`AND ep.idSite = ${Number(idSite)}`;
+        } else if (idUnidadOperativa && !isNaN(Number(idUnidadOperativa))) {
+            const sites = await this.prisma.catSites.findMany({
+                where: {
+                    idUnidadOperativa: Number(idUnidadOperativa),
+                    idTenant: user.idTenant,
+                },
+                select: { idSite: true },
+            });
+            const siteIds = sites.map((s) => Number(s.idSite));
+
+            // Unidad sin ubicaciones => no debe regresar empleados
+            siteFilterSql = siteIds.length > 0
+                ? Prisma.sql`AND ep.idSite IN (${Prisma.join(siteIds)})`
+                : Prisma.sql`AND 1 = 0`;
+        }
+
+
         // 4. Conteo de empleados con expediente completo (idEstatus = 4)
         const countResult = await this.prisma.$queryRaw<{ total: bigint }[]>`
             SELECT COUNT(DISTINCT ep.idEmpleado) as total
@@ -68,8 +92,9 @@ export class WorkShiftsService {
             WHERE ep.idEmpresa = ${companyId}
                 AND ep.idTenant = ${user.idTenant}
                 AND ep.activo = 1
-                AND exp.idEstatus = 4
+                -- AND exp.idEstatus = 4
                 ${searchFilter}
+                ${siteFilterSql}
         `;
         const total = countResult[0]?.total ? Number(countResult[0].total) : 0;
 
@@ -105,7 +130,7 @@ export class WorkShiftsService {
             WHERE ep.idEmpresa = ${companyId}
                 AND ep.idTenant = ${user.idTenant}
                 AND ep.activo = 1
-                AND exp.idEstatus = 4
+                -- AND exp.idEstatus = 4
                 ${searchFilter}
             ORDER BY ep.primerApellido ASC, ep.nombre ASC
             LIMIT ${limit} OFFSET ${offset}
@@ -241,7 +266,7 @@ export class WorkShiftsService {
     }
 
 
-        async findMine(user: ActiveUserDto, companyId: number, startDateStr?: string) {
+    async findMine(user: ActiveUserDto, companyId: number, startDateStr?: string) {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
@@ -324,11 +349,11 @@ export class WorkShiftsService {
             }
 
             if (!tieneHorarioConfigurado) {
-                               return { fecha: fechaStr, dia: diaNombre, texto: 'Descanso', minutos: 0, estatus: 'DESCANSO', variant: 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
+                return { fecha: fechaStr, dia: diaNombre, texto: 'Descanso', minutos: 0, estatus: 'DESCANSO', variant: 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
             }
 
             const yaPaso = new Date(`${fechaStr}T23:59:59`) < new Date();
-                    return { fecha: fechaStr, dia: diaNombre, texto: yaPaso ? 'Falta' : '-', minutos: 0, estatus: yaPaso ? 'FALTA' : 'PENDIENTE', variant: yaPaso ? 'falta' : 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
+            return { fecha: fechaStr, dia: diaNombre, texto: yaPaso ? 'Falta' : '-', minutos: 0, estatus: yaPaso ? 'FALTA' : 'PENDIENTE', variant: yaPaso ? 'falta' : 'descanso', minutosRetardo: 0, horaEntrada: null, horaSalida: null };
         });
 
         const porcentajeCumplimiento = Number(((totalMinutosSemana / limiteMinutosLegal) * 100).toFixed(1));

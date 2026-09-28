@@ -7,6 +7,7 @@ import { SalaryLevelsCatalogService } from './sub-services/salary-levels-catalog
 import { PatronalRecordsService } from './sub-services/patronal-records.service';
 import { OperatingUnitsService } from './sub-services/operating-units.service';
 import { PublicCatalogsService } from './public-catalogs.service';
+import { ScheduleCatalogsService } from './sub-services/schedule-catalogs.service';
 
 @Module({
   imports: [],
@@ -17,7 +18,8 @@ import { PublicCatalogsService } from './public-catalogs.service';
     // CatalogsSeedService,
     SalaryLevelsCatalogService,
     PatronalRecordsService,
-    OperatingUnitsService
+    OperatingUnitsService,
+    ScheduleCatalogsService
   ],
   exports: [CatalogsService, PublicCatalogsService],
 })

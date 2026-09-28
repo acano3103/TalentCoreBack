@@ -660,7 +660,7 @@ export class MobileAttendanceService {
     }
 }
 
-interface RegistroHoy {
+export interface RegistroHoy {
     idRegistro: number;
     tipo: string;
     canal: string;
@@ -714,7 +714,7 @@ function mensajeDispositivoNoAprobado(estatus: string | null): string {
     return 'Este dispositivo no está autorizado para registrar asistencia. Regístralo y espera la aprobación de Recursos Humanos.';
 }
 
-interface SyncItemResultado {
+export interface SyncItemResultado {
     uuidCliente: string;
     aceptado: boolean;
     idRegistro?: string;

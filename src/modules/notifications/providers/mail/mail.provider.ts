@@ -13,7 +13,8 @@ export class MailProvider {
                 throw new Error(`No template definido para notificación`);
             }
 
-            const logoUrl = `${process.env.APP_URL}/public/logo-talent-core.svg`;
+            const baseUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+            const logoUrl = `${baseUrl}/public/logo-talent-core.svg`;
 
             await this.mailerService.sendMail({
                 to: payload.to,

@@ -391,6 +391,40 @@ describe('ArtemisService', () => {
       expect(respuesta).not.toHaveProperty('rechazado');
     });
 
+    it('un antirebote del motor responde duplicado e ignoradoPorTolerancia', async () => {
+      engine.registerCheck.mockResolvedValue(
+        resultadoMotor({
+          duplicado: true,
+          motivoDuplicado: 'ANTIREBOTE',
+          tipo: 'ENTRADA',
+        }),
+      );
+
+      const respuesta = await service.clockIn(dtoBase());
+
+      expect(respuesta).toEqual(
+        expect.objectContaining({
+          duplicado: true,
+          ignoradoPorTolerancia: true,
+          tipo: 'ENTRADA',
+        }),
+      );
+    });
+
+    it('la idempotencia del motor no marca ignoradoPorTolerancia', async () => {
+      engine.registerCheck.mockResolvedValue(
+        resultadoMotor({
+          duplicado: true,
+          motivoDuplicado: 'IDEMPOTENCIA',
+        }),
+      );
+
+      const respuesta = await service.clockIn(dtoBase());
+
+      expect(respuesta).toEqual(expect.objectContaining({ duplicado: true }));
+      expect(respuesta).not.toHaveProperty('ignoradoPorTolerancia');
+    });
+
     it('IdAsistencia repetido responde duplicado:true sin volver a llamar al motor', async () => {
       prisma.registrosAsistencia.findFirst.mockResolvedValue({
         idRegistro: 5n,

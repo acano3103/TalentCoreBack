@@ -59,6 +59,7 @@ export class IvrService {
                 WHERE exc_b.idEmpleado = ${employee.idEmpleado}
                   AND exc_b.TipoExcepcion = 'BLOQUEADO'
                   AND exc_b.Activo = 1
+                  AND exc_b.Did IS NOT NULL
             )
             ORDER BY d.Did ASC;
         `;

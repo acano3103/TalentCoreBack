@@ -33,6 +33,7 @@ describe('InternalMovementsService', () => {
   const activeUser: ActiveUserDto = {
     id: 1,
     uuid: 'user-uuid-1',
+    idTenant: 1,
     username: 'admin',
     first_name: 'Ana',
     last_name: 'Lopez',
