@@ -13,6 +13,7 @@ export const envValidationSchema = Joi.object({
     MOBILE_USE_CAPTCHA: Joi.boolean().default(false),
     MOBILE_USE_TOKEN_2FA: Joi.boolean().default(false),
     MOBILE_ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
+    MOBILE_MIN_APP_VERSION: Joi.string().default('1.0.0'),
     ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
     MAIL_HOST: Joi.string().required(),
     MAIL_PORT: Joi.number().required(),
@@ -53,4 +54,6 @@ export const envValidationSchema = Joi.object({
     GUPSHUP_APP_NAME: Joi.string().required(),
     IVR_API_KEY: Joi.string().required(),
     ARTEMIS_API_KEY: Joi.string().required(),
+    ATTENDANCE_ENGINE_ENABLED: Joi.string().valid('true', 'false').default('true'),
+    ATTENDANCE_JOBS_ENABLED: Joi.string().valid('true', 'false').default('true'),
 });

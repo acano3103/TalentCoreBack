@@ -51,7 +51,11 @@ export class MobileAuthController {
     @ApiOperation({ summary: 'Close session from the mobile app', description: 'Close session from the mobile app', })
     @ApiResponse({ status: 200, description: 'Logout successful', })
     @ApiResponse({ status: 401, description: 'Invalid credentials', })
-    logout(@GetActiveUser() activeUser: ActiveUserDto) {
-        return this.mobileAuthService.logout(activeUser);
+    logout(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Req() request: { user?: { session_id?: string | null } },
+    ) {
+        const sessionId = request.user?.session_id ?? undefined;
+        return this.mobileAuthService.logout(activeUser, sessionId);
     }
 }

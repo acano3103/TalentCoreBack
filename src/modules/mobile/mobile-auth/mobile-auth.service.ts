@@ -4,14 +4,16 @@ import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { DjangoPasswordHasher } from 'src/common/utils/django-password.util';
 import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
-import { UsersService } from 'src/modules/users/users.service';
 import { MobileLoginDto } from './dto/login.dto';
 import { MobileVerifyTokenDto } from './dto/verify-token.dto';
 import { MobileResendTokenDto } from './dto/resend-token.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CaptchaService } from 'src/modules/auth/providers/captcha.service';
 import { AuthDataService } from 'src/modules/auth/queries/auth.queries';
-import { ActiveUserDto, UserFullInfoDto } from 'src/modules/auth/dto/active-user.dto';
+import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
+
+const MENSAJE_SIN_EMPLEADO =
+    'Tu usuario no tiene un perfil de empleado activo. Contacta a Recursos Humanos.';
 
 @Injectable()
 export class MobileAuthService {
@@ -24,7 +26,6 @@ export class MobileAuthService {
         private readonly dataService: AuthDataService,
         private readonly notifications: NotificationDispatcher,
         private readonly captchaService: CaptchaService,
-        private readonly userService: UsersService,
     ) { }
 
     async login(loginDto: MobileLoginDto) {
@@ -63,6 +64,9 @@ export class MobileAuthService {
             throw new UnauthorizedException('La contraseña es incorrecta');
         }
 
+        // Sin empleado activo no hay sesión ni código 2FA: la app de asistencia no puede checar.
+        await this.obtenerEmpleadoActivo(userSystem.uuid);
+
         // 4. Control de sesiones concurrentes específico para móvil
         if (!allowConcurrent) {
             const sessionCheck = await this.handleSessionControl(userSystem.uuid, !!forceLogin);
@@ -77,6 +81,8 @@ export class MobileAuthService {
         // 5. Autenticación de Dos Factores (2FA) si está activo para móvil
         if (useToken2FA) {
             const token2fa = Math.floor(100000 + Math.random() * 900000).toString();
+
+            await this.prisma.tokenUsuario.deleteMany({ where: { idUsuario: userSystem.id } });
 
             await this.prisma.tokenUsuario.create({
                 data: {
@@ -198,27 +204,26 @@ export class MobileAuthService {
         throw new BadRequestException('Tipo de usuario no soportado');
     }
 
-    async logout(activeUser: ActiveUserDto) {
+    async logout(activeUser: ActiveUserDto, sessionId?: string | null) {
         if (!activeUser) {
             throw new UnauthorizedException('No se encontraron credenciales de usuario activas.');
         }
 
-        const user: UserFullInfoDto = await this.userService.getUserFullInfo(activeUser.id);
-        const userId = activeUser.id;
-        const userType = user.roles && user.roles.length > 0 ? 'staff' : 'candidato';
-        let userUuid = '';
-
-        if (userType === 'staff') {
-            const userDb = await this.prisma.auth_user.findUnique({ where: { id: userId } });
-            userUuid = userDb?.uuid || '';
-        } else {
-            const userDb = await this.prisma.usuarios.findFirst({ where: { idUsuario: userId } });
-            userUuid = userDb?.uuid || '';
+        if (sessionId) {
+            await this.prisma.usuarioslogin.deleteMany({
+                where: { identificador: sessionId },
+            });
+            return { success: true, message: 'Sesión móvil eliminada correctamente.' };
         }
 
-        if (userUuid) {
+        this.logger.warn(
+            `Logout móvil sin session_id (usuario ${activeUser.id}). Se eliminan todas las sesiones del usuario.`,
+        );
+
+        const userDb = await this.prisma.auth_user.findUnique({ where: { id: activeUser.id } });
+        if (userDb?.uuid) {
             await this.prisma.usuarioslogin.deleteMany({
-                where: { UuidUsuario: userUuid },
+                where: { UuidUsuario: userDb.uuid },
             });
         }
 
@@ -231,6 +236,12 @@ export class MobileAuthService {
         let isSuperuser = false;
         let idTenant: number | null = null;
 
+        let empleadoClaims: {
+            idEmpleado: number;
+            idEmpresa: number | null;
+            numeroEmpleado: string | null;
+        } | null = null;
+
         if (type === 'staff') {
             const user = await this.prisma.auth_user.findUnique({ where: { id: userId } });
             const fullName = `${user?.first_name} ${user?.last_name}`;
@@ -238,9 +249,24 @@ export class MobileAuthService {
             isSuperuser = Boolean(user?.is_superuser);
             idTenant = (user as any)?.idTenant || null;
 
+            const empleado = await this.obtenerEmpleadoActivo(userUuid);
+
             userData = await this.dataService.getStaffData(userId, fullName, idTenant);
             userData.is_superuser = isSuperuser;
             userData.idTenant = idTenant;
+            userData.empleado = {
+                nombreCompleto: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido]
+                    .filter((parte): parte is string => typeof parte === 'string' && parte.trim().length > 0)
+                    .join(' '),
+                numeroEmpleado: empleado.numeroEmpleado,
+                idPuesto: empleado.idPuesto,
+                idSite: empleado.idSite,
+            };
+            empleadoClaims = {
+                idEmpleado: empleado.idEmpleado,
+                idEmpresa: empleado.idEmpresa,
+                numeroEmpleado: empleado.numeroEmpleado,
+            };
         } else {
             const user = await this.prisma.usuarios.findFirst({ where: { idUsuario: userId } });
             userUuid = user?.uuid || '';
@@ -252,13 +278,14 @@ export class MobileAuthService {
             orderBy: { FechaLogin: 'desc' },
         });
 
-        // Mismo payload que usa tu JWT web para mantener compatibilidad
+        // Mismos claims que el JWT web, más el empleado para no resolverlo en cada checada.
         const payload = {
             user_id: userId,
             roles: userData.roles,
             session_id: currentSession?.identificador || null,
             is_superuser: isSuperuser,
             idTenant: idTenant,
+            ...(empleadoClaims ?? {}),
         };
 
         return {
@@ -266,6 +293,29 @@ export class MobileAuthService {
             user_type: type,
             userData,
         };
+    }
+
+    private async obtenerEmpleadoActivo(userUuid: string) {
+        const empleado = await this.prisma.empleados.findFirst({
+            where: { idUsuario: userUuid, activo: true },
+            select: {
+                idEmpleado: true,
+                idEmpresa: true,
+                idTenant: true,
+                numeroEmpleado: true,
+                nombre: true,
+                primerApellido: true,
+                segundoApellido: true,
+                idPuesto: true,
+                idSite: true,
+            },
+        });
+
+        if (!empleado) {
+            throw new UnauthorizedException(MENSAJE_SIN_EMPLEADO);
+        }
+
+        return empleado;
     }
 
     private ofuscarCorreo(correo: string): string {
