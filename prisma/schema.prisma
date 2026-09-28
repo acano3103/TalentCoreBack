@@ -360,6 +360,7 @@ model CatSites {
   Activo                Boolean?                 @default(true)
   FechaRegistro         DateTime?                @db.DateTime(0)
   TipoAsistencia        CatSites_TipoAsistencia?
+  CatDispositivos       CatDispositivos[]
   CatGeocercas          CatGeocercas[]
   CatPuestos            CatPuestos[]
   CatTiposUbicacion     CatTiposUbicacion        @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
@@ -368,6 +369,7 @@ model CatSites {
   RelAreasUbicaciones   RelAreasUbicaciones[]
   RelEmpleadosSites     RelEmpleadosSites[]
   RelPuestosUbicaciones RelPuestosUbicaciones[]
+  RelSitesHorarios      RelSitesHorarios[]
   RelUsuarioSite        RelUsuarioSite[]
   Vacantes              Vacantes[]
 
@@ -1126,8 +1128,8 @@ model Empleados {
   numeroInfonavit                                   String?               @db.VarChar(30)
   numeroHijos                                       Int?
   imagenFirmaAutografa                              String?               @db.VarChar(500)
-  uploadLink                                        String?               @db.VarChar(100)
-  token                                             String?               @db.VarChar(100)
+  uploadLink                                        String?               @db.VarChar(500)
+  token                                             String?               @db.VarChar(500)
   activo                                            Boolean               @default(true)
   artemisUserId                                     String?               @db.VarChar(50)
   artemisSyncedAt                                   DateTime?             @db.DateTime(0)
@@ -1915,6 +1917,7 @@ model RelEmpleadosDidsExcepciones {
   idTenant      Int                                       @default(0)
   idEmpresa     Int
   idEmpleado    Int
+  idSite        Int?
   Did           String                                    @db.VarChar(20)
   TipoExcepcion RelEmpleadosDidsExcepciones_TipoExcepcion @default(BLOQUEADO)
   Motivo        String?                                   @db.VarChar(150)
@@ -1924,6 +1927,7 @@ model RelEmpleadosDidsExcepciones {
   @@unique([idEmpleado, Did], map: "UK_EmpDidExcepcion")
   @@index([idEmpresa], map: "FK_EmpDidExcepcion_Empresa")
   @@index([idEmpleado, Did, TipoExcepcion, Activo], map: "IDX_EmpDidExcepcion_Lookup")
+  @@index([idEmpleado, idSite], map: "IDX_EmpDidExcepcion_Site")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -2041,6 +2045,56 @@ model TenantConfiguracionesModulos {
   @@unique([idTenant, moduloCodigo], map: "uq_tenant_modulo_config")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatDispositivos {
+  idDispositivo        Int                  @id @default(autoincrement())
+  idDispositivoArtemis Int
+  idTenant             Int                  @default(0)
+  idEmpresa            Int?
+  idSite               Int?
+  tipo                 CatDispositivos_tipo
+  alias                String               @db.VarChar(150)
+  modelo               String?              @db.VarChar(100)
+  Activo               Boolean              @default(true)
+  FechaRegistro        DateTime             @default(now()) @db.DateTime(0)
+  FechaModificacion    DateTime?            @db.DateTime(0)
+  UsuarioRegistro      String?              @default("artemis_sync") @db.VarChar(100)
+  CatSites             CatSites?            @relation(fields: [idSite], references: [idSite], map: "FK_Dispositivos_Site")
+
+  @@unique([idTenant, idDispositivoArtemis], map: "UQ_Dispositivo_Tenant_Artemis")
+  @@index([idEmpresa], map: "FK_Dispositivos_Empresa")
+  @@index([idSite], map: "FK_Dispositivos_Site")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CatHorarios {
+  idHorario       Int       @id @default(autoincrement())
+  idTenant        Int       @default(0)
+  Nombre          String    @db.VarChar(150)
+  DiaSemana       String?   @db.VarChar(10)
+  HoraEntrada     DateTime? @db.Time(0)
+  HoraSalida      DateTime? @db.Time(0)
+  Activo          Boolean   @default(true)
+  FechaRegistro   DateTime  @default(now()) @db.DateTime(0)
+  UsuarioRegistro String?   @db.VarChar(100)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model RelSitesHorarios {
+  idRelSiteHorario Int      @id @default(autoincrement())
+  idTenant         Int      @default(0)
+  idEmpresa        Int?
+  idSite           Int
+  NombreHorario    String   @db.VarChar(150)
+  Activo           Boolean  @default(true)
+  FechaRegistro    DateTime @default(now()) @db.DateTime(0)
+  CatSites         CatSites @relation(fields: [idSite], references: [idSite], onDelete: Cascade, map: "FK_RelSitesHorarios_Site")
+
+  @@unique([idSite, NombreHorario], map: "UQ_RelSitesHorarios_Site_Nombre")
+  @@index([idTenant, idEmpresa], map: "FK_RelSitesHorarios_Tenant_Empresa")
+  @@index([NombreHorario], map: "IDX_RelSitesHorarios_Nombre")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -2117,12 +2171,6 @@ enum RelEmpleadosSites_MetodoAsistencia {
   CUALQUIERA
 }
 
-enum CatSites_TipoAsistencia {
-  IVR
-  BIOMETRICO
-  APP_MOVIL
-}
-
 enum RegistrosAsistencia_canal {
   APP_MOVIL
   IVR
@@ -2136,13 +2184,6 @@ enum RegistrosAsistencia_tipo {
   SALIDA
   INICIO_COMIDA
   FIN_COMIDA
-}
-
-enum RegistrosAsistencia_resultadoGeocerca {
-  DENTRO
-  FUERA_PERMITIDA
-  FUERA_BLOQUEADA
-  NO_APLICA
 }
 
 enum JornadasEmpleado_estatusJornada {
@@ -2159,4 +2200,24 @@ enum RegistrosAsistencia_estatusProcesamiento {
   PROCESADO
   DUPLICADO
   RECHAZADO
+}
+
+enum CatDispositivos_tipo {
+  BIOMETRICO
+  IVR
+  NFC
+}
+
+enum RegistrosAsistencia_resultadoGeocerca {
+  DENTRO
+  FUERA_PERMITIDA
+  FUERA_BLOQUEADA
+  NO_APLICA
+}
+
+enum CatSites_TipoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
+  NFC
 }

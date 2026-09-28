@@ -59,6 +59,8 @@ import { AttendanceModule } from './modules/attendance/attendance.module';
       {
         rootPath: process.env.MEDIA_ROOT_PATH || join(process.cwd(), 'media'),
         serveRoot: '/media',
+        // D6: las selfies de asistencia no son públicas; se leen por MediaController.
+        exclude: ['/media/attendance/(.*)'],
       }
     ),
     PrismaModule,

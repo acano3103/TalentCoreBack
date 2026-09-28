@@ -21,7 +21,14 @@ export class MobileJwtStrategy extends PassportStrategy(Strategy, 'jwt-mobile') 
         });
     }
 
-    async validate(payload: any) {
+    async validate(payload: {
+        user_id?: number;
+        session_id?: string | null;
+        idEmpleado?: number | null;
+        idEmpresa?: number | null;
+        idTenant?: number | null;
+        numeroEmpleado?: string | null;
+    }) {
         const userId = payload.user_id;
         const sessionId = payload.session_id;
 
@@ -32,6 +39,12 @@ export class MobileJwtStrategy extends PassportStrategy(Strategy, 'jwt-mobile') 
         const user = await this.usersService.getUserBasicInfo(userId);
         if (!user) {
             throw new UnauthorizedException('Usuario no encontrado');
+        }
+
+        if (payload.idEmpleado == null) {
+            throw new UnauthorizedException(
+                'Tu sesión no incluye el perfil de empleado. Vuelve a iniciar sesión.',
+            );
         }
 
         // Leemos la variable específica para el control de sesiones en la app móvil
@@ -48,7 +61,14 @@ export class MobileJwtStrategy extends PassportStrategy(Strategy, 'jwt-mobile') 
             }
         }
 
-        // Esto se adjunta automáticamente a request.user
-        return user;
+        // request.user: datos de auth_user más el empleado, el tenant y la sesión del JWT
+        return {
+            ...user,
+            idTenant: payload.idTenant ?? user.idTenant,
+            idEmpleado: payload.idEmpleado,
+            idEmpresa: payload.idEmpresa,
+            numeroEmpleado: payload.numeroEmpleado,
+            session_id: sessionId,
+        };
     }
 }

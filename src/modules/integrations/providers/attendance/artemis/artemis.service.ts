@@ -1,6 +1,14 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    Logger,
+    NotFoundException,
+} from '@nestjs/common';
+import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
+import { CanonicalCheck } from 'src/modules/attendance/engine/interfaces/canonical-check.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ArtemisClockInDto } from './dto/artemis-clock-in.dto';
+import { resolverTenantUnico } from '../utils/resolver-tenant-unico.util';
 
 const DIAS_MAP: Record<number, string> = {
     0: 'Domingo',
@@ -16,9 +24,152 @@ const DIAS_MAP: Record<number, string> = {
 export class ArtemisService {
     private readonly logger = new Logger(ArtemisService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly engine: AttendanceEngineService,
+    ) { }
 
+    /**
+     * TODO(artemis): borrar clockInLegacy y la bandera ATTENDANCE_ENGINE_ENABLED
+     * cuando el motor lleve dos semanas estable en producción. Sin la bandera,
+     * un problema obliga a rollback de deploy; con ella, es un cambio de env.
+     */
     async clockIn(dto: ArtemisClockInDto) {
+        if (!this.motorHabilitado()) {
+            return this.clockInLegacy(dto);
+        }
+        return this.clockInConMotor(dto);
+    }
+
+    private motorHabilitado(): boolean {
+        return (process.env.ATTENDANCE_ENGINE_ENABLED ?? 'true') !== 'false';
+    }
+
+    private async clockInConMotor(dto: ArtemisClockInDto) {
+        const idExternoBigInt = BigInt(dto.IdAsistencia);
+
+        const yaExiste = await this.prisma.registrosAsistencia.findFirst({
+            where: { idExternoArtemis: idExternoBigInt },
+            select: { idRegistro: true, tipo: true, idJornada: true },
+        });
+
+        if (yaExiste) {
+            this.logger.warn(`Marcaje duplicado recibido de Artemis. IdAsistencia: ${dto.IdAsistencia}`);
+            return {
+                success: true,
+                duplicado: true,
+                message: 'Marcaje previamente registrado.',
+                idRegistro: Number(yaExiste.idRegistro),
+                tipo: yaExiste.tipo,
+            };
+        }
+
+        const idTenant = await resolverTenantUnico(this.prisma);
+        const numeroEmpleado = dto.ExternalUserId.trim();
+        const empleado = await this.prisma.empleados.findFirst({
+            where: {
+                numeroEmpleado,
+                activo: true,
+                idTenant,
+            },
+            select: {
+                idEmpleado: true,
+                idEmpresa: true,
+                idTenant: true,
+                nombre: true,
+                primerApellido: true,
+            },
+        });
+
+        if (!empleado) {
+            this.logger.error(`Empleado no encontrado o inactivo con número: ${numeroEmpleado}`);
+            throw new NotFoundException(`No se encontró un empleado activo con el número de colaborador "${numeroEmpleado}".`);
+        }
+
+        const canal = this.normalizarCanal(dto.FuenteAsistencia);
+        const fechaChecadaDate = this.sanitizarFechaChecada(dto.FechaChecada);
+
+        const check: CanonicalCheck = {
+            idTenant: empleado.idTenant ?? idTenant,
+            idEmpresa: empleado.idEmpresa as number,
+            idEmpleado: empleado.idEmpleado,
+            canal,
+            tipo: null,
+            modoInferencia: 'ALTERNANTE_SIMPLE',
+            rechazoSuave: true,
+            fechaHoraRegistro: fechaChecadaDate,
+            idExternoArtemis: idExternoBigInt,
+            idDispositivoArtemis: dto.IdDispositivo ?? null,
+            nombreDispositivo: dto.Dispositivo ?? null,
+            urlFoto: dto.UrlFoto ?? null,
+        };
+
+        const resultado = await this.engine.registerCheck(check);
+
+        if (resultado.rechazado) {
+            this.logger.warn(
+                `Checada rechazada [${resultado.codigoRechazo}] para #${numeroEmpleado}: ${resultado.motivoRechazo}`,
+            );
+            return {
+                message: resultado.motivoRechazo,
+                rechazado: true,
+                codigo: resultado.codigoRechazo,
+                idRegistro: Number(resultado.idRegistro),
+                idJornada: resultado.idJornada,
+            };
+        }
+
+        return {
+            message: `Checada de ${resultado.tipo.toLowerCase()} registrada exitosamente.`,
+            idRegistro: Number(resultado.idRegistro),
+            idJornada: resultado.idJornada,
+            tipo: resultado.tipo,
+            empleado: `${empleado.nombre} ${empleado.primerApellido}`,
+            fechaHora: fechaChecadaDate,
+            ...(resultado.duplicado ? { duplicado: true } : {}),
+        };
+    }
+
+    private normalizarCanal(fuente: string): 'IVR' | 'BIOMETRICO' | 'NFC' {
+        let canal: 'IVR' | 'BIOMETRICO' | 'NFC' = 'BIOMETRICO';
+        const fuenteUpper = (fuente || '').toUpperCase();
+        if (fuenteUpper.includes('IVR')) {
+            canal = 'IVR';
+        } else if (fuenteUpper.includes('NFC')) {
+            canal = 'NFC';
+        }
+        return canal;
+    }
+
+    private sanitizarFechaChecada(fecha: string): Date {
+        let fechaRaw = (fecha || '').trim();
+
+        // Si viene sin indicador de zona horaria ('Z' o '+/-HH:mm'), forzamos UTC
+        if (!fechaRaw.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(fechaRaw)) {
+            if (fechaRaw.includes('.')) {
+                const [fechaParte, decimales] = fechaRaw.split('.');
+                // JS Date solo acepta hasta 3 dígitos de milisegundos
+                fechaRaw = `${fechaParte}.${decimales.slice(0, 3)}Z`;
+            } else {
+                fechaRaw = `${fechaRaw}Z`;
+            }
+        }
+
+        const fechaChecadaDate = new Date(fechaRaw);
+        if (isNaN(fechaChecadaDate.getTime())) {
+            throw new BadRequestException('FechaChecada inválida');
+        }
+        return fechaChecadaDate;
+    }
+
+    /**
+     * Ruta anterior, intacta salvo el filtro de tenant en el lookup del
+     * empleado. Salvavidas temporal: ATTENDANCE_ENGINE_ENABLED=false.
+     *
+     * TODO(artemis): borrar este método y la bandera cuando el motor lleve
+     * dos semanas estable en producción.
+     */
+    private async clockInLegacy(dto: ArtemisClockInDto) {
         const idExternoBigInt = BigInt(dto.IdAsistencia);
 
         // 1. Idempotencia: validar si este registro de Artemis ya fue recibido
@@ -39,11 +190,13 @@ export class ArtemisService {
         }
 
         // 2. Buscar al empleado por su número de empleado (ExternalUserId)
+        const idTenant = await resolverTenantUnico(this.prisma);
         const numeroEmpleado = dto.ExternalUserId.trim();
         const empleado = await this.prisma.empleados.findFirst({
             where: {
                 numeroEmpleado,
                 activo: true,
+                idTenant,
             },
             select: {
                 idEmpleado: true,

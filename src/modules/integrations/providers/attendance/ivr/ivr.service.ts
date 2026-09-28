@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { VerifyEmployeeIvrDto } from './dto/verify-employee-ivr.dto';
+import { resolverTenantUnico } from '../utils/resolver-tenant-unico.util';
 
 @Injectable()
 export class IvrService {
@@ -14,10 +15,12 @@ export class IvrService {
             throw new BadRequestException('El número de empleado no es válido');
         }
 
+        const idTenant = await resolverTenantUnico(this.prisma);
         const employee = await this.prisma.empleados.findFirst({
             where: {
                 numeroEmpleado: cleanEmployeeNumber,
                 activo: true,
+                idTenant,
             },
         });
 
