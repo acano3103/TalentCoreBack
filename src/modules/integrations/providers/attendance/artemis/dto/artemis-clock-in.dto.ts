@@ -46,4 +46,9 @@ export class ArtemisClockInDto {
     @IsOptional()
     @IsString()
     UrlFoto?: string;
+
+    @ApiPropertyOptional({ example: '5512345678', description: 'Número telefónico desde el cual marcó el empleado (obligatorio para origen IVR)' })
+    @IsOptional()
+    @IsString()
+    NumeroTelefono?: string;
 }

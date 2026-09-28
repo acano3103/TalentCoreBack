@@ -716,6 +716,7 @@ export class EmployeesService {
             idTenant: user.idTenant,
             idEmpresa: companyId,
             idEmpleado: employeeId,
+            idSite: exc.idSite ?? null,
             Did: exc.did.trim(),
             TipoExcepcion: exc.tipoExcepcion, // 'BLOQUEADO' | 'EXTRA'
             Activo: true, // La regla de excepción se guarda activa

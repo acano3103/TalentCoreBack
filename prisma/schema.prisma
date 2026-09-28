@@ -1917,6 +1917,7 @@ model RelEmpleadosDidsExcepciones {
   idTenant      Int                                       @default(0)
   idEmpresa     Int
   idEmpleado    Int
+  idSite        Int?
   Did           String                                    @db.VarChar(20)
   TipoExcepcion RelEmpleadosDidsExcepciones_TipoExcepcion @default(BLOQUEADO)
   Motivo        String?                                   @db.VarChar(150)
@@ -1926,6 +1927,7 @@ model RelEmpleadosDidsExcepciones {
   @@unique([idEmpleado, Did], map: "UK_EmpDidExcepcion")
   @@index([idEmpresa], map: "FK_EmpDidExcepcion_Empresa")
   @@index([idEmpleado, Did, TipoExcepcion, Activo], map: "IDX_EmpDidExcepcion_Lookup")
+  @@index([idEmpleado, idSite], map: "IDX_EmpDidExcepcion_Site")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
