@@ -188,10 +188,10 @@ export class ArtemisService {
             });
 
             if (!dispositivo) {
-                throw new NotFoundException(`Dispositivo no encontrado con idExternoArtemis: ${dto.IdDispositivo}`);
+                idSite = null;
+            } else {
+                idSite = dispositivo.idSite;
             }
-
-            idSite = dispositivo.idSite;
         }
 
         // Caso 2: IVR (por número telefónico)
