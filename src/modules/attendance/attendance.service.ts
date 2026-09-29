@@ -2,6 +2,10 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AttendanceTrackingConfigService } from '../config/attendance-config/attendance-config.service';
+import {
+    jornadaConMarcajesInclude,
+    mapJornadaConMarcajes,
+} from './utils/jornada-response.util';
 
 @Injectable()
 export class AttendanceService {
@@ -54,21 +58,7 @@ export class AttendanceService {
                 idTenant: user.idTenant,
                 idEmpresa: companyId,
             },
-            include: {
-                RegistrosAsistencia: {
-                    orderBy: {
-                        fechaHoraRegistro: 'asc',
-                    },
-                    select: {
-                        idRegistro: true,
-                        canal: true,
-                        tipo: true,
-                        fechaHoraRegistro: true,
-                        resultadoGeocerca: true,
-                        nombreDispositivo: true,
-                    },
-                },
-            },
+            include: jornadaConMarcajesInclude,
             orderBy: {
                 fecha: 'desc',
             },
@@ -81,7 +71,7 @@ export class AttendanceService {
         let diasAsistidos = 0;
         let totalFaltas = 0;
 
-        const detalleJornadas = jornadas.map((jornada: any) => {
+        const detalleJornadas = jornadas.map((jornada) => {
             totalMinutosTrabajados += jornada.minutosTrabajados || 0;
             totalMinutosRetardo += jornada.minutosRetardo || 0;
 
@@ -91,34 +81,7 @@ export class AttendanceService {
                 diasAsistidos += 1;
             }
 
-            const entrada = jornada.RegistrosAsistencia.find((r: any) => r.tipo === 'ENTRADA');
-            const salidaComida = jornada.RegistrosAsistencia.find((r: any) => r.tipo === 'INICIO_COMIDA');
-            const entradaComida = jornada.RegistrosAsistencia.find((r: any) => r.tipo === 'FIN_COMIDA');
-            const salida = jornada.RegistrosAsistencia.filter((r: any) => r.tipo === 'SALIDA').pop();
-
-            return {
-                idJornada: jornada.idJornada,
-                fecha: jornada.fecha,
-                estatusJornada: jornada.estatusJornada,
-                minutosTrabajados: jornada.minutosTrabajados,
-                horasTrabajadasFormato: `${Math.floor(jornada.minutosTrabajados / 60)}h ${jornada.minutosTrabajados % 60}m`,
-                minutosRetardo: jornada.minutosRetardo,
-                horasTeoricas: {
-                    entrada: jornada.horaEntradaTeorica,
-                    salida: jornada.horaSalidaTeorica,
-                },
-                horasReales: {
-                    entrada: jornada.horaEntradaReal,
-                    salida: jornada.horaSalidaReal,
-                },
-                marcajes: {
-                    entrada: entrada ? { hora: entrada.fechaHoraRegistro, canal: entrada.canal } : null,
-                    salidaComida: salidaComida ? { hora: salidaComida.fechaHoraRegistro, canal: salidaComida.canal } : null,
-                    entradaComida: entradaComida ? { hora: entradaComida.fechaHoraRegistro, canal: entradaComida.canal } : null,
-                    salida: salida ? { hora: salida.fechaHoraRegistro, canal: salida.canal } : null,
-                },
-                totalRegistros: jornada.RegistrosAsistencia.length,
-            };
+            return mapJornadaConMarcajes(jornada);
         });
 
         const totalHoras = (totalMinutosTrabajados / 60).toFixed(1);

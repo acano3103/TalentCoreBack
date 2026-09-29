@@ -10,7 +10,13 @@ export interface LogbookItemDto {
     canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL';
     ubicacionDispositivo: string | null;
     geocerca: {
-        resultado: 'DENTRO' | 'FUERA_PERMITIDA' | 'FUERA_BLOQUEADA' | 'NO_APLICA';
+        resultado:
+            | 'DENTRO'
+            | 'FUERA_PERMITIDA'
+            | 'FUERA_BLOQUEADA'
+            | 'NO_APLICA'
+            | 'SIN_UBICACION'
+            | 'PRECISION_INSUFICIENTE';
         latitud: number | null;
         longitud: number | null;
     };

@@ -37,6 +37,7 @@ export class AttendanceTrackingConfigService {
             salidas: { ...DEFAULT_ATTENDANCE_CONFIG.salidas, ...configGuardada.salidas },
             horasExtra: { ...DEFAULT_ATTENDANCE_CONFIG.horasExtra, ...configGuardada.horasExtra },
             movil: { ...DEFAULT_ATTENDANCE_CONFIG.movil, ...configGuardada.movil },
+            antirebote: { ...DEFAULT_ATTENDANCE_CONFIG.antirebote, ...configGuardada.antirebote },
         };
     }
 

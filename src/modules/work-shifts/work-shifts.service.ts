@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'generated/prisma/client';
@@ -16,7 +16,7 @@ export class WorkShiftsService {
         limit: number,
         startDateStr?: string,
         search?: string,
-         idSite?: string,
+        idSite?: string,
         idUnidadOperativa?: string,
     ) {
         if (!user.idTenant) {
@@ -377,6 +377,173 @@ export class WorkShiftsService {
             },
         };
     }
+
+    async findDayDetails(
+        user: ActiveUserDto,
+        companyId: number,
+        employeeId: number,
+        dateStr: string,
+    ) {
+        if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            throw new BadRequestException('El parámetro date es requerido y debe tener formato YYYY-MM-DD');
+        }
+
+        // 1. Validar que el empleado exista en la empresa y tenant
+        const empleado = await this.prisma.empleados.findFirst({
+            where: {
+                idEmpleado: employeeId,
+                idEmpresa: companyId,
+                ...(user.idTenant && { idTenant: user.idTenant }),
+            },
+            select: {
+                idEmpleado: true,
+                numeroEmpleado: true,
+                nombre: true,
+                primerApellido: true,
+                segundoApellido: true,
+                CatPuestos: {
+                    select: {
+                        DescripcionPuesto: true,
+                    },
+                },
+            },
+        });
+
+        if (!empleado) {
+            throw new NotFoundException(`No se encontró el colaborador con ID ${employeeId}`);
+        }
+
+        // 2. Rango de búsqueda para el día completo (00:00:00 a 23:59:59 UTC)
+        const fechaInicio = new Date(`${dateStr}T00:00:00.000Z`);
+        const fechaFin = new Date(`${dateStr}T23:59:59.999Z`);
+        const fechaJornada = new Date(dateStr);
+
+        // 3. Consultar jornada y registros en paralelo
+        const [jornada, registros] = await Promise.all([
+            this.prisma.jornadasEmpleado.findFirst({
+                where: {
+                    idEmpleado: employeeId,
+                    fecha: fechaJornada,
+                },
+            }),
+            this.prisma.registrosAsistencia.findMany({
+                where: {
+                    idEmpleado: employeeId,
+                    idEmpresa: companyId,
+                    ...(user.idTenant && { idTenant: user.idTenant }),
+                    fechaHoraRegistro: {
+                        gte: fechaInicio,
+                        lte: fechaFin,
+                    },
+                },
+                orderBy: {
+                    fechaHoraRegistro: 'asc',
+                },
+            }),
+        ]);
+
+        // 4. Resolver nombres de sedes (CatSites) para los idSitioDetectado presentes
+        const siteIds = Array.from(
+            new Set(
+                registros
+                    .map((r) => r.idSitioDetectado)
+                    .filter((id): id is number => id !== null && id !== undefined),
+            ),
+        );
+
+        const siteMap = new Map<number, string>();
+        if (siteIds.length > 0) {
+            const sites = await this.prisma.catSites.findMany({
+                where: {
+                    idSite: { in: siteIds },
+                },
+                select: {
+                    idSite: true,
+                    Descripcion: true,
+                },
+            });
+
+            sites.forEach((s) => {
+                siteMap.set(s.idSite, s.Descripcion!);
+            });
+        }
+
+        // 5. Mapear cada checada
+        const marcajes = registros.map((reg) => {
+            let syncLabel = 'En línea';
+            if (reg.esOffline) {
+                syncLabel = 'Offline';
+            } else if (reg.idExternoArtemis || reg.idDispositivoArtemis) {
+                syncLabel = 'Artemis';
+            } else if (reg.canal === 'WEB_MANUAL') {
+                syncLabel = 'Manual';
+            }
+
+            const ubicacionNombre = reg.idSitioDetectado
+                ? (siteMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
+                : (reg.nombreDispositivo ?? null);
+
+            return {
+                idRegistro: reg.idRegistro.toString(),
+                idJornada: reg.idJornada,
+                tipo: reg.tipo,
+                canal: reg.canal,
+                fechaHoraRegistro: reg.fechaHoraRegistro,
+                ubicacionDispositivo: ubicacionNombre,
+                idSitioDetectado: reg.idSitioDetectado,
+                nombreDispositivo: reg.nombreDispositivo,
+                geocerca: {
+                    resultado: reg.resultadoGeocerca,
+                    latitud: reg.latitud ? Number(reg.latitud) : null,
+                    longitud: reg.longitud ? Number(reg.longitud) : null,
+                },
+                evidencia: {
+                    tieneFoto: Boolean(reg.urlFoto),
+                    urlFoto: reg.urlFoto ?? null,
+                },
+                sync: {
+                    label: syncLabel,
+                    esOffline: Boolean(reg.esOffline),
+                    fechaHoraRecepcion: reg.fechaHoraRecepcion,
+                },
+                estatusProcesamiento: reg.estatusProcesamiento,
+            };
+        });
+
+        // 6. Formatear minutos a horas y minutos (ej. 493 -> "8:13")
+        const minutos = jornada?.minutosTrabajados ?? 0;
+        const horasNum = Math.floor(minutos / 60);
+        const minsNum = minutos % 60;
+        const textoHoras = minutos > 0 ? `${horasNum}:${minsNum.toString().padStart(2, '0')}` : '-';
+
+        return {
+            empleado: {
+                idEmpleado: empleado.idEmpleado,
+                numeroEmpleado: empleado.numeroEmpleado,
+                nombreCompleto: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido].filter(Boolean).join(' '),
+                puesto: empleado.CatPuestos?.DescripcionPuesto ?? null,
+            },
+            jornada: jornada
+                ? {
+                    idJornada: jornada.idJornada,
+                    fecha: dateStr,
+                    estatus: jornada.estatusJornada,
+                    minutosTrabajados: jornada.minutosTrabajados,
+                    totalHorasTexto: textoHoras,
+                    horaEntradaReal: jornada.horaEntradaReal,
+                    horaSalidaReal: jornada.horaSalidaReal,
+                    horaEntradaTeorica: jornada.horaEntradaTeorica,
+                    horaSalidaTeorica: jornada.horaSalidaTeorica,
+                    minutosRetardo: jornada.minutosRetardo,
+                }
+                : null,
+            marcajes,
+        };
+    }
+
+    // -------------------------------
+    // Helpers
+    // -------------------------------
 
     private getWeekRange(startDateStr?: string) {
         let baseDate = startDateStr ? new Date(`${startDateStr}T00:00:00`) : new Date();
