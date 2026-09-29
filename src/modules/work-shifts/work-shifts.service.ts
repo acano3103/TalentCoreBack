@@ -413,36 +413,47 @@ export class WorkShiftsService {
             throw new NotFoundException(`No se encontró el colaborador con ID ${employeeId}`);
         }
 
-        // 2. Rango de búsqueda para el día completo (00:00:00 a 23:59:59 UTC)
-        const fechaInicio = new Date(`${dateStr}T00:00:00.000Z`);
-        const fechaFin = new Date(`${dateStr}T23:59:59.999Z`);
-        const fechaJornada = new Date(dateStr);
+        // 2. Resolver la fecha de la jornada como medianoche UTC (formato @db.Date de Prisma)
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const fechaJornada = new Date(Date.UTC(year, month - 1, day));
 
-        // 3. Consultar jornada y registros en paralelo
-        const [jornada, registros] = await Promise.all([
-            this.prisma.jornadasEmpleado.findFirst({
+        // 3. Consultar primero la jornada del colaborador para esta fecha
+        const jornada = await this.prisma.jornadasEmpleado.findFirst({
+            where: {
+                idEmpleado: employeeId,
+                fecha: fechaJornada,
+            },
+        });
+
+        // 4. Consultar los marcajes vinculados a la jornada (o por ventana de tiempo si no hay jornada)
+        const registros = jornada
+            ? await this.prisma.registrosAsistencia.findMany({
                 where: {
-                    idEmpleado: employeeId,
-                    fecha: fechaJornada,
+                    idJornada: jornada.idJornada,
+                    idEmpresa: companyId,
+                    ...(user.idTenant && { idTenant: user.idTenant }),
                 },
-            }),
-            this.prisma.registrosAsistencia.findMany({
+                orderBy: {
+                    fechaHoraRegistro: 'asc',
+                },
+            })
+            : await this.prisma.registrosAsistencia.findMany({
                 where: {
                     idEmpleado: employeeId,
                     idEmpresa: companyId,
                     ...(user.idTenant && { idTenant: user.idTenant }),
+                    // Ventana de 24 horas cubriendo el día local en UTC (ej. 06:00 UTC del día a 05:59:59 UTC del día siguiente)
                     fechaHoraRegistro: {
-                        gte: fechaInicio,
-                        lte: fechaFin,
+                        gte: new Date(`${dateStr}T06:00:00.000Z`),
+                        lte: new Date(new Date(`${dateStr}T06:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000 - 1),
                     },
                 },
                 orderBy: {
                     fechaHoraRegistro: 'asc',
                 },
-            }),
-        ]);
+            });
 
-        // 4. Resolver nombres de sedes (CatSites) para los idSitioDetectado presentes
+        // 5. Resolver nombres de sedes (CatSites) para los idSitioDetectado presentes
         const siteIds = Array.from(
             new Set(
                 registros
@@ -468,7 +479,7 @@ export class WorkShiftsService {
             });
         }
 
-        // 5. Mapear cada checada
+        // 6. Mapear cada checada
         const marcajes = registros.map((reg) => {
             let syncLabel = 'En línea';
             if (reg.esOffline) {
@@ -510,7 +521,7 @@ export class WorkShiftsService {
             };
         });
 
-        // 6. Formatear minutos a horas y minutos (ej. 493 -> "8:13")
+        // 7. Formatear minutos a horas y minutos (ej. 493 -> "8:13")
         const minutos = jornada?.minutosTrabajados ?? 0;
         const horasNum = Math.floor(minutos / 60);
         const minsNum = minutos % 60;
