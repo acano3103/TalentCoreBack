@@ -83,6 +83,8 @@ export class ArtemisService {
         const canal = this.normalizarCanal(dto.FuenteAsistencia);
         const fechaChecadaDate = this.sanitizarFechaChecada(dto.FechaChecada);
         const idSite = await this.resolverSitio(dto, empleado.idEmpleado, numeroEmpleado);
+        const telefonoOrigen = dto.NumeroTelefonoOrigen?.trim() || null;
+        const telefonoDestino = dto.NumeroTelefonoDestino?.trim() || null;
 
         const check: CanonicalCheck = {
             idTenant: empleado.idTenant ?? idTenant,
@@ -98,6 +100,8 @@ export class ArtemisService {
             idSitioDetectado: idSite,
             nombreDispositivo: dto.Dispositivo ?? null,
             urlFoto: dto.UrlFoto ?? null,
+            telefonoOrigen: telefonoOrigen,
+            telefonoDestino: telefonoDestino,
         };
 
         const resultado = await this.engine.registerCheck(check);

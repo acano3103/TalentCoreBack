@@ -139,7 +139,7 @@ export class AttendanceEngineService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attendanceConfigService: AttendanceTrackingConfigService,
-  ) {}
+  ) { }
 
   getParametrosOperativos(config: AttendanceModuleConfig): ParametrosOperativos {
     return {
@@ -227,9 +227,9 @@ export class AttendanceEngineService {
       diaSemana,
       horario: horario
         ? {
-            HoraEntrada: horario.HoraEntrada,
-            HoraSalida: horario.HoraSalida,
-          }
+          HoraEntrada: horario.HoraEntrada,
+          HoraSalida: horario.HoraSalida,
+        }
         : null,
       geocercas,
       config,
@@ -469,11 +469,11 @@ export class AttendanceEngineService {
     const inicioComida = registros.find((r) => r.tipo === 'INICIO_COMIDA');
     const finComida = inicioComida
       ? registros.find(
-          (r) =>
-            r.tipo === 'FIN_COMIDA' &&
-            r.fechaHoraRegistro.getTime() >
-              inicioComida.fechaHoraRegistro.getTime(),
-        )
+        (r) =>
+          r.tipo === 'FIN_COMIDA' &&
+          r.fechaHoraRegistro.getTime() >
+          inicioComida.fechaHoraRegistro.getTime(),
+      )
       : undefined;
     const salidas = registros.filter((r) => r.tipo === 'SALIDA');
     const salida = salidas.length ? salidas[salidas.length - 1] : undefined;
@@ -506,17 +506,17 @@ export class AttendanceEngineService {
     const minutosComidaExcedidos = Math.max(
       0,
       minutosComida -
-        (config.comida.tiempoComidaMinutos +
-          config.comida.toleranciaComidaMinutos),
+      (config.comida.tiempoComidaMinutos +
+        config.comida.toleranciaComidaMinutos),
     );
 
     const minutosTrabajados =
       entrada && horaSalidaEfectiva
         ? Math.max(
-            0,
-            diffMinutes(entrada.fechaHoraRegistro, horaSalidaEfectiva) -
-              minutosComida,
-          )
+          0,
+          diffMinutes(entrada.fechaHoraRegistro, horaSalidaEfectiva) -
+          minutosComida,
+        )
         : 0;
 
     let minutosRetardo = 0;
@@ -529,7 +529,7 @@ export class AttendanceEngineService {
       minutosRetardo = Math.max(
         0,
         diffMinutes(teoricaInstant, entrada.fechaHoraRegistro) -
-          config.tolerancia.minutosToleranciaEntrada,
+        config.tolerancia.minutosToleranciaEntrada,
       );
     }
 
@@ -1224,8 +1224,8 @@ export class AttendanceEngineService {
   ): Promise<ResultadoCheck> {
     const jornada = registro.idJornada
       ? await this.prisma.jornadasEmpleado.findUnique({
-          where: { idJornada: registro.idJornada },
-        })
+        where: { idJornada: registro.idJornada },
+      })
       : null;
     const config =
       await this.attendanceConfigService.getConfiguracionAsistencia(
@@ -1234,16 +1234,16 @@ export class AttendanceEngineService {
       );
     const siguiente = jornada
       ? await this.resolveNextType(
-          registro.idEmpleado,
-          jornada.fecha,
-          config,
-          input.modoInferencia,
-        )
+        registro.idEmpleado,
+        jornada.fecha,
+        config,
+        input.modoInferencia,
+      )
       : siguienteAccion(
-          null,
-          input.modoInferencia,
-          config.comida.obligatorioChecarComida,
-        );
+        null,
+        input.modoInferencia,
+        config.comida.obligatorioChecarComida,
+      );
 
     return this.armarResultado({
       registro,
@@ -1331,6 +1331,8 @@ export class AttendanceEngineService {
       idEmpleado: input.idEmpleado,
       idJornada: extra.idJornada,
       canal: input.canal,
+      telefonoOrigen: input.telefonoOrigen ?? null,
+      telefonoDestino: input.telefonoDestino ?? null,
       tipo: extra.tipo,
       fechaHoraRegistro: input.fechaHoraRegistro,
       esOffline: input.esOffline ?? false,

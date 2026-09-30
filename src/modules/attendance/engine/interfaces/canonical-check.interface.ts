@@ -41,6 +41,8 @@ export interface CanonicalCheck {
    */
   idSitioDetectado?: number | null;
   urlFoto?: string | null;
+  telefonoOrigen?: string | null;
+  telefonoDestino?: string | null;
 }
 
 export interface ResultadoCheck {
