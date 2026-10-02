@@ -495,27 +495,27 @@ export class ArtemisService {
 
                 return tx.catDispositivos.upsert({
                     where: {
-                        UQ_Dispositivo_Tenant_Artemis: {
-                            idTenant: idTenant,
-                            idDispositivoArtemis: disp.idDispositivo,
-                        },
-                    },
-                    update: {
-                        tipo: tipoNormalizado,
-                        alias: disp.alias.trim(),
-                        modelo: disp.modelo?.trim() ?? null,
-                        Activo: true,
-                    },
-                    create: {
+                      idTenant_idDispositivoArtemis: {
                         idTenant: idTenant,
                         idDispositivoArtemis: disp.idDispositivo,
-                        tipo: tipoNormalizado,
-                        alias: disp.alias.trim(),
-                        modelo: disp.modelo?.trim() ?? null,
-                        Activo: true,
-                        UsuarioRegistro: 'artemis_sync',
+                      },
                     },
-                });
+                    update: {
+                      tipo: tipoNormalizado,
+                      alias: disp.alias.trim(),
+                      modelo: disp.modelo?.trim() ?? null,
+                      Activo: true,
+                    },
+                    create: {
+                      idTenant: idTenant,
+                      idDispositivoArtemis: disp.idDispositivo,
+                      tipo: tipoNormalizado,
+                      alias: disp.alias.trim(),
+                      modelo: disp.modelo?.trim() ?? null,
+                      Activo: true,
+                      UsuarioRegistro: 'artemis_sync',
+                    },
+                  });
             });
 
             return Promise.all(operaciones);
