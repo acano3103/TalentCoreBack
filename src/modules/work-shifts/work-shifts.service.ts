@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'generated/prisma/client';
@@ -16,6 +16,8 @@ export class WorkShiftsService {
         limit: number,
         startDateStr?: string,
         search?: string,
+        idSite?: string,
+        idUnidadOperativa?: string,
     ) {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
@@ -60,6 +62,28 @@ export class WorkShiftsService {
             )`
             : Prisma.empty;
 
+        // 3.1 Filtro por ubicación / unidad operativa (idSite gana si vienen ambos)
+        let siteFilterSql = Prisma.empty;
+
+        if (idSite && !isNaN(Number(idSite))) {
+            siteFilterSql = Prisma.sql`AND ep.idSite = ${Number(idSite)}`;
+        } else if (idUnidadOperativa && !isNaN(Number(idUnidadOperativa))) {
+            const sites = await this.prisma.catSites.findMany({
+                where: {
+                    idUnidadOperativa: Number(idUnidadOperativa),
+                    idTenant: user.idTenant,
+                },
+                select: { idSite: true },
+            });
+            const siteIds = sites.map((s) => Number(s.idSite));
+
+            // Unidad sin ubicaciones => no debe regresar empleados
+            siteFilterSql = siteIds.length > 0
+                ? Prisma.sql`AND ep.idSite IN (${Prisma.join(siteIds)})`
+                : Prisma.sql`AND 1 = 0`;
+        }
+
+
         // 4. Conteo de empleados con expediente completo (idEstatus = 4)
         const countResult = await this.prisma.$queryRaw<{ total: bigint }[]>`
             SELECT COUNT(DISTINCT ep.idEmpleado) as total
@@ -70,6 +94,7 @@ export class WorkShiftsService {
                 AND ep.activo = 1
                 -- AND exp.idEstatus = 4
                 ${searchFilter}
+                ${siteFilterSql}
         `;
         const total = countResult[0]?.total ? Number(countResult[0].total) : 0;
 
@@ -352,6 +377,184 @@ export class WorkShiftsService {
             },
         };
     }
+
+    async findDayDetails(
+        user: ActiveUserDto,
+        companyId: number,
+        employeeId: number,
+        dateStr: string,
+    ) {
+        if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            throw new BadRequestException('El parámetro date es requerido y debe tener formato YYYY-MM-DD');
+        }
+
+        // 1. Validar que el empleado exista en la empresa y tenant
+        const empleado = await this.prisma.empleados.findFirst({
+            where: {
+                idEmpleado: employeeId,
+                idEmpresa: companyId,
+                ...(user.idTenant && { idTenant: user.idTenant }),
+            },
+            select: {
+                idEmpleado: true,
+                numeroEmpleado: true,
+                nombre: true,
+                primerApellido: true,
+                segundoApellido: true,
+                CatPuestos: {
+                    select: {
+                        DescripcionPuesto: true,
+                    },
+                },
+            },
+        });
+
+        if (!empleado) {
+            throw new NotFoundException(`No se encontró el colaborador con ID ${employeeId}`);
+        }
+
+        // 2. Resolver la fecha de la jornada como medianoche UTC (formato @db.Date de Prisma)
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const fechaJornada = new Date(Date.UTC(year, month - 1, day));
+
+        // 3. Consultar primero la jornada del colaborador para esta fecha
+        const jornada = await this.prisma.jornadasEmpleado.findFirst({
+            where: {
+                idEmpleado: employeeId,
+                fecha: fechaJornada,
+            },
+        });
+
+        // 4. Consultar los marcajes vinculados a la jornada (o por ventana de tiempo si no hay jornada)
+        const registros = jornada
+            ? await this.prisma.registrosAsistencia.findMany({
+                where: {
+                    idJornada: jornada.idJornada,
+                    idEmpresa: companyId,
+                    ...(user.idTenant && { idTenant: user.idTenant }),
+                },
+                orderBy: {
+                    fechaHoraRegistro: 'asc',
+                },
+            })
+            : await this.prisma.registrosAsistencia.findMany({
+                where: {
+                    idEmpleado: employeeId,
+                    idEmpresa: companyId,
+                    ...(user.idTenant && { idTenant: user.idTenant }),
+                    // Ventana de 24 horas cubriendo el día local en UTC (ej. 06:00 UTC del día a 05:59:59 UTC del día siguiente)
+                    fechaHoraRegistro: {
+                        gte: new Date(`${dateStr}T06:00:00.000Z`),
+                        lte: new Date(new Date(`${dateStr}T06:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000 - 1),
+                    },
+                },
+                orderBy: {
+                    fechaHoraRegistro: 'asc',
+                },
+            });
+
+        // 5. Resolver nombres de sedes (CatSites) para los idSitioDetectado presentes
+        const siteIds = Array.from(
+            new Set(
+                registros
+                    .map((r) => r.idSitioDetectado)
+                    .filter((id): id is number => id !== null && id !== undefined),
+            ),
+        );
+
+        const siteMap = new Map<number, string>();
+        if (siteIds.length > 0) {
+            const sites = await this.prisma.catSites.findMany({
+                where: {
+                    idSite: { in: siteIds },
+                },
+                select: {
+                    idSite: true,
+                    Descripcion: true,
+                },
+            });
+
+            sites.forEach((s) => {
+                siteMap.set(s.idSite, s.Descripcion!);
+            });
+        }
+
+        // 6. Mapear cada checada
+        const marcajes = registros.map((reg) => {
+            let syncLabel = 'En línea';
+            if (reg.esOffline) {
+                syncLabel = 'Offline';
+            } else if (reg.idExternoArtemis || reg.idDispositivoArtemis) {
+                syncLabel = 'Artemis';
+            } else if (reg.canal === 'WEB_MANUAL') {
+                syncLabel = 'Manual';
+            }
+
+            const ubicacionNombre = reg.idSitioDetectado
+                ? (siteMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
+                : (reg.nombreDispositivo ?? null);
+
+            return {
+                idRegistro: reg.idRegistro.toString(),
+                idJornada: reg.idJornada,
+                tipo: reg.tipo,
+                canal: reg.canal,
+                fechaHoraRegistro: reg.fechaHoraRegistro,
+                ubicacionDispositivo: ubicacionNombre,
+                idSitioDetectado: reg.idSitioDetectado,
+                nombreDispositivo: reg.nombreDispositivo,
+                geocerca: {
+                    resultado: reg.resultadoGeocerca,
+                    latitud: reg.latitud ? Number(reg.latitud) : null,
+                    longitud: reg.longitud ? Number(reg.longitud) : null,
+                },
+                evidencia: {
+                    tieneFoto: Boolean(reg.urlFoto),
+                    urlFoto: reg.urlFoto ?? null,
+                },
+                sync: {
+                    label: syncLabel,
+                    esOffline: Boolean(reg.esOffline),
+                    fechaHoraRecepcion: reg.fechaHoraRecepcion,
+                },
+                estatusProcesamiento: reg.estatusProcesamiento,
+            };
+        });
+
+        // 7. Formatear minutos a horas y minutos (ej. 493 -> "8:13")
+        const minutos = jornada?.minutosTrabajados ?? 0;
+        const horasNum = Math.floor(minutos / 60);
+        const minsNum = minutos % 60;
+        const textoHoras = minutos > 0 ? `${horasNum}:${minsNum.toString().padStart(2, '0')}` : '-';
+
+        return {
+            empleado: {
+                idEmpleado: empleado.idEmpleado,
+                numeroEmpleado: empleado.numeroEmpleado,
+                nombreCompleto: [empleado.nombre, empleado.primerApellido, empleado.segundoApellido].filter(Boolean).join(' '),
+                puesto: empleado.CatPuestos?.DescripcionPuesto ?? null,
+            },
+            jornada: jornada
+                ? {
+                    idJornada: jornada.idJornada,
+                    fecha: dateStr,
+                    estatus: jornada.estatusJornada,
+                    minutosTrabajados: jornada.minutosTrabajados,
+                    totalHorasTexto: textoHoras,
+                    horaEntradaReal: jornada.horaEntradaReal,
+                    horaSalidaReal: jornada.horaSalidaReal,
+                    horaEntradaTeorica: jornada.horaEntradaTeorica,
+                    horaSalidaTeorica: jornada.horaSalidaTeorica,
+                    minutosRetardo: jornada.minutosRetardo,
+                }
+                : null,
+            marcajes,
+        };
+    }
+
+    // -------------------------------
+    // Helpers
+    // -------------------------------
 
     private getWeekRange(startDateStr?: string) {
         let baseDate = startDateStr ? new Date(`${startDateStr}T00:00:00`) : new Date();

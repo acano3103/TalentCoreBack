@@ -61,7 +61,7 @@ async function bootstrap() {
     .addExtension('x-tagGroups', [
       {
         name: 'Mobile App',
-        tags: ['Mobile Auth', 'Mobile Dashboard', 'Mobile Attendance'],
+        tags: ['Mobile Auth', 'Mobile Dashboard', 'Mobile Attendance', 'Mobile Devices'],
       },
       {
         name: 'Web App',

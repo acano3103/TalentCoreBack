@@ -5,6 +5,7 @@ import {
     IsInt,
     IsNotEmptyObject,
     IsNumber,
+    IsOptional,
     Max,
     Min,
     ValidateNested,
@@ -71,6 +72,26 @@ export class MovilDto {
     selfieObligatoria: boolean;
 }
 
+export class AntirreboteDto {
+    @ApiProperty({
+        example: 120,
+        description:
+            'Segundos en los que un marcaje de proveedor (biométrico, NFC, IVR) se ignora sin importar el tipo',
+    })
+    @IsInt()
+    @Min(0)
+    ventanaProveedorSegundos: number;
+
+    @ApiProperty({
+        example: 60,
+        description:
+            'Segundos en los que un doble toque del mismo tipo se ignora en la app móvil y la captura manual',
+    })
+    @IsInt()
+    @Min(0)
+    ventanaMismoTipoSegundos: number;
+}
+
 export class UpdateAttendanceConfigDto {
     @ApiProperty({ type: ToleranciaDto })
     @IsNotEmptyObject()
@@ -101,4 +122,10 @@ export class UpdateAttendanceConfigDto {
     @ValidateNested()
     @Type(() => MovilDto)
     movil: MovilDto;
+
+    @ApiProperty({ type: AntirreboteDto, required: false })
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => AntirreboteDto)
+    antirebote?: AntirreboteDto;
 }

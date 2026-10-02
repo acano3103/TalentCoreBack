@@ -44,6 +44,7 @@ import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashb
 import { AttendanceTrackingConfigModule } from './modules/config/attendance-config/attendance-config.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { existsSync } from 'fs';
+import { AttendanceReportsModule } from './modules/reports/attendance-reports/attendance-reports.module';
 
 // Determina dinámicamente la ruta correcta de public
 const publicDistPath = join(process.cwd(), 'dist', 'public');
@@ -61,7 +62,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
       {
         rootPath: staticPublicPath,
         serveRoot: '/public',
-        exclude: ['/api/(.*)'],
+        exclude: ['/api/{*path}'],
         serveStaticOptions: {
           index: false,
           fallthrough: false, // Evita buscar index.html cuando no existe el archivo
@@ -72,6 +73,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
       {
         rootPath: process.env.MEDIA_ROOT_PATH || join(process.cwd(), 'media'),
         serveRoot: '/media',
+        // D6: las selfies de asistencia no son públicas; se leen por MediaController.
+        exclude: ['/media/attendance/(.*)'],
       }
     ),
     PrismaModule,
@@ -110,7 +113,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     LogbookModule,
     AttendanceDashboardModule,
     AttendanceTrackingConfigModule,
-    AttendanceModule
+    AttendanceModule,
+    AttendanceReportsModule
   ],
   controllers: [],
   providers: [AreasService, GeofencesService],

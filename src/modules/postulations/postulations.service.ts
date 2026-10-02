@@ -289,7 +289,8 @@ export class PostulationsService {
           fortalezas_clave,
           brechas_criticas,
           requisitos_knockout,
-          hasAiEvaluation, // Flag útil para que la vista renderice la sección de IA o solo el CV
+          hasAiEvaluation,
+          idSite: rawData.idSite,
         }
       };
 

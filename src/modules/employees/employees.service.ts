@@ -435,13 +435,11 @@ export class EmployeesService {
 
   // Método que sincroniza todos los empleados pendientes de la empresa con artemis
   async syncAllPendingToArtemis(activeUser: ActiveUserDto, companyId: number) {
-    // Buscar empleados con expediente completo (idEstatus = 4) y sin sincronizar
     const pendingEmployees = await this.prisma.empleados.findMany({
       where: {
         idEmpresa: companyId,
         idTenant: activeUser.idTenant,
         activo: true,
-        Expedientes: { some: { idEstatus: 4 } },
         OR: [
           { artemisUserId: null },
           { artemisUserId: '' },
@@ -454,7 +452,6 @@ export class EmployeesService {
       return { message: 'No hay empleados pendientes de sincronizar.', synced: 0 };
     }
 
-    // Buscamos si la empresa tiene una integración de Artemis activa
     const activeArtemisIntegration = await this.prisma.integraciones.findFirst({
       where: {
         idEmpresa: companyId,
@@ -462,15 +459,14 @@ export class EmployeesService {
         CatIntegracionesProvedores: {
           name: 'Artemis',
           type: 'workforce',
-          isActive: true
-        }
+          isActive: true,
+        },
       },
       include: {
-        CatIntegracionesProvedores: true
-      }
+        CatIntegracionesProvedores: true,
+      },
     });
 
-    // Si la empresa no tiene la Artemis configurada, forzamos un error
     if (!activeArtemisIntegration) {
       throw new BadRequestException('La empresa no cuenta con una integración de Artemis activa.');
     }
@@ -478,25 +474,25 @@ export class EmployeesService {
     const providerId = activeArtemisIntegration.providerId;
     const artemisProvider = await this.integrationFactory.getProvider(providerId);
 
-    await Promise.all(
-      pendingEmployees.map(async (employee) => {
+    let syncedCount = 0;
+    const errors: Array<{ idEmpleado: number; error: string }> = [];
 
-        const { schedules, bankDetails, salaryInfo, address } = await this.prisma.$transaction(async (tx) => {
-          const [schedules, bankDetails, salaryInfo, address] = await Promise.all([
-            tx.horariosEmpleado.findMany({ where: { idEmpleado: employee.idEmpleado } }),
-            tx.datosBancarios.findFirst({ where: { idEmpleado: employee.idEmpleado } }),
-            tx.historialSalarios.findFirst({ where: { idEmpleado: employee.idEmpleado, actual: true } }),
-            tx.domicilioEmpleado.findFirst({ where: { idEmpleado: employee.idEmpleado } }),
-          ]);
-
-          return { schedules, bankDetails, salaryInfo, address };
-        });
+    // Procesamiento secuencial para evitar deadlocks de folios/consecutivos en Artemis
+    for (const employee of pendingEmployees) {
+      try {
+        const [schedules, bankDetails, salaryInfo, address] = await Promise.all([
+          this.prisma.horariosEmpleado.findMany({ where: { idEmpleado: employee.idEmpleado } }),
+          this.prisma.datosBancarios.findFirst({ where: { idEmpleado: employee.idEmpleado } }),
+          this.prisma.historialSalarios.findFirst({ where: { idEmpleado: employee.idEmpleado, actual: true } }),
+          this.prisma.domicilioEmpleado.findFirst({ where: { idEmpleado: employee.idEmpleado } }),
+        ]);
 
         const employeeData = {
           externalEmployeeId: employee.numeroEmpleado,
           name: employee.nombre,
           lastName: employee.primerApellido,
           motherLastName: employee.segundoApellido,
+          idGenero: employee.idGenero, // Se agrega para que mapGenderToArtemis reciba el valor correcto
           email: employee.correo,
           phone: employee.telefonoMovil,
           rfc: employee.rfc,
@@ -504,16 +500,14 @@ export class EmployeesService {
           nss: employee.numeroSeguroSocial,
           startDate: employee.FechaRegistro,
           birthDate: employee.fechaNacimiento,
-          schedules: schedules,
-          bankDetails: bankDetails,
-          salaryInfo: salaryInfo,
-          address: address
+          schedules,
+          bankDetails,
+          salaryInfo,
+          address,
         };
 
         const response = await artemisProvider.syncSingleEmployee(companyId, employeeData);
-        console.log('Respuesta recibida de Artemis:', response);
 
-        // GUARDAR EN LA BD TALENTCORE
         await this.prisma.empleados.update({
           where: { idEmpleado: employee.idEmpleado },
           data: {
@@ -522,11 +516,23 @@ export class EmployeesService {
           },
         });
 
-        return response;
-      }),
-    );
+        syncedCount++;
+      } catch (err: any) {
+        this.logger.error(`Error sincronizando empleado ID ${employee.idEmpleado}: ${err.message}`);
+        errors.push({
+          idEmpleado: employee.idEmpleado,
+          error: err.message,
+        });
+      }
+    }
 
-    return { message: 'Empleados sincronizados exitosamente.', synced: pendingEmployees.length };
+    return {
+      message: `Sincronización finalizada. Éxitos: ${syncedCount}, Fallos: ${errors.length}`,
+      total: pendingEmployees.length,
+      synced: syncedCount,
+      failed: errors.length,
+      errors: errors.length > 0 ? errors : undefined,
+    };
   }
 
   async updateSchedule(activeUser: ActiveUserDto, companyId: number, employeeId: number, dto: UpdateEmployeeScheduleDto,) {
@@ -710,6 +716,7 @@ export class EmployeesService {
             idTenant: user.idTenant,
             idEmpresa: companyId,
             idEmpleado: employeeId,
+            idSite: exc.idSite ?? null,
             Did: exc.did.trim(),
             TipoExcepcion: exc.tipoExcepcion, // 'BLOQUEADO' | 'EXTRA'
             Activo: true, // La regla de excepción se guarda activa

@@ -1582,7 +1582,7 @@ export class DigitalFilesService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // GENERAR PLANTILLA EXCEL CON CATÁLOGOS DINÁMICOS
+  // GENERAR PLANTILLA EXCEL CON CATÁLOGOS DINÁMICOS Y HORARIOS
   // ─────────────────────────────────────────────────────────────
   async generateBulkTemplate(companyId: number, user: ActiveUserDto): Promise<Buffer> {
     if (!user.idTenant) throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
@@ -1590,7 +1590,7 @@ export class DigitalFilesService {
     // Consultamos puestos y sites activos de la empresa
     const [puestos, sites] = await Promise.all([
       this.prisma.catPuestos.findMany({
-        where: { idEmpresa: companyId, idTenant: user.idTenant, Activo: true },
+        where: { idEmpresa: companyId, idTenant: user.idTenant, Activo: true, aprobada: true, pendiente: false },
         select: { idPuesto: true, NombrePuesto: true, idModalidad: true },
         orderBy: { NombrePuesto: 'asc' },
       }),
@@ -1609,7 +1609,7 @@ export class DigitalFilesService {
 
     // ── Hoja 2: Catálogos (Referencia para dropdowns) ──
     const catSheet = workbook.addWorksheet('Catalogos');
-    catSheet.state = 'veryHidden'; // Oculta para no distraer al usuario
+    catSheet.state = 'veryHidden';
 
     catSheet.getCell('A1').value = 'Puestos';
     puestos.forEach((p, idx) => {
@@ -1634,17 +1634,27 @@ export class DigitalFilesService {
       { header: 'Puesto *', key: 'puesto', width: 32 },
       { header: 'Ubicación / Site *', key: 'site', width: 24 },
       { header: 'Número de Empleado (Opcional)', key: 'numeroEmpleado', width: 28 },
-      { header: 'Fecha de Ingreso (YYYY-MM-DD)', key: 'fechaIngreso', width: 30 },
+      { header: 'Fecha de Ingreso (YYYY-MM-DD)', key: 'fechaIngreso', width: 28 },
+      // Columnas dinámicas de horario por día
+      { header: 'Lunes (ej. 09:00 - 18:00)', key: 'lunes', width: 24 },
+      { header: 'Martes (ej. 09:00 - 18:00)', key: 'martes', width: 24 },
+      { header: 'Miércoles (ej. 08:00 - 17:00)', key: 'miercoles', width: 24 },
+      { header: 'Jueves (ej. 08:00 - 17:00)', key: 'jueves', width: 24 },
+      { header: 'Viernes (ej. 14:00 - 20:00)', key: 'viernes', width: 24 },
+      { header: 'Sábado (Opcional)', key: 'sabado', width: 22 },
+      { header: 'Domingo (Opcional)', key: 'domingo', width: 22 },
     ];
 
     // Estilo para la fila de encabezados
     const headerRow = mainSheet.getRow(1);
-    headerRow.height = 28;
-    headerRow.eachCell((cell) => {
+    headerRow.height = 30;
+    headerRow.eachCell((cell, colNumber) => {
+      const isScheduleCol = colNumber >= 11;
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF1E293B' }, // Slate 800
+        // Encabezados de horario con tono distinguido (Slate/Azul marino petróleo)
+        fgColor: { argb: isScheduleCol ? 'FF0F172A' : 'FF1E293B' },
       };
       cell.font = {
         name: 'Calibri',
@@ -1652,11 +1662,11 @@ export class DigitalFilesService {
         bold: true,
         color: { argb: 'FFFFFFFF' },
       };
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     });
 
-    // Fila 2 con datos de ejemplo
-    const sampleRow = mainSheet.addRow({
+    // Fila 2: Ejemplo 1 - Horario fijo lunes a viernes
+    const sampleRow1 = mainSheet.addRow({
       nombre: 'Juan Carlos',
       apellido1: 'Pérez',
       apellido2: 'García',
@@ -1667,16 +1677,43 @@ export class DigitalFilesService {
       site: sites[0]?.Descripcion || '',
       numeroEmpleado: 'EMP-001',
       fechaIngreso: new Date().toISOString().split('T')[0],
+      lunes: '09:00 - 18:00',
+      martes: '09:00 - 18:00',
+      miercoles: '09:00 - 18:00',
+      jueves: '09:00 - 18:00',
+      viernes: '09:00 - 18:00',
+      sabado: '',
+      domingo: '',
     });
+    sampleRow1.font = { italic: true, color: { argb: 'FF64748B' } };
 
-    sampleRow.font = { italic: true, color: { argb: 'FF64748B' } };
+    // Fila 3: Ejemplo 2 - Horario variado/dinámico por día
+    const sampleRow2 = mainSheet.addRow({
+      nombre: 'María Elena',
+      apellido1: 'López',
+      apellido2: 'Hernández',
+      curp: 'LOHM920315MDFRRN01',
+      correo: 'maria.lopez@ejemplo.com',
+      telefono: '5598765432',
+      puesto: puestos[0]?.NombrePuesto || '',
+      site: sites[0]?.Descripcion || '',
+      numeroEmpleado: 'EMP-002',
+      fechaIngreso: new Date().toISOString().split('T')[0],
+      lunes: '09:00 - 18:00',
+      martes: '09:00 - 18:00',
+      miercoles: '08:00 - 17:00',
+      jueves: '08:00 - 17:00',
+      viernes: '14:00 - 20:00',
+      sabado: '',
+      domingo: '',
+    });
+    sampleRow2.font = { italic: true, color: { argb: 'FF64748B' } };
 
     // Validaciones de lista desplegable (filas 2 a 500)
     const totalPuestos = puestos.length;
     const totalSites = sites.length;
 
     for (let row = 2; row <= 500; row++) {
-      // Columna G: Puesto (Columna 7)
       if (totalPuestos > 0) {
         mainSheet.getCell(`G${row}`).dataValidation = {
           type: 'list',
@@ -1688,7 +1725,6 @@ export class DigitalFilesService {
         };
       }
 
-      // Columna H: Site (Columna 8)
       if (totalSites > 0) {
         mainSheet.getCell(`H${row}`).dataValidation = {
           type: 'list',
@@ -1777,6 +1813,17 @@ export class DigitalFilesService {
       const rawNumeroEmpleado = row.getCell(9).text?.trim() || null;
       let rawFechaIngreso = row.getCell(10).text?.trim();
 
+      // Celdas de horarios por día (Columnas 11 a 17)
+      const rawDays: { dia: string; value: string }[] = [
+        { dia: 'LUNES', value: row.getCell(11).text?.trim() },
+        { dia: 'MARTES', value: row.getCell(12).text?.trim() },
+        { dia: 'MIERCOLES', value: row.getCell(13).text?.trim() },
+        { dia: 'JUEVES', value: row.getCell(14).text?.trim() },
+        { dia: 'VIERNES', value: row.getCell(15).text?.trim() },
+        { dia: 'SABADO', value: row.getCell(16).text?.trim() },
+        { dia: 'DOMINGO', value: row.getCell(17).text?.trim() },
+      ];
+
       // Si la fila está completamente en blanco, la omitimos
       if (!rawNombre && !rawApellido1 && !rawCurp && !rawCorreo) {
         continue;
@@ -1841,15 +1888,7 @@ export class DigitalFilesService {
         continue;
       }
 
-      // ── Modalidad calculada según el puesto ──
-      const modalidadPuestoDesc = modalidadMap.get(puestoObj.idModalidad || 1) || '';
-      const modalidadDiaCalculada = modalidadPuestoDesc.includes('REMOTO') ? 'REMOTO' : 'PRESENCIAL';
-
-      // ── Traer horarios base del puesto ──
-      const scheduleConfig = await this.prisma.horariosPuesto.findMany({
-        where: { idPuesto: puestoObj.idPuesto },
-      });
-
+      // ── CONSTRUCCIÓN DE HORARIOS (DINÁMICOS O FALLBACK) ──
       let formattedSchedules: {
         dia: string;
         horaEntrada: string;
@@ -1857,26 +1896,48 @@ export class DigitalFilesService {
         modalidad: string;
       }[] = [];
 
-      if (scheduleConfig.length > 0) {
-        formattedSchedules = scheduleConfig
-          .filter((h) => Boolean(h.DiaSemana))
-          .map((h) => ({
-            dia: String(h.DiaSemana).trim(),
-            horaEntrada: h.HoraEntrada ? String(h.HoraEntrada).substring(0, 5) : '09:00',
-            horaSalida: h.HoraSalida ? String(h.HoraSalida).substring(0, 5) : '18:00',
-            modalidad: modalidadDiaCalculada,
-          }));
+      // 1. Intentar armar los horarios desde las columnas del Excel
+      for (const dayItem of rawDays) {
+        if (dayItem.value) {
+          const parsed = parseTimeRange(dayItem.value);
+          if (parsed) {
+            formattedSchedules.push({
+              dia: dayItem.dia,
+              horaEntrada: parsed.horaEntrada,
+              horaSalida: parsed.horaSalida,
+              modalidad: 'PRESENCIAL', // Modalidad por defecto solicitada
+            });
+          }
+        }
       }
 
-      // Si el puesto no tiene horarios configurados o quedaron vacíos, asignamos el estándar (Lunes a Viernes 9 a 6)
+      // 2. Si el usuario NO especificó horarios en el Excel, recurrimos al puesto o estándar
       if (formattedSchedules.length === 0) {
-        const diasSemana = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
-        formattedSchedules = diasSemana.map((dia) => ({
-          dia,
-          horaEntrada: '09:00',
-          horaSalida: '18:00',
-          modalidad: modalidadDiaCalculada,
-        }));
+        const scheduleConfig = await this.prisma.horariosPuesto.findMany({
+          where: { idPuesto: puestoObj.idPuesto },
+        });
+
+        if (scheduleConfig.length > 0) {
+          formattedSchedules = scheduleConfig
+            .filter((h) => Boolean(h.DiaSemana))
+            .map((h) => ({
+              dia: String(h.DiaSemana).trim(),
+              horaEntrada: h.HoraEntrada ? String(h.HoraEntrada).substring(0, 5) : '09:00',
+              horaSalida: h.HoraSalida ? String(h.HoraSalida).substring(0, 5) : '18:00',
+              modalidad: 'PRESENCIAL',
+            }));
+        }
+
+        // 3. Si el puesto tampoco tiene horarios configurados, estándar de Lunes a Viernes
+        if (formattedSchedules.length === 0) {
+          const diasSemana = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
+          formattedSchedules = diasSemana.map((dia) => ({
+            dia,
+            horaEntrada: '09:00',
+            horaSalida: '18:00',
+            modalidad: 'PRESENCIAL',
+          }));
+        }
       }
 
       try {
@@ -1928,4 +1989,38 @@ export class DigitalFilesService {
 
 }
 
+/**
+ * Parsea cadenas de texto de horario como:
+ * "09:00 - 18:00", "9:00-18:00", "09:00 a 18:00", "9-18", etc.
+ * Retorna { horaEntrada: '09:00', horaSalida: '18:00' } o null si no es horario válido.
+ */
+function parseTimeRange(timeStr: string): { horaEntrada: string; horaSalida: string } | null {
+  if (!timeStr) return null;
+  const clean = timeStr.trim().toLowerCase();
+  if (['descanso', 'n/a', 'na', 'off', 'libre', '-'].includes(clean)) return null;
+
+  // Busca dos grupos de horas separados por guion, 'a' o 'to'
+  // Ejemplos: "09:00 - 18:00", "9:30 a 18:30", "9 - 6" (asumiendo 24h o formato explícito)
+  const regex = /(\d{1,2})(?::(\d{2}))?\s*(?:-|a|to)\s*(\d{1,2})(?::(\d{2}))?/i;
+  const match = clean.match(regex);
+
+  if (!match) return null;
+
+  let [, h1, m1, h2, m2] = match;
+  let hour1 = parseInt(h1, 10);
+  let min1 = m1 ? parseInt(m1, 10) : 0;
+  let hour2 = parseInt(h2, 10);
+  let min2 = m2 ? parseInt(m2, 10) : 0;
+
+  // Si ponen horas en formato 1-12 por error común (ej. 9 a 6 de la tarde)
+  if (hour2 < hour1 && hour2 <= 11) {
+    hour2 += 12;
+  }
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    horaEntrada: `${pad(hour1)}:${pad(min1)}`,
+    horaSalida: `${pad(hour2)}:${pad(min2)}`,
+  };
+}
 

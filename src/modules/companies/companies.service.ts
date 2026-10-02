@@ -8,15 +8,96 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { MediaPathService } from 'src/common/services/media-path.service';
 import * as ExcelJS from 'exceljs';
 import { seedDocumentosEmpresa } from './seeds/default-documentos.seed';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
+import { Prisma } from 'generated/prisma/client';
 
 @Injectable()
 export class CompaniesService {
     constructor(
         private prismaService: PrismaService,
+        private excelExportService: ExcelExportService,
         private mediaPathService: MediaPathService,
     ) { }
 
     private readonly logger = new Logger(CompaniesService.name);
+
+
+    // Exporta TODAS las empresas del tenant que cumplan los filtros (sin paginar)
+    async exportCompanies(
+        user: ActiveUserDto,
+        filters: { search?: string; activo?: string; fechaDesde?: string; fechaHasta?: string },
+    ): Promise<Buffer> {
+        // Sin tenant no se exporta nada (evita que idTenant undefined quite el filtro)
+        if (!user.idTenant) {
+            throw new BadRequestException('El usuario no tiene un tenant asignado');
+        }
+
+        const where: Prisma.CatEmpresasWhereInput = { idTenant: user.idTenant };
+
+        // Búsqueda: mismo criterio que la tabla (nombre comercial o RFC)
+        if (filters.search?.trim()) {
+            const term = filters.search.trim();
+            where.OR = [
+                { nombre_comercial: { contains: term } },
+                { rfc: { contains: term } },
+            ];
+        }
+
+        // Estatus: 'true' = activas, 'false' = inactivas, vacío = todas
+        if (filters.activo === 'true') where.activo = true;
+        if (filters.activo === 'false') where.activo = false;
+
+        // Rango de fechas de registro (días completos)
+        const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+        if (esFecha(filters.fechaDesde) || esFecha(filters.fechaHasta)) {
+            where.fechaRegistro = {
+                ...(esFecha(filters.fechaDesde) && { gte: new Date(`${filters.fechaDesde}T00:00:00.000Z`) }),
+                ...(esFecha(filters.fechaHasta) && { lte: new Date(`${filters.fechaHasta}T23:59:59.999Z`) }),
+            };
+        }
+
+        const empresas = await this.prismaService.catEmpresas.findMany({
+            where,
+            orderBy: { fechaRegistro: 'desc' },
+            include: {
+                DomicilioEmpresas: {
+                    take: 1,
+                    orderBy: { fechaRegistro: 'desc' },
+                },
+            },
+        });
+
+        type EmpresaExport = (typeof empresas)[number];
+
+        const formatFecha = (fecha: Date | null) => {
+            if (!fecha) return '';
+            const [anio, mes, dia] = fecha.toISOString().split('T')[0].split('-');
+            return `${dia}/${mes}/${anio}`;
+        };
+
+        const columns: ExcelColumn<EmpresaExport>[] = [
+            { header: 'Razón Social', key: 'razon_social', width: 32 },
+            { header: 'Nombre Comercial', key: 'nombre_comercial', width: 28 },
+            { header: 'RFC', key: 'rfc', width: 18 },
+            { header: 'Correo Electrónico', key: 'correo', width: 30 },
+            { header: 'Teléfono', key: 'telefono', width: 18 },
+            { header: 'Estatus', key: 'activo', width: 12, value: (e) => (e.activo ? 'Activa' : 'Inactiva') },
+            { header: 'Fecha de Registro', key: 'fechaRegistro', width: 18, value: (e) => formatFecha(e.fechaRegistro) },
+            { header: 'Código Postal', key: 'codigo_postal', width: 16, value: (e) => e.DomicilioEmpresas[0]?.codigo_postal },
+            { header: 'Estado', key: 'estado', width: 22, value: (e) => e.DomicilioEmpresas[0]?.estado },
+            { header: 'Municipio / Alcaldía', key: 'municipio', width: 26, value: (e) => e.DomicilioEmpresas[0]?.municipio },
+            { header: 'Colonia', key: 'colonia', width: 26, value: (e) => e.DomicilioEmpresas[0]?.colonia },
+            { header: 'Calle', key: 'calle', width: 30, value: (e) => e.DomicilioEmpresas[0]?.calle },
+            { header: 'No. Exterior', key: 'numero_exterior', width: 16, value: (e) => e.DomicilioEmpresas[0]?.numero_exterior },
+            { header: 'No. Interior', key: 'numero_interior', width: 16, value: (e) => e.DomicilioEmpresas[0]?.numero_interior },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Empresas',
+            columns,
+            rows: empresas,
+        });
+    }
 
     // Obtiene todas las empresas paginadas de un tenant especifico
     async findAll(page: number, query: string, limit: number, user: ActiveUserDto) {

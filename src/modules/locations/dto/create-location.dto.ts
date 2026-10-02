@@ -103,14 +103,14 @@ export class CreateLocationDto {
     zonaFronteriza?: number;
 
     @ApiPropertyOptional({
-        example: 'IVR',
-        enum: ['IVR', 'BIOMETRICO', 'APP_MOVIL'],
+        example: 'NFC',
+        enum: ['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC'],
         nullable: true,
         description: 'Mecanismo de marcaje de asistencia de la sucursal (null si no maneja asistencia)'
     })
     @IsOptional()
-    @IsIn(['IVR', 'BIOMETRICO', 'APP_MOVIL', null])
-    tipoAsistencia?: 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | null;
+    @IsIn(['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC', null])
+    tipoAsistencia?: 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | 'NFC' | null;
 
     @ApiPropertyOptional({
         example: ['5512345678', '5598765432'],
@@ -125,4 +125,14 @@ export class CreateLocationDto {
         message: 'Cada DID debe ser un número telefónico válido de entre 10 y 15 dígitos',
     })
     dids?: string[];
+
+    @ApiPropertyOptional({
+        example: ['Matutino 9 a 6', 'Velador 24x24'],
+        description: 'Nombres de los horarios predefinidos asociados a esta sucursal',
+        type: [String]
+    })
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    horarios?: string[];
 }

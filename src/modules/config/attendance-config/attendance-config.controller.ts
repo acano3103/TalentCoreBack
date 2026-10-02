@@ -5,6 +5,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { GetActiveUser } from 'src/modules/auth/decorators/active-user.decorator';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
+import { AssignDeviceSiteDto } from './dto/assign-device-site.dto';
 
 @ApiTags('Attendance Config')
 @ApiBearerAuth()
@@ -25,6 +26,17 @@ export class AttendanceTrackingConfigController {
     return this.attendanceTrackingConfigService.getConfiguracionAsistencia(user.idTenant, companyId);
   }
 
+  @Get('devices')
+  @ApiOperation({ summary: 'List attendance hardware devices', description: 'Retrieves all physical devices (BIOMETRICO, IVR, NFC) synced from Artemis for the tenant/company', })
+  @ApiResponse({ status: 200, description: 'Devices retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getDevices(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.attendanceTrackingConfigService.getDispositivos(user.idTenant, companyId);
+  }
+
   @Put()
   @ApiOperation({ summary: 'Update attendance tracking configuration', description: 'Updates or creates the configuration payload for attendance tracking' })
   @ApiResponse({ status: 200, description: 'Configuration updated successfully' })
@@ -37,5 +49,19 @@ export class AttendanceTrackingConfigController {
     @Body() dto: UpdateAttendanceConfigDto,
   ) {
     return this.attendanceTrackingConfigService.updateConfiguracionAsistencia(user.idTenant, companyId, dto);
+  }
+
+  @Put('devices/:idDispositivo/site')
+  @ApiOperation({ summary: 'Assign site to device', description: 'Assigns or unassigns a physical site (CatSites) to an attendance device', })
+  @ApiResponse({ status: 200, description: 'Device site updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid site ID' })
+  @ApiResponse({ status: 404, description: 'Device not found' })
+  assignSiteToDevice(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idDispositivo', ParseIntPipe) idDispositivo: number,
+    @Body() dto: AssignDeviceSiteDto,
+  ) {
+    return this.attendanceTrackingConfigService.assignDeviceSite(user.idTenant, companyId, idDispositivo, dto);
   }
 }

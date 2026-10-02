@@ -35,6 +35,53 @@ export class LocationsController {
         return this.locationsService.findAll(companyId, page, querySearch, limit, user, unitId);
     }
 
+    // Obtiene una ubicación por ID
+    @Get(':locationId')
+    @ApiOperation({ summary: 'Get location by ID', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Location obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Location not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getLocationById(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('locationId', ParseIntPipe) locationId: number,
+    ) {
+        return this.locationsService.getLocationById(companyId, locationId, user);
+    }
+
+    // Obtiene los catálogos de horarios asignados a una ubicación específica
+    @Get(':locationId/schedules')
+    @ApiOperation({ summary: 'Get schedules catalogs for a location', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Location schedules catalogs obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Location not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async getLocationSchedules(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('locationId', ParseIntPipe) locationId: number,
+    ) {
+        return this.locationsService.getLocationSchedules(companyId, locationId, activeUser);
+    }
+
+    // Descarga una plantilla masiva de ubicaciones, registros patronales y unidades operativas
+    @Get('bulk/template/general')
+    @ApiOperation({ summary: 'Download general bulk template', description: 'Download general template for locations, registries and operational units', })
+    @ApiResponse({ status: 200, description: 'Download general template for locations, registries and operational units' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async downloadBulkTemplate(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Res() res: Response,
+    ) {
+        const buffer = await this.locationsService.generateBulkTemplate(companyId, activeUser);
+        res.set({
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': `attachment; filename="Plantilla_Estructura_Ubicaciones_${companyId}.xlsx"`,
+            'Content-Length': buffer.length,
+        });
+        res.send(buffer);
+    }
+
     // Crea una nueva ubicación
     @Post()
     @ApiOperation({ summary: 'Create a new location', description: SWAGGER_AUTH_DESCRIPTION })
@@ -63,39 +110,6 @@ export class LocationsController {
         @GetActiveUser() activeUser: ActiveUserDto,
     ) {
         return await this.locationsService.processBulkLocations(companyId, file, activeUser);
-    }
-
-    // Obtiene una ubicación por ID
-    @Get(':locationId')
-    @ApiOperation({ summary: 'Get location by ID', description: SWAGGER_AUTH_DESCRIPTION })
-    @ApiResponse({ status: 200, description: 'Location obtained successfully' })
-    @ApiResponse({ status: 404, description: 'Location not found' })
-    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-    async getLocationById(
-        @GetActiveUser() user: ActiveUserDto,
-        @Param('companyId', ParseIntPipe) companyId: number,
-        @Param('locationId', ParseIntPipe) locationId: number,
-    ) {
-        return this.locationsService.getLocationById(companyId, locationId, user);
-    }
-
-    // Descarga una plantilla masiva de ubicaciones, registros patronales y unidades operativas
-    @Get('bulk/template/general')
-    @ApiOperation({ summary: 'Download general bulk template', description: 'Download general template for locations, registries and operational units', })
-    @ApiResponse({ status: 200, description: 'Download general template for locations, registries and operational units' })
-    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
-    async downloadBulkTemplate(
-        @Param('companyId', ParseIntPipe) companyId: number,
-        @GetActiveUser() activeUser: ActiveUserDto,
-        @Res() res: Response,
-    ) {
-        const buffer = await this.locationsService.generateBulkTemplate(companyId, activeUser);
-        res.set({
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition': `attachment; filename="Plantilla_Estructura_Ubicaciones_${companyId}.xlsx"`,
-            'Content-Length': buffer.length,
-        });
-        res.send(buffer);
     }
 
     // Actualiza una ubicación por ID
