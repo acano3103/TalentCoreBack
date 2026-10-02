@@ -10,13 +10,46 @@ import { CreateLocationDto } from './dto/create-location.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import * as ExcelJS from 'exceljs';
+import { Prisma } from 'generated/prisma/client';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
+import { getCanalLabel } from 'src/constants/attendance.constants';
+
 
 @Injectable()
 export class LocationsService {
     private readonly logger = new Logger(LocationsService.name);
 
-    constructor(private prismaService: PrismaService) { }
+    constructor(private prismaService: PrismaService, private excelExportService: ExcelExportService) { }
+    
+        /**
+     * Where común de ubicaciones (empresa, tenant, unidad operativa y búsqueda).
+     * Lo usan la tabla paginada y la exportación, para que ambas filtren igual.
+     */
+    private buildLocationsWhere(
+        companyId: number,
+        user: ActiveUserDto,
+        query?: string,
+        operatingUnitId?: number | string | null,
+    ): Prisma.CatSitesWhereInput {
+        const where: Prisma.CatSitesWhereInput = {
+            idEmpresa: Number(companyId),
+            idTenant: user.idTenant as number,
+            ...(operatingUnitId ? { idUnidadOperativa: Number(operatingUnitId) } : {}),
+        };
 
+        if (query) {
+            where.OR = [
+                { Descripcion: { contains: query } },
+                { Estado: { contains: query } },
+                { MunicipioDelegacion: { contains: query } },
+                { Colonia: { contains: query } },
+                { Calle: { contains: query } },
+                { CodigoPostal: { contains: query } },
+            ];
+        }
+
+        return where;
+    }
     // Obtiene todas las ubicaciones de una empresa
     async findAll(
         companyId: number,
@@ -33,11 +66,7 @@ export class LocationsService {
         const limitNumber = Math.max(1, Number(limit) || 10);
         const skip = (pageNumber - 1) * limitNumber;
 
-        const whereCondition: any = {
-            idEmpresa: Number(companyId),
-            idTenant: user.idTenant,
-            ...(operatingUnitId ? { idUnidadOperativa: Number(operatingUnitId) } : {}),
-        };
+        const whereCondition = this.buildLocationsWhere(companyId, user, query, operatingUnitId);
 
         if (query) {
             whereCondition.OR = [
@@ -75,6 +104,84 @@ export class LocationsService {
             currentPage: pageNumber,
             totalPages: Math.ceil(total / limitNumber) || 1,
         };
+    }
+
+
+        // Exporta a Excel TODAS las ubicaciones que cumplan los filtros (sin paginar)
+    async exportLocations(
+        companyId: number,
+        user: ActiveUserDto,
+        filters: { search?: string; operatingUnitId?: string; activo?: string; fechaDesde?: string; fechaHasta?: string },
+    ): Promise<Buffer> {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+
+        const where = this.buildLocationsWhere(companyId, user, filters.search?.trim(), filters.operatingUnitId);
+
+        // Estatus: 'true' = activas, 'false' = inactivas, vacío = todas
+        if (filters.activo === 'true') where.Activo = true;
+        if (filters.activo === 'false') where.Activo = false;
+
+        // Rango de fechas de registro (días completos)
+        const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+        if (esFecha(filters.fechaDesde) || esFecha(filters.fechaHasta)) {
+            where.FechaRegistro = {
+                ...(esFecha(filters.fechaDesde) && { gte: new Date(`${filters.fechaDesde}T00:00:00.000Z`) }),
+                ...(esFecha(filters.fechaHasta) && { lte: new Date(`${filters.fechaHasta}T23:59:59.999Z`) }),
+            };
+        }
+
+        const sites = await this.prismaService.catSites.findMany({
+            where,
+            orderBy: { idSite: 'desc' }, // Mismo orden que la tabla
+            include: {
+                CatTiposUbicacion: true,
+                CatUnidadesOperativas: true,
+            },
+        });
+
+        type SiteExport = (typeof sites)[number];
+
+        const siNo = (v?: boolean | null) => (v ? 'Sí' : 'No');
+        const formatFecha = (fecha: Date | null) => {
+            if (!fecha) return '';
+            const [anio, mes, dia] = fecha.toISOString().split('T')[0].split('-');
+            return `${dia}/${mes}/${anio}`;
+        };
+
+        const columns: ExcelColumn<SiteExport>[] = [
+            { header: 'Nombre', key: 'nombre', width: 32, value: (s) => s.Descripcion },
+            { header: 'Tipo de Ubicación', key: 'tipo', width: 20, value: (s) => s.CatTiposUbicacion?.Descripcion },
+            {
+                header: 'Unidad Operativa', key: 'unidad', width: 30,
+                value: (s) => s.CatUnidadesOperativas
+                    ? `${s.CatUnidadesOperativas.Codigo ? `[${s.CatUnidadesOperativas.Codigo}] ` : ''}${s.CatUnidadesOperativas.Nombre ?? ''}`
+                    : '',
+            },
+            { header: 'Principal', key: 'principal', width: 11, value: (s) => siNo(s.EsPrincipal) },
+            { header: 'Calle', key: 'calle', width: 30, value: (s) => s.Calle },
+            { header: 'No. Exterior', key: 'noExt', width: 13, value: (s) => s.NoExterior },
+            { header: 'No. Interior', key: 'noInt', width: 13, value: (s) => s.NoInterior },
+            { header: 'Colonia', key: 'colonia', width: 26, value: (s) => s.Colonia },
+            { header: 'Municipio / Alcaldía', key: 'municipio', width: 26, value: (s) => s.MunicipioDelegacion },
+            { header: 'Estado', key: 'estado', width: 22, value: (s) => s.Estado },
+            { header: 'Código Postal', key: 'cp', width: 14, value: (s) => s.CodigoPostal },
+            { header: 'País', key: 'pais', width: 14, value: (s) => s.Pais },
+            { header: 'Latitud', key: 'latitud', width: 14, value: (s) => (s.Latitud != null ? Number(s.Latitud) : '') },
+            { header: 'Longitud', key: 'longitud', width: 14, value: (s) => (s.Longitud != null ? Number(s.Longitud) : '') },
+            { header: 'Zona Fronteriza', key: 'zonaFronteriza', width: 15, value: (s) => siNo(s.ZonaFronteriza) },
+            { header: 'Tipo de Asistencia', key: 'tipoAsistencia', width: 18, value: (s) => getCanalLabel(s.TipoAsistencia) },
+            { header: 'Zona Horaria', key: 'zonaHoraria', width: 22, value: (s) => s.zonaHoraria },
+            { header: 'Estatus', key: 'estatus', width: 12, value: (s) => (s.Activo ? 'Activa' : 'Inactiva') },
+            { header: 'Fecha de Registro', key: 'fechaRegistro', width: 18, value: (s) => formatFecha(s.FechaRegistro) },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Ubicaciones',
+            columns,
+            rows: sites,
+        });
     }
 
     // Obtiene una ubicación por ID
