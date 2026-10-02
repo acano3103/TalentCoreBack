@@ -9,12 +9,13 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/areas')
 export class AreasController {
-    constructor(private readonly areasService: AreasService) { }
+    constructor(private readonly areasService: AreasService, private readonly excelExportService: ExcelExportService) { }
 
     // Endpoint que obtiene todas las áreas
     @Get()
@@ -33,6 +34,21 @@ export class AreasController {
         return this.areasService.findAll(user, companyId, page, querySearch, limit);
     }
 
+
+        // Exporta a Excel todas las áreas que cumplan los filtros (sin paginar)
+    @Get('export')
+    @ApiOperation({ summary: 'Export areas to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+    async exportAreas(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Res() res: Response,
+        @Query('search') search?: string,
+        @Query('activo') activo?: string,
+    ) {
+        const buffer = await this.areasService.exportAreas(user, companyId, { search, activo });
+        this.excelExportService.send(res, buffer, 'Areas_Operativas');
+    }
     // Endpoint que obtiene un área
     @Get('/:areaId')
     @ApiOperation({ summary: 'Get area', description: SWAGGER_AUTH_DESCRIPTION })
