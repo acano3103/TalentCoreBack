@@ -37,7 +37,7 @@ model AgentesCriterios {
   max_score   Int?    @default(10)
   weight      Int?
   order       Int?
-  Agentes     Agentes @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "AgentesCriterios_ibfk_1")
+  Agentes     Agentes @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "AgentesCriterios_ibfk_1")
 
   @@index([agent_id], map: "agent_id")
 }
@@ -428,7 +428,7 @@ model CompetenciasPuesto {
   idCompetenciaPuesto Int         @id @default(autoincrement())
   idPuesto            Int?
   Competencia         String?     @db.Text
-  CatPuestos          CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, onUpdate: Restrict, map: "CompetenciasPuesto_ibfk_1")
+  CatPuestos          CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "CompetenciasPuesto_ibfk_1")
 
   @@index([idPuesto], map: "idPuesto")
 }
@@ -446,7 +446,7 @@ model CriterioPreguntas {
   question             String               @db.Text
   expected_answer      String?              @db.Text
   order                Int?
-  EntrevistasCriterios EntrevistasCriterios @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "CriterioPreguntas_ibfk_1")
+  EntrevistasCriterios EntrevistasCriterios @relation(fields: [criterio_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "CriterioPreguntas_ibfk_1")
 
   @@index([criterio_id], map: "criterio_id")
 }
@@ -502,7 +502,7 @@ model DomicilioEmpresas {
   fechaRegistro      DateTime?   @default(now()) @db.DateTime(0)
   usuarioRegistro    String?     @db.VarChar(100)
   idTenant           Int
-  CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onUpdate: Restrict, map: "DomicilioEmpresas_ibfk_1")
+  CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "DomicilioEmpresas_ibfk_1")
 
   @@index([idEmpresa], map: "idEmpresa")
 }
@@ -513,8 +513,8 @@ model EntrevistaCriteriosEvaluacion {
   score                  Decimal?               @db.Decimal(5, 2)
   comment                String?                @db.Text
   interview_postulant_id String                 @db.Char(36)
-  EntrevistasCriterios   EntrevistasCriterios   @relation(fields: [criterio_id], references: [id], onUpdate: Restrict, map: "EntrevistaCriteriosEvaluacion_ibfk_1")
-  EntrevistasPostulantes EntrevistasPostulantes @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_evaluacion_postulante")
+  EntrevistasCriterios   EntrevistasCriterios   @relation(fields: [criterio_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "EntrevistaCriteriosEvaluacion_ibfk_1")
+  EntrevistasPostulantes EntrevistasPostulantes @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_evaluacion_postulante")
 
   @@unique([criterio_id, interview_postulant_id], map: "unique_criterio_postulante")
   @@index([interview_postulant_id], map: "fk_evaluacion_postulante")
@@ -536,8 +536,8 @@ model Entrevistas {
   location               String?                    @db.VarChar(255)
   comment                String?                    @db.Text
   active                 Boolean                    @default(true)
-  Agentes                Agentes?                   @relation(fields: [agent_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "Entrevistas_ibfk_1")
-  Vacantes               Vacantes?                  @relation(fields: [idVacante], references: [idVacante], onDelete: Restrict, onUpdate: Restrict, map: "Entrevistas_idVacante_fk")
+  Agentes                Agentes?                   @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_ibfk_1")
+  Vacantes               Vacantes?                  @relation(fields: [idVacante], references: [idVacante], onDelete: NoAction, onUpdate: NoAction, map: "Entrevistas_idVacante_fk")
   EntrevistasCriterios   EntrevistasCriterios[]
   EntrevistasPostulantes EntrevistasPostulantes[]
 
@@ -555,7 +555,7 @@ model EntrevistasCriterios {
   order                         Int
   CriterioPreguntas             CriterioPreguntas[]
   EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion[]
-  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "EntrevistasCriterios_ibfk_1")
+  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasCriterios_ibfk_1")
 
   @@index([interview_id], map: "interview_id")
 }
@@ -573,7 +573,7 @@ model EntrevistasPostulantes {
   location                      String?                         @db.Text
   metadata                      Json?
   EntrevistaCriteriosEvaluacion EntrevistaCriteriosEvaluacion[]
-  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "EntrevistasPostulantes_ibfk_1")
+  Entrevistas                   Entrevistas                     @relation(fields: [interview_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasPostulantes_ibfk_1")
   EntrevistasResultados         EntrevistasResultados?
 
   @@index([interview_id], map: "interview_id")
@@ -588,14 +588,14 @@ model EntrevistasResultados {
   improvement_areas      String?                 @db.Text
   recommendations        String?                 @db.Text
   metadata               Json?
-  EntrevistasPostulantes EntrevistasPostulantes? @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "EntrevistasResultados_ibfk_1")
+  EntrevistasPostulantes EntrevistasPostulantes? @relation(fields: [interview_postulant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "EntrevistasResultados_ibfk_1")
 }
 
 model FuncionesPuesto {
   idFuncionPuesto Int         @id @default(autoincrement())
   idPuesto        Int?
   Funcion         String?     @db.Text
-  CatPuestos      CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, onUpdate: Restrict, map: "FuncionesPuesto_ibfk_1")
+  CatPuestos      CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "FuncionesPuesto_ibfk_1")
 
   @@index([idPuesto], map: "idPuesto")
 }
@@ -606,7 +606,7 @@ model HabilidadesPuesto {
   Habilidad         String?     @db.Text
   Nivel             String?     @db.Text
   Tipo              String?     @db.VarChar(100)
-  CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, onUpdate: Restrict, map: "HabilidadesPuesto_ibfk_1")
+  CatPuestos        CatPuestos? @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "HabilidadesPuesto_ibfk_1")
 
   @@index([idPuesto], map: "idPuesto")
 }
@@ -666,8 +666,8 @@ model Integraciones {
   isConnected                Boolean?                   @default(false)
   createdAt                  DateTime?                  @default(now()) @db.DateTime(0)
   updatedAt                  DateTime?                  @default(now()) @db.DateTime(0)
-  CatEmpresas                CatEmpresas                @relation(fields: [idEmpresa], references: [idEmpresa], onUpdate: Restrict, map: "fk_integrations_empresa")
-  CatIntegracionesProvedores CatIntegracionesProvedores @relation(fields: [providerId], references: [id], onUpdate: Restrict, map: "fk_integrations_provider")
+  CatEmpresas                CatEmpresas                @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "fk_integrations_empresa")
+  CatIntegracionesProvedores CatIntegracionesProvedores @relation(fields: [providerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_integrations_provider")
 
   @@unique([idEmpresa, providerId], map: "unique_empresa_provider")
   @@index([providerId], map: "fk_integrations_provider")
@@ -687,8 +687,8 @@ model NotificacionTipoCanales {
   notification_type_id     Int?
   channel_id               Int?
   enabled                  Boolean?                  @default(true)
-  CatTipoNotificacion      CatTipoNotificacion?      @relation(fields: [notification_type_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "NotificacionTipoCanales_ibfk_1")
-  CatCanalesNotificaciones CatCanalesNotificaciones? @relation(fields: [channel_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "NotificacionTipoCanales_ibfk_2")
+  CatTipoNotificacion      CatTipoNotificacion?      @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionTipoCanales_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones? @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionTipoCanales_ibfk_2")
 
   @@unique([notification_type_id, channel_id], map: "notification_type_id")
   @@index([channel_id], map: "channel_id")
@@ -702,7 +702,7 @@ model Notificaciones {
   message                String?                  @db.Text
   created_at             DateTime?                @default(now()) @db.Timestamp(0)
   read_at                DateTime?                @db.Timestamp(0)
-  CatTipoNotificacion    CatTipoNotificacion?     @relation(fields: [notification_type_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "Notificaciones_ibfk_2")
+  CatTipoNotificacion    CatTipoNotificacion?     @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Notificaciones_ibfk_2")
   NotificacionesEntregas NotificacionesEntregas[]
 
   @@index([notification_type_id], map: "notification_type_id")
@@ -716,8 +716,8 @@ model NotificacionesEntregas {
   status                   String?                  @db.VarChar(20)
   sent_at                  DateTime?                @db.Timestamp(0)
   error_message            String?                  @db.Text
-  Notificaciones           Notificaciones           @relation(fields: [notification_id], references: [id], onUpdate: Restrict, map: "NotificacionesEntregas_ibfk_1")
-  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onUpdate: Restrict, map: "NotificacionesEntregas_ibfk_2")
+  Notificaciones           Notificaciones           @relation(fields: [notification_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_2")
 
   @@index([channel_id], map: "channel_id")
   @@index([notification_id], map: "notification_id")
@@ -792,8 +792,8 @@ model PreferenciasNotificacionesUsuario {
   enabled                  Boolean?                 @default(true)
   created_at               DateTime?                @default(now()) @db.Timestamp(0)
   updated_at               DateTime?                @db.Timestamp(0)
-  auth_user                auth_user                @relation(fields: [user_uuid], references: [uuid], onUpdate: Restrict, map: "PreferenciasNotificacionesUsuario_ibfk_1")
-  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onUpdate: Restrict, map: "PreferenciasNotificacionesUsuario_ibfk_2")
+  auth_user                auth_user                @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_1")
+  CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_2")
 
   @@unique([user_uuid, channel_id], map: "user_uuid")
   @@index([channel_id], map: "channel_id")
@@ -836,8 +836,8 @@ model RelUsuarioEmpresa {
   idUsuario     Int
   activo        Boolean?    @default(true)
   fechaRegistro DateTime?   @default(now()) @db.DateTime(0)
-  CatEmpresas   CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onUpdate: Restrict, map: "RelUsuarioEmpresa_ibfk_1")
-  auth_user     auth_user   @relation(fields: [idUsuario], references: [id], onUpdate: Restrict, map: "RelUsuarioEmpresa_ibfk_2")
+  CatEmpresas   CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "RelUsuarioEmpresa_ibfk_1")
+  auth_user     auth_user   @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "RelUsuarioEmpresa_ibfk_2")
 
   @@index([idEmpresa], map: "idEmpresa")
   @@index([idUsuario], map: "idUsuario")
@@ -882,8 +882,8 @@ model auth_group_permissions {
   id              BigInt          @id @default(autoincrement())
   group_id        Int
   permission_id   Int
-  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onUpdate: Restrict, map: "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm")
-  auth_group      auth_group      @relation(fields: [group_id], references: [id], onUpdate: Restrict, map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
+  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm")
+  auth_group      auth_group      @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
 
   @@unique([group_id, permission_id], map: "auth_group_permissions_group_id_permission_id_0cd325b0_uniq")
   @@index([permission_id], map: "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm")
@@ -895,7 +895,7 @@ model auth_permission {
   content_type_id            Int
   codename                   String                       @db.VarChar(100)
   auth_group_permissions     auth_group_permissions[]
-  django_content_type        django_content_type          @relation(fields: [content_type_id], references: [id], onUpdate: Restrict, map: "auth_permission_content_type_id_2f476e4b_fk_django_co")
+  django_content_type        django_content_type          @relation(fields: [content_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_permission_content_type_id_2f476e4b_fk_django_co")
   auth_user_user_permissions auth_user_user_permissions[]
 
   @@unique([content_type_id, codename], map: "auth_permission_content_type_id_codename_01ab375a_uniq")
@@ -937,8 +937,8 @@ model auth_user_groups {
   id         BigInt     @id @default(autoincrement())
   user_id    Int
   group_id   Int
-  auth_group auth_group @relation(fields: [group_id], references: [id], onUpdate: Restrict, map: "auth_user_groups_group_id_97559544_fk_auth_group_id")
-  auth_user  auth_user  @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "auth_user_groups_user_id_6a12ed8b_fk_auth_user_id")
+  auth_group auth_group @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_groups_group_id_97559544_fk_auth_group_id")
+  auth_user  auth_user  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_groups_user_id_6a12ed8b_fk_auth_user_id")
 
   @@unique([user_id, group_id], map: "auth_user_groups_user_id_group_id_94350c0c_uniq")
   @@index([group_id], map: "auth_user_groups_group_id_97559544_fk_auth_group_id")
@@ -948,8 +948,8 @@ model auth_user_user_permissions {
   id              BigInt          @id @default(autoincrement())
   user_id         Int
   permission_id   Int
-  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onUpdate: Restrict, map: "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm")
-  auth_user       auth_user       @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "auth_user_user_permissions_user_id_a95ead1b_fk_auth_user_id")
+  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm")
+  auth_user       auth_user       @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_user_user_permissions_user_id_a95ead1b_fk_auth_user_id")
 
   @@unique([user_id, permission_id], map: "auth_user_user_permissions_user_id_permission_id_14a6b632_uniq")
   @@index([permission_id], map: "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm")
@@ -973,8 +973,8 @@ model django_admin_log {
   change_message      String               @db.LongText
   content_type_id     Int?
   user_id             Int
-  django_content_type django_content_type? @relation(fields: [content_type_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "django_admin_log_content_type_id_c4bce8eb_fk_django_co")
-  auth_user           auth_user            @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "django_admin_log_user_id_c564eba6_fk_auth_user_id")
+  django_content_type django_content_type? @relation(fields: [content_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "django_admin_log_content_type_id_c4bce8eb_fk_django_co")
+  auth_user           auth_user            @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "django_admin_log_user_id_c564eba6_fk_auth_user_id")
 
   @@index([content_type_id], map: "django_admin_log_content_type_id_c4bce8eb_fk_django_co")
   @@index([user_id], map: "django_admin_log_user_id_c564eba6_fk_auth_user_id")
@@ -1026,7 +1026,7 @@ model tokenUsuario {
   idUsuario       Int?
   token           String?    @db.VarChar(6)
   fechaGeneracion DateTime?  @default(now()) @db.Timestamp(0)
-  auth_user       auth_user? @relation(fields: [idUsuario], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "tokenUsuario_ibfk_1")
+  auth_user       auth_user? @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "tokenUsuario_ibfk_1")
 
   @@index([idUsuario], map: "idUsuario")
 }
@@ -1060,7 +1060,7 @@ model CatRegistrosPatronales {
   PrimaRiesgo        Decimal     @default(0.50000) @db.Decimal(7, 5)
   Activo             Boolean?    @default(true)
   idTenant           Int         @default(0)
-  CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, onUpdate: Restrict, map: "FK_RegPatronal_Empresa")
+  CatEmpresas        CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, onUpdate: NoAction, map: "FK_RegPatronal_Empresa")
 
   @@index([idEmpresa], map: "FK_RegPatronal_Empresa")
 }
@@ -1193,7 +1193,7 @@ model RelRolPermisos {
   puedeActualizar Boolean    @default(false)
   puedeEliminar   Boolean    @default(false)
   activo          Boolean    @default(true)
-  CatModulos      CatModulos @relation(fields: [idModulo], references: [idModulo], onDelete: Cascade, onUpdate: Restrict, map: "fk_permiso_modulo")
+  CatModulos      CatModulos @relation(fields: [idModulo], references: [idModulo], onDelete: Cascade, onUpdate: NoAction, map: "fk_permiso_modulo")
   catroles        CatRoles   @relation(fields: [idRol], references: [idRol], onDelete: Cascade, map: "fk_permisos_roles")
 
   @@unique([idRol, idModulo], map: "idx_rol_modulo_v2")
@@ -1257,7 +1257,7 @@ model PlantillasDocumentos {
   idTipoDocumento     Int?
   campos              CamposPlantilla[]
   documentosGenerados DocumentosGenerados[]
-  TiposDocumento      TiposDocumento?       @relation(fields: [idTipoDocumento], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_plantilla_tipo_doc")
+  TiposDocumento      TiposDocumento?       @relation(fields: [idTipoDocumento], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_plantilla_tipo_doc")
 
   @@index([idEmpresa], map: "idx_plantilla_empresa")
   @@index([activa], map: "idx_plantilla_activa")
@@ -1359,8 +1359,8 @@ model SolicitudPuesto {
   comentarios               String?                   @db.Text
   fechaCreacion             DateTime                  @default(now()) @db.Timestamp(0)
   fechaActualizacion        DateTime?                 @default(now()) @db.Timestamp(0)
-  CatEstatusSolicitudPuesto CatEstatusSolicitudPuesto @relation(fields: [estatusId], references: [id], onUpdate: Restrict, map: "fk_solicitud_estatus")
-  auth_user                 auth_user                 @relation(fields: [idUsuarioSolicita], references: [id], onUpdate: Restrict, map: "fk_solicitud_usuario")
+  CatEstatusSolicitudPuesto CatEstatusSolicitudPuesto @relation(fields: [estatusId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_estatus")
+  auth_user                 auth_user                 @relation(fields: [idUsuarioSolicita], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_solicitud_usuario")
 
   @@index([estatusId], map: "fk_solicitud_estatus")
   @@index([idEmpresa, estatusId], map: "idx_empresa_estatus")
@@ -1378,7 +1378,7 @@ model HistoricoMovimientos {
   descripcion   String    @db.Text
   detalles_json Json?
   fechaCreacion DateTime? @default(now()) @db.Timestamp(0)
-  auth_user     auth_user @relation(fields: [idUsuario], references: [id], onUpdate: Restrict, map: "fk_historico_usuario")
+  auth_user     auth_user @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
 
   @@index([fechaCreacion], map: "idx_creado_at")
   @@index([tablaOrigen, idRegistro], map: "idx_polimorfico")
@@ -1591,7 +1591,7 @@ model CursoAsistencias {
   fechaHoraRegistro DateTime                         @default(now()) @db.DateTime(0)
   metodoRegistro    CursoAsistencias_metodoRegistro? @default(qr_autoatendido)
   ipRegistro        String?                          @db.VarChar(45)
-  CursoFechasClase  CursoFechasClase                 @relation(fields: [idFechaClase], references: [idFechaClase], onDelete: Cascade, onUpdate: Restrict, map: "fk_asist_fechaclase")
+  CursoFechasClase  CursoFechasClase                 @relation(fields: [idFechaClase], references: [idFechaClase], onDelete: Cascade, onUpdate: NoAction, map: "fk_asist_fechaclase")
 
   @@unique([idFechaClase, idEmpleado], map: "uk_clase_empleado")
 }
@@ -1605,7 +1605,7 @@ model CursoFechasClase {
   estatus          CursoFechasClase_estatus? @default(programada)
   creadoEn         DateTime?                 @default(now()) @db.Timestamp(0)
   CursoAsistencias CursoAsistencias[]
-  CursoSesiones    CursoSesiones             @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: Restrict, map: "fk_fechas_sesion")
+  CursoSesiones    CursoSesiones             @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_fechas_sesion")
 
   @@index([idSesion], map: "fk_fechas_sesion")
 }
@@ -1618,7 +1618,7 @@ model CursoParticipantes {
   calificacionFinal Decimal?                              @db.Decimal(5, 2)
   creadoEn          DateTime?                             @default(now()) @db.Timestamp(0)
   Empleados         Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
-  CursoSesiones     CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: Restrict, map: "fk_part_sesion")
+  CursoSesiones     CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
 
   @@unique([idSesion, idEmpleado], map: "uk_sesion_empleado")
   @@index([idEmpleado], map: "idx_curso_participantes_empleado")
@@ -1643,7 +1643,7 @@ model CursoSesiones {
   creadoEn                   DateTime?                    @default(now()) @db.Timestamp(0)
   CursoFechasClase           CursoFechasClase[]
   CursoParticipantes         CursoParticipantes[]
-  CatCursos                  CatCursos                    @relation(fields: [idCurso], references: [idCursos], onUpdate: Restrict, map: "fk_sesion_curso")
+  CatCursos                  CatCursos                    @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "fk_sesion_curso")
   Empleados                  Empleados?                   @relation(fields: [idEmpleadoInstructor], references: [idEmpleado], map: "fk_sesion_empleado_instructor")
 
   @@index([idCurso], map: "fk_sesion_curso")
@@ -1802,7 +1802,7 @@ model EvaluationCriteria {
   PuntosMaximos               Int
   Orden                       Int
   Tipo                        String                        @db.VarChar(20)
-  RolePlays                   RolePlays                     @relation(fields: [idRolePlay], references: [idRolePlay], onUpdate: Restrict, map: "FK_EvalCriteria_RolePlay")
+  RolePlays                   RolePlays                     @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_EvalCriteria_RolePlay")
   RolePlayEvaluacionCriterios RolePlayEvaluacionCriterios[]
 
   @@index([idRolePlay], map: "idx_evalcriteria_idRolePlay")
@@ -1831,8 +1831,8 @@ model RolePlayEvaluacionCriterios {
   OverrideBy           Int?
   OverrideAt           DateTime?            @db.DateTime(0)
   ComentarioSupervisor String?              @db.Text
-  EvaluationCriteria   EvaluationCriteria   @relation(fields: [idCriterio], references: [idCriterio], onUpdate: Restrict, map: "FK_RolePlayEvalCrit_Criterio")
-  RolePlayEvaluaciones RolePlayEvaluaciones @relation(fields: [idEvaluacion], references: [idEvaluacion], onUpdate: Restrict, map: "FK_RolePlayEvalCrit_Evaluacion")
+  EvaluationCriteria   EvaluationCriteria   @relation(fields: [idCriterio], references: [idCriterio], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayEvalCrit_Criterio")
+  RolePlayEvaluaciones RolePlayEvaluaciones @relation(fields: [idEvaluacion], references: [idEvaluacion], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayEvalCrit_Evaluacion")
 
   @@index([idCriterio], map: "idx_roleevalcrit_idCriterio")
   @@index([idEvaluacion], map: "idx_roleevalcrit_idEvaluacion")
@@ -1851,7 +1851,7 @@ model RolePlayEvaluaciones {
   Recomendaciones             Json?
   FechaEvaluacion             DateTime?                     @default(now()) @db.DateTime(0)
   RolePlayEvaluacionCriterios RolePlayEvaluacionCriterios[]
-  RolePlayLlamadas            RolePlayLlamadas              @relation(fields: [idLlamada], references: [idLlamada], onUpdate: Restrict, map: "FK_RolePlayEvaluaciones_Llamada")
+  RolePlayLlamadas            RolePlayLlamadas              @relation(fields: [idLlamada], references: [idLlamada], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayEvaluaciones_Llamada")
 
   @@index([idTenant], map: "idx_roleevaluaciones_idTenant")
 }
@@ -1868,7 +1868,7 @@ model RolePlayLlamadas {
   FechaFin              DateTime?             @db.DateTime(0)
   FechaRegistro         DateTime?             @default(now()) @db.DateTime(0)
   RolePlayEvaluaciones  RolePlayEvaluaciones?
-  RolePlays             RolePlays             @relation(fields: [idRolePlay], references: [idRolePlay], onUpdate: Restrict, map: "FK_RolePlayLlamadas_RolePlay")
+  RolePlays             RolePlays             @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayLlamadas_RolePlay")
 
   @@index([idRolePlay], map: "idx_rolellamadas_idRolePlay")
   @@index([idTenant], map: "idx_rolellamadas_idTenant")
@@ -1972,7 +1972,7 @@ model JornadasEmpleado {
   horaFinComidaReal      DateTime?                       @db.DateTime(0)
   minutosComida          Int                             @default(0)
   minutosComidaExcedidos Int                             @default(0)
-  Empleados              Empleados                       @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: Restrict, map: "FK_Jornadas_Empleados")
+  Empleados              Empleados                       @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Jornadas_Empleados")
   RegistrosAsistencia    RegistrosAsistencia[]
 
   @@unique([idEmpleado, fecha], map: "UK_Jornada_Empleado_Fecha")
@@ -2012,8 +2012,8 @@ model RegistrosAsistencia {
   motivoFueraGeocerca     String?                                  @db.VarChar(255)
   versionApp              String?                                  @db.VarChar(20)
   zonaHoraria             String?                                  @db.VarChar(50)
-  Empleados               Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: Restrict, map: "FK_Registros_Empleados")
-  JornadasEmpleado        JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: Restrict, map: "FK_Registros_Jornadas")
+  Empleados               Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Registros_Empleados")
+  JornadasEmpleado        JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: NoAction, map: "FK_Registros_Jornadas")
 
   @@index([idJornada], map: "FK_Registros_Jornadas")
   @@index([idEmpleado, fechaHoraRegistro], map: "IDX_Registros_Empleado_Fecha")
