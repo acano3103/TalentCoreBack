@@ -169,6 +169,23 @@ export class CatalogsController {
     return this.patronalRecordsService.findAll(companyId, page, limit, querySearch, user);
   }
 
+  // Exporta a Excel todos los registros patronales que cumplan los filtros (sin paginar)
+  @Get('patronal-records/export')
+  @ApiOperation({ summary: 'Export patronal records to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async exportPatronalRecords(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Res() res: Response,
+    @Query('search') search?: string,
+    @Query('activo') activo?: string,
+  ) {
+    const buffer = await this.patronalRecordsService.exportPatronalRecords(companyId, user, { search, activo });
+    this.excelExportService.send(res, buffer, 'Registros_Patronales');
+  }
+
+
   // Obtiene un registro patronal por id
   @Get('patronal-records/:id')
   @ApiOperation({ summary: 'Get all patronal records', description: SWAGGER_AUTH_DESCRIPTION })

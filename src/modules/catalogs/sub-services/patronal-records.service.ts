@@ -3,10 +3,12 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePatronalRecordDto } from '../dto/create-patronal-record.dto';
 import { UpdatePatronalRecordDto } from '../dto/update-patronal-record.dto';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
+import { Prisma } from 'generated/prisma/client';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 
 @Injectable()
 export class PatronalRecordsService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(private readonly prisma: PrismaService, private readonly excelExportService: ExcelExportService) { }
 
     private readonly logger = new Logger(PatronalRecordsService.name);
 
@@ -69,6 +71,79 @@ export class PatronalRecordsService {
             currentPage: page,
             totalPages: Math.ceil(total / limit) || 1,
         };
+    }
+
+        /**
+     * Exporta a Excel TODOS los registros patronales que cumplan los filtros (sin paginar).
+     * Replica las condiciones del findAll (que usa SQL crudo): empresa, tenant y búsqueda.
+     */
+    async exportPatronalRecords(
+        idEmpresa: number,
+        user: ActiveUserDto,
+        filters: { search?: string; activo?: string },
+    ): Promise<Buffer> {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+
+        const search = filters.search?.trim() ?? '';
+
+        const where: Prisma.CatRegistrosPatronalesWhereInput = {
+            idEmpresa: Number(idEmpresa),
+            idTenant: user.idTenant,
+            ...(search
+                ? {
+                    OR: [
+                        { RegistroPatronal: { contains: search } },
+                        { RazonSocial: { contains: search } },
+                    ],
+                }
+                : {}),
+        };
+
+        // Estatus: 'true' = activos, 'false' = inactivos, vacío = todos
+        if (filters.activo === 'true') where.Activo = true;
+        if (filters.activo === 'false') where.Activo = false;
+
+        const records = await this.prisma.catRegistrosPatronales.findMany({
+            where,
+            orderBy: { idRegistroPatronal: 'desc' }, // Mismo orden que la tabla
+        });
+
+        // Conteo de ubicaciones activas por registro (mismo criterio que el LEFT JOIN del findAll)
+        const ids = records.map((r) => r.idRegistroPatronal);
+        const sitesCount = ids.length
+            ? await this.prisma.catSites.groupBy({
+                by: ['idRegistroPatronal'],
+                where: {
+                    idRegistroPatronal: { in: ids },
+                    Activo: true,
+                    idTenant: user.idTenant,
+                },
+                _count: { idSite: true },
+            })
+            : [];
+
+        const totalSitesMap = new Map<number, number>(
+            sitesCount.map((s) => [Number(s.idRegistroPatronal), s._count.idSite]),
+        );
+
+        type RegistroExport = (typeof records)[number];
+
+        const columns: ExcelColumn<RegistroExport>[] = [
+            { header: 'Registro Patronal', key: 'registroPatronal', width: 20, value: (r) => r.RegistroPatronal },
+            { header: 'Razón Social', key: 'razonSocial', width: 40, value: (r) => r.RazonSocial },
+            { header: 'Clase de Riesgo', key: 'claseRiesgo', width: 16, value: (r) => r.ClaseRiesgo },
+            { header: 'Prima de Riesgo', key: 'primaRiesgo', width: 16, value: (r) => Number(r.PrimaRiesgo) },
+            { header: 'Ubicaciones Activas', key: 'totalSites', width: 18, value: (r) => totalSitesMap.get(r.idRegistroPatronal) ?? 0 },
+            { header: 'Estatus', key: 'estatus', width: 12, value: (r) => (r.Activo ? 'Activo' : 'Inactivo') },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Registros Patronales',
+            columns,
+            rows: records,
+        });
     }
 
      async findOne(idEmpresa: number, idRegistroPatronal: number, user: ActiveUserDto) {   
