@@ -78,6 +78,22 @@ export class CatalogsController {
     return this.salaryLevelsCatalogService.findAll(activeUser, companyId, page, limit, querySearch);
   }
 
+    // Exporta a Excel todos los niveles salariales que cumplan los filtros (sin paginar)
+  @Get('salary-levels/export')
+  @ApiOperation({ summary: 'Export salary levels to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async exportSalaryLevels(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Res() res: Response,
+    @Query('search') search?: string,
+    @Query('activo') activo?: string,
+  ) {
+    const buffer = await this.salaryLevelsCatalogService.exportSalaryLevels(activeUser, companyId, { search, activo });
+    this.excelExportService.send(res, buffer, 'Niveles_Salariales');
+  }
+
   // Obtiene un nivel salarial por id
   @Get('salary-levels/:salaryLevelId')
   @ApiOperation({ summary: 'Get one salary level', description: SWAGGER_AUTH_DESCRIPTION })
