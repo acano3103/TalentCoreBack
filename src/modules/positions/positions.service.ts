@@ -19,14 +19,16 @@ import { CreatePositionRequestDto } from './dto/create-position-request.dto';
 import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import * as ExcelJS from 'exceljs';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 
 @Injectable()
 export class PositionsService {
-    constructor(
+     constructor(
         private readonly prisma: PrismaService,
         private readonly notifications: NotificationDispatcher,
         private readonly configService: ConfigService,
         private integrationFactory: IntegrationsFactory,
+        private readonly excelExportService: ExcelExportService,
     ) { }
 
     private readonly logger = new Logger(PositionsService.name);
@@ -49,6 +51,58 @@ export class PositionsService {
             currentPage: page,
             totalPages: Math.ceil(total / limit) || 1,
         };
+    }
+
+    // Exporta a Excel TODOS los puestos que cumplan los filtros (sin paginar), igual que la tabla
+    async exportPositions(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        aprobada: number,
+        filters: { search?: string; activo?: string; fechaDesde?: string; fechaHasta?: string },
+    ): Promise<Buffer> {
+        if (!activeUser.idTenant) {
+            throw new BadRequestException('El usuario no tiene un tenant asignado.');
+        }
+
+        const positions = await PositionQueries.findAllForExport(
+            this.prisma,
+            activeUser.idTenant,
+            companyId,
+            filters.search?.trim() ?? '',
+            aprobada,
+            { activo: filters.activo, fechaDesde: filters.fechaDesde, fechaHasta: filters.fechaHasta },
+        );
+
+        // En SQL crudo los booleanos pueden venir como 1/0 y los decimales como Decimal
+        const siNo = (v: unknown) => (Number(v) ? 'Sí' : 'No');
+        const toNumber = (v: unknown) => (v === null || v === undefined ? '' : Number(v));
+        const formatFecha = (fecha: Date | null) => {
+            if (!fecha) return '';
+            const [anio, mes, dia] = new Date(fecha).toISOString().split('T')[0].split('-');
+            return `${dia}/${mes}/${anio}`;
+        };
+
+        const columns: ExcelColumn<any>[] = [
+            { header: 'Puesto', key: 'puesto', width: 32, value: (p) => p.NombrePuesto },
+            { header: 'Área Organizacional', key: 'area', width: 26, value: (p) => p.Area },
+            { header: 'Clasificación / Nivel', key: 'tipoPuesto', width: 22, value: (p) => p.TipoPuesto },
+            { header: 'Tipo de Contratación', key: 'tipoContratacion', width: 22, value: (p) => p.TipoContratacion },
+            { header: 'Modalidad', key: 'modalidad', width: 16, value: (p) => p.Modalidad },
+            { header: 'Escolaridad', key: 'escolaridad', width: 22, value: (p) => p.Escolaridad },
+            { header: 'Disponibilidad para Viajar', key: 'viajar', width: 14, value: (p) => siNo(p.DisponibilidadViajar) },
+            { header: 'Nivel Salarial', key: 'nivelSalario', width: 20, value: (p) => p.NivelSalario },
+            { header: 'Salario Mínimo', key: 'salarioMin', width: 16, value: (p) => toNumber(p.SalarioMinimo) },
+            { header: 'Salario Máximo', key: 'salarioMax', width: 16, value: (p) => toNumber(p.SalarioMaximo) },
+            { header: 'Descripción del Puesto', key: 'descripcion', width: 50, value: (p) => p.DescripcionPuesto },
+            { header: 'Estatus', key: 'estatus', width: 12, value: (p) => (Number(p.Activo) ? 'Activo' : 'Inactivo') },
+            { header: 'Fecha de Registro', key: 'fechaRegistro', width: 18, value: (p) => formatFecha(p.FechaRegistro) },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Puestos',
+            columns,
+            rows: positions,
+        });
     }
 
     async findOne(activeUser: ActiveUserDto, companyId: number, positionId: number, specific: number) {
