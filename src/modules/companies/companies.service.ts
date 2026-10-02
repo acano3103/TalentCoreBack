@@ -10,6 +10,7 @@ import * as ExcelJS from 'exceljs';
 import { seedDocumentosEmpresa } from './seeds/default-documentos.seed';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 import { Prisma } from 'generated/prisma/client';
+
 @Injectable()
 export class CompaniesService {
     constructor(
@@ -21,7 +22,7 @@ export class CompaniesService {
     private readonly logger = new Logger(CompaniesService.name);
 
 
-        // Exporta TODAS las empresas del tenant que cumplan los filtros (sin paginar)
+    // Exporta TODAS las empresas del tenant que cumplan los filtros (sin paginar)
     async exportCompanies(
         user: ActiveUserDto,
         filters: { search?: string; activo?: string; fechaDesde?: string; fechaHasta?: string },
