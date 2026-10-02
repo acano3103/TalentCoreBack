@@ -385,6 +385,7 @@ export function calcularRetardoEntrada(
   horaProgramada?: Date | string | null,
   horaReal?: Date | string | null,
   config?: { tolerancia?: Partial<ToleranciaConfig> } | null,
+  timeZone = DEFAULT_TIMEZONE,
 ): EvaluacionEntrada {
   if (!horaReal || !horaProgramada) {
     return {
@@ -398,18 +399,24 @@ export function calcularRetardoEntrada(
   const tolerancia = config?.tolerancia?.minutosToleranciaEntrada ?? 0;
   const limiteRetardo = config?.tolerancia?.minutosLimiteRetardo ?? 60;
 
-  // Convertir a minutos desde la medianoche para cálculo limpio
-  const getMinutosDelDia = (valor: Date | string): number => {
-    if (valor instanceof Date) {
-      return valor.getUTCHours() * 60 + valor.getUTCMinutes();
-    }
-    const cleanStr = valor.includes('T') ? valor.split('T')[1] : valor.includes(' ') ? valor.split(' ')[1] : valor;
-    const [h, m] = cleanStr.substring(0, 5).split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
-  };
+  // Extraer "HH:mm" siempre en hora local
+  const horaProgStr = toTimeStr(horaProgramada, timeZone);
+  const horaRealStr = toTimeStr(horaReal, timeZone);
 
-  const minutosProg = getMinutosDelDia(horaProgramada);
-  const minutosCheck = getMinutosDelDia(horaReal);
+  if (horaProgStr === '—' || horaRealStr === '—') {
+    return {
+      esRetardo: false,
+      esFaltaPorRetardo: false,
+      minutosRetardo: 0,
+      estado: 'SIN_CHECK',
+    };
+  }
+
+  const [hP, mP] = horaProgStr.split(':').map(Number);
+  const [hR, mR] = horaRealStr.split(':').map(Number);
+
+  const minutosProg = hP * 60 + mP;
+  const minutosCheck = hR * 60 + mR;
 
   const diferenciaMinutos = minutosCheck - minutosProg;
 
@@ -423,7 +430,7 @@ export function calcularRetardoEntrada(
     };
   }
 
-  // Llegó después pero dentro del margen de tolerancia
+  // Margen de tolerancia cubierto
   if (diferenciaMinutos <= tolerancia) {
     return {
       esRetardo: false,
@@ -433,7 +440,7 @@ export function calcularRetardoEntrada(
     };
   }
 
-  // Superó el límite máximo de retardo permitido (se considera Falta por retardo)
+  // Excedió el límite admisible para considerarse retardo -> Falta
   if (diferenciaMinutos > limiteRetardo) {
     return {
       esRetardo: false,
@@ -443,7 +450,7 @@ export function calcularRetardoEntrada(
     };
   }
 
-  // Superó la tolerancia pero está dentro del límite admisible de retardo
+  // Retardo dentro del límite permitido
   return {
     esRetardo: true,
     esFaltaPorRetardo: false,
@@ -452,22 +459,66 @@ export function calcularRetardoEntrada(
   };
 }
 
+// Zona horaria por defecto (ajustable si la empresa maneja otra)
+const DEFAULT_TIMEZONE = 'America/Mexico_City';
+
 // --- Helpers de formateo reutilizables fuera de la clase ---
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-const toDateStr = (d: Date | string | null) => {
+/**
+ * Convierte Date o string ISO a formato DD/MM/YYYY en la zona horaria local.
+ */
+const toDateStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
   if (!d) return '';
-  const [y, m, day] = (typeof d === 'string' ? d : d.toISOString()).split('T')[0].split('-');
-  return `${day}/${m}/${y}`;
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return '';
+
+  return new Intl.DateTimeFormat('es-MX', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(dateObj);
 };
 
-const toDiaSemana = (d: Date | string | null) =>
-  d ? DIAS_SEMANA[new Date(d).getUTCDay()] : '';
+/**
+ * Obtiene el día de la semana respetando la zona horaria local.
+ */
+const toDiaSemana = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
+  if (!d) return '';
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return '';
 
-const toTimeStr = (d: Date | string | null) => {
+  const dia = new Intl.DateTimeFormat('es-MX', {
+    timeZone,
+    weekday: 'long',
+  }).format(dateObj);
+
+  return dia.charAt(0).toUpperCase() + dia.slice(1);
+};
+
+/**
+ * Extrae HH:mm respetando la zona horaria local.
+ * Si ya viene en formato corto "HH:mm" (hora teórica), lo devuelve directo.
+ * Si es un Date o string ISO UTC (hora real), lo convierte a la zona horaria local.
+ */
+const toTimeStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
   if (!d) return '—';
-  const str = typeof d === 'string' ? d : d.toISOString();
-  return (str.includes('T') ? str.split('T')[1] : str.split(' ')[1] || str).substring(0, 5);
+
+  // Si ya es una cadena "HH:mm" o "HH:mm:ss" sin zona horaria ni fecha completa
+  if (typeof d === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(d.trim())) {
+    return d.trim().substring(0, 5);
+  }
+
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return '—';
+
+  return new Intl.DateTimeFormat('es-MX', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(dateObj);
 };
 
 const toHorasStr = (minutos: number) => {
@@ -477,7 +528,7 @@ const toHorasStr = (minutos: number) => {
   return `${h}:${m}`;
 };
 
-// Helper para definir columnas en 1 sola línea limpia
+// Helper para definir columnas
 const col = <T>(header: string, width: number, value: (row: T) => any): ExcelColumn<T> => ({
   header,
   key: header,
