@@ -236,10 +236,10 @@ export class AttendanceReportsService {
       col('ubicacion', 24, (j) => emp(j)?.ubicacionDescripcion || 'SIN UBICACIÓN'),
       col('modalidad', 16, (j) => emp(j)?.modalidadDescripcion || 'Presencial'),
       col('canalPrincipal', 18, (j) => emp(j)?.canalPrincipal || 'CUALQUIERA'),
-      col('horaEntradaTeorica', 18, (j) => toTimeStr(j.horaEntradaTeorica)),
-      col('horaSalidaTeorica', 18, (j) => toTimeStr(j.horaSalidaTeorica)),
-      col('horaEntradaReal', 18, (j) => toTimeStr(j.horaEntradaReal)),
-      col('horaSalidaReal', 18, (j) => toTimeStr(j.horaSalidaReal)),
+      col('horaEntradaTeorica', 18, (j) => toTimeTeoricoStr(j.horaEntradaTeorica)),
+      col('horaSalidaTeorica', 18, (j) => toTimeTeoricoStr(j.horaSalidaTeorica)),
+      col('horaEntradaReal', 18, (j) => toTimeRealStr(j.horaEntradaReal)),
+      col('horaSalidaReal', 18, (j) => toTimeRealStr(j.horaSalidaReal)),
       col('minutosTrabajados', 18, (j) => j.minutosTrabajados ?? 0),
       col('horasTrabajadas', 16, (j) => toHorasStr(j.minutosTrabajados)),
       col('minutosRetardo', 16, (j) => evalMap.get(j.idJornada)?.minutosRetardo ?? j.minutosRetardo ?? 0),
@@ -356,8 +356,8 @@ export class AttendanceReportsService {
       col('puesto', 26, (r) => emp(r)?.nombrePuesto || 'SIN PUESTO'),
       col('jefeInmediato', 30, (r) => emp(r)?.jefeInmediatoNombre || '—'),
       col('ubicacion', 24, (r) => emp(r)?.ubicacionDescripcion || 'SIN UBICACIÓN'),
-      col('horaEntradaTeorica', 18, (r) => toTimeStr(r.jornada.horaEntradaTeorica)),
-      col('horaEntradaReal', 18, (r) => toTimeStr(r.jornada.horaEntradaReal)),
+      col('horaEntradaTeorica', 18, (r) => toTimeTeoricoStr(r.jornada.horaEntradaTeorica)),
+      col('horaEntradaReal', 18, (r) => toTimeRealStr(r.jornada.horaEntradaReal)),
       col('minutosTolerancia', 18, () => tolerancia),
       col('minutosRetardo', 16, (r) => r.evaluacion.minutosRetardo),
       col('clasificacion', 16, (r) => r.clasificacion),
@@ -399,9 +399,10 @@ export function calcularRetardoEntrada(
   const tolerancia = config?.tolerancia?.minutosToleranciaEntrada ?? 0;
   const limiteRetardo = config?.tolerancia?.minutosLimiteRetardo ?? 60;
 
-  // Extraer "HH:mm" siempre en hora local
-  const horaProgStr = toTimeStr(horaProgramada, timeZone);
-  const horaRealStr = toTimeStr(horaReal, timeZone);
+  // Hora programada: literal (sin desfase)
+  const horaProgStr = toTimeTeoricoStr(horaProgramada);
+  // Hora real: convertida a hora local
+  const horaRealStr = toTimeRealStr(horaReal, timeZone);
 
   if (horaProgStr === '—' || horaRealStr === '—') {
     return {
@@ -430,7 +431,7 @@ export function calcularRetardoEntrada(
     };
   }
 
-  // Margen de tolerancia cubierto
+  // Dentro de tolerancia
   if (diferenciaMinutos <= tolerancia) {
     return {
       esRetardo: false,
@@ -440,7 +441,7 @@ export function calcularRetardoEntrada(
     };
   }
 
-  // Excedió el límite admisible para considerarse retardo -> Falta
+  // Superó el límite admisible de retardo -> Falta
   if (diferenciaMinutos > limiteRetardo) {
     return {
       esRetardo: false,
@@ -450,7 +451,7 @@ export function calcularRetardoEntrada(
     };
   }
 
-  // Retardo dentro del límite permitido
+  // Retardo válido
   return {
     esRetardo: true,
     esFaltaPorRetardo: false,
@@ -459,14 +460,13 @@ export function calcularRetardoEntrada(
   };
 }
 
-// Zona horaria por defecto (ajustable si la empresa maneja otra)
 const DEFAULT_TIMEZONE = 'America/Mexico_City';
 
 // --- Helpers de formateo reutilizables fuera de la clase ---
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 /**
- * Convierte Date o string ISO a formato DD/MM/YYYY en la zona horaria local.
+ * Formatea fechas a DD/MM/YYYY en hora local.
  */
 const toDateStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
   if (!d) return '';
@@ -498,17 +498,40 @@ const toDiaSemana = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
 };
 
 /**
- * Extrae HH:mm respetando la zona horaria local.
- * Si ya viene en formato corto "HH:mm" (hora teórica), lo devuelve directo.
- * Si es un Date o string ISO UTC (hora real), lo convierte a la zona horaria local.
+ * Para HORAS TEÓRICAS (hora de entrada / salida pactada del turno).
+ * NO aplica conversión de zona horaria: extrae la hora y minuto literal (tal como se guardó).
  */
-const toTimeStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
+const toTimeTeoricoStr = (d: Date | string | null) => {
   if (!d) return '—';
 
-  // Si ya es una cadena "HH:mm" o "HH:mm:ss" sin zona horaria ni fecha completa
-  if (typeof d === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(d.trim())) {
+  // Si viene como string: "08:00", "08:00:00" o "1970-01-01T08:00:00.000Z"
+  if (typeof d === 'string') {
+    if (d.includes('T')) {
+      return d.split('T')[1].substring(0, 5);
+    }
+    if (d.includes(' ')) {
+      return d.split(' ')[1].substring(0, 5);
+    }
     return d.trim().substring(0, 5);
   }
+
+  // Si Prisma lo devuelve como Date, los campos tipo TIME de PostgreSQL se almacenan
+  // con los valores de hora/minuto en UTC (ej. 08:00 UTC = 08:00 nominal).
+  if (d instanceof Date) {
+    const h = String(d.getUTCHours()).padStart(2, '0');
+    const m = String(d.getUTCMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+
+  return '—';
+};
+
+/**
+ * Para HORAS REALES (checada de huella, biométrico, app, etc. en UTC).
+ * SÍ aplica la conversión a la zona horaria local de México.
+ */
+const toTimeRealStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
+  if (!d) return '—';
 
   const dateObj = typeof d === 'string' ? new Date(d) : d;
   if (isNaN(dateObj.getTime())) return '—';
@@ -528,7 +551,6 @@ const toHorasStr = (minutos: number) => {
   return `${h}:${m}`;
 };
 
-// Helper para definir columnas
 const col = <T>(header: string, width: number, value: (row: T) => any): ExcelColumn<T> => ({
   header,
   key: header,
