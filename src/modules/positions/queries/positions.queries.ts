@@ -67,7 +67,7 @@ export class PositionQueries {
     companyId: number,
     search: string,
     aprobada: number,
-    filters: { activo?: string; fechaDesde?: string; fechaHasta?: string } = {},
+        filters: { activo?: string; fechaDesde?: string; fechaHasta?: string; pendiente?: string } = {},
   ) {
     const searchQuery = search ? `%${search}%` : '%';
     const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
@@ -84,6 +84,11 @@ export class PositionQueries {
     const hastaFilter = esFecha(filters.fechaHasta)
       ? Prisma.sql`AND p.FechaRegistro <= ${`${filters.fechaHasta} 23:59:59`}`
       : Prisma.empty;
+
+    const pendienteFilter =
+      filters.pendiente === 'true' ? Prisma.sql`AND p.pendiente = 1`
+        : filters.pendiente === 'false' ? Prisma.sql`AND p.pendiente = 0`
+          : Prisma.empty;
 
     return prisma.$queryRaw<any[]>`
       SELECT 
@@ -115,6 +120,7 @@ export class PositionQueries {
         ${activoFilter}
         ${desdeFilter}
         ${hastaFilter}
+        ${pendienteFilter}
       ORDER BY p.idPuesto DESC;
     `;
   }

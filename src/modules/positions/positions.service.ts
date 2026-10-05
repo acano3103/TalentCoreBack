@@ -58,7 +58,7 @@ export class PositionsService {
         activeUser: ActiveUserDto,
         companyId: number,
         aprobada: number,
-        filters: { search?: string; activo?: string; fechaDesde?: string; fechaHasta?: string },
+        filters: { search?: string; activo?: string; fechaDesde?: string; fechaHasta?: string; pendiente?: string },
     ): Promise<Buffer> {
         if (!activeUser.idTenant) {
             throw new BadRequestException('El usuario no tiene un tenant asignado.');
@@ -70,7 +70,7 @@ export class PositionsService {
             companyId,
             filters.search?.trim() ?? '',
             aprobada,
-            { activo: filters.activo, fechaDesde: filters.fechaDesde, fechaHasta: filters.fechaHasta },
+        { activo: filters.activo, fechaDesde: filters.fechaDesde, fechaHasta: filters.fechaHasta, pendiente: filters.pendiente },
         );
 
         // En SQL crudo los booleanos pueden venir como 1/0 y los decimales como Decimal

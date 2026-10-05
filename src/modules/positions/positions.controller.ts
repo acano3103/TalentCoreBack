@@ -146,12 +146,14 @@ export class PositionsController {
         @Query('activo') activo?: string,
         @Query('fechaDesde') fechaDesde?: string,
         @Query('fechaHasta') fechaHasta?: string,
+        @Query('pendiente') pendiente?: string,
     ) {
         const buffer = await this.service.exportPositions(activeUser, companyId, aprobada, {
             search,
             activo,
             fechaDesde,
             fechaHasta,
+            pendiente,
         });
         this.excelExportService.send(res, buffer, 'Catalogo_de_Puestos');
     }
