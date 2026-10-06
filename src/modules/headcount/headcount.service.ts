@@ -3,10 +3,14 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { HeadcountQueries } from './queries/headcount.queries';
 import { UpdateHeadcountDto } from './dto/update-headcount.dto';
 import * as ExcelJS from 'exceljs';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 
 @Injectable()
 export class HeadcountService {
-    constructor(private prisma: PrismaService) { }
+       constructor(
+        private prisma: PrismaService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
 
     async findAll(companyId: number, page: number, search: string, limit: number, locationId?: number) {
         const skip = (page - 1) * limit;
@@ -70,6 +74,57 @@ export class HeadcountService {
                 totalDisponible: globalSummary.totalAutorizado // Al ser los demás 0, el disponible es igual al autorizado
             }
         };
+    }
+
+        // Exporta a Excel la matriz completa de plazas (sin paginar): una fila por puesto en cada Área-Ubicación
+    async exportHeadcount(companyId: number, search: string, locationId?: number): Promise<Buffer> {
+        const rows = await HeadcountQueries.getMatrixForExport(this.prisma, companyId, search, locationId);
+
+        // El presupuesto es del Área-Ubicación, no de cada puesto: solo se pone en la primera fila de cada grupo
+        // para que al sumar la columna en Excel no se duplique.
+        let lastGroup: unknown = null;
+        const exportRows = rows.map((r) => {
+            const isFirstOfGroup = r.idAreaUbicacion !== lastGroup;
+            lastGroup = r.idAreaUbicacion;
+
+            const tienePuesto = r.idPuesto !== null && r.idPuesto !== undefined;
+            const autorizado = Number(r.autorizado || 0);
+            const ocupado = Number(r.ocupado || 0);
+
+            return {
+                ubicacion: r.siteDescripcion,
+                area: r.areaDescripcion,
+                presupuesto: isFirstOfGroup ? Number(r.PresupuestoAsignado || 0) : '',
+                puesto: tienePuesto ? r.nombrePuesto : 'Sin puestos configurados',
+                nivel: tienePuesto ? r.nombreNivel : '',
+                salarioMinimo: tienePuesto ? Number(r.salarioMinimo) : '',
+                salarioMaximo: tienePuesto ? Number(r.salarioMaximo) : '',
+                autorizadas: tienePuesto ? autorizado : '',
+                ocupadas: tienePuesto ? ocupado : '',
+                vacantes: tienePuesto ? Math.max(0, autorizado - ocupado) : '',
+            };
+        });
+
+        type PlazaExport = (typeof exportRows)[number];
+
+        const columns: ExcelColumn<PlazaExport>[] = [
+            { header: 'Ubicación', key: 'ubicacion', width: 22 },
+            { header: 'Área', key: 'area', width: 26 },
+            { header: 'Presupuesto Autorizado (Área-Ubicación)', key: 'presupuesto', width: 24 },
+            { header: 'Puesto', key: 'puesto', width: 34 },
+            { header: 'Nivel Salarial', key: 'nivel', width: 14 },
+            { header: 'Salario Mínimo', key: 'salarioMinimo', width: 15 },
+            { header: 'Salario Máximo', key: 'salarioMaximo', width: 15 },
+            { header: 'Plazas Autorizadas', key: 'autorizadas', width: 16 },
+            { header: 'Plazas Ocupadas', key: 'ocupadas', width: 15 },
+            { header: 'Vacantes', key: 'vacantes', width: 11 },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Plazas',
+            columns,
+            rows: exportRows,
+        });
     }
 
     async update(companyId: number, dto: UpdateHeadcountDto) {

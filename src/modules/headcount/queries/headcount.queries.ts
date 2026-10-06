@@ -123,4 +123,41 @@ export class HeadcountQueries {
             totalAutorizado: Number(result[0]?.totalAutorizado || 0)
         };
     }
+
+    // 5. Matriz completa para exportar: una fila por puesto dentro de cada Área-Ubicación (sin paginar).
+    //    Mismas condiciones que getPaginatedMatrix; las combinaciones sin puestos salen con columnas de puesto en NULL.
+    static async getMatrixForExport(
+        prisma: PrismaService,
+        companyId: number,
+        search: string,
+        locationId?: number
+    ): Promise<any[]> {
+        const siteFilter = locationId ? Prisma.sql`AND rau.idSite = ${Number(locationId)}` : Prisma.empty;
+        const searchFilter = search ? Prisma.sql`AND (a.Descripcion LIKE ${`%${search}%`} OR s.Descripcion LIKE ${`%${search}%`})` : Prisma.empty;
+
+        return prisma.$queryRaw<any[]>`
+          SELECT
+            rau.idAreaUbicacion,
+            s.Descripcion AS siteDescripcion,
+            a.Descripcion AS areaDescripcion,
+            rau.PresupuestoAsignado,
+            p.idPuesto,
+            p.NombrePuesto AS nombrePuesto,
+            IFNULL(rpu.PlazasAutorizadas, 0) AS autorizado,
+            (SELECT COUNT(*) FROM Empleados emp WHERE emp.idPuesto = p.idPuesto AND emp.idSite = rau.idSite AND emp.activo = 1) AS ocupado,
+            IFNULL(cns.NombreNivel, 'SIN NIVEL') AS nombreNivel,
+            IFNULL(cns.SalarioMinimo, 0.00) AS salarioMinimo,
+            IFNULL(cns.SalarioMaximo, 0.00) AS salarioMaximo
+          FROM RelAreasUbicaciones rau
+          JOIN CatSites s ON s.idSite = rau.idSite AND s.idEmpresa = ${companyId}
+          JOIN CatAreas a ON a.idArea = rau.idArea AND a.Activo = 1
+          LEFT JOIN CatPuestos p ON p.idArea = rau.idArea AND p.Activo = 1 AND p.aprobada = 1
+          LEFT JOIN RelPuestosUbicaciones rpu ON rpu.idPuesto = p.idPuesto AND rpu.idSite = rau.idSite
+          LEFT JOIN CatNivelesSalario cns ON cns.IdNivelSalario = p.IdNivelSalario
+          WHERE rau.Activo = 1
+          ${siteFilter}
+          ${searchFilter}
+          ORDER BY rau.idAreaUbicacion DESC, p.NombrePuesto ASC;
+        `;
+    }
 }

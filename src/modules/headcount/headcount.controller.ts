@@ -7,13 +7,17 @@ import { UpdateHeadcountDto } from './dto/update-headcount.dto';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CompanyTenantGuard } from '../auth/guards/company-tenant.guard';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 
 @ApiTags('Headcount')
 @UseGuards(JwtAuthGuard, CompanyTenantGuard)
 @ApiBearerAuth()
 @Controller('companies/:companyId/headcount')
 export class HeadcountController {
-    constructor(private readonly headcountService: HeadcountService) { }
+        constructor(
+        private readonly headcountService: HeadcountService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
 
     // Obtiene todo el headcount de la empresa paginado y filtrado
     @Get()
@@ -31,7 +35,22 @@ export class HeadcountController {
         const querySearch = search || '';
         return this.headcountService.findAll(companyId, page, querySearch, limit, locationId);
     }
-
+    // Exporta a Excel la matriz completa de plazas (sin paginar)
+    @Get('export')
+    @ApiOperation({ summary: 'Export headcount to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    @ApiResponse({ status: 403, description: 'Forbidden: company does not belong to user tenant' })
+    async exportHeadcount(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Res() res: Response,
+        @Query('search') search?: string,
+        @Query('locationId', new ParseIntPipe({ optional: true })) locationId?: number,
+    ) {
+        const buffer = await this.headcountService.exportHeadcount(companyId, search?.trim() || '', locationId);
+        this.excelExportService.send(res, buffer, 'Plazas_Operativas');
+    }
+    
     // Actualiza las plazas autorizadas para roles
     @Patch()
     @ApiOperation({ summary: 'Update authorized headcount plazas for specific roles', description: SWAGGER_AUTH_DESCRIPTION })
