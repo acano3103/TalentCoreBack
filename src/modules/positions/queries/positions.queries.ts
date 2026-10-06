@@ -1,4 +1,5 @@
 import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from 'generated/prisma/client';
 
 export class PositionQueries {
   static async findAll(prisma: PrismaService, idTenant: number, companyId: number, search: string, page: number, limit: number, aprobada: number) {
@@ -54,6 +55,76 @@ export class PositionQueries {
       total: Number(total || 0)
     };
   }
+
+  /**
+   * Misma consulta que findAll pero SIN paginación, para exportar a Excel.
+   * Mantiene los mismos JOIN y condiciones (empresa por área, tenant, aprobada y búsqueda)
+   * y agrega filtros opcionales de estatus y rango de fechas de registro.
+   */
+  static async findAllForExport(
+    prisma: PrismaService,
+    idTenant: number,
+    companyId: number,
+    search: string,
+    aprobada: number,
+        filters: { activo?: string; fechaDesde?: string; fechaHasta?: string; pendiente?: string } = {},
+  ) {
+    const searchQuery = search ? `%${search}%` : '%';
+    const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+
+    const activoFilter =
+      filters.activo === 'true' ? Prisma.sql`AND p.Activo = 1`
+        : filters.activo === 'false' ? Prisma.sql`AND p.Activo = 0`
+          : Prisma.empty;
+
+    const desdeFilter = esFecha(filters.fechaDesde)
+      ? Prisma.sql`AND p.FechaRegistro >= ${`${filters.fechaDesde} 00:00:00`}`
+      : Prisma.empty;
+
+    const hastaFilter = esFecha(filters.fechaHasta)
+      ? Prisma.sql`AND p.FechaRegistro <= ${`${filters.fechaHasta} 23:59:59`}`
+      : Prisma.empty;
+
+    const pendienteFilter =
+      filters.pendiente === 'true' ? Prisma.sql`AND p.pendiente = 1`
+        : filters.pendiente === 'false' ? Prisma.sql`AND p.pendiente = 0`
+          : Prisma.empty;
+
+    return prisma.$queryRaw<any[]>`
+      SELECT 
+        p.idPuesto,
+        p.NombrePuesto,
+        p.DescripcionPuesto,
+        a.Descripcion AS Area,
+        tp.Descripcion AS TipoPuesto,
+        tc.Descripcion AS TipoContratacion,
+        m.Descripcion AS Modalidad,
+        e.Descripcion AS Escolaridad,
+        p.DisponibilidadViajar,
+        ns.NombreNivel AS NivelSalario,
+        ns.SalarioMinimo,
+        ns.SalarioMaximo,
+        p.Activo,
+        p.FechaRegistro
+      FROM CatPuestos p
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+      LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
+      LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
+      LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
+      LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+      WHERE a.idEmpresa = ${companyId}
+        AND p.idTenant = ${idTenant}
+        AND p.aprobada = ${aprobada}
+        AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
+        ${activoFilter}
+        ${desdeFilter}
+        ${hastaFilter}
+        ${pendienteFilter}
+      ORDER BY p.idPuesto DESC;
+    `;
+  }
+
 
   static async findValidationDetails(prisma: PrismaService, positionId: number) {
     const [idiomas, documentos, cursos, funciones, competencias, habilidades, horarios, [maestro]] = await Promise.all([

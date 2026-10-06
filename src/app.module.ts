@@ -14,7 +14,6 @@ import { MediaModule } from './media/media.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { PostulationsModule } from './modules/postulations/postulations.module';
 import { LocationsModule } from './modules/locations/locations.module';
-import { AreasService } from './modules/areas/areas.service';
 import { AreasModule } from './modules/areas/areas.module';
 import { CostCenterModule } from './modules/cost-center/cost-center.module';
 import { EventsModule } from './modules/events/events.module';
@@ -117,6 +116,6 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     AttendanceReportsModule
   ],
   controllers: [],
-  providers: [AreasService, GeofencesService],
+  providers: [GeofencesService],
 })
 export class AppModule { }

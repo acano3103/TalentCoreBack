@@ -4,16 +4,19 @@ import { CreateAreaDto } from './dto/create-area.dto';
 import { UpdateAreaDto } from './dto/update-area.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import * as ExcelJS from 'exceljs';
+import { Prisma } from 'generated/prisma/client';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 
 @Injectable()
 export class AreasService {
-    constructor(private prismaService: PrismaService) { }
+    constructor(private prismaService: PrismaService, private excelExportService: ExcelExportService) { }
 
-    async findAll(user: ActiveUserDto, companyId: number, page: number, query: string, limit: number) {
-        const skip = (page - 1) * limit;
-
-        // Filtramos las áreas del tenant y empresa actual
-        const whereCondition: any = {
+    /**
+     * Where común de áreas (tenant, empresa y búsqueda en catálogo y relaciones).
+     * Lo usan la tabla paginada y la exportación, para que ambas filtren igual.
+     */
+    private buildAreasWhere(user: ActiveUserDto, companyId: number, query?: string): Prisma.CatAreasWhereInput {
+        const whereCondition: Prisma.CatAreasWhereInput = {
             idTenant: user.idTenant,
             idEmpresa: companyId,
         };
@@ -38,24 +41,72 @@ export class AreasService {
             ];
         }
 
+        return whereCondition;
+    }
+
+    /** Relaciones que se consultan por área (sedes y centros de costos de la empresa/tenant). */
+    private buildAreasInclude(user: ActiveUserDto, companyId: number) {
+        return {
+            RelAreasUbicaciones: {
+                where: {
+                    OR: [
+                        { CatSites: { idEmpresa: companyId, idTenant: user.idTenant } },
+                        { CatCentroCostos: { idEmpresa: companyId } }
+                    ]
+                },
+                include: {
+                    CatCentroCostos: true,
+                    CatSites: true,
+                }
+            }
+        } satisfies Prisma.CatAreasInclude;
+    }
+
+    /** Consolida un área: suma presupuestos y junta sedes y centros de costos únicos. */
+    private consolidateArea(area: {
+        idArea: number;
+        Descripcion: string;
+        Activo: boolean | null;
+        RelAreasUbicaciones?: Array<{
+            PresupuestoAsignado?: Prisma.Decimal | number | null;
+            PresupuestoEjecutado?: Prisma.Decimal | number | null;
+            CatCentroCostos?: { Codigo?: string | null } | null;
+            CatSites?: { Descripcion?: string | null } | null;
+        }>;
+    }) {
+        const asignaciones = area.RelAreasUbicaciones || [];
+
+        // Sumamos los presupuestos específicos de esta área a lo largo de todas sus sedes vinculadas
+        const presupuestoAsignadoArea = asignaciones.reduce((acc, curr) => acc + Number(curr.PresupuestoAsignado || 0), 0);
+        const presupuestoEjecutadoArea = asignaciones.reduce((acc, curr) => acc + Number(curr.PresupuestoEjecutado || 0), 0);
+
+        // Extraemos valores únicos de centros de costos y sedes involucradas en esta área para la vista general
+        const codigosCC = Array.from(new Set(asignaciones.map(a => a.CatCentroCostos?.Codigo).filter(Boolean)));
+        const nombresSites = Array.from(new Set(asignaciones.map(a => a.CatSites?.Descripcion).filter(Boolean)));
+
+        return {
+            idArea: area.idArea,
+            descripcion: area.Descripcion,
+            activo: area.Activo,
+            totalSitesVinculados: nombresSites.length,
+            presupuestoAsignado: presupuestoAsignadoArea,
+            presupuestoEjecutado: presupuestoEjecutadoArea,
+            codigoCentroCostos: codigosCC.length > 0 ? codigosCC.join(', ') : '—',
+            siteDescripcion: nombresSites.length > 0 ? nombresSites.join(', ') : 'Sin Sedes',
+        };
+    }
+
+    async findAll(user: ActiveUserDto, companyId: number, page: number, query: string, limit: number) {
+        const skip = (page - 1) * limit;
+
+        // Filtramos las áreas del tenant y empresa actual
+        const whereCondition = this.buildAreasWhere(user, companyId, query);
+
         // Consultas en paralelo optimizadas con aislamiento por tenant y empresa
         const [areas, total, totalActivas] = await Promise.all([
             this.prismaService.catAreas.findMany({
                 where: whereCondition,
-                include: {
-                    RelAreasUbicaciones: {
-                        where: {
-                            OR: [
-                                { CatSites: { idEmpresa: companyId, idTenant: user.idTenant } },
-                                { CatCentroCostos: { idEmpresa: companyId } }
-                            ]
-                        },
-                        include: {
-                            CatCentroCostos: true,
-                            CatSites: true,
-                        }
-                    }
-                },
+                include: this.buildAreasInclude(user, companyId),
                 skip: skip,
                 take: limit,
                 orderBy: { idArea: 'desc' },
@@ -89,30 +140,13 @@ export class AreasService {
         let globalEjecutado = 0;
 
         const flattenedAreas = areas.map((area) => {
-            const asignaciones = area.RelAreasUbicaciones || [];
-
-            // Sumamos los presupuestos específicos de esta área a lo largo de todas sus sedes vinculadas
-            const presupuestoAsignadoArea = asignaciones.reduce((acc, curr) => acc + Number(curr.PresupuestoAsignado || 0), 0);
-            const presupuestoEjecutadoArea = asignaciones.reduce((acc, curr) => acc + Number(curr.PresupuestoEjecutado || 0), 0);
+            const consolidated = this.consolidateArea(area);
 
             // Acumulamos para las métricas globales del summary del pie de página de la tabla
-            globalAsignado += presupuestoAsignadoArea;
-            globalEjecutado += presupuestoEjecutadoArea;
+            globalAsignado += consolidated.presupuestoAsignado;
+            globalEjecutado += consolidated.presupuestoEjecutado;
 
-            // Extraemos valores únicos de centros de costos y sedes involucradas en esta área para la vista general
-            const codigosCC = Array.from(new Set(asignaciones.map(a => a.CatCentroCostos?.Codigo).filter(Boolean)));
-            const nombresSites = Array.from(new Set(asignaciones.map(a => a.CatSites?.Descripcion).filter(Boolean)));
-
-            return {
-                idArea: area.idArea,
-                descripcion: area.Descripcion,
-                activo: area.Activo,
-                totalSitesVinculados: nombresSites.length,
-                presupuestoAsignado: presupuestoAsignadoArea,
-                presupuestoEjecutado: presupuestoEjecutadoArea,
-                codigoCentroCostos: codigosCC.length > 0 ? codigosCC.join(', ') : '—',
-                siteDescripcion: nombresSites.length > 0 ? nombresSites.join(', ') : 'Sin Sedes',
-            };
+            return consolidated;
         });
 
         return {
@@ -127,6 +161,49 @@ export class AreasService {
             }
         };
     }
+
+    // Exporta a Excel TODAS las áreas que cumplan los filtros (sin paginar), igual que la tabla
+    async exportAreas(
+        user: ActiveUserDto,
+        companyId: number,
+        filters: { search?: string; activo?: string },
+    ): Promise<Buffer> {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+
+        const where = this.buildAreasWhere(user, companyId, filters.search?.trim());
+
+        // Estatus: 'true' = activas, 'false' = inactivas, vacío = todas
+        if (filters.activo === 'true') where.Activo = true;
+        if (filters.activo === 'false') where.Activo = false;
+
+        const areas = await this.prismaService.catAreas.findMany({
+            where,
+            include: this.buildAreasInclude(user, companyId),
+            orderBy: { idArea: 'desc' }, // Mismo orden que la tabla
+        });
+
+        const rows = areas.map((area) => this.consolidateArea(area));
+        type AreaExport = (typeof rows)[number];
+
+        const columns: ExcelColumn<AreaExport>[] = [
+            { header: 'Área Operativa', key: 'descripcion', width: 32 },
+            { header: 'Sedes Totales', key: 'totalSitesVinculados', width: 14 },
+            { header: 'Detalle de Ubicaciones', key: 'siteDescripcion', width: 40 },
+            { header: 'Centro de Costos', key: 'codigoCentroCostos', width: 28 },
+            { header: 'Presupuesto Asignado', key: 'presupuestoAsignado', width: 20 },
+            { header: 'Presupuesto Ejecutado', key: 'presupuestoEjecutado', width: 20 },
+            { header: 'Estatus', key: 'activo', width: 12, value: (a) => (a.activo ? 'Activa' : 'Inactiva') },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Áreas',
+            columns,
+            rows,
+        });
+    }
+
 
     async findOne(user: ActiveUserDto, companyId: number, id: number) {
         // 1. Buscamos el área y traemos TODAS sus sedes y centros de costos vinculados de esta empresa y tenant

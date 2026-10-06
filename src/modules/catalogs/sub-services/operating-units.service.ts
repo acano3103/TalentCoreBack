@@ -9,26 +9,29 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { CreateOperatingUnitDto } from "../dto/create-operating-unit.dto";
 import { UpdateOperatingUnitDto } from "../dto/update-operating-unit.dto";
 import { ActiveUserDto } from "src/modules/auth/dto/active-user.dto";
+import { ExcelColumn, ExcelExportService } from "src/common/services/excel-export.service";
 
 @Injectable()
 export class OperatingUnitsService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(private readonly prisma: PrismaService,
+    private readonly excelExportService: ExcelExportService,
+    ) { }
 
     private readonly logger = new Logger(OperatingUnitsService.name);
 
-    async findAll(idEmpresa: number, page: number, limit: number, query: string = "", user: ActiveUserDto) {   
-    if (!user.idTenant) {
-        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
-    }
-
-        const pageNumber = Math.max(1, Number(page) || 1);
-        const limitNumber = Math.max(1, Number(limit) || 10);
-        const skip = (pageNumber - 1) * limitNumber;
+        /**
+     * Where común de unidades operativas (empresa, tenant y búsqueda).
+     * Lo usan la tabla paginada y la exportación, para que ambas filtren igual.
+     */
+    private buildOperatingUnitsWhere(
+        idEmpresa: number,
+        user: ActiveUserDto,
+        query: string = "",
+    ): Prisma.CatUnidadesOperativasWhereInput {
         const search = query.trim();
-
-        const whereCondition: Prisma.CatUnidadesOperativasWhereInput = {
+        return {
             idEmpresa: Number(idEmpresa),
-            idTenant: user.idTenant,
+            idTenant: user.idTenant as number,
             ...(search
                 ? {
                     OR: [
@@ -39,6 +42,18 @@ export class OperatingUnitsService {
                 }
                 : {}),
         };
+    }
+
+    async findAll(idEmpresa: number, page: number, limit: number, query: string = "", user: ActiveUserDto) {   
+    if (!user.idTenant) {
+        throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+    }
+
+        const pageNumber = Math.max(1, Number(page) || 1);
+        const limitNumber = Math.max(1, Number(limit) || 10);
+        const skip = (pageNumber - 1) * limitNumber;
+
+        const whereCondition = this.buildOperatingUnitsWhere(idEmpresa, user, query);
 
         try {
             const [records, total] = await this.prisma.$transaction([
@@ -90,6 +105,72 @@ export class OperatingUnitsService {
             throw error;
         }
     }
+
+        // Exporta a Excel TODAS las unidades operativas que cumplan los filtros (sin paginar)
+    async exportOperatingUnits(
+        idEmpresa: number,
+        user: ActiveUserDto,
+        filters: { search?: string; activo?: string; fechaDesde?: string; fechaHasta?: string },
+    ): Promise<Buffer> {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+
+        const where = this.buildOperatingUnitsWhere(idEmpresa, user, filters.search ?? "");
+
+        // Estatus: 'true' = activas, 'false' = inactivas, vacío = todas
+        if (filters.activo === "true") where.Activo = true;
+        if (filters.activo === "false") where.Activo = false;
+
+        // Rango de fechas de registro (días completos)
+        const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+        if (esFecha(filters.fechaDesde) || esFecha(filters.fechaHasta)) {
+            where.FechaRegistro = {
+                ...(esFecha(filters.fechaDesde) && { gte: new Date(`${filters.fechaDesde}T00:00:00.000Z`) }),
+                ...(esFecha(filters.fechaHasta) && { lte: new Date(`${filters.fechaHasta}T23:59:59.999Z`) }),
+            };
+        }
+
+        const records = await this.prisma.catUnidadesOperativas.findMany({
+            where,
+            orderBy: { idUnidadOperativa: "desc" }, // Mismo orden que la tabla
+            include: {
+                _count: {
+                    select: {
+                        CatSites: { where: { Activo: true } }, // Mismo conteo que la tabla
+                    },
+                },
+            },
+        });
+
+        type UnidadExport = (typeof records)[number];
+
+        const formatFecha = (fecha: Date | null) => {
+            if (!fecha) return "";
+            const [anio, mes, dia] = fecha.toISOString().split("T")[0].split("-");
+            return `${dia}/${mes}/${anio}`;
+        };
+
+        const columns: ExcelColumn<UnidadExport>[] = [
+            { header: "Código", key: "codigo", width: 18, value: (u) => u.Codigo },
+            { header: "Nombre", key: "nombre", width: 40, value: (u) => u.Nombre },
+            { header: "Descripción", key: "descripcion", width: 45, value: (u) => u.Descripcion },
+            { header: "Tipo", key: "tipo", width: 12, value: (u) => (u.EsExterna ? "Externa" : "Interna") },
+            { header: "Responsable", key: "responsable", width: 28, value: (u) => u.ResponsableContacto },
+            { header: "Teléfono", key: "telefono", width: 16, value: (u) => u.TelefonoContacto },
+            { header: "Correo", key: "correo", width: 30, value: (u) => u.CorreoContacto },
+            { header: "Ubicaciones Activas", key: "totalSites", width: 18, value: (u) => u._count?.CatSites ?? 0 },
+            { header: "Estatus", key: "estatus", width: 12, value: (u) => (u.Activo ? "Activa" : "Inactiva") },
+            { header: "Fecha de Registro", key: "fechaRegistro", width: 18, value: (u) => formatFecha(u.FechaRegistro) },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: "Unidades Operativas",
+            columns,
+            rows: records,
+        });
+    }
+
 
     async findById(idEmpresa: number, idUnidadOperativa: number, user: ActiveUserDto) {   
     if (!user.idTenant) {

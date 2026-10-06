@@ -3,17 +3,25 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCostCenterDto } from './dto/create-cost-center.dto';
 import { UpdateCostCenterDto } from './dto/update-cost-center.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { Prisma } from 'generated/prisma/client';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
+
 
 @Injectable()
 export class CostCenterService {
     private readonly logger = new Logger(CostCenterService.name);
 
-    constructor(private prismaService: PrismaService) { }
+    constructor(
+        private prismaService: PrismaService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
 
-    async findAll(user: ActiveUserDto, companyId: number, page: number, query: string, limit: number) {
-        const skip = (page - 1) * limit;
-
-        const whereCondition: any = {
+    /**
+     * Where común de centros de costos (tenant, empresa y búsqueda).
+     * Lo usan la tabla paginada, las tarjetas y la exportación, para que filtren igual.
+     */
+    private buildCostCentersWhere(user: ActiveUserDto, companyId: number, query?: string): Prisma.CatCentroCostosWhereInput {
+        const whereCondition: Prisma.CatCentroCostosWhereInput = {
             idTenant: user.idTenant,
             idEmpresa: companyId,
         };
@@ -24,6 +32,14 @@ export class CostCenterService {
                 { Codigo: { contains: query } },
             ];
         }
+
+        return whereCondition;
+    }
+
+    async findAll(user: ActiveUserDto, companyId: number, page: number, query: string, limit: number) {
+        const skip = (page - 1) * limit;
+
+        const whereCondition = this.buildCostCentersWhere(user, companyId, query);
 
         const [costCenters, total, metrics] = await Promise.all([
             this.prismaService.catCentroCostos.findMany({
@@ -83,6 +99,70 @@ export class CostCenterService {
                 totalDisponibleGlobal: totalAnualGlobal - totalEjecutadoGlobal,
             }
         };
+    }
+
+    // Exporta a Excel TODOS los centros de costos que cumplan los filtros (sin paginar)
+    async exportCostCenters(
+        user: ActiveUserDto,
+        companyId: number,
+        filters: { search?: string; activo?: string; fechaDesde?: string; fechaHasta?: string },
+    ): Promise<Buffer> {
+        if (!user.idTenant) {
+            throw new BadRequestException('El usuario no tiene un tenant asignado.');
+        }
+
+        const where = this.buildCostCentersWhere(user, companyId, filters.search?.trim());
+
+        // Estatus: 'true' = activos, 'false' = inactivos, vacío = todos
+        if (filters.activo === 'true') where.Activo = true;
+        if (filters.activo === 'false') where.Activo = false;
+
+        // Rango de fechas de creación (días completos)
+        const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+        if (esFecha(filters.fechaDesde) || esFecha(filters.fechaHasta)) {
+            where.FechaCreacion = {
+                ...(esFecha(filters.fechaDesde) && { gte: new Date(`${filters.fechaDesde}T00:00:00.000Z`) }),
+                ...(esFecha(filters.fechaHasta) && { lte: new Date(`${filters.fechaHasta}T23:59:59.999Z`) }),
+            };
+        }
+
+        const costCenters = await this.prismaService.catCentroCostos.findMany({
+            where,
+            include: {
+                _count: {
+                    select: { RelAreasUbicaciones: true }, // Mismo conteo que la tabla
+                },
+            },
+            orderBy: { idCentroCostos: 'desc' }, // Mismo orden que la tabla
+        });
+
+        type CentroExport = (typeof costCenters)[number];
+
+        const formatFecha = (fecha: Date | null) => {
+            if (!fecha) return '';
+            const [anio, mes, dia] = fecha.toISOString().split('T')[0].split('-');
+            return `${dia}/${mes}/${anio}`;
+        };
+
+        const columns: ExcelColumn<CentroExport>[] = [
+            { header: 'Código', key: 'codigo', width: 16, value: (c) => c.Codigo },
+            { header: 'Descripción', key: 'descripcion', width: 36, value: (c) => c.Descripcion },
+            { header: 'Presupuesto Anual', key: 'presupuestoAnual', width: 20, value: (c) => Number(c.PresupuestoAnual || 0) },
+            { header: 'Presupuesto Ejecutado', key: 'presupuestoEjecutado', width: 20, value: (c) => Number(c.PresupuestoEjecutado || 0) },
+            {
+                header: 'Balance Disponible', key: 'disponible', width: 20,
+                value: (c) => Number(c.PresupuestoAnual || 0) - Number(c.PresupuestoEjecutado || 0),
+            },
+            { header: 'Total de Áreas', key: 'totalAreas', width: 14, value: (c) => c._count?.RelAreasUbicaciones ?? 0 },
+            { header: 'Estatus', key: 'estatus', width: 12, value: (c) => (c.Activo ? 'Activo' : 'Inactivo') },
+            { header: 'Fecha de Creación', key: 'fechaCreacion', width: 18, value: (c) => formatFecha(c.FechaCreacion) },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Centros de Costos',
+            columns,
+            rows: costCenters,
+        });
     }
 
     async findOne(user: ActiveUserDto, companyId: number, id: number) {

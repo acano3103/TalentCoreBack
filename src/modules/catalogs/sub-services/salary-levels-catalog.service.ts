@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from 'generated/prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateSalaryLevelsCatalogDto } from '../dto/update-salary-levels-catalog.dto';
 import { CreateSalaryLevelsCatalogDto } from '../dto/create-salary-levels-catalog.dto';
@@ -6,12 +8,17 @@ import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 
 @Injectable()
 export class SalaryLevelsCatalogService {
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
 
-    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, limit: number, query: string,) {
-        const skip = (page - 1) * limit;
-
-        const whereCondition: any = {
+        /**
+     * Where común de niveles salariales (tenant, empresa y búsqueda).
+     * Lo usan la tabla paginada y la exportación, para que ambas filtren igual.
+     */
+    private buildSalaryLevelsWhere(activeUser: ActiveUserDto, companyId: number, query?: string): Prisma.CatNivelesSalarioWhereInput {
+        const whereCondition: Prisma.CatNivelesSalarioWhereInput = {
             idTenant: activeUser.idTenant,
             IdEmpresa: companyId,
         };
@@ -22,6 +29,15 @@ export class SalaryLevelsCatalogService {
                 { Descripcion: { contains: query } },
             ];
         }
+
+        return whereCondition;
+    }
+
+
+    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, limit: number, query: string,) {
+        const skip = (page - 1) * limit;
+
+        const whereCondition = this.buildSalaryLevelsWhere(activeUser, companyId, query);
 
         const [salaryLevels, total] = await Promise.all([
             this.prismaService.catNivelesSalario.findMany({
@@ -61,6 +77,50 @@ export class SalaryLevelsCatalogService {
             currentPage: page,
             totalPages: Math.ceil(total / limit) || 1,
         };
+    }
+
+        // Exporta a Excel TODOS los niveles salariales que cumplan los filtros (sin paginar)
+    async exportSalaryLevels(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        filters: { search?: string; activo?: string },
+    ): Promise<Buffer> {
+        if (!activeUser.idTenant) {
+            throw new BadRequestException('El usuario no tiene un tenant asignado.');
+        }
+
+        const where = this.buildSalaryLevelsWhere(activeUser, companyId, filters.search?.trim());
+
+        // Estatus: 'true' = activos, 'false' = inactivos, vacío = todos
+        if (filters.activo === 'true') where.Activo = true;
+        if (filters.activo === 'false') where.Activo = false;
+
+        const salaryLevels = await this.prismaService.catNivelesSalario.findMany({
+            where,
+            include: {
+                _count: {
+                    select: { CatPuestos: true }, // Mismo conteo que la tabla
+                },
+            },
+            orderBy: { IdNivelSalario: 'desc' }, // Mismo orden que la tabla
+        });
+
+        type NivelExport = (typeof salaryLevels)[number];
+
+        const columns: ExcelColumn<NivelExport>[] = [
+            { header: 'Nombre', key: 'nombre', width: 22, value: (n) => n.NombreNivel },
+            { header: 'Descripción', key: 'descripcion', width: 45, value: (n) => n.Descripcion },
+            { header: 'Salario Mínimo', key: 'salarioMinimo', width: 16, value: (n) => (n.SalarioMinimo != null ? Number(n.SalarioMinimo) : '') },
+            { header: 'Salario Máximo', key: 'salarioMaximo', width: 16, value: (n) => (n.SalarioMaximo != null ? Number(n.SalarioMaximo) : '') },
+            { header: 'Total Puestos', key: 'totalPuestos', width: 14, value: (n) => n._count?.CatPuestos ?? 0 },
+            { header: 'Estatus', key: 'estatus', width: 12, value: (n) => (n.Activo ? 'Activo' : 'Inactivo') },
+        ];
+
+        return this.excelExportService.generate({
+            sheetName: 'Niveles Salariales',
+            columns,
+            rows: salaryLevels,
+        });
     }
 
     async findOne(activeUser: ActiveUserDto, companyId: number, id: number) {

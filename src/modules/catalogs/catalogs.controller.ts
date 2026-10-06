@@ -18,6 +18,7 @@ import { ScheduleCatalogsService } from './sub-services/schedule-catalogs.servic
 import { CreateScheduleCatalogDto } from './dto/create-schedule-catalog.dto';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -30,6 +31,7 @@ export class CatalogsController {
     private readonly patronalRecordsService: PatronalRecordsService,
     private readonly operatingUnitsService: OperatingUnitsService,
     private readonly scheduleCatalogsService: ScheduleCatalogsService,
+    private readonly excelExportService: ExcelExportService,
   ) { }
 
   // Obtiene un catálogo genérico
@@ -74,6 +76,22 @@ export class CatalogsController {
   ) {
     const querySearch = search || '';
     return this.salaryLevelsCatalogService.findAll(activeUser, companyId, page, limit, querySearch);
+  }
+
+    // Exporta a Excel todos los niveles salariales que cumplan los filtros (sin paginar)
+  @Get('salary-levels/export')
+  @ApiOperation({ summary: 'Export salary levels to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async exportSalaryLevels(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Res() res: Response,
+    @Query('search') search?: string,
+    @Query('activo') activo?: string,
+  ) {
+    const buffer = await this.salaryLevelsCatalogService.exportSalaryLevels(activeUser, companyId, { search, activo });
+    this.excelExportService.send(res, buffer, 'Niveles_Salariales');
   }
 
   // Obtiene un nivel salarial por id
@@ -167,6 +185,23 @@ export class CatalogsController {
     return this.patronalRecordsService.findAll(companyId, page, limit, querySearch, user);
   }
 
+  // Exporta a Excel todos los registros patronales que cumplan los filtros (sin paginar)
+  @Get('patronal-records/export')
+  @ApiOperation({ summary: 'Export patronal records to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async exportPatronalRecords(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Res() res: Response,
+    @Query('search') search?: string,
+    @Query('activo') activo?: string,
+  ) {
+    const buffer = await this.patronalRecordsService.exportPatronalRecords(companyId, user, { search, activo });
+    this.excelExportService.send(res, buffer, 'Registros_Patronales');
+  }
+
+
   // Obtiene un registro patronal por id
   @Get('patronal-records/:id')
   @ApiOperation({ summary: 'Get all patronal records', description: SWAGGER_AUTH_DESCRIPTION })
@@ -257,6 +292,30 @@ export class CatalogsController {
     const querySearch = search || '';
     return this.operatingUnitsService.findAll(companyId, page, limit, querySearch, user);
   }
+
+  // Exporta a Excel todas las unidades operativas que cumplan los filtros (sin paginar)
+  @Get('operating-units/export')
+  @ApiOperation({ summary: 'Export operating units to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async exportOperatingUnits(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Res() res: Response,
+    @Query('search') search?: string,
+    @Query('activo') activo?: string,
+    @Query('fechaDesde') fechaDesde?: string,
+    @Query('fechaHasta') fechaHasta?: string,
+  ) {
+    const buffer = await this.operatingUnitsService.exportOperatingUnits(companyId, user, {
+      search,
+      activo,
+      fechaDesde,
+      fechaHasta,
+    });
+    this.excelExportService.send(res, buffer, 'Unidades_Operativas');
+  }
+
 
   // Obtiene una unidad operativa por id
   @Get('operating-units/:id')

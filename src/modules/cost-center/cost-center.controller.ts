@@ -1,4 +1,5 @@
-import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { CostCenterService } from './cost-center.service';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
@@ -7,11 +8,15 @@ import { CreateCostCenterDto } from './dto/create-cost-center.dto';
 import { UpdateCostCenterDto } from './dto/update-cost-center.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/cost-centers')
 export class CostCenterController {
-    constructor(private readonly costCenterService: CostCenterService) { }
+    constructor(
+        private readonly costCenterService: CostCenterService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
 
     @Get()
     @ApiBearerAuth()
@@ -30,6 +35,29 @@ export class CostCenterController {
         return this.costCenterService.findAll(user, companyId, page, querySearch, limit);
     }
 
+    // Exporta a Excel todos los centros de costos que cumplan los filtros (sin paginar)
+    @Get('export')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Export cost centers to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async exportCostCenters(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Res() res: Response,
+        @Query('search') search?: string,
+        @Query('activo') activo?: string,
+        @Query('fechaDesde') fechaDesde?: string,
+        @Query('fechaHasta') fechaHasta?: string,
+    ) {
+        const buffer = await this.costCenterService.exportCostCenters(user, companyId, {
+            search,
+            activo,
+            fechaDesde,
+            fechaHasta,
+        });
+        this.excelExportService.send(res, buffer, 'Centros_de_Costos');
+    }
     @Get('/:costCenterId')
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get one cost center', description: SWAGGER_AUTH_DESCRIPTION })

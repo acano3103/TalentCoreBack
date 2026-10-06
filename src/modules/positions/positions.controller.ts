@@ -11,14 +11,17 @@ import { CreatePositionRequestDto } from './dto/create-position-request.dto';
 import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 
 @ApiTags('Positions')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @Controller('companies/:companyId/positions')
 export class PositionsController {
-    constructor(private readonly service: PositionsService) { }
-
+        constructor(
+        private readonly service: PositionsService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
     // ==========================================
     // ENDPOINTS: Subservicio de solicitudes de puesto
     // ==========================================
@@ -40,6 +43,10 @@ export class PositionsController {
     ) {
         return this.service.findAllRequests(companyId, activeUser, page, limit, filterByUser, estatusId, search);
     }
+
+
+
+    
 
     // Obtiene el catalogo de estatus de solicitudes
     @Get('requests/status')
@@ -119,6 +126,39 @@ export class PositionsController {
         return this.service.findAll(activeUser, companyId, page, querySearch, limit, aprobada);
     }
 
+
+
+
+
+
+    // Exporta a Excel todos los puestos que cumplan los filtros (sin paginar)
+    @Get('export')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Export positions to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async exportPositions(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Res() res: Response,
+        @Query('aprobada', new DefaultValuePipe(1), ParseIntPipe) aprobada: number,
+        @Query('search') search?: string,
+        @Query('activo') activo?: string,
+        @Query('fechaDesde') fechaDesde?: string,
+        @Query('fechaHasta') fechaHasta?: string,
+        @Query('pendiente') pendiente?: string,
+    ) {
+        const buffer = await this.service.exportPositions(activeUser, companyId, aprobada, {
+            search,
+            activo,
+            fechaDesde,
+            fechaHasta,
+            pendiente,
+        });
+        this.excelExportService.send(res, buffer, 'Catalogo_de_Puestos');
+    }
+
+    
     // Obtiene los catálogos necesarios para la creación de un puesto
     @Get('/catalogs')
     @ApiBearerAuth()

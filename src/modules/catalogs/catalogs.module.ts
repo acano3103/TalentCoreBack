@@ -8,9 +8,10 @@ import { PatronalRecordsService } from './sub-services/patronal-records.service'
 import { OperatingUnitsService } from './sub-services/operating-units.service';
 import { PublicCatalogsService } from './public-catalogs.service';
 import { ScheduleCatalogsService } from './sub-services/schedule-catalogs.service';
+import { ExcelExportModule } from 'src/common/services/excel-export.module';
 
 @Module({
-  imports: [],
+    imports: [ExcelExportModule],
   controllers: [CatalogsController, PublicCatalogsController],
   providers: [
     CatalogsService,

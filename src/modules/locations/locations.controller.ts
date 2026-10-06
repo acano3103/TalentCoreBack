@@ -9,12 +9,16 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/locations')
 export class LocationsController {
-    constructor(private readonly locationsService: LocationsService) { }
+   constructor(
+        private readonly locationsService: LocationsService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
 
     // Obtiene todas las ubicaciones de una empresa con soporte para búsqueda y filtrado por unidad operativa
     @Get()
@@ -34,6 +38,34 @@ export class LocationsController {
         const unitId = operatingUnitId ? Number(operatingUnitId) : null;
         return this.locationsService.findAll(companyId, page, querySearch, limit, user, unitId);
     }
+
+        // Exporta a Excel todas las ubicaciones que cumplan los filtros (sin paginar)
+    @Get('export')
+    @ApiOperation({ summary: 'Export locations to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async exportLocations(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Res() res: Response,
+        @Query('search') search?: string,
+        @Query('operatingUnitId') operatingUnitId?: string,
+        @Query('activo') activo?: string,
+        @Query('fechaDesde') fechaDesde?: string,
+        @Query('fechaHasta') fechaHasta?: string,
+    ) {
+        const buffer = await this.locationsService.exportLocations(companyId, user, {
+            search,
+            operatingUnitId,
+            activo,
+            fechaDesde,
+            fechaHasta,
+        });
+        this.excelExportService.send(res, buffer, 'Ubicaciones');
+    }
+
+
+
 
     // Obtiene una ubicación por ID
     @Get(':locationId')
