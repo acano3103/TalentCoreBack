@@ -6,9 +6,10 @@ import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { UpdateHeadcountDto } from './dto/update-headcount.dto';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { CompanyTenantGuard } from '../auth/guards/company-tenant.guard';
 
 @ApiTags('Headcount')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyTenantGuard)
 @ApiBearerAuth()
 @Controller('companies/:companyId/headcount')
 export class HeadcountController {
