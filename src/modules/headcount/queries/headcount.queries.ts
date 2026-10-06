@@ -13,13 +13,13 @@ export class HeadcountQueries {
         locationId?: number
     ): Promise<any[]> {
 
-        // 2. Usamos Prisma.raw() para que el ORM entienda que es un fragmento de código SQL nativo literal
-        const siteFilter = locationId
-            ? Prisma.raw(`AND rau.idSite = ${Number(locationId)}`)
-            : Prisma.empty; // Helper nativo para no meter nada vacío que rompa
+    // Prisma.sql parametriza los valores (los escapa); nunca concatenar texto del usuario con Prisma.raw
+ const siteFilter = locationId
+            ? Prisma.sql`AND rau.idSite = ${Number(locationId)}`
+            : Prisma.empty;
 
         const searchFilter = search
-            ? Prisma.raw(`AND (a.Descripcion LIKE '%${search}%' OR s.Descripcion LIKE '%${search}%')`)
+            ? Prisma.sql`AND (a.Descripcion LIKE ${`%${search}%`} OR s.Descripcion LIKE ${`%${search}%`})`
             : Prisma.empty;
 
         return prisma.$queryRaw<any[]>`
@@ -63,8 +63,8 @@ export class HeadcountQueries {
         locationId?: number
     ): Promise<number> {
         // Hacemos exactamente lo mismo aquí para blindar el conteo
-        const siteFilter = locationId ? Prisma.raw(`AND rau.idSite = ${Number(locationId)}`) : Prisma.empty;
-        const searchFilter = search ? Prisma.raw(`AND (a.Descripcion LIKE '%${search}%' OR s.Descripcion LIKE '%${search}%')`) : Prisma.empty;
+        const siteFilter = locationId ? Prisma.sql`AND rau.idSite = ${Number(locationId)}` : Prisma.empty;
+        const searchFilter = search ? Prisma.sql`AND (a.Descripcion LIKE ${`%${search}%`} OR s.Descripcion LIKE ${`%${search}%`})` : Prisma.empty;
 
         const result = await prisma.$queryRaw<[{ total: number }]>`
           SELECT COUNT(*) AS total
@@ -105,8 +105,8 @@ export class HeadcountQueries {
         search: string,
         locationId?: number
     ): Promise<{ totalAutorizado: number }> {
-        const siteFilter = locationId ? Prisma.raw(`AND rau.idSite = ${Number(locationId)}`) : Prisma.empty;
-        const searchFilter = search ? Prisma.raw(`AND (a.Descripcion LIKE '%${search}%' OR s.Descripcion LIKE '%${search}%')`) : Prisma.empty;
+        const siteFilter = locationId ? Prisma.sql`AND rau.idSite = ${Number(locationId)}` : Prisma.empty;
+        const searchFilter = search ? Prisma.sql`AND (a.Descripcion LIKE ${`%${search}%`} OR s.Descripcion LIKE ${`%${search}%`})` : Prisma.empty;
 
         const result = await prisma.$queryRaw<[{ totalAutorizado: string | number }]>`
       SELECT 
