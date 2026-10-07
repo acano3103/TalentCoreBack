@@ -50,6 +50,22 @@ export class AttendanceReportsController {
     this.excelExportService.send(res, buffer, 'Reporte_Retardos');
   }
 
+  // Genera y descarga el archivo Excel del reporte de faltas
+  @Get('absences/export-excel')
+  @ApiOperation({ summary: 'Exportar faltas a Excel (.xlsx)', description: 'Genera y descarga el archivo Excel con todas las faltas que cumplen los filtros indicados.', })
+  @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
+  @ApiResponse({ status: 200, description: 'Archivo binario Excel generado exitosamente.', })
+  @ApiResponse({ status: 500, description: 'Error al generar el archivo Excel.' })
+  async exportAbsences(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query() filters: DailyAttendanceReportFilterDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.attendanceReportsService.exportAbsencesExcel(user, companyId, filters);
+    this.excelExportService.send(res, buffer, 'Reporte_Faltas');
+  }
+
   // Genera y descarga el archivo Excel del reporte de horas
   @Get('work-hours/export-excel')
   @ApiOperation({ summary: 'Exportar horas trabajadas a Excel (.xlsx)', description: 'Genera y descarga el archivo Excel con todas las horas trabajadas que cumplen los filtros indicados.', })

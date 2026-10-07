@@ -5,7 +5,7 @@ import { DailyAttendanceReportFilterDto } from './dto/daily-attendance-report.dt
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 import { Prisma } from 'generated/prisma/client';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
-import { EvaluacionEntrada, FilaReporteHorasSemanales, ToleranciaConfig } from './interfaces/attendance-report.interface';
+import { EvaluacionEntrada, FilaReporteFaltas, FilaReporteHorasSemanales, ToleranciaConfig } from './interfaces/attendance-report.interface';
 import { LegalWorkdayService } from 'src/modules/legal-workday/legal-workday.service';
 
 @Injectable()
@@ -375,71 +375,200 @@ export class AttendanceReportsService {
     });
   }
 
-  // Genera el Excel de Reporte de Horas Trabajadas utilizando ExcelExportService
-  async exportWorkHoursExcel(
+  /**
+   * Genera el archivo Excel de faltas e inasistencias
+   */
+  async exportAbsencesExcel(
     user: ActiveUserDto,
     companyId: number,
     filters: DailyAttendanceReportFilterDto,
   ): Promise<Buffer> {
-    // 1. Obtener empleados filtrados
+    // 1. Obtener empleados que cumplan con los filtros de búsqueda
     const employees = await this.getFilteredEmployees(companyId, filters);
     if (!employees || employees.length === 0) {
-      return this.generateWorkHoursWorkbook([], 'Reporte_Horas');
+      return this.generateAbsencesWorkbook([]);
     }
 
     const employeeIds = employees.map((e) => e.idEmpleado);
     const empMap = new Map(employees.map((e) => [e.idEmpleado, e]));
 
-    // 2. Obtener configuraciones dinámicas
+    // 2. Resolver filtros de fecha
+    const rawFrom = (filters as any)?.dateFrom || (filters as any)?.fechaInicio;
+    const rawTo = (filters as any)?.dateTo || (filters as any)?.fechaFin;
+    const esFechaValida = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+
+    const jornadaWhere: Prisma.JornadasEmpleadoWhereInput = {
+      idEmpresa: companyId,
+      idEmpleado: { in: employeeIds },
+      // Consideramos FALTA e INCOMPLETA (omisión de salida)
+      estatusJornada: { in: ['FALTA', 'INCOMPLETA'] },
+    };
+
+    if (esFechaValida(rawFrom) || esFechaValida(rawTo)) {
+      jornadaWhere.fecha = {
+        ...(esFechaValida(rawFrom) && { gte: new Date(`${rawFrom}T00:00:00.000Z`) }),
+        ...(esFechaValida(rawTo) && { lte: new Date(`${rawTo}T23:59:59.999Z`) }),
+      };
+    }
+
+    // 3. Consultar jornadas catalogadas como falta o incompletas
+    const jornadasFalta = await this.prisma.jornadasEmpleado.findMany({
+      where: jornadaWhere,
+      orderBy: [{ fecha: 'asc' }, { idEmpleado: 'asc' }],
+    });
+
+    // 4. Mapear filas para el reporte
+    const filas: FilaReporteFaltas[] = jornadasFalta.map((j) => {
+      const emp = empMap.get(j.idEmpleado);
+
+      // Clasificación del tipo de falta
+      let tipoFalta = 'FALTA_SIN_REGISTRO';
+      if (j.estatusJornada === 'INCOMPLETA') {
+        tipoFalta = 'OMISION_DE_SALIDA';
+      }
+
+      return {
+        fecha: toDateStr(j.fecha),
+        diaSemana: toDiaSemana(j.fecha),
+        numeroEmpleado: emp?.numeroEmpleado || '—',
+        nombreEmpleado: emp?.nombreCompleto || `${emp?.nombre || ''} ${emp?.primerApellido || ''}`.trim() || '—',
+        area: emp?.areaDescripcion || 'SIN ÁREA',
+        puesto: emp?.nombrePuesto || 'SIN PUESTO',
+        jefeInmediato: emp?.jefeInmediatoNombre || '—',
+        ubicacion: emp?.ubicacionDescripcion || 'SIN UBICACIÓN',
+        estatusJornada: j.estatusJornada,
+        tipoFalta,
+        horaEntradaReal: j.horaEntradaReal ? toTimeRealStr(j.horaEntradaReal) : '',
+        minutosTrabajados: j.minutosTrabajados ?? 0,
+        // Espacios reservados para el futuro módulo de incidencias
+        justificada: '',
+        idTipoIncidencia: '',
+        tipoIncidencia: '',
+        folioIncidencia: '',
+        revisada: j.revisada ? 1 : 0,
+        idJornada: j.idJornada,
+      };
+    });
+
+    return this.generateAbsencesWorkbook(filas);
+  }
+
+  /**
+   * Genera el libro Excel con el layout requerido
+   */
+  private async generateAbsencesWorkbook(rows: FilaReporteFaltas[]): Promise<Buffer> {
+    const columns: ExcelColumn<FilaReporteFaltas>[] = [
+      col('fecha', 14, (r) => r.fecha),
+      col('diaSemana', 14, (r) => r.diaSemana),
+      col('numeroEmpleado', 18, (r) => r.numeroEmpleado),
+      col('nombreEmpleado', 32, (r) => r.nombreEmpleado),
+      col('area', 18, (r) => r.area),
+      col('puesto', 24, (r) => r.puesto),
+      col('jefeInmediato', 26, (r) => r.jefeInmediato),
+      col('ubicacion', 28, (r) => r.ubicacion),
+      col('estatusJornada', 16, (r) => r.estatusJornada),
+      col('tipoFalta', 24, (r) => r.tipoFalta),
+      col('horaEntradaReal', 18, (r) => r.horaEntradaReal),
+      col('minutosTrabajados', 18, (r) => r.minutosTrabajados),
+      col('justificada', 14, (r) => r.justificada),
+      col('idTipoIncidencia', 18, (r) => r.idTipoIncidencia),
+      col('tipoIncidencia', 20, (r) => r.tipoIncidencia),
+      col('folioIncidencia', 18, (r) => r.folioIncidencia),
+      col('revisada', 12, (r) => r.revisada),
+      col('idJornada', 14, (r) => r.idJornada),
+    ];
+
+    return this.excelExportService.generate({
+      sheetName: 'Faltas',
+      columns,
+      rows,
+    });
+  }
+
+  // Genera el Excel de Reporte de Horas Trabajadas utilizando ExcelExportService
+  async exportWorkHoursExcel(
+    user: ActiveUserDto,
+    companyId: number,
+    filters: any,
+  ): Promise<Buffer> {
+    // 1. Resolver el rango semanal (Lunes a Domingo)
+    // Se contemplan ambos nombres posibles del DTO (dateFrom/dateTo o fechaInicio/fechaFin)
+    const rawFrom = filters?.dateFrom || filters?.fechaInicio;
+    const rawTo = filters?.dateTo || filters?.fechaFin;
+
+    const esFechaValida = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+
+    let fechaInicioDate: Date;
+    let fechaFinDate: Date;
+
+    if (esFechaValida(rawFrom) && esFechaValida(rawTo)) {
+      fechaInicioDate = new Date(`${rawFrom}T00:00:00.000Z`);
+      fechaFinDate = new Date(`${rawTo}T23:59:59.999Z`);
+    } else {
+      // Si no vienen fechas en el filtro, delimitamos a la semana en curso (Lunes a Domingo)
+      const ahora = new Date();
+      const diaSemana = ahora.getDay(); // 0: Dom, 1: Lun, ...
+      const diffLunes = ahora.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+
+      fechaInicioDate = new Date(ahora.getFullYear(), ahora.getMonth(), diffLunes, 0, 0, 0);
+      fechaFinDate = new Date(ahora.getFullYear(), ahora.getMonth(), diffLunes + 6, 23, 59, 59, 999);
+    }
+
+    const semanaISO = getISOWeekStr(fechaInicioDate);
+    const fechaInicioStr = toDateStr(fechaInicioDate);
+    const fechaFinStr = toDateStr(fechaFinDate);
+    const targetYear = fechaInicioDate.getFullYear();
+
+    // 2. Obtener empleados activos según filtros
+    const employees = await this.getFilteredEmployees(companyId, filters);
+    if (!employees || employees.length === 0) {
+      return this.generateWorkHoursWorkbook([], `Horas_${semanaISO}`);
+    }
+
+    const employeeIds = employees.map((e) => e.idEmpleado);
+
+    // 3. Obtener configuraciones dinámicas (Asistencia y Legal)
     const configAsistencia = await this.attendanceConfigService.getConfiguracionAsistencia(
       user.idTenant,
       companyId,
     );
     const legalWorkdayStatus = await this.legalWorkdayService.getStatus(user, companyId);
 
-    // 3. Resolver año para la configuración legal
-    const targetYear = filters.dateFrom
-      ? new Date(filters.dateFrom).getFullYear()
-      : new Date().getFullYear();
-
+    // Resolver configuración legal del año (o fallback a default)
     const legalConfig =
-      legalWorkdayStatus.config.find((c: any) => c.anio === targetYear) ??
-      legalWorkdayStatus.config[0];
+      legalWorkdayStatus.config?.find((c: any) => c.anio === targetYear) ??
+      legalWorkdayStatus.config?.[0] ?? {
+        horasSemana: 48,
+        extraSemanalMax: 9,
+        factorDentro: 2,
+        factorFuera: 3,
+        anio: targetYear,
+      };
 
-    // Valores legales tomados de la configuración
-    const limiteLegalHoras = Number(legalConfig.horasSemana);
+    const limiteLegalHoras = Number(legalConfig.horasSemana) || 48;
     const limiteLegalMinutos = limiteLegalHoras * 60;
-    const topeExtraHoras = Number(legalConfig.extraSemanalMax);
+    const topeExtraHoras = Number(legalConfig.extraSemanalMax) || 9;
     const topeExtraMinutos = topeExtraHoras * 60;
-    const factorPagoDentro = Number(legalConfig.factorDentro);
-    const factorPagoSobre = Number(legalConfig.factorFuera);
+    const factorPagoDentro = Number(legalConfig.factorDentro) || 2;
+    const factorPagoSobre = Number(legalConfig.factorFuera) || 3;
 
-    // Parámetros de tolerancia de asistencia
-    const acumulacionRetardosParaFalta =
+    const acumRetardosParaFalta =
       configAsistencia?.tolerancia?.acumulacionRetardosParaFalta ?? 3;
 
-    // 4. Consultar Jornadas
-    // NOTA: NO filtramos horaEntradaReal: { not: null } para poder computar
-    // días de descanso y faltas reales en la semana.
-    const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
-    const jornadaWhere: Prisma.JornadasEmpleadoWhereInput = {
-      idEmpresa: companyId,
-      idEmpleado: { in: employeeIds },
-    };
-
-    if (esFecha(filters.dateFrom) || esFecha(filters.dateTo)) {
-      jornadaWhere.fecha = {
-        ...(esFecha(filters.dateFrom) && { gte: new Date(`${filters.dateFrom}T00:00:00.000Z`) }),
-        ...(esFecha(filters.dateTo) && { lte: new Date(`${filters.dateTo}T23:59:59.999Z`) }),
-      };
-    }
-
+    // 4. Consultar Jornadas estrictamente dentro del rango de la semana
     const jornadas = await this.prisma.jornadasEmpleado.findMany({
-      where: jornadaWhere,
+      where: {
+        idEmpresa: companyId,
+        idEmpleado: { in: employeeIds },
+        fecha: {
+          gte: fechaInicioDate,
+          lte: fechaFinDate,
+        },
+      },
       orderBy: [{ fecha: 'asc' }, { idEmpleado: 'asc' }],
     });
 
-    // 5. Agrupar jornadas por Empleado
+    // Agrupar jornadas por idEmpleado
     const jornadasPorEmpleado = new Map<number, typeof jornadas>();
     for (const j of jornadas) {
       if (!jornadasPorEmpleado.has(j.idEmpleado)) {
@@ -448,35 +577,34 @@ export class AttendanceReportsService {
       jornadasPorEmpleado.get(j.idEmpleado)!.push(j);
     }
 
-    // Resolver metadata de semana (Semana ISO y rango de fechas)
-    const refDate = filters.dateFrom ? new Date(filters.dateFrom) : new Date();
-    const semanaISO = getISOWeekStr(refDate);
-    const { inicioSemanaStr, finSemanaStr } = getRangoSemanaStr(refDate);
-
-    // 6. Construir filas consolidadas por empleado
+    // 5. Construir registros consolidados por empleado
     const filas: FilaReporteHorasSemanales[] = [];
 
     for (const emp of employees) {
-      const jList = jornadasPorEmpleado.get(emp.idEmpleado) || [];
+      const empJornadas = jornadasPorEmpleado.get(emp.idEmpleado) || [];
 
       let totalMinutosTrabajados = 0;
       let totalMinutosRetardo = 0;
-      let diasLaborables = 0;
-      let diasDescanso = 0;
       let faltasDirectas = 0;
       let conteoRetardos = 0;
-      let minutosExtraDobles = 0;
-      let minutosExtraTriples = 0;
+      let minutosExtraDoblesBD = 0;
+      let minutosExtraTriplesBD = 0;
 
-      for (const j of jList) {
+      // Usar Set para asegurar conteo de fechas únicas laboradas y descansadas
+      const fechasLaborablesSet = new Set<string>();
+      const fechasDescansoSet = new Set<string>();
+
+      for (const j of empJornadas) {
+        const fechaKey = toDateStr(j.fecha);
+
         if (j.estatusJornada === 'DESCANSO') {
-          diasDescanso++;
+          fechasDescansoSet.add(fechaKey);
           continue;
         }
 
-        diasLaborables++;
+        fechasLaborablesSet.add(fechaKey);
 
-        // Evaluar retardo con la tolerancia dinámica
+        // Evaluar retardo usando la configuración dinámica
         const evalEntrada = calcularRetardoEntrada(
           j.horaEntradaTeorica,
           j.horaEntradaReal,
@@ -490,36 +618,72 @@ export class AttendanceReportsService {
         if (evalEntrada.esRetardo) {
           conteoRetardos++;
           totalMinutosRetardo += evalEntrada.minutosRetardo;
-        } else if (j.minutosRetardo > 0) {
-          totalMinutosRetardo += j.minutosRetardo;
         }
 
-        totalMinutosTrabajados += j.minutosTrabajados || 0;
-        minutosExtraDobles += j.minutosExtraDobles || 0;
-        minutosExtraTriples += j.minutosExtraTriples || 0;
+        // Si la jornada fue un rebote inválido (ej. checó y salió en menos de 5 min)
+        const duracionMinutos = j.minutosTrabajados ?? 0;
+        if (duracionMinutos > 5) {
+          totalMinutosTrabajados += duracionMinutos;
+        }
+
+        minutosExtraDoblesBD += j.minutosExtraDobles ?? 0;
+        minutosExtraTriplesBD += j.minutosExtraTriples ?? 0;
       }
 
-      // Faltas totales considerando acumulación de retardos por configuración
-      const faltasPorRetardo = Math.floor(conteoRetardos / acumulacionRetardosParaFalta);
+      // Cálculo de faltas acumuladas por retardo
+      const faltasPorRetardo = Math.floor(conteoRetardos / acumRetardosParaFalta);
       const faltasTotales = faltasDirectas + faltasPorRetardo;
 
-      // Minutos ordinarios vs extras
-      const totalMinutosExtra = minutosExtraDobles + minutosExtraTriples;
-      // Los minutos ordinarios corresponden al tiempo dentro de la jornada pactada
-      const minutosOrdinarios = Math.max(0, totalMinutosTrabajados - totalMinutosExtra);
+      const diasLaborables = fechasLaborablesSet.size;
+      // Días de descanso: si están registrados explícitamente se toman,
+      // de lo contrario se calculan restando los laborados a la semana estándar de 7 días
+      const diasDescanso = fechasDescansoSet.size > 0
+        ? fechasDescansoSet.size
+        : Math.max(0, 7 - diasLaborables);
 
-      // Cumplimiento porcentual sobre la jornada legal
+      // 6. CÁLCULO DE HORAS ORDINARIAS Y EXTRAS (LFT)
+      let minutosOrdinarios = 0;
+      let minutosExtra = 0;
+      let minutosExtraDobles = 0;
+      let minutosExtraTriples = 0;
+
+      const tieneExtrasEnBD = (minutosExtraDoblesBD + minutosExtraTriplesBD) > 0;
+
+      if (tieneExtrasEnBD) {
+        // Si el proceso de jornadas ya calculó horas extras diariamente
+        minutosExtraDobles = minutosExtraDoblesBD;
+        minutosExtraTriples = minutosExtraTriplesBD;
+        minutosExtra = minutosExtraDobles + minutosExtraTriples;
+        minutosOrdinarios = Math.max(0, totalMinutosTrabajados - minutosExtra);
+      } else {
+        // Si no vienen calculadas en BD, se calcula por corte semanal:
+        if (totalMinutosTrabajados > limiteLegalMinutos) {
+          minutosOrdinarios = limiteLegalMinutos;
+          const excedenteSemanal = totalMinutosTrabajados - limiteLegalMinutos;
+          minutosExtra = excedenteSemanal;
+
+          // Hasta topeExtraMinutos (9 hrs) son Dobles
+          minutosExtraDobles = Math.min(excedenteSemanal, topeExtraMinutos);
+          // Lo que exceda de las 9 hrs son Triples
+          minutosExtraTriples = Math.max(0, excedenteSemanal - topeExtraMinutos);
+        } else {
+          minutosOrdinarios = totalMinutosTrabajados;
+          minutosExtra = 0;
+        }
+      }
+
+      // Porcentaje de cumplimiento semanal frente a la jornada legal
       const pctSobreLimite = limiteLegalMinutos > 0
         ? Number(((totalMinutosTrabajados / limiteLegalMinutos) * 100).toFixed(1))
         : 0;
 
       filas.push({
         semanaISO,
-        fechaInicio: filters.dateFrom ? toDateStr(filters.dateFrom) : inicioSemanaStr,
-        fechaFin: filters.dateTo ? toDateStr(filters.dateTo) : finSemanaStr,
+        fechaInicio: fechaInicioStr,
+        fechaFin: fechaFinStr,
         numeroEmpleado: emp.numeroEmpleado || '—',
         nombreEmpleado: emp.nombreCompleto || `${emp.nombre || ''} ${emp.primerApellido || ''}`.trim(),
-        area: emp.areaDescripcion || 'SIN ÁREA',
+        area: emp.areaDescripcion || 'OPERACIONES',
         puesto: emp.nombrePuesto || 'SIN PUESTO',
         jefeInmediato: emp.jefeInmediatoNombre || '—',
         ubicacion: emp.ubicacionDescripcion || 'SIN UBICACIÓN',
@@ -530,8 +694,8 @@ export class AttendanceReportsService {
         horasTrabajadas: toHorasStr(totalMinutosTrabajados),
         minutosOrdinarios,
         horasOrdinarias: toHorasStr(minutosOrdinarios),
-        minutosExtra: totalMinutosExtra,
-        horasExtra: toHorasStr(totalMinutosExtra),
+        minutosExtra,
+        horasExtra: toHorasStr(minutosExtra),
         minutosExtraDobles,
         minutosExtraTriples,
         factorPagoDentro,
@@ -541,7 +705,7 @@ export class AttendanceReportsService {
         topeExtraSemana: topeExtraHoras,
         pctSobreLimite,
         excedeLimiteLegal: totalMinutosTrabajados > limiteLegalMinutos ? 'SI' : 'NO',
-        excedeTopeExtra: totalMinutosExtra > topeExtraMinutos ? 'SI' : 'NO',
+        excedeTopeExtra: minutosExtra > topeExtraMinutos ? 'SI' : 'NO',
         anioConfiguracionLegal: legalConfig.anio,
       });
     }
@@ -558,11 +722,11 @@ export class AttendanceReportsService {
       col('fechaInicio', 12, (r) => r.fechaInicio),
       col('fechaFin', 12, (r) => r.fechaFin),
       col('numeroEmpleado', 16, (r) => r.numeroEmpleado),
-      col('nombreEmpleado', 30, (r) => r.nombreEmpleado),
+      col('nombreEmpleado', 32, (r) => r.nombreEmpleado),
       col('area', 18, (r) => r.area),
       col('puesto', 24, (r) => r.puesto),
       col('jefeInmediato', 26, (r) => r.jefeInmediato),
-      col('ubicacion', 20, (r) => r.ubicacion),
+      col('ubicacion', 30, (r) => r.ubicacion),
       col('diasLaborables', 14, (r) => r.diasLaborables),
       col('diasDescanso', 14, (r) => r.diasDescanso),
       col('faltas', 10, (r) => r.faltas),
@@ -594,16 +758,12 @@ export class AttendanceReportsService {
 }
 
 /**
- * Evalúa la hora de entrada real contra la hora programada y la tolerancia configurada.
- *
- * @param horaProgramada Hora de entrada del turno (ej. '09:00' o Date)
- * @param horaReal Primer marcaje/checada de entrada (ej. '09:25' o Date)
- * @param config Configuración de tolerancia de la empresa
+ * Evalúa retardos evitando que las faltas por retardo inflen los minutos acumulados
  */
 export function calcularRetardoEntrada(
   horaProgramada?: Date | string | null,
   horaReal?: Date | string | null,
-  config?: { tolerancia?: Partial<ToleranciaConfig> } | null,
+  config?: any,
   timeZone = DEFAULT_TIMEZONE,
 ): EvaluacionEntrada {
   if (!horaReal || !horaProgramada) {
@@ -615,12 +775,10 @@ export function calcularRetardoEntrada(
     };
   }
 
-  const tolerancia = config?.tolerancia?.minutosToleranciaEntrada ?? 0;
+  const tolerancia = config?.tolerancia?.minutosToleranciaEntrada ?? 20;
   const limiteRetardo = config?.tolerancia?.minutosLimiteRetardo ?? 60;
 
-  // Hora programada: literal (sin desfase)
   const horaProgStr = toTimeTeoricoStr(horaProgramada);
-  // Hora real: convertida a hora local
   const horaRealStr = toTimeRealStr(horaReal, timeZone);
 
   if (horaProgStr === '—' || horaRealStr === '—') {
@@ -637,20 +795,9 @@ export function calcularRetardoEntrada(
 
   const minutosProg = hP * 60 + mP;
   const minutosCheck = hR * 60 + mR;
-
   const diferenciaMinutos = minutosCheck - minutosProg;
 
-  // Si llegó antes o a tiempo
-  if (diferenciaMinutos <= 0) {
-    return {
-      esRetardo: false,
-      esFaltaPorRetardo: false,
-      minutosRetardo: 0,
-      estado: 'A_TIEMPO',
-    };
-  }
-
-  // Dentro de tolerancia
+  // Llegó antes o a tiempo
   if (diferenciaMinutos <= tolerancia) {
     return {
       esRetardo: false,
@@ -660,17 +807,17 @@ export function calcularRetardoEntrada(
     };
   }
 
-  // Superó el límite admisible de retardo -> Falta
+  // Superó el límite de retardo permitido -> Se clasifica como falta y NO se suman minutos de retardo
   if (diferenciaMinutos > limiteRetardo) {
     return {
       esRetardo: false,
       esFaltaPorRetardo: true,
-      minutosRetardo: diferenciaMinutos,
+      minutosRetardo: 0,
       estado: 'FALTA_RETARDO',
     };
   }
 
-  // Retardo válido
+  // Retardo admisible
   return {
     esRetardo: true,
     esFaltaPorRetardo: false,
@@ -679,14 +826,17 @@ export function calcularRetardoEntrada(
   };
 }
 
-const DEFAULT_TIMEZONE = 'America/Mexico_City';
+// --- Helpers de Formato y Fechas ---
 
-// --- Helpers de formateo reutilizables fuera de la clase ---
-const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+function getISOWeekStr(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
 
-/**
- * Formatea fechas a DD/MM/YYYY en hora local.
- */
 const toDateStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
   if (!d) return '';
   const dateObj = typeof d === 'string' ? new Date(d) : d;
@@ -700,58 +850,23 @@ const toDateStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
   }).format(dateObj);
 };
 
-/**
- * Obtiene el día de la semana respetando la zona horaria local.
- */
-const toDiaSemana = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
-  if (!d) return '';
-  const dateObj = typeof d === 'string' ? new Date(d) : d;
-  if (isNaN(dateObj.getTime())) return '';
-
-  const dia = new Intl.DateTimeFormat('es-MX', {
-    timeZone,
-    weekday: 'long',
-  }).format(dateObj);
-
-  return dia.charAt(0).toUpperCase() + dia.slice(1);
-};
-
-/**
- * Para HORAS TEÓRICAS (hora de entrada / salida pactada del turno).
- * NO aplica conversión de zona horaria: extrae la hora y minuto literal (tal como se guardó).
- */
 const toTimeTeoricoStr = (d: Date | string | null) => {
   if (!d) return '—';
-
-  // Si viene como string: "08:00", "08:00:00" o "1970-01-01T08:00:00.000Z"
   if (typeof d === 'string') {
-    if (d.includes('T')) {
-      return d.split('T')[1].substring(0, 5);
-    }
-    if (d.includes(' ')) {
-      return d.split(' ')[1].substring(0, 5);
-    }
+    if (d.includes('T')) return d.split('T')[1].substring(0, 5);
+    if (d.includes(' ')) return d.split(' ')[1].substring(0, 5);
     return d.trim().substring(0, 5);
   }
-
-  // Si Prisma lo devuelve como Date, los campos tipo TIME de PostgreSQL se almacenan
-  // con los valores de hora/minuto en UTC (ej. 08:00 UTC = 08:00 nominal).
   if (d instanceof Date) {
     const h = String(d.getUTCHours()).padStart(2, '0');
     const m = String(d.getUTCMinutes()).padStart(2, '0');
     return `${h}:${m}`;
   }
-
   return '—';
 };
 
-/**
- * Para HORAS REALES (checada de huella, biométrico, app, etc. en UTC).
- * SÍ aplica la conversión a la zona horaria local de México.
- */
 const toTimeRealStr = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
   if (!d) return '—';
-
   const dateObj = typeof d === 'string' ? new Date(d) : d;
   if (isNaN(dateObj.getTime())) return '—';
 
@@ -777,26 +892,24 @@ const col = <T>(header: string, width: number, value: (row: T) => any): ExcelCol
   value,
 });
 
-function getISOWeekStr(d: Date): string {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
 
-function getRangoSemanaStr(d: Date, timeZone = DEFAULT_TIMEZONE) {
-  const current = new Date(d);
-  const day = current.getDay(); // 0 domingo, 1 lunes...
-  const diffToMonday = current.getDate() - day + (day === 0 ? -6 : 1);
+const DEFAULT_TIMEZONE = 'America/Mexico_City';
 
-  const monday = new Date(current.setDate(diffToMonday));
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+// --- Helpers de formateo reutilizables fuera de la clase ---
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-  return {
-    inicioSemanaStr: toDateStr(monday, timeZone),
-    finSemanaStr: toDateStr(sunday, timeZone),
-  };
-}
+/**
+ * Obtiene el día de la semana respetando la zona horaria local.
+ */
+const toDiaSemana = (d: Date | string | null, timeZone = DEFAULT_TIMEZONE) => {
+  if (!d) return '';
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return '';
+
+  const dia = new Intl.DateTimeFormat('es-MX', {
+    timeZone,
+    weekday: 'long',
+  }).format(dateObj);
+
+  return dia.charAt(0).toUpperCase() + dia.slice(1);
+};

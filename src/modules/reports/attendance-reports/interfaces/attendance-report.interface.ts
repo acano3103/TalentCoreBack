@@ -42,3 +42,24 @@ export interface FilaReporteHorasSemanales {
     excedeTopeExtra: 'SI' | 'NO';
     anioConfiguracionLegal: number;
 }
+
+export interface FilaReporteFaltas {
+    fecha: string;
+    diaSemana: string;
+    numeroEmpleado: string;
+    nombreEmpleado: string;
+    area: string;
+    puesto: string;
+    jefeInmediato: string;
+    ubicacion: string;
+    estatusJornada: string;
+    tipoFalta: string;
+    horaEntradaReal: string;
+    minutosTrabajados: number;
+    justificada: string;
+    idTipoIncidencia: string;
+    tipoIncidencia: string;
+    folioIncidencia: string;
+    revisada: number;
+    idJornada: number;
+}
