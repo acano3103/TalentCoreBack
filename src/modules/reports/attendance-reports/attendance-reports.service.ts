@@ -5,7 +5,8 @@ import { DailyAttendanceReportFilterDto } from './dto/daily-attendance-report.dt
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 import { Prisma } from 'generated/prisma/client';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
-import { EvaluacionEntrada, ToleranciaConfig } from './interfaces/attendance-report.interface';
+import { EvaluacionEntrada, FilaReporteHorasSemanales, ToleranciaConfig } from './interfaces/attendance-report.interface';
+import { LegalWorkdayService } from 'src/modules/legal-workday/legal-workday.service';
 
 @Injectable()
 export class AttendanceReportsService {
@@ -13,6 +14,7 @@ export class AttendanceReportsService {
     private readonly prisma: PrismaService,
     private readonly excelExportService: ExcelExportService,
     private readonly attendanceConfigService: AttendanceTrackingConfigService,
+    private readonly legalWorkdayService: LegalWorkdayService,
   ) { }
 
   // Filtra empleados por Empresa, Ubicación (idSite), Área (vía puestos)
@@ -372,6 +374,223 @@ export class AttendanceReportsService {
       rows: retardosValidos,
     });
   }
+
+  // Genera el Excel de Reporte de Horas Trabajadas utilizando ExcelExportService
+  async exportWorkHoursExcel(
+    user: ActiveUserDto,
+    companyId: number,
+    filters: DailyAttendanceReportFilterDto,
+  ): Promise<Buffer> {
+    // 1. Obtener empleados filtrados
+    const employees = await this.getFilteredEmployees(companyId, filters);
+    if (!employees || employees.length === 0) {
+      return this.generateWorkHoursWorkbook([], 'Reporte_Horas');
+    }
+
+    const employeeIds = employees.map((e) => e.idEmpleado);
+    const empMap = new Map(employees.map((e) => [e.idEmpleado, e]));
+
+    // 2. Obtener configuraciones dinámicas
+    const configAsistencia = await this.attendanceConfigService.getConfiguracionAsistencia(
+      user.idTenant,
+      companyId,
+    );
+    const legalWorkdayStatus = await this.legalWorkdayService.getStatus(user, companyId);
+
+    // 3. Resolver año para la configuración legal
+    const targetYear = filters.dateFrom
+      ? new Date(filters.dateFrom).getFullYear()
+      : new Date().getFullYear();
+
+    const legalConfig =
+      legalWorkdayStatus.config.find((c: any) => c.anio === targetYear) ??
+      legalWorkdayStatus.config[0];
+
+    // Valores legales tomados de la configuración
+    const limiteLegalHoras = Number(legalConfig.horasSemana);
+    const limiteLegalMinutos = limiteLegalHoras * 60;
+    const topeExtraHoras = Number(legalConfig.extraSemanalMax);
+    const topeExtraMinutos = topeExtraHoras * 60;
+    const factorPagoDentro = Number(legalConfig.factorDentro);
+    const factorPagoSobre = Number(legalConfig.factorFuera);
+
+    // Parámetros de tolerancia de asistencia
+    const acumulacionRetardosParaFalta =
+      configAsistencia?.tolerancia?.acumulacionRetardosParaFalta ?? 3;
+
+    // 4. Consultar Jornadas
+    // NOTA: NO filtramos horaEntradaReal: { not: null } para poder computar
+    // días de descanso y faltas reales en la semana.
+    const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+    const jornadaWhere: Prisma.JornadasEmpleadoWhereInput = {
+      idEmpresa: companyId,
+      idEmpleado: { in: employeeIds },
+    };
+
+    if (esFecha(filters.dateFrom) || esFecha(filters.dateTo)) {
+      jornadaWhere.fecha = {
+        ...(esFecha(filters.dateFrom) && { gte: new Date(`${filters.dateFrom}T00:00:00.000Z`) }),
+        ...(esFecha(filters.dateTo) && { lte: new Date(`${filters.dateTo}T23:59:59.999Z`) }),
+      };
+    }
+
+    const jornadas = await this.prisma.jornadasEmpleado.findMany({
+      where: jornadaWhere,
+      orderBy: [{ fecha: 'asc' }, { idEmpleado: 'asc' }],
+    });
+
+    // 5. Agrupar jornadas por Empleado
+    const jornadasPorEmpleado = new Map<number, typeof jornadas>();
+    for (const j of jornadas) {
+      if (!jornadasPorEmpleado.has(j.idEmpleado)) {
+        jornadasPorEmpleado.set(j.idEmpleado, []);
+      }
+      jornadasPorEmpleado.get(j.idEmpleado)!.push(j);
+    }
+
+    // Resolver metadata de semana (Semana ISO y rango de fechas)
+    const refDate = filters.dateFrom ? new Date(filters.dateFrom) : new Date();
+    const semanaISO = getISOWeekStr(refDate);
+    const { inicioSemanaStr, finSemanaStr } = getRangoSemanaStr(refDate);
+
+    // 6. Construir filas consolidadas por empleado
+    const filas: FilaReporteHorasSemanales[] = [];
+
+    for (const emp of employees) {
+      const jList = jornadasPorEmpleado.get(emp.idEmpleado) || [];
+
+      let totalMinutosTrabajados = 0;
+      let totalMinutosRetardo = 0;
+      let diasLaborables = 0;
+      let diasDescanso = 0;
+      let faltasDirectas = 0;
+      let conteoRetardos = 0;
+      let minutosExtraDobles = 0;
+      let minutosExtraTriples = 0;
+
+      for (const j of jList) {
+        if (j.estatusJornada === 'DESCANSO') {
+          diasDescanso++;
+          continue;
+        }
+
+        diasLaborables++;
+
+        // Evaluar retardo con la tolerancia dinámica
+        const evalEntrada = calcularRetardoEntrada(
+          j.horaEntradaTeorica,
+          j.horaEntradaReal,
+          configAsistencia,
+        );
+
+        if (j.estatusJornada === 'FALTA' || evalEntrada.esFaltaPorRetardo) {
+          faltasDirectas++;
+        }
+
+        if (evalEntrada.esRetardo) {
+          conteoRetardos++;
+          totalMinutosRetardo += evalEntrada.minutosRetardo;
+        } else if (j.minutosRetardo > 0) {
+          totalMinutosRetardo += j.minutosRetardo;
+        }
+
+        totalMinutosTrabajados += j.minutosTrabajados || 0;
+        minutosExtraDobles += j.minutosExtraDobles || 0;
+        minutosExtraTriples += j.minutosExtraTriples || 0;
+      }
+
+      // Faltas totales considerando acumulación de retardos por configuración
+      const faltasPorRetardo = Math.floor(conteoRetardos / acumulacionRetardosParaFalta);
+      const faltasTotales = faltasDirectas + faltasPorRetardo;
+
+      // Minutos ordinarios vs extras
+      const totalMinutosExtra = minutosExtraDobles + minutosExtraTriples;
+      // Los minutos ordinarios corresponden al tiempo dentro de la jornada pactada
+      const minutosOrdinarios = Math.max(0, totalMinutosTrabajados - totalMinutosExtra);
+
+      // Cumplimiento porcentual sobre la jornada legal
+      const pctSobreLimite = limiteLegalMinutos > 0
+        ? Number(((totalMinutosTrabajados / limiteLegalMinutos) * 100).toFixed(1))
+        : 0;
+
+      filas.push({
+        semanaISO,
+        fechaInicio: filters.dateFrom ? toDateStr(filters.dateFrom) : inicioSemanaStr,
+        fechaFin: filters.dateTo ? toDateStr(filters.dateTo) : finSemanaStr,
+        numeroEmpleado: emp.numeroEmpleado || '—',
+        nombreEmpleado: emp.nombreCompleto || `${emp.nombre || ''} ${emp.primerApellido || ''}`.trim(),
+        area: emp.areaDescripcion || 'SIN ÁREA',
+        puesto: emp.nombrePuesto || 'SIN PUESTO',
+        jefeInmediato: emp.jefeInmediatoNombre || '—',
+        ubicacion: emp.ubicacionDescripcion || 'SIN UBICACIÓN',
+        diasLaborables,
+        diasDescanso,
+        faltas: faltasTotales,
+        minutosTrabajados: totalMinutosTrabajados,
+        horasTrabajadas: toHorasStr(totalMinutosTrabajados),
+        minutosOrdinarios,
+        horasOrdinarias: toHorasStr(minutosOrdinarios),
+        minutosExtra: totalMinutosExtra,
+        horasExtra: toHorasStr(totalMinutosExtra),
+        minutosExtraDobles,
+        minutosExtraTriples,
+        factorPagoDentro,
+        factorPagoSobre,
+        minutosRetardo: totalMinutosRetardo,
+        limiteLegalSemana: limiteLegalHoras,
+        topeExtraSemana: topeExtraHoras,
+        pctSobreLimite,
+        excedeLimiteLegal: totalMinutosTrabajados > limiteLegalMinutos ? 'SI' : 'NO',
+        excedeTopeExtra: totalMinutosExtra > topeExtraMinutos ? 'SI' : 'NO',
+        anioConfiguracionLegal: legalConfig.anio,
+      });
+    }
+
+    return this.generateWorkHoursWorkbook(filas, `Horas_${semanaISO}`);
+  }
+
+  private async generateWorkHoursWorkbook(
+    rows: FilaReporteHorasSemanales[],
+    sheetName: string,
+  ): Promise<Buffer> {
+    const columns: ExcelColumn<FilaReporteHorasSemanales>[] = [
+      col('semanaISO', 12, (r) => r.semanaISO),
+      col('fechaInicio', 12, (r) => r.fechaInicio),
+      col('fechaFin', 12, (r) => r.fechaFin),
+      col('numeroEmpleado', 16, (r) => r.numeroEmpleado),
+      col('nombreEmpleado', 30, (r) => r.nombreEmpleado),
+      col('area', 18, (r) => r.area),
+      col('puesto', 24, (r) => r.puesto),
+      col('jefeInmediato', 26, (r) => r.jefeInmediato),
+      col('ubicacion', 20, (r) => r.ubicacion),
+      col('diasLaborables', 14, (r) => r.diasLaborables),
+      col('diasDescanso', 14, (r) => r.diasDescanso),
+      col('faltas', 10, (r) => r.faltas),
+      col('minutosTrabajados', 18, (r) => r.minutosTrabajados),
+      col('horasTrabajadas', 16, (r) => r.horasTrabajadas),
+      col('minutosOrdinarios', 18, (r) => r.minutosOrdinarios),
+      col('horasOrdinarias', 16, (r) => r.horasOrdinarias),
+      col('minutosExtra', 14, (r) => r.minutosExtra),
+      col('horasExtra', 14, (r) => r.horasExtra),
+      col('minutosExtraDobles', 18, (r) => r.minutosExtraDobles),
+      col('minutosExtraTriples', 18, (r) => r.minutosExtraTriples),
+      col('factorPagoDentro', 16, (r) => r.factorPagoDentro),
+      col('factorPagoSobre', 16, (r) => r.factorPagoSobre),
+      col('minutosRetardo', 14, (r) => r.minutosRetardo),
+      col('limiteLegalSemana', 18, (r) => r.limiteLegalSemana),
+      col('topeExtraSemana', 16, (r) => r.topeExtraSemana),
+      col('pctSobreLimite', 16, (r) => r.pctSobreLimite),
+      col('excedeLimiteLegal', 18, (r) => r.excedeLimiteLegal),
+      col('excedeTopeExtra', 16, (r) => r.excedeTopeExtra),
+      col('anioConfiguracionLegal', 22, (r) => r.anioConfiguracionLegal),
+    ];
+
+    return this.excelExportService.generate({
+      sheetName,
+      columns,
+      rows,
+    });
+  }
 }
 
 /**
@@ -557,3 +776,27 @@ const col = <T>(header: string, width: number, value: (row: T) => any): ExcelCol
   width,
   value,
 });
+
+function getISOWeekStr(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+function getRangoSemanaStr(d: Date, timeZone = DEFAULT_TIMEZONE) {
+  const current = new Date(d);
+  const day = current.getDay(); // 0 domingo, 1 lunes...
+  const diffToMonday = current.getDate() - day + (day === 0 ? -6 : 1);
+
+  const monday = new Date(current.setDate(diffToMonday));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  return {
+    inicioSemanaStr: toDateStr(monday, timeZone),
+    finSemanaStr: toDateStr(sunday, timeZone),
+  };
+}

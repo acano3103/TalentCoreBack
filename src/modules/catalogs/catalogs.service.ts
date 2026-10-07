@@ -30,7 +30,7 @@ export class CatalogsService {
 
       case 'roles':
         return this.prisma.catRoles.findMany({
-          where: { activo: true },
+          where: { activo: true, idTenant: user.idTenant },
           select: { idRol: true, descripcion: true, activo: true },
           orderBy: { descripcion: 'asc' },
         });

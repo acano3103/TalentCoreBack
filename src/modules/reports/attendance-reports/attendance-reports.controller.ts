@@ -34,6 +34,7 @@ export class AttendanceReportsController {
     this.excelExportService.send(res, buffer, 'Reporte_Asistencia_Diaria');
   }
 
+  // Genera y descarga el archivo Excel del reporte de retardos
   @Get('lateness/export-excel')
   @ApiOperation({ summary: 'Exportar retardos a Excel (.xlsx)', description: 'Genera y descarga el archivo Excel con todos los retardos que cumplen los filtros indicados.', })
   @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
@@ -47,5 +48,21 @@ export class AttendanceReportsController {
   ) {
     const buffer = await this.attendanceReportsService.exportLatenessExcel(user, companyId, filters);
     this.excelExportService.send(res, buffer, 'Reporte_Retardos');
+  }
+
+  // Genera y descarga el archivo Excel del reporte de horas
+  @Get('work-hours/export-excel')
+  @ApiOperation({ summary: 'Exportar horas trabajadas a Excel (.xlsx)', description: 'Genera y descarga el archivo Excel con todas las horas trabajadas que cumplen los filtros indicados.', })
+  @ApiParam({ name: 'companyId', type: Number, description: 'ID de la empresa' })
+  @ApiResponse({ status: 200, description: 'Archivo binario Excel generado exitosamente.', })
+  @ApiResponse({ status: 500, description: 'Error al generar el archivo Excel.' })
+  async exportWorkHours(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query() filters: DailyAttendanceReportFilterDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.attendanceReportsService.exportWorkHoursExcel(user, companyId, filters);
+    this.excelExportService.send(res, buffer, 'Reporte_Horas_Trabajadas');
   }
 }

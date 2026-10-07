@@ -5,5 +5,6 @@ import { LegalWorkdayController } from './legal-workday.controller';
 @Module({
   controllers: [LegalWorkdayController],
   providers: [LegalWorkdayService],
+  exports: [LegalWorkdayService],
 })
-export class LegalWorkdayModule {}
+export class LegalWorkdayModule { }
