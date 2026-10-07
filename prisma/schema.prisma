@@ -1617,6 +1617,7 @@ model CursoParticipantes {
   estatusAsignacion CursoParticipantes_estatusAsignacion? @default(inscrito)
   calificacionFinal Decimal?                              @db.Decimal(5, 2)
   creadoEn          DateTime?                             @default(now()) @db.Timestamp(0)
+  CursoLeccionProgresos CursoLeccionProgresos[]
   Empleados         Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
   CursoSesiones     CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
 
@@ -1645,6 +1646,7 @@ model CursoSesiones {
   CursoParticipantes         CursoParticipantes[]
   CatCursos                  CatCursos                    @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "fk_sesion_curso")
   Empleados                  Empleados?                   @relation(fields: [idEmpleadoInstructor], references: [idEmpleado], map: "fk_sesion_empleado_instructor")
+  CursoContenidos            CursoContenidos?
 
   @@index([idCurso], map: "fk_sesion_curso")
   @@index([idEmpleadoInstructor], map: "fk_sesion_empleado_instructor")
@@ -2160,6 +2162,97 @@ model AsistenciaEvidencias {
   @@index([fechaPurga], map: "IDX_Evidencia_Purga")
 }
 
+model CursoContenidos {
+  idContenido        Int                           @id @default(autoincrement())
+  idTenant           Int
+  idEmpresa          Int
+  idSesion           Int                           @unique(map: "uk_contenido_sesion")
+  tipoContenido      CursoContenidos_tipoContenido
+  modoAvance         CursoContenidos_modoAvance    @default(libre)
+  estructuraIa       Json?
+  estatusVideo       CursoContenidos_estatusVideo  @default(pendiente)
+  activo             Boolean                       @default(true)
+  creadoEn           DateTime?                     @default(now()) @db.Timestamp(0)
+  actualizadoEn      DateTime?                     @default(now()) @db.Timestamp(0)
+  CursoSesiones      CursoSesiones                 @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_contenido_sesion")
+  CursoModulos       CursoModulos[]
+  CursoPaquetesScorm CursoPaquetesScorm?
+
+  @@index([idTenant], map: "idx_contenido_tenant")
+}
+
+model CursoModulos {
+  idCursoModulo   Int              @id @default(autoincrement())
+  idTenant        Int
+  idContenido     Int
+  titulo          String           @db.VarChar(255)
+  objetivo        String?          @db.Text
+  orden           Int              @default(0)
+  creadoEn        DateTime?        @default(now()) @db.Timestamp(0)
+  CursoLecciones  CursoLecciones[]
+  CursoContenidos CursoContenidos  @relation(fields: [idContenido], references: [idContenido], onDelete: Cascade, onUpdate: NoAction, map: "fk_modulo_contenido")
+
+  @@index([idContenido, orden], map: "idx_modulo_contenido_orden")
+  @@index([idTenant], map: "idx_modulo_tenant")
+}
+
+model CursoLecciones {
+  idLeccion             Int                         @id @default(autoincrement())
+  idTenant              Int
+  idCursoModulo         Int
+  titulo                String                      @db.VarChar(255)
+  objetivo              String?                     @db.Text
+  contenido             String?                     @db.LongText
+  puntosClave           Json?
+  slides                Json?
+  quiz                  Json?
+  urlVideo              String?                     @db.VarChar(500)
+  estatusVideo          CursoLecciones_estatusVideo @default(pendiente)
+  idTrabajoVideo        String?                     @db.VarChar(100)
+  orden                 Int                         @default(0)
+  creadoEn              DateTime?                   @default(now()) @db.Timestamp(0)
+  actualizadoEn         DateTime?                   @default(now()) @db.Timestamp(0)
+  CursoLeccionProgresos CursoLeccionProgresos[]
+  CursoModulos          CursoModulos                @relation(fields: [idCursoModulo], references: [idCursoModulo], onDelete: Cascade, onUpdate: NoAction, map: "fk_leccion_modulo")
+
+  @@index([idCursoModulo, orden], map: "idx_leccion_modulo_orden")
+  @@index([idTenant], map: "idx_leccion_tenant")
+}
+
+model CursoLeccionProgresos {
+  idProgreso         Int                @id @default(autoincrement())
+  idTenant           Int
+  idParticipante     Int
+  idLeccion          Int
+  videoVisto         Boolean            @default(false)
+  calificacionQuiz   Decimal?           @db.Decimal(5, 2)
+  fechaCompletado    DateTime?          @db.DateTime(0)
+  creadoEn           DateTime?          @default(now()) @db.Timestamp(0)
+  actualizadoEn      DateTime?          @default(now()) @db.Timestamp(0)
+  CursoLecciones     CursoLecciones     @relation(fields: [idLeccion], references: [idLeccion], onDelete: Cascade, onUpdate: NoAction, map: "fk_progreso_leccion")
+  CursoParticipantes CursoParticipantes @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_progreso_participante")
+
+  @@unique([idParticipante, idLeccion], map: "uk_participante_leccion")
+  @@index([idLeccion], map: "idx_progreso_leccion")
+  @@index([idTenant], map: "idx_progreso_tenant")
+}
+
+model CursoPaquetesScorm {
+  idPaqueteScorm  Int                        @id @default(autoincrement())
+  idTenant        Int
+  idContenido     Int                        @unique(map: "uk_scorm_contenido")
+  version         CursoPaquetesScorm_version @default(scorm_12)
+  archivoInicio   String                     @db.VarChar(500)
+  rutaArchivo     String                     @db.VarChar(500)
+  nombreArchivo   String?                    @db.VarChar(255)
+  creadoEn        DateTime?                  @default(now()) @db.Timestamp(0)
+  CursoContenidos CursoContenidos            @relation(fields: [idContenido], references: [idContenido], onDelete: Cascade, onUpdate: NoAction, map: "fk_scorm_contenido")
+
+  @@index([idTenant], map: "idx_scorm_tenant")
+}
+
+
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -2300,4 +2393,41 @@ enum AsistenciaEvidencias_tipo {
   SELFIE
   FOTO
   FIRMA
+}
+
+
+enum CursoContenidos_tipoContenido {
+  scorm
+  nativo
+  ia
+}
+
+enum CursoContenidos_modoAvance {
+  libre
+  video_completo
+  aprobar_quiz
+  video_y_quiz
+}
+
+enum CursoContenidos_estatusVideo {
+  pendiente
+  generando
+  listo
+  error
+  sin_creditos
+  no_aplica
+}
+
+enum CursoLecciones_estatusVideo {
+  pendiente
+  generando
+  listo
+  error
+  sin_creditos
+  no_aplica
+}
+
+enum CursoPaquetesScorm_version {
+  scorm_12
+  scorm_2004
 }
