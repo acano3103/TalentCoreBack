@@ -39,12 +39,12 @@ export class CreateCourseSessionDto {
     @IsInt()
     idCurso: number;
 
-    @ApiProperty({ enum: ['presencial', 'online_sincrono'], example: 'presencial' })
+    @ApiProperty({ enum: ['presencial', 'online_sincrono', 'online_asincrono'], example: 'presencial' })
     @IsNotEmpty({ message: 'La modalidad es requerida' })
-    @IsEnum(['presencial', 'online_sincrono'], {
-        message: 'La modalidad debe ser presencial o online_sincrono',
+    @IsEnum(['presencial', 'online_sincrono', 'online_asincrono'], {
+        message: 'La modalidad debe ser presencial, online_sincrono u online_asincrono',
     })
-    modalidad: 'presencial' | 'online_sincrono';
+    modalidad: 'presencial' | 'online_sincrono' | 'online_asincrono';
 
     @ApiProperty({ enum: ['interno', 'externo'], example: 'interno' })
     @IsNotEmpty({ message: 'El tipo de instructor es requerido' })

@@ -3,9 +3,13 @@ import { CoursesService } from './courses.service';
 import { CoursesController } from './courses.controller';
 import { EncryptionService } from 'src/common/utils/encryption.util';
 import { ConfigService } from '@nestjs/config';
+import { IntegrationsModule } from '../integrations/integrations.module';
+import { CourseContentController } from './course-content.controller';
+import { CourseContentService } from './course-content.service';
 
 @Module({
-  controllers: [CoursesController],
-  providers: [CoursesService, ConfigService, EncryptionService],
+  imports: [IntegrationsModule],
+  controllers: [CoursesController, CourseContentController],
+  providers: [CoursesService, CourseContentService, ConfigService, EncryptionService],
 })
 export class CoursesModule { }
