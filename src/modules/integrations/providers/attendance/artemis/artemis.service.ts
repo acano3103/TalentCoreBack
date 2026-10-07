@@ -58,13 +58,12 @@ export class ArtemisService {
             };
         }
 
-        const idTenant = await resolverTenantUnico(this.prisma);
+        // const idTenant = await resolverTenantUnico(this.prisma);
         const numeroEmpleado = dto.ExternalUserId.trim();
         const empleado = await this.prisma.empleados.findFirst({
             where: {
                 numeroEmpleado,
                 activo: true,
-                idTenant,
             },
             select: {
                 idEmpleado: true,
@@ -80,6 +79,7 @@ export class ArtemisService {
             throw new NotFoundException(`No se encontró un empleado activo con el número de colaborador "${numeroEmpleado}".`);
         }
 
+
         const canal = this.normalizarCanal(dto.FuenteAsistencia);
         const fechaChecadaDate = this.sanitizarFechaChecada(dto.FechaChecada);
         const idSite = await this.resolverSitio(dto, empleado.idEmpleado, numeroEmpleado);
@@ -87,7 +87,7 @@ export class ArtemisService {
         const telefonoDestino = dto.NumeroTelefonoDestino?.trim() || null;
 
         const check: CanonicalCheck = {
-            idTenant: empleado.idTenant ?? idTenant,
+            idTenant: empleado.idTenant || 0,
             idEmpresa: empleado.idEmpresa as number,
             idEmpleado: empleado.idEmpleado,
             canal,
@@ -495,27 +495,27 @@ export class ArtemisService {
 
                 return tx.catDispositivos.upsert({
                     where: {
-                      idTenant_idDispositivoArtemis: {
-                        idTenant: idTenant,
-                        idDispositivoArtemis: disp.idDispositivo,
-                      },
+                        idTenant_idDispositivoArtemis: {
+                            idTenant: idTenant,
+                            idDispositivoArtemis: disp.idDispositivo,
+                        },
                     },
                     update: {
-                      tipo: tipoNormalizado,
-                      alias: disp.alias.trim(),
-                      modelo: disp.modelo?.trim() ?? null,
-                      Activo: true,
+                        tipo: tipoNormalizado,
+                        alias: disp.alias.trim(),
+                        modelo: disp.modelo?.trim() ?? null,
+                        Activo: true,
                     },
                     create: {
-                      idTenant: idTenant,
-                      idDispositivoArtemis: disp.idDispositivo,
-                      tipo: tipoNormalizado,
-                      alias: disp.alias.trim(),
-                      modelo: disp.modelo?.trim() ?? null,
-                      Activo: true,
-                      UsuarioRegistro: 'artemis_sync',
+                        idTenant: idTenant,
+                        idDispositivoArtemis: disp.idDispositivo,
+                        tipo: tipoNormalizado,
+                        alias: disp.alias.trim(),
+                        modelo: disp.modelo?.trim() ?? null,
+                        Activo: true,
+                        UsuarioRegistro: 'artemis_sync',
                     },
-                  });
+                });
             });
 
             return Promise.all(operaciones);
