@@ -729,10 +729,8 @@ async evaluateRoleplayCall(
     return { idEvaluacion, scoreGlobal };
 }
 
-    // ==========================================
-    // CURSOS ONLINE ASÍNCRONO (réplica de SimuPro)
-    // ==========================================
 
+    // CURSOS ONLINE ASÍNCRONO (réplica de SimuPro)
     // Obtiene y desencripta las credenciales de OpenAI de la empresa.
     // Es el mismo bloque que repiten los métodos de arriba, extraído para reutilizarlo.
     private async getCredentials(companyId: number): Promise<{ apiKey: string; model: string }> {
