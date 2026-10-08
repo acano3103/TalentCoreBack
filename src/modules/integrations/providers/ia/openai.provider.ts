@@ -767,6 +767,8 @@ async evaluateRoleplayCall(
         const numModulos = params.numModulos ?? 3;
         const nivel = params.nivel || 'Intermedio';
         const idioma = params.idioma || 'Español México';
+        // Con más módulos se piden menos lecciones para no pasar el límite de tokens de la respuesta
+        const leccionesPorModulo = numModulos <= 3 ? 3 : 2;
         // BASICO | INTERMEDIO | AVANZADO (sin acentos, igual que SimuPro)
         const nivelClave = nivel.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 
@@ -780,8 +782,17 @@ Siempre respondes en JSON válido sin markdown.`;
 TÍTULO DEL CURSO: ${params.titulo}
 DESCRIPCIÓN: ${params.prompt}
 NÚMERO DE MÓDULOS: ${numModulos}
+LECCIONES POR MÓDULO: ${leccionesPorModulo}
+PREGUNTAS DE QUIZ POR LECCIÓN: 3
 NIVEL: ${nivel}
 IDIOMA: ${idioma}
+
+REGLAS:
+- El contenido se basa principalmente en la DESCRIPCIÓN; el título solo da contexto.
+- Cada módulo tiene exactamente ${leccionesPorModulo} lecciones y cada lección exactamente 3 preguntas de quiz.
+- "content" tiene 3-4 párrafos de 3-5 oraciones cada uno, separados con \\n\\n.
+- Cada pregunta tiene 4 opciones plausibles y una sola correcta; varía la posición de la respuesta correcta.
+- Los "keyPoints" son frases cortas (máximo 12 palabras) sin punto final.
 
 Responde ÚNICAMENTE con este JSON (sin markdown, sin explicaciones adicionales):
 {
@@ -797,7 +808,7 @@ Responde ÚNICAMENTE con este JSON (sin markdown, sin explicaciones adicionales)
         {
           "title": "Título de la lección",
           "objective": "Al finalizar esta lección, el alumno podrá...",
-          "content": "Contenido principal de la lección en 3-4 párrafos",
+          "content": "Párrafo 1\\n\\nPárrafo 2\\n\\nPárrafo 3",
           "keyPoints": ["Punto clave 1", "Punto clave 2", "Punto clave 3"],
           "quiz": [
             {
@@ -825,7 +836,7 @@ Responde ÚNICAMENTE con este JSON (sin markdown, sin explicaciones adicionales)
                         { role: 'user', content: userPrompt },
                     ],
                     temperature: 0.7,
-                    max_tokens: 8000,
+                    max_tokens: 16000,
                 },
                 {
                     headers: {

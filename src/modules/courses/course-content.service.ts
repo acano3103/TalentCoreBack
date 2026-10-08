@@ -129,7 +129,9 @@ export class CourseContentService {
                                     Number.isInteger(q.correctIndex) &&
                                     q.correctIndex >= 0 &&
                                     q.correctIndex < q.options.length,
-                            );
+                            )
+                            // La IA suele poner la respuesta correcta siempre en la misma posición; se baraja
+                            .map((q: QuizQuestion) => this.shuffleQuestion(q));
 
                         return {
                             title: this.asText(lesson?.title, `Lección ${li + 1}`),
@@ -166,6 +168,42 @@ export class CourseContentService {
         };
     }
 
+    // Baraja las opciones de una pregunta y recalcula correctIndex (Fisher-Yates)
+    private shuffleQuestion(q: QuizQuestion): QuizQuestion {
+        const correcta = q.options[q.correctIndex];
+        const options = [...q.options];
+        for (let i = options.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [options[i], options[j]] = [options[j], options[i]];
+        }
+        return { ...q, options, correctIndex: options.indexOf(correcta) };
+    }
+
+    // Divide el contenido en bloques para las slides de contenido (máximo 3).
+    // Si la IA lo mandó en un solo párrafo, se parte por oraciones para no dejar una sola slide enorme.
+    private splitContent(content: string): string[] {
+        const paragraphs = content
+            .split(/\n+/)
+            .map((p) => p.trim())
+            .filter((p) => p.length > 20);
+
+        // Más de 3 párrafos: los sobrantes se juntan en la última slide para no perder contenido
+        if (paragraphs.length > 3) return [paragraphs[0], paragraphs[1], paragraphs.slice(2).join(' ')];
+        if (paragraphs.length >= 2) return paragraphs;
+
+        const texto = paragraphs[0] ?? content.trim();
+        const oraciones = texto.match(/[^.!?]+[.!?]+(\s+|$)|[^.!?]+$/g)?.map((o) => o.trim()).filter(Boolean) ?? [texto];
+        if (oraciones.length < 4) return [texto];
+
+        const bloques = Math.min(3, Math.ceil(oraciones.length / 2));
+        const porBloque = Math.ceil(oraciones.length / bloques);
+        const resultado: string[] = [];
+        for (let i = 0; i < oraciones.length; i += porBloque) {
+            resultado.push(oraciones.slice(i, i + porBloque).join(' '));
+        }
+        return resultado;
+    }
+
     // Arma las slides de una lección: 1 de introducción, hasta 3 de contenido, 1 por punto clave y 1 de resumen
     private buildSlides(lesson: GeneratedLesson): Slide[] {
         const slides: Slide[] = [];
@@ -173,30 +211,30 @@ export class CourseContentService {
 
         slides.push({ index: index++, type: 'intro', title: lesson.title, body: lesson.objective });
 
-        const paragraphs = lesson.content
-            .split('\n')
-            .map((p) => p.trim())
-            .filter((p) => p.length > 20)
-            .slice(0, 3);
-
-        for (const paragraph of paragraphs) {
-            slides.push({ index: index++, type: 'content', title: lesson.title, body: paragraph });
+        for (const bloque of this.splitContent(lesson.content)) {
+            slides.push({ index: index++, type: 'content', title: lesson.title, body: bloque });
         }
 
-        for (const keyPoint of lesson.keyPoints) {
-            slides.push({ index: index++, type: 'keypoint', title: 'Punto clave', body: keyPoint });
-        }
+        lesson.keyPoints.forEach((keyPoint, i) => {
+            slides.push({
+                index: index++,
+                type: 'keypoint',
+                title: `Punto clave ${i + 1} de ${lesson.keyPoints.length}`,
+                body: keyPoint,
+            });
+        });
 
+        // Resumen con TODOS los puntos clave y el título tal cual (sin minúsculas: "CVs", siglas, nombres propios)
         const resumenPuntos =
             lesson.keyPoints.length > 0
-                ? ` Los puntos clave son: ${lesson.keyPoints.slice(0, 2).join(', ')}.`
+                ? ` Los puntos clave son: ${lesson.keyPoints.map((kp) => kp.replace(/[.;\s]+$/, '')).join('; ')}.`
                 : '';
 
         slides.push({
             index: index++,
             type: 'summary',
             title: 'Resumen',
-            body: `En esta lección aprendiste sobre ${lesson.title.toLowerCase()}.${resumenPuntos}`,
+            body: `En esta lección aprendiste sobre «${lesson.title}».${resumenPuntos}`,
         });
 
         return slides;
