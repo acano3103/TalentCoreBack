@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { SubmitLessonProgressDto } from './dto/submit-lesson-progress.dto';
+import { RegisterActivityDto } from './dto/register-activity.dto';
+import { CourseTrackingService } from './course-tracking.service';
 import { QuizQuestion, Slide } from './interfaces/course-content.interface';
 
 // Calificación mínima cuando el curso no tiene calificacionAprobatoria configurada (mismo default que CourseContentService)
@@ -21,7 +23,10 @@ interface ProgresoLeccion {
 export class CourseLearningService {
     private readonly logger = new Logger(CourseLearningService.name);
 
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly trackingService: CourseTrackingService,
+    ) { }
 
     // ==========================================
     // HELPERS PRIVADOS
@@ -386,7 +391,12 @@ export class CourseLearningService {
         const ahora = new Date();
 
         // 2. Guardar el avance y recalcular la participación en una sola transacción
+        const participante = { idTenant, idParticipante: participacion.idParticipante };
+
         const resultadoCurso = await this.prismaService.$transaction(async (tx) => {
+            // Seguimiento: cuenta como actividad del empleado
+            await this.trackingService.touchActivity(tx, participante, ahora);
+
             const guardado = await tx.cursoLeccionProgresos.upsert({
                 where: {
                     idParticipante_idLeccion: { idParticipante: participacion.idParticipante, idLeccion: lessonId },
@@ -406,6 +416,25 @@ export class CourseLearningService {
                 select: { idLeccion: true, calificacionQuiz: true, fechaCompletado: true },
             });
             progressMap.set(lessonId, { ...guardado, idProgreso: anterior?.idProgreso ?? 0 });
+
+            // Seguimiento: se guarda CADA intento (no solo el mejor) y el momento en que completa la lección
+            if (calificacion != null) {
+                await this.trackingService.recordQuizAttempt(tx, participante, {
+                    idLeccion: lessonId,
+                    calificacion,
+                    aprobado: aprobada,
+                    respuestas: answers,
+                    totalPreguntas: quiz.length,
+                    respuestasCorrectas: correctas.filter(Boolean).length,
+                    yaAprobadaAntes: calificacionAnterior != null && calificacionAnterior >= aprobatoria,
+                    ahora,
+                });
+            }
+            if (completada && !anterior?.fechaCompletado) {
+                await this.trackingService.logEvent(tx, participante, 'completar_leccion', ahora, lessonId, {
+                    calificacion: mejorCalificacion,
+                });
+            }
 
             const resumen = this.buildProgressSummary(lessonIds, progressMap);
             let estatusAsignacion = participacion.estatusAsignacion;
@@ -445,8 +474,16 @@ export class CourseLearningService {
                 }
             }
 
+            if (terminado) {
+                // Seguimiento: fecha y hora de conclusión (solo la primera vez que termina)
+                await this.trackingService.registerCourseEnd(tx, participante, ahora, {
+                    calificacionFinal,
+                    estatusAsignacion,
+                });
+            }
+
             return { ...resumen, terminado, estatusAsignacion, calificacionFinal, cambioEstatus };
-        });
+        }, { timeout: 15000 });
 
         const { cambioEstatus, ...curso } = resultadoCurso;
         if (cambioEstatus) {
@@ -470,5 +507,45 @@ export class CourseLearningService {
             siguienteLeccion: completada && siguiente ? { idLeccion: siguiente.idLeccion, titulo: siguiente.titulo } : null,
             curso,
         };
+    }
+
+    // ==========================================
+    // SEGUIMIENTO DE ACTIVIDAD (PARA REPORTES)
+    // ==========================================
+
+    // El player avisa cuando abre una lección y cada 60 s mientras está visible (latido).
+    // Solo registra seguimiento; no cambia el avance ni la calificación.
+    async registerActivity(companyId: number, sessionId: number, dto: RegisterActivityDto, user: ActiveUserDto) {
+        const { participacion, idTenant } = await this.getParticipation(companyId, sessionId, user);
+        const participante = { idTenant, idParticipante: participacion.idParticipante };
+        const ahora = new Date();
+
+        if (dto.tipo === 'latido') {
+            await this.trackingService.touchActivity(this.prismaService, participante, ahora);
+            return { registrado: true };
+        }
+
+        const contenido = await this.getContent(sessionId, idTenant);
+        if (!contenido) throw new BadRequestException('El curso aún no tiene contenido.');
+
+        const lessonIds = this.flattenLessons(contenido).map((l) => l.idLeccion);
+        if (!lessonIds.includes(dto.idLeccion!)) {
+            throw new NotFoundException(`La lección #${dto.idLeccion} no pertenece a este curso.`);
+        }
+
+        const progresos = await this.prismaService.cursoLeccionProgresos.findMany({
+            where: { idParticipante: participacion.idParticipante, idTenant },
+            select: { idLeccion: true, calificacionQuiz: true, fechaCompletado: true },
+        });
+        const progressMap = new Map(progresos.map((p) => [p.idLeccion, p]));
+        if (this.getLockedIds(lessonIds, progressMap, contenido.modoAvance as ModoAvance).has(dto.idLeccion!)) {
+            throw new BadRequestException('Primero completa la lección anterior para desbloquear esta.');
+        }
+
+        const yaCompletada = !!progressMap.get(dto.idLeccion!)?.fechaCompletado;
+        await this.prismaService.$transaction((tx) =>
+            this.trackingService.registerLessonOpen(tx, participante, dto.idLeccion!, yaCompletada, ahora),
+        );
+        return { registrado: true, repaso: yaCompletada };
     }
 }

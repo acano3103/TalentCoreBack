@@ -6,6 +6,7 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { CourseLearningService } from './course-learning.service';
 import { SubmitLessonProgressDto } from './dto/submit-lesson-progress.dto';
+import { RegisterActivityDto } from './dto/register-activity.dto';
 
 // Endpoints del empleado logueado: sus cursos Online Asíncrono asignados, tomarlos y guardar su avance
 @ApiBearerAuth()
@@ -57,5 +58,21 @@ export class CourseLearningController {
         @GetActiveUser() activeUser: ActiveUserDto,
     ) {
         return this.courseLearningService.submitLessonProgress(companyId, sessionId, lessonId, submitLessonProgressDto, activeUser);
+    }
+
+    // Endpoint para registrar actividad del empleado (abrir lección o latido cada 60 s) para el seguimiento
+    @Post(':sessionId/activity')
+    @ApiOperation({ summary: 'Register employee activity in the course (open lesson or heartbeat) for tracking', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 201, description: 'Activity registered' })
+    @ApiResponse({ status: 400, description: 'Invalid activity or lesson locked' })
+    @ApiResponse({ status: 404, description: 'Course or lesson not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    registerActivity(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('sessionId', ParseIntPipe) sessionId: number,
+        @Body() registerActivityDto: RegisterActivityDto,
+        @GetActiveUser() activeUser: ActiveUserDto,
+    ) {
+        return this.courseLearningService.registerActivity(companyId, sessionId, registerActivityDto, activeUser);
     }
 }

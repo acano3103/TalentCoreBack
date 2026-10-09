@@ -8,10 +8,12 @@ import { CourseContentController } from './course-content.controller';
 import { CourseContentService } from './course-content.service';
 import { CourseLearningController } from './course-learning.controller';
 import { CourseLearningService } from './course-learning.service';
+import { CourseTrackingController } from './course-tracking.controller';
+import { CourseTrackingService } from './course-tracking.service';
 
 @Module({
   imports: [IntegrationsModule],
-  controllers: [CoursesController, CourseContentController, CourseLearningController],
-  providers: [CoursesService, CourseContentService, CourseLearningService, ConfigService, EncryptionService],
+  controllers: [CoursesController, CourseContentController, CourseLearningController, CourseTrackingController],
+  providers: [CoursesService, CourseContentService, CourseLearningService, CourseTrackingService, ConfigService, EncryptionService],
 })
 export class CoursesModule { }

@@ -1618,6 +1618,9 @@ model CursoParticipantes {
   calificacionFinal Decimal?                              @db.Decimal(5, 2)
   creadoEn          DateTime?                             @default(now()) @db.Timestamp(0)
   CursoLeccionProgresos CursoLeccionProgresos[]
+  CursoIntentosQuiz            CursoIntentosQuiz[]
+  CursoBitacoraActividad       CursoBitacoraActividad[]
+  CursoSeguimientoParticipante CursoSeguimientoParticipante?
   Empleados         Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
   CursoSesiones     CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
 
@@ -2213,6 +2216,8 @@ model CursoLecciones {
   creadoEn              DateTime?                   @default(now()) @db.Timestamp(0)
   actualizadoEn         DateTime?                   @default(now()) @db.Timestamp(0)
   CursoLeccionProgresos CursoLeccionProgresos[]
+  CursoIntentosQuiz      CursoIntentosQuiz[]
+  CursoBitacoraActividad CursoBitacoraActividad[]
   CursoModulos          CursoModulos                @relation(fields: [idCursoModulo], references: [idCursoModulo], onDelete: Cascade, onUpdate: NoAction, map: "fk_leccion_modulo")
 
   @@index([idCursoModulo, orden], map: "idx_leccion_modulo_orden")
@@ -2430,4 +2435,78 @@ enum CursoLecciones_estatusVideo {
 enum CursoPaquetesScorm_version {
   scorm_12
   scorm_2004
+}
+model CursoIntentosQuiz {
+  idIntento           Int                           @id @default(autoincrement())
+  idTenant            Int
+  idParticipante      Int
+  idLeccion           Int
+  numeroIntento       Int
+  calificacion        Decimal                       @db.Decimal(5, 2)
+  aprobado            Boolean
+  totalPreguntas      Int
+  respuestasCorrectas Int
+  respuestas          Json
+  tipoIntento         CursoIntentosQuiz_tipoIntento
+  fechaIntento        DateTime                      @db.DateTime(0)
+  CursoParticipantes  CursoParticipantes            @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_intento_participante")
+  CursoLecciones      CursoLecciones                @relation(fields: [idLeccion], references: [idLeccion], onDelete: Cascade, onUpdate: NoAction, map: "fk_intento_leccion")
+
+  @@index([idParticipante, idLeccion], map: "idx_intento_participante_leccion")
+  @@index([idLeccion], map: "idx_intento_leccion")
+  @@index([idTenant], map: "idx_intento_tenant")
+}
+
+model CursoBitacoraActividad {
+  idActividad        BigInt                            @id @default(autoincrement())
+  idTenant           Int
+  idParticipante     Int
+  idLeccion          Int?
+  tipoEvento         CursoBitacoraActividad_tipoEvento
+  detalle            Json?
+  fechaEvento        DateTime                          @db.DateTime(0)
+  CursoParticipantes CursoParticipantes                @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_bitacora_participante")
+  CursoLecciones     CursoLecciones?                   @relation(fields: [idLeccion], references: [idLeccion], onUpdate: NoAction, map: "fk_bitacora_leccion")
+
+  @@index([idParticipante, fechaEvento], map: "idx_bitacora_participante_fecha")
+  @@index([tipoEvento], map: "idx_bitacora_tipo")
+  @@index([idTenant], map: "idx_bitacora_tenant")
+  @@index([idLeccion], map: "idx_bitacora_leccion")
+}
+
+model CursoSeguimientoParticipante {
+  idSeguimiento             Int                @id @default(autoincrement())
+  idTenant                  Int
+  idParticipante            Int                @unique(map: "uk_seguimiento_participante")
+  fechaPrimerAcceso         DateTime?          @db.DateTime(0)
+  fechaUltimaActividad      DateTime?          @db.DateTime(0)
+  fechaConclusion           DateTime?          @db.DateTime(0)
+  tiempoTotalSegundos       Int                @default(0)
+  totalSesionesEstudio      Int                @default(0)
+  vecesRetomado             Int                @default(0)
+  totalRepasos              Int                @default(0)
+  totalIntentosQuiz         Int                @default(0)
+  totalQuizReprobados       Int                @default(0)
+  totalIntentosMejora       Int                @default(0)
+  calificacionPrimerIntento Decimal?           @db.Decimal(5, 2)
+  actualizadoEn             DateTime?          @default(now()) @db.Timestamp(0)
+  CursoParticipantes        CursoParticipantes @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_seguimiento_participante")
+
+  @@index([idTenant], map: "idx_seguimiento_tenant")
+}
+
+enum CursoIntentosQuiz_tipoIntento {
+  primero
+  reintento
+  mejora
+}
+
+enum CursoBitacoraActividad_tipoEvento {
+  inicio_curso
+  retomo_curso
+  abrir_leccion
+  repaso_leccion
+  intento_quiz
+  completar_leccion
+  fin_curso
 }
