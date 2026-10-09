@@ -101,7 +101,8 @@ export class CourseLearningService {
     }
 
     // El curso solo se puede tomar dentro del periodo y si la sesión no está cancelada ni finalizada
-    private getAvailability(session: { estatus: string; fechaInicioPeriodo: Date; fechaFinPeriodo: Date }) {
+    // fechaFinPeriodo en null = periodo indeterminado: el curso no vence
+    private getAvailability(session: { estatus: string; fechaInicioPeriodo: Date; fechaFinPeriodo: Date | null }) {
         const ahora = new Date();
         const fecha = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -110,7 +111,7 @@ export class CourseLearningService {
         if (ahora < session.fechaInicioPeriodo) {
             return { disponible: false, motivo: `El curso estará disponible a partir del ${fecha(session.fechaInicioPeriodo)}.` };
         }
-        if (ahora > session.fechaFinPeriodo) {
+        if (session.fechaFinPeriodo && ahora > session.fechaFinPeriodo) {
             return { disponible: false, motivo: `El periodo del curso terminó el ${fecha(session.fechaFinPeriodo)}.` };
         }
         return { disponible: true, motivo: null };
@@ -202,7 +203,7 @@ export class CourseLearningService {
                 },
                 CursoLeccionProgresos: { select: { idLeccion: true, calificacionQuiz: true, fechaCompletado: true } },
             },
-            orderBy: { CursoSesiones: { fechaFinPeriodo: 'asc' } },
+            orderBy: { CursoSesiones: { fechaInicioPeriodo: 'desc' } },
         });
 
         return participaciones

@@ -1635,7 +1635,7 @@ model CursoSesiones {
   nombreInstructorExterno    String?                      @db.VarChar(255)
   empresaInstructorExterno   String?                      @db.VarChar(255)
   fechaInicioPeriodo         DateTime                     @db.DateTime(0)
-  fechaFinPeriodo            DateTime                     @db.DateTime(0)
+  fechaFinPeriodo            DateTime?                     @db.DateTime(0)
   ubicacionFisica            String?                      @db.VarChar(255)
   linkReunion                String?                      @db.VarChar(500)
   minutosToleranciaQr        Int                          @default(15)

@@ -275,6 +275,11 @@ export class CoursesService {
       );
     }
 
+    // El fin del periodo (si viene) no puede ser antes del inicio
+    if (fechaFinPeriodo && new Date(fechaFinPeriodo) < new Date(fechaInicioPeriodo)) {
+      throw new BadRequestException('La fecha de fin del periodo no puede ser anterior a la fecha de inicio.');
+    }
+
     // 2. Ejecutamos la inserción relacional y el histórico en una sola Transacción
     return await this.prismaService.$transaction(async (tx) => {
       // A. Crear la Sesión Principal
@@ -295,7 +300,8 @@ export class CoursesService {
               ? empresaInstructorExterno
               : null,
           fechaInicioPeriodo: new Date(fechaInicioPeriodo),
-          fechaFinPeriodo: new Date(fechaFinPeriodo),
+          // null = fecha de término indeterminada (solo se permite en Online Asíncrono, lo valida el DTO)
+          fechaFinPeriodo: fechaFinPeriodo ? new Date(fechaFinPeriodo) : null,
           ubicacionFisica:
             modalidad === 'presencial' && ubicacionFisica?.trim() !== ''
               ? ubicacionFisica
