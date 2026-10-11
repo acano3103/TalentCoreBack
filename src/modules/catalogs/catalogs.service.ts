@@ -19,7 +19,8 @@ export type CatalogKey =
   | 'periodicidades-pagos'
   | 'cursos'
   | 'tipos-cursos'
-  | 'unidades-operativas';
+  | 'unidades-operativas'
+  | 'modulos-flujo';
 
 @Injectable()
 export class CatalogsService {
@@ -217,6 +218,11 @@ export class CatalogsService {
         return this.prisma.catUnidadesOperativas.findMany({
           where: { idEmpresa: companyId, Activo: true },
           orderBy: { Descripcion: 'asc' },
+        });
+
+      case 'modulos-flujo':
+        return this.prisma.catModuloFlujo.findMany({
+          orderBy: { codigo: 'asc' },
         });
 
       default:

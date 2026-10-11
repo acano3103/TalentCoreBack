@@ -1611,14 +1611,18 @@ model CursoFechasClase {
 }
 
 model CursoParticipantes {
-  idParticipante    Int                                   @id @default(autoincrement())
-  idSesion          Int
-  idEmpleado        Int
-  estatusAsignacion CursoParticipantes_estatusAsignacion? @default(inscrito)
-  calificacionFinal Decimal?                              @db.Decimal(5, 2)
-  creadoEn          DateTime?                             @default(now()) @db.Timestamp(0)
-  Empleados         Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
-  CursoSesiones     CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
+  idParticipante               Int                                   @id @default(autoincrement())
+  idSesion                     Int
+  idEmpleado                   Int
+  estatusAsignacion            CursoParticipantes_estatusAsignacion? @default(inscrito)
+  calificacionFinal            Decimal?                              @db.Decimal(5, 2)
+  creadoEn                     DateTime?                             @default(now()) @db.Timestamp(0)
+  CursoBitacoraActividad       CursoBitacoraActividad[]
+  CursoIntentosQuiz            CursoIntentosQuiz[]
+  CursoLeccionProgresos        CursoLeccionProgresos[]
+  Empleados                    Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
+  CursoSesiones                CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
+  CursoSeguimientoParticipante CursoSeguimientoParticipante?
 
   @@unique([idSesion, idEmpleado], map: "uk_sesion_empleado")
   @@index([idEmpleado], map: "idx_curso_participantes_empleado")
@@ -1634,13 +1638,14 @@ model CursoSesiones {
   nombreInstructorExterno    String?                      @db.VarChar(255)
   empresaInstructorExterno   String?                      @db.VarChar(255)
   fechaInicioPeriodo         DateTime                     @db.DateTime(0)
-  fechaFinPeriodo            DateTime                     @db.DateTime(0)
+  fechaFinPeriodo            DateTime?                    @db.DateTime(0)
   ubicacionFisica            String?                      @db.VarChar(255)
   linkReunion                String?                      @db.VarChar(500)
   minutosToleranciaQr        Int                          @default(15)
   porcentajeAsistenciaMinimo Decimal?                     @default(80.00) @db.Decimal(5, 2)
   estatus                    CursoSesiones_estatus        @default(programado)
   creadoEn                   DateTime?                    @default(now()) @db.Timestamp(0)
+  CursoContenidos            CursoContenidos?
   CursoFechasClase           CursoFechasClase[]
   CursoParticipantes         CursoParticipantes[]
   CatCursos                  CatCursos                    @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "fk_sesion_curso")
@@ -1672,9 +1677,15 @@ model CatRolAprobador {
 
 model CatTipoMovimiento {
   idTipoMovimiento             Int                            @id @default(autoincrement())
+  idModuloFlujo                Int                            @default(2)
   codigo                       String                         @unique(map: "uk_CatTipoMovimiento_codigo") @db.VarChar(50)
   nombre                       String                         @db.VarChar(100)
+  activo                       Boolean                        @default(true)
+  CatModuloFlujo               CatModuloFlujo                 @relation(fields: [idModuloFlujo], references: [idModuloFlujo], map: "fk_TipoMovimiento_ModuloFlujo")
+  ConfiguracionFlujoPaso       ConfiguracionFlujoPaso[]
   ConfiguracionPasosAprobacion ConfiguracionPasosAprobacion[]
+
+  @@index([idModuloFlujo], map: "fk_TipoMovimiento_ModuloFlujo")
 }
 
 model ConfiguracionPasosAprobacion {
@@ -2160,6 +2171,228 @@ model AsistenciaEvidencias {
   @@index([fechaPurga], map: "IDX_Evidencia_Purga")
 }
 
+model CatModuloFlujo {
+  idModuloFlujo           Int                       @id @default(autoincrement())
+  codigo                  String                    @unique(map: "codigo") @db.VarChar(50)
+  nombre                  String                    @db.VarChar(100)
+  CatTipoMovimiento       CatTipoMovimiento[]
+  ConfiguracionFlujoPaso  ConfiguracionFlujoPaso[]
+  SolicitudAprobacionPaso SolicitudAprobacionPaso[]
+}
+
+model ConfiguracionFlujoPaso {
+  idConfiguracionPaso           Int                                       @id @default(autoincrement())
+  idTenant                      Int
+  idEmpresa                     Int
+  idModuloFlujo                 Int
+  idTipoMovimiento              Int
+  codigoTipoSolicitud           String                                    @db.VarChar(50)
+  paso                          Int
+  tipoAprobador                 ConfiguracionFlujoPaso_tipoAprobador
+  nivelJerarquia                Int?                                      @default(1)
+  autoAprobarSiSolicitante      Boolean                                   @default(true)
+  idRolAprobador                Int?
+  modoAsignacionRol             ConfiguracionFlujoPaso_modoAsignacionRol? @default(CUALQUIERA)
+  idUsuarioFijoRol              Int?
+  activo                        Boolean                                   @default(true)
+  fechaCreacion                 DateTime                                  @default(now()) @db.DateTime(0)
+  fechaActualizacion            DateTime                                  @default(now()) @db.DateTime(0)
+  CatModuloFlujo                CatModuloFlujo                            @relation(fields: [idModuloFlujo], references: [idModuloFlujo], map: "fk_cfgpaso_modulo")
+  CatTipoMovimiento             CatTipoMovimiento                         @relation(fields: [idTipoMovimiento], references: [idTipoMovimiento], map: "fk_cfgpaso_tipomovimiento")
+  ConfiguracionPasoAreaDirector ConfiguracionPasoAreaDirector[]
+
+  @@unique([idEmpresa, idModuloFlujo, codigoTipoSolicitud, paso], map: "uk_flujo_empresa_solicitud_paso")
+  @@index([idModuloFlujo], map: "fk_cfgpaso_modulo")
+  @@index([idTipoMovimiento], map: "fk_cfgpaso_tipomovimiento")
+  @@index([idEmpresa, idModuloFlujo, codigoTipoSolicitud], map: "idx_busqueda_flujo")
+}
+
+model ConfiguracionPasoAreaDirector {
+  idConfiguracionAreaDirector Int                    @id @default(autoincrement())
+  idConfiguracionPaso         Int
+  idArea                      Int
+  idUsuarioDirector           Int
+  ConfiguracionFlujoPaso      ConfiguracionFlujoPaso @relation(fields: [idConfiguracionPaso], references: [idConfiguracionPaso], onDelete: Cascade, map: "fk_area_dir_paso")
+
+  @@unique([idConfiguracionPaso, idArea], map: "uk_paso_area")
+  @@index([idConfiguracionPaso], map: "idx_paso_director")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CursoBitacoraActividad {
+  idActividad        BigInt                            @id @default(autoincrement())
+  idTenant           Int
+  idParticipante     Int
+  idLeccion          Int?
+  tipoEvento         CursoBitacoraActividad_tipoEvento
+  detalle            Json?
+  fechaEvento        DateTime                          @db.DateTime(0)
+  CursoLecciones     CursoLecciones?                   @relation(fields: [idLeccion], references: [idLeccion], onUpdate: NoAction, map: "fk_bitacora_leccion")
+  CursoParticipantes CursoParticipantes                @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_bitacora_participante")
+
+  @@index([idLeccion], map: "idx_bitacora_leccion")
+  @@index([idParticipante, fechaEvento], map: "idx_bitacora_participante_fecha")
+  @@index([idTenant], map: "idx_bitacora_tenant")
+  @@index([tipoEvento], map: "idx_bitacora_tipo")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CursoContenidos {
+  idContenido        Int                           @id @default(autoincrement())
+  idTenant           Int
+  idEmpresa          Int
+  idSesion           Int                           @unique(map: "uk_contenido_sesion")
+  tipoContenido      CursoContenidos_tipoContenido
+  modoAvance         CursoContenidos_modoAvance    @default(libre)
+  estructuraIa       Json?
+  estatusVideo       CursoContenidos_estatusVideo  @default(pendiente)
+  activo             Boolean                       @default(true)
+  creadoEn           DateTime?                     @default(now()) @db.Timestamp(0)
+  actualizadoEn      DateTime?                     @default(now()) @db.Timestamp(0)
+  CursoSesiones      CursoSesiones                 @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_contenido_sesion")
+  CursoModulos       CursoModulos[]
+  CursoPaquetesScorm CursoPaquetesScorm?
+
+  @@index([idTenant], map: "idx_contenido_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CursoIntentosQuiz {
+  idIntento           Int                           @id @default(autoincrement())
+  idTenant            Int
+  idParticipante      Int
+  idLeccion           Int
+  numeroIntento       Int
+  calificacion        Decimal                       @db.Decimal(5, 2)
+  aprobado            Boolean
+  totalPreguntas      Int
+  respuestasCorrectas Int
+  respuestas          Json
+  tipoIntento         CursoIntentosQuiz_tipoIntento
+  fechaIntento        DateTime                      @db.DateTime(0)
+  CursoLecciones      CursoLecciones                @relation(fields: [idLeccion], references: [idLeccion], onDelete: Cascade, onUpdate: NoAction, map: "fk_intento_leccion")
+  CursoParticipantes  CursoParticipantes            @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_intento_participante")
+
+  @@index([idLeccion], map: "idx_intento_leccion")
+  @@index([idParticipante, idLeccion], map: "idx_intento_participante_leccion")
+  @@index([idTenant], map: "idx_intento_tenant")
+}
+
+model CursoLeccionProgresos {
+  idProgreso         Int                @id @default(autoincrement())
+  idTenant           Int
+  idParticipante     Int
+  idLeccion          Int
+  videoVisto         Boolean            @default(false)
+  calificacionQuiz   Decimal?           @db.Decimal(5, 2)
+  fechaCompletado    DateTime?          @db.DateTime(0)
+  creadoEn           DateTime?          @default(now()) @db.Timestamp(0)
+  actualizadoEn      DateTime?          @default(now()) @db.Timestamp(0)
+  CursoLecciones     CursoLecciones     @relation(fields: [idLeccion], references: [idLeccion], onDelete: Cascade, onUpdate: NoAction, map: "fk_progreso_leccion")
+  CursoParticipantes CursoParticipantes @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_progreso_participante")
+
+  @@unique([idParticipante, idLeccion], map: "uk_participante_leccion")
+  @@index([idLeccion], map: "idx_progreso_leccion")
+  @@index([idTenant], map: "idx_progreso_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CursoLecciones {
+  idLeccion              Int                         @id @default(autoincrement())
+  idTenant               Int
+  idCursoModulo          Int
+  titulo                 String                      @db.VarChar(255)
+  objetivo               String?                     @db.Text
+  contenido              String?                     @db.LongText
+  puntosClave            Json?
+  slides                 Json?
+  quiz                   Json?
+  urlVideo               String?                     @db.VarChar(500)
+  estatusVideo           CursoLecciones_estatusVideo @default(pendiente)
+  idTrabajoVideo         String?                     @db.VarChar(100)
+  orden                  Int                         @default(0)
+  creadoEn               DateTime?                   @default(now()) @db.Timestamp(0)
+  actualizadoEn          DateTime?                   @default(now()) @db.Timestamp(0)
+  CursoBitacoraActividad CursoBitacoraActividad[]
+  CursoIntentosQuiz      CursoIntentosQuiz[]
+  CursoLeccionProgresos  CursoLeccionProgresos[]
+  CursoModulos           CursoModulos                @relation(fields: [idCursoModulo], references: [idCursoModulo], onDelete: Cascade, onUpdate: NoAction, map: "fk_leccion_modulo")
+
+  @@index([idCursoModulo, orden], map: "idx_leccion_modulo_orden")
+  @@index([idTenant], map: "idx_leccion_tenant")
+}
+
+model CursoModulos {
+  idCursoModulo   Int              @id @default(autoincrement())
+  idTenant        Int
+  idContenido     Int
+  titulo          String           @db.VarChar(255)
+  objetivo        String?          @db.Text
+  orden           Int              @default(0)
+  creadoEn        DateTime?        @default(now()) @db.Timestamp(0)
+  CursoLecciones  CursoLecciones[]
+  CursoContenidos CursoContenidos  @relation(fields: [idContenido], references: [idContenido], onDelete: Cascade, onUpdate: NoAction, map: "fk_modulo_contenido")
+
+  @@index([idContenido, orden], map: "idx_modulo_contenido_orden")
+  @@index([idTenant], map: "idx_modulo_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CursoPaquetesScorm {
+  idPaqueteScorm  Int                        @id @default(autoincrement())
+  idTenant        Int
+  idContenido     Int                        @unique(map: "uk_scorm_contenido")
+  version         CursoPaquetesScorm_version @default(scorm_12)
+  archivoInicio   String                     @db.VarChar(500)
+  rutaArchivo     String                     @db.VarChar(500)
+  nombreArchivo   String?                    @db.VarChar(255)
+  creadoEn        DateTime?                  @default(now()) @db.Timestamp(0)
+  CursoContenidos CursoContenidos            @relation(fields: [idContenido], references: [idContenido], onDelete: Cascade, onUpdate: NoAction, map: "fk_scorm_contenido")
+
+  @@index([idTenant], map: "idx_scorm_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CursoSeguimientoParticipante {
+  idSeguimiento             Int                @id @default(autoincrement())
+  idTenant                  Int
+  idParticipante            Int                @unique(map: "uk_seguimiento_participante")
+  fechaPrimerAcceso         DateTime?          @db.DateTime(0)
+  fechaUltimaActividad      DateTime?          @db.DateTime(0)
+  fechaConclusion           DateTime?          @db.DateTime(0)
+  tiempoTotalSegundos       Int                @default(0)
+  totalSesionesEstudio      Int                @default(0)
+  vecesRetomado             Int                @default(0)
+  totalRepasos              Int                @default(0)
+  totalIntentosQuiz         Int                @default(0)
+  totalQuizReprobados       Int                @default(0)
+  totalIntentosMejora       Int                @default(0)
+  calificacionPrimerIntento Decimal?           @db.Decimal(5, 2)
+  actualizadoEn             DateTime?          @default(now()) @db.Timestamp(0)
+  CursoParticipantes        CursoParticipantes @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_seguimiento_participante")
+
+  @@index([idTenant], map: "idx_seguimiento_tenant")
+}
+
+model SolicitudAprobacionPaso {
+  idSolicitudAprobacionPaso  Int                            @id @default(autoincrement())
+  idEmpresa                  Int
+  idModuloFlujo              Int
+  idSolicitud                Int
+  paso                       Int
+  idUsuarioAprobadorAsignado Int?
+  idRolAprobadorRequerido    Int?
+  idUsuarioDictaminador      Int?
+  estado                     SolicitudAprobacionPaso_estado @default(PENDIENTE)
+  comentarios                String?                        @db.Text
+  fechaAccion                DateTime?                      @db.DateTime(0)
+  fechaCreacion              DateTime                       @default(now()) @db.DateTime(0)
+  CatModuloFlujo             CatModuloFlujo                 @relation(fields: [idModuloFlujo], references: [idModuloFlujo], map: "fk_sol_aprob_modulo")
+
+  @@index([idUsuarioAprobadorAsignado, estado], map: "idx_aprobador_pendiente")
+  @@index([idModuloFlujo, idSolicitud, paso], map: "idx_solicitud_estado")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -2300,4 +2533,76 @@ enum AsistenciaEvidencias_tipo {
   SELFIE
   FOTO
   FIRMA
+}
+
+enum CursoPaquetesScorm_version {
+  scorm_12
+  scorm_2004
+}
+
+enum CursoBitacoraActividad_tipoEvento {
+  inicio_curso
+  retomo_curso
+  abrir_leccion
+  repaso_leccion
+  intento_quiz
+  completar_leccion
+  fin_curso
+}
+
+enum CursoContenidos_tipoContenido {
+  scorm
+  nativo
+  ia
+}
+
+enum CursoContenidos_modoAvance {
+  libre
+  video_completo
+  aprobar_quiz
+  video_y_quiz
+}
+
+enum ConfiguracionFlujoPaso_tipoAprobador {
+  JERARQUIA
+  ROL
+  AREA
+}
+
+enum CursoContenidos_estatusVideo {
+  pendiente
+  generando
+  listo
+  error
+  sin_creditos
+  no_aplica
+}
+
+enum SolicitudAprobacionPaso_estado {
+  PENDIENTE
+  EN_REVISION
+  APROBADO
+  RECHAZADO
+  AUTO_APROBADO
+  SALTADO
+}
+
+enum CursoIntentosQuiz_tipoIntento {
+  primero
+  reintento
+  mejora
+}
+
+enum CursoLecciones_estatusVideo {
+  pendiente
+  generando
+  listo
+  error
+  sin_creditos
+  no_aplica
+}
+
+enum ConfiguracionFlujoPaso_modoAsignacionRol {
+  CUALQUIERA
+  ESPECIFICO
 }

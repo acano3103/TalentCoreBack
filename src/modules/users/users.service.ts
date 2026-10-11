@@ -443,4 +443,221 @@ export class UsersService {
       message: 'Contraseña actualizada correctamente.',
     };
   }
+
+  async findByRole(activeUser: ActiveUserDto, idRole: number) {
+    const idTenant = activeUser.idTenant;
+
+    // 1. Obtener los IDs de usuario asociados al rol y activos
+    const relaciones = await this.prisma.relUsuarioRol.findMany({
+      where: {
+        idRol: idRole,
+        activo: true,
+      },
+      select: {
+        idUsuario: true,
+      },
+    });
+
+    const userIds = relaciones.map((r) => r.idUsuario);
+
+    if (userIds.length === 0) {
+      return [];
+    }
+
+    // 2. Obtener los usuarios filtrando por tenant e IDs
+    const usuarios = await this.prisma.auth_user.findMany({
+      where: {
+        idTenant: idTenant,
+        id: {
+          in: userIds,
+        },
+        is_active: true,
+      },
+      select: {
+        id: true,
+        uuid: true,
+        username: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+      },
+    });
+
+    if (usuarios.length === 0) {
+      return [];
+    }
+
+    const userUuids = usuarios.map((u) => u.uuid);
+
+    // 3. Obtener los empleados activos ligados a esos UUIDs (incluyendo su puesto)
+    const empleados = await this.prisma.empleados.findMany({
+      where: {
+        idTenant: idTenant,
+        idUsuario: {
+          in: userUuids,
+        },
+        activo: true,
+      },
+      select: {
+        idEmpleado: true,
+        numeroEmpleado: true,
+        idUsuario: true,
+        idPuesto: true,
+        CatPuestos: {
+          select: {
+            idPuesto: true,
+            NombrePuesto: true,
+          },
+        },
+      },
+    });
+
+    // Mapeamos los empleados por su idUsuario (uuid) para un lookup O(1)
+    const empleadoByUuid = new Map(
+      empleados.map((emp) => [emp.idUsuario, emp])
+    );
+
+    // 4. Retornar los usuarios con la información del empleado y puesto asignado
+    return usuarios.map((usuario) => {
+      const empleado = empleadoByUuid.get(usuario.uuid) || null;
+
+      return {
+        ...usuario,
+        empleado: empleado
+          ? {
+            idEmpleado: empleado.idEmpleado,
+            numeroEmpleado: empleado.numeroEmpleado,
+            idPuesto: empleado.idPuesto,
+            puesto: empleado.CatPuestos?.NombrePuesto || null,
+          }
+          : null,
+      };
+    });
+  }
+
+  async findByArea(activeUser: ActiveUserDto, idArea: number) {
+    const idTenant = activeUser.idTenant;
+
+    // 1. Obtener todos los puestos activos que pertenecen al área especificada y al tenant
+    const puestos = await this.prisma.catPuestos.findMany({
+      where: {
+        idTenant: idTenant,
+        idArea: idArea,
+        Activo: true,
+      },
+      select: {
+        idPuesto: true,
+        NombrePuesto: true,
+      },
+    });
+
+    const puestosIds = puestos.map((p) => p.idPuesto);
+
+    if (puestosIds.length === 0) {
+      return [];
+    }
+
+    // 2. Obtener los empleados activos asignados a esos puestos en el tenant
+    const empleados = await this.prisma.empleados.findMany({
+      where: {
+        idTenant: idTenant,
+        idPuesto: {
+          in: puestosIds,
+        },
+        activo: true,
+        idUsuario: {
+          not: null,
+        },
+      },
+      select: {
+        idEmpleado: true,
+        numeroEmpleado: true,
+        idUsuario: true,
+        idPuesto: true,
+      },
+    });
+
+    const userUuids = empleados
+      .map((e) => e.idUsuario)
+      .filter((uuid): uuid is string => Boolean(uuid));
+
+    if (userUuids.length === 0) {
+      return [];
+    }
+
+    // 3. Obtener los usuarios activos a partir de los UUIDs
+    const usuarios = await this.prisma.auth_user.findMany({
+      where: {
+        idTenant: idTenant,
+        uuid: {
+          in: userUuids,
+        },
+        is_active: true,
+      },
+      select: {
+        id: true,
+        uuid: true,
+        username: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+      },
+    });
+
+    if (usuarios.length === 0) {
+      return [];
+    }
+
+    const userIds = usuarios.map((u) => u.id);
+
+    // 4. (Opcional según tu ApiOperation) Obtener roles activos de estos usuarios
+    const relacionesRol = await this.prisma.relUsuarioRol.findMany({
+      where: {
+        idUsuario: {
+          in: userIds,
+        },
+        activo: true,
+      },
+      select: {
+        idUsuario: true,
+        idRol: true,
+      },
+    });
+
+    // 5. Indexar en Maps para combinación O(1)
+    const puestoById = new Map<number, string>(
+      puestos.map((p) => [p.idPuesto, (p.NombrePuesto ?? (p as any).NombrePuesto) || ""])
+    );
+
+    const empleadoByUuid = new Map(
+      empleados.map((emp) => [emp.idUsuario, emp])
+    );
+
+    const rolesByUserId = new Map<number, number[]>();
+    for (const rel of relacionesRol) {
+      const list = rolesByUserId.get(rel.idUsuario) || [];
+      list.push(rel.idRol);
+      rolesByUserId.set(rel.idUsuario, list);
+    }
+
+    // 6. Ensamblar el payload final
+    return usuarios.map((usuario) => {
+      const empleado = empleadoByUuid.get(usuario.uuid) || null;
+      const nombrePuesto = empleado?.idPuesto ? puestoById.get(empleado.idPuesto) || null : null;
+      const roles = rolesByUserId.get(usuario.id) || [];
+
+      return {
+        ...usuario,
+        roles,
+        empleado: empleado
+          ? {
+            idEmpleado: empleado.idEmpleado,
+            numeroEmpleado: empleado.numeroEmpleado,
+            idPuesto: empleado.idPuesto,
+            puesto: nombrePuesto,
+          }
+          : null,
+      };
+    });
+  }
 }

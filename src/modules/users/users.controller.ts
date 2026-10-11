@@ -40,6 +40,32 @@ export class UsersController {
     return user;
   }
 
+  // ESta función busca usuarios por su Rol
+  @Get('role/:idRole')
+  @ApiParam({ name: 'idRole', type: Number, description: 'Role ID' })
+  @ApiOperation({ summary: 'Get user by Role', description: 'Returns a specific user by their Role. Does not include password. Includes idRol and rol_descripcion via relUsuarioRol.', })
+  @ApiResponse({ status: 200, description: 'User found.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  findByRole(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('idRole', ParseIntPipe) idRole: number
+  ) {
+    return this.usersService.findByRole(user, idRole);
+  }
+
+  // ESta función busca usuarios por su Area
+  @Get('area/:idArea')
+  @ApiParam({ name: 'idArea', type: Number, description: 'Area ID' })
+  @ApiOperation({ summary: 'Get user by Area', description: 'Returns a specific user by their Area. Does not include password. Includes idRol and rol_descripcion via relUsuarioRol.', })
+  @ApiResponse({ status: 200, description: 'User found.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  findByArea(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('idArea', ParseIntPipe) idArea: number
+  ) {
+    return this.usersService.findByArea(user, idArea);
+  }
+
   // ESta función crea un nuevo usuario
   @Post()
   @HttpCode(HttpStatus.CREATED)
