@@ -35,6 +35,8 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedTiposMoneda(); /** CatTiposMoneda */
             await this.seedPeriodicidadesPago(); /** CatPeriodicidadesPago */
             await this.seedPlantillasNotificaciones(); /** PlantillasNotificaciones */
+            await this.seedModulosFlujo(); /** CatModuloFlujo (debe ir antes por FK) */
+            await this.seedTiposMovimiento(); /** CatTipoMovimiento */
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -636,6 +638,56 @@ export class CatalogsSeedService implements OnModuleInit {
                 gupshupId = VALUES(gupshupId),
                 noParams = VALUES(noParams);
         `;
+        }
+    }
+
+    // Seeds initial workflow modules into CatModuloFlujo
+    private async seedModulosFlujo() {
+        const modulos = [
+            { idModuloFlujo: 1, codigo: 'INCIDENCIAS', nombre: 'Módulo de Incidencias y Permisos' },
+            { idModuloFlujo: 2, codigo: 'MOVIMIENTOS', nombre: 'Módulo de Movimientos Internos de Personal' },
+        ];
+
+        for (const modulo of modulos) {
+            await this.prisma.$queryRaw`
+                INSERT INTO CatModuloFlujo (idModuloFlujo, codigo, nombre)
+                VALUES (${modulo.idModuloFlujo}, ${modulo.codigo}, ${modulo.nombre})
+                ON DUPLICATE KEY UPDATE 
+                    codigo = VALUES(codigo),
+                    nombre = VALUES(nombre);
+            `;
+        }
+    }
+
+    // Seeds movement types into CatTipoMovimiento
+    private async seedTiposMovimiento() {
+        const tipos = [
+            // idModuloFlujo = 1 (Incidencias y Permisos)
+            { idModuloFlujo: 1, codigo: 'VACACIONES', nombre: 'Solicitud de Vacaciones', activo: 1 },
+            { idModuloFlujo: 1, codigo: 'PERMISO_CON_GOCE', nombre: 'Permiso con Goce de Sueldo', activo: 1 },
+            { idModuloFlujo: 1, codigo: 'PERMISO_SIN_GOCE', nombre: 'Permiso sin Goce de Sueldo', activo: 1 },
+            { idModuloFlujo: 1, codigo: 'INCAPACIDAD_MEDICA', nombre: 'Incapacidad Médica (IMSS/Certificado)', activo: 1 },
+            { idModuloFlujo: 1, codigo: 'PERMUTA_TURNO', nombre: 'Permuta o Cambio de Turno', activo: 1 },
+            { idModuloFlujo: 1, codigo: 'DIAS_ECONOMICOS', nombre: 'Días Económicos / Personales', activo: 1 },
+            { idModuloFlujo: 1, codigo: 'HOMEOFFICE_TEMPORAL', nombre: 'Permiso de Trabajo Remoto (Home Office)', activo: 1 },
+            { idModuloFlujo: 1, codigo: 'HORAS_EXTRAS', nombre: 'Autorización de Tiempo Extra', activo: 1 },
+
+            // idModuloFlujo = 2 (Movimientos de Personal)
+            { idModuloFlujo: 2, codigo: 'PROMOCION', nombre: 'Promoción', activo: 1 },
+            { idModuloFlujo: 2, codigo: 'CAMBIO_AREA', nombre: 'Cambio de Área', activo: 1 },
+            { idModuloFlujo: 2, codigo: 'AJUSTE_SALARIAL', nombre: 'Ajuste Salarial', activo: 1 },
+            { idModuloFlujo: 2, codigo: 'REUBICACION_GEOGRAFICA', nombre: 'Reubicación Geográfica', activo: 1 },
+            { idModuloFlujo: 2, codigo: 'BAJA_PERSONAL', nombre: 'Baja de Personal', activo: 1 },
+        ];
+
+        for (const tipo of tipos) {
+            await this.prisma.$queryRaw`
+                INSERT INTO CatTipoMovimiento (idModuloFlujo, codigo, nombre, activo)
+                VALUES (${tipo.idModuloFlujo}, ${tipo.codigo}, ${tipo.nombre}, ${tipo.activo})
+                ON DUPLICATE KEY UPDATE 
+                    nombre = VALUES(nombre),
+                    activo = VALUES(activo);
+            `;
         }
     }
 
