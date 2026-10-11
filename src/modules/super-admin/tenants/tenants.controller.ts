@@ -7,6 +7,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { UpdateTenantModulesDto } from './dto/update-tenant-modules.dto';
 import { GetActiveUser } from 'src/modules/auth/decorators/active-user.decorator';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
+import { CreateTenantModuleDto } from './dto/create-tenant-module.dto';
 
 @ApiTags('Tenants')
 @ApiBearerAuth()
@@ -40,6 +41,18 @@ export class TenantsController {
     return this.tenantsService.findAll(page ?? 1, limit ?? 10, search || '');
   }
 
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post(':id/modules')
+  @ApiOperation({ summary: 'Crear un módulo y asociar sus permisos por rol para un tenant' })
+  @ApiResponse({ status: 201, description: 'Módulo y permisos creados exitosamente' })
+  @ApiResponse({ status: 404, description: 'Tenant no encontrado' })
+  async createModuleWithPermissions(
+    @Param('id', ParseIntPipe) tenantId: number,
+    @Body() dto: CreateTenantModuleDto,
+  ) {
+    return this.tenantsService.createModuleWithPermissions(tenantId, dto);
+  }
+
   // Obtener todos los tenants paginados
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
   @Get(':id')
@@ -50,6 +63,30 @@ export class TenantsController {
     @Param('id') id: string
   ) {
     return this.tenantsService.findOne(id);
+  }
+
+  // Obtener todos los roles de un tenant
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get(':id/roles')
+  @ApiOperation({ summary: 'Get all roles for a tenant' })
+  @ApiResponse({ status: 200, description: 'Tenant roles retrieved successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  findOneTenantRoles(
+    @Param('id', ParseIntPipe) id: number
+  ) {
+    return this.tenantsService.findRolesByTenantId(id);
+  }
+
+  // Obtener todos los modulos principales y sus hijos
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get(':id/modules')
+  @ApiOperation({ summary: 'Get all modules for a tenant' })
+  @ApiResponse({ status: 200, description: 'Tenant modules retrieved successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  findOneTenantModules(
+    @Param('id', ParseIntPipe) id: number
+  ) {
+    return this.tenantsService.findModulesByTenantId(id);
   }
 
   // Actualizar el estado de los módulos de un tenant

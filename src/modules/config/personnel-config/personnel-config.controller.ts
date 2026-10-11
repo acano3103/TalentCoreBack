@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Put } from '@nestjs/common';
 import { PersonnelConfigService } from './personnel-config.service';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -7,6 +7,7 @@ import { GetActiveUser } from 'src/modules/auth/decorators/active-user.decorator
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { CreateApprovalWorkflowBatchDto } from './dto/create-approval-workflow.dto';
 import { PaginationApprovalWorkflowDto } from './dto/pagination-approval-workflow.dto';
+import { UpdatePersonnelConfigDto } from './dto/update-personnel-config.dto';
 
 @ApiTags('Personnel Config')
 @ApiBearerAuth()
@@ -14,6 +15,19 @@ import { PaginationApprovalWorkflowDto } from './dto/pagination-approval-workflo
 @Controller('companies/:companyId/personnel-config')
 export class PersonnelConfigController {
   constructor(private readonly personnelConfigService: PersonnelConfigService) { }
+
+  // Este endpoint retorna la configuracion general de personal
+  @Get()
+  @ApiOperation({ summary: 'Config data for personnel tracking', description: 'Returns config data for personnel tracking' })
+  @ApiResponse({ status: 200, description: 'Config data retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  getConfig(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.personnelConfigService.getConfiguracionPersonal(user.idTenant, companyId);
+  }
 
   // Este endpoint retorna los flujos de aprobacion paginados
   @Get('approval-workflows')
@@ -70,5 +84,20 @@ export class PersonnelConfigController {
     @Body() dto: CreateApprovalWorkflowBatchDto,
   ) {
     return this.personnelConfigService.guardarFlujoAprobacionCompleto(user.idTenant, companyId, dto);
+  }
+
+  // Este endpoint actualiza la configuracion de administración de personal
+  @Put()
+  @ApiOperation({ summary: 'Update personnel administration configuration', description: 'Updates or creates the configuration payload for personnel administration' })
+  @ApiResponse({ status: 200, description: 'Configuration updated successfully' })
+  @ApiResponse({ status: 400, description: 'Bad Request / Invalid Payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  updateConfig(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() dto: UpdatePersonnelConfigDto,
+  ) {
+    return this.personnelConfigService.updateConfiguracionPersonal(user.idTenant, companyId, dto);
   }
 }

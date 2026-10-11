@@ -9,12 +9,101 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateApprovalWorkflowBatchDto } from './dto/create-approval-workflow.dto';
 import { PaginationApprovalWorkflowDto } from './dto/pagination-approval-workflow.dto';
 import { Prisma } from 'generated/prisma/client';
+import { DEFAULT_PERSONNEL_CONFIG, PersonnelModuleConfig } from './interfaces/personnel-config.interface';
+import { UpdatePersonnelConfigDto } from './dto/update-personnel-config.dto';
 
 @Injectable()
 export class PersonnelConfigService {
   private readonly logger = new Logger(PersonnelConfigService.name);
+  private readonly MODULO_CODIGO = 'personnel-administration';
 
   constructor(private readonly prisma: PrismaService) { }
+
+  async getConfiguracionPersonal(
+    idTenant: number,
+    companyId: number,
+  ): Promise<PersonnelModuleConfig> {
+    const registro = await this.prisma.tenantConfiguracionesModulos.findUnique({
+      where: {
+        idTenant_moduloCodigo: {
+          idTenant,
+          moduloCodigo: this.MODULO_CODIGO,
+        },
+      },
+    });
+
+    if (!registro || !registro.configuracion) {
+      return DEFAULT_PERSONNEL_CONFIG;
+    }
+
+    const configGuardada = registro.configuracion as Partial<PersonnelModuleConfig>;
+
+    // Deep merge para proteger propiedades agregadas en el futuro
+    return {
+      ...DEFAULT_PERSONNEL_CONFIG,
+      ...configGuardada,
+      vacaciones: {
+        ...DEFAULT_PERSONNEL_CONFIG.vacaciones,
+        ...(configGuardada.vacaciones ?? {}),
+      },
+      permisosEIncapacidades: {
+        ...DEFAULT_PERSONNEL_CONFIG.permisosEIncapacidades,
+        ...(configGuardada.permisosEIncapacidades ?? {}),
+      },
+      permutas: {
+        ...DEFAULT_PERSONNEL_CONFIG.permutas,
+        ...(configGuardada.permutas ?? {}),
+      },
+      movimientosInternos: {
+        ...DEFAULT_PERSONNEL_CONFIG.movimientosInternos,
+        ...(configGuardada.movimientosInternos ?? {}),
+      },
+    };
+  }
+
+  async updateConfiguracionPersonal(
+    idTenant: number,
+    companyId: number,
+    dto: UpdatePersonnelConfigDto,
+  ) {
+    try {
+      const registro = await this.prisma.tenantConfiguracionesModulos.upsert({
+        where: {
+          idTenant_moduloCodigo: {
+            idTenant,
+            moduloCodigo: this.MODULO_CODIGO,
+          },
+        },
+        create: {
+          idTenant,
+          moduloCodigo: this.MODULO_CODIGO,
+          configuracion: dto as any,
+          activo: true,
+        },
+        update: {
+          configuracion: dto as any,
+          activo: true,
+        },
+      });
+
+      this.logger.log(
+        `Configuración de administración de personal actualizada para tenant ${idTenant}`,
+      );
+
+      return {
+        message: 'Configuración de administración de personal actualizada exitosamente',
+        data: registro.configuracion,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error al guardar configuración de administración de personal para tenant ${idTenant}`,
+        error?.stack || error,
+      );
+      throw new InternalServerErrorException(
+        'Ocurrió un error al intentar guardar la configuración del módulo.',
+      );
+    }
+  }
 
   async obtenerTiposDeMovimientoPorModulo(idTenant: number, idCompany: number, idModulo: number,) {
     return this.prisma.catTipoMovimiento.findMany({
@@ -322,7 +411,7 @@ export class PersonnelConfigService {
       ])
     );
 
-    return {
+    const data = {
       idTipoMovimiento,
       nombreTipoMovimiento: tipoMov?.nombre || pasos[0].codigoTipoSolicitud,
       codigoTipoSolicitud: pasos[0].codigoTipoSolicitud,
@@ -348,5 +437,6 @@ export class PersonnelConfigService {
         })),
       })),
     };
+    return data
   }
 }
