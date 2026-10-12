@@ -39,12 +39,12 @@ export class CreateCourseSessionDto {
     @IsInt()
     idCurso: number;
 
-    @ApiProperty({ enum: ['presencial', 'online_sincrono'], example: 'presencial' })
+    @ApiProperty({ enum: ['presencial', 'online_sincrono', 'online_asincrono'], example: 'presencial' })
     @IsNotEmpty({ message: 'La modalidad es requerida' })
-    @IsEnum(['presencial', 'online_sincrono'], {
-        message: 'La modalidad debe ser presencial o online_sincrono',
+    @IsEnum(['presencial', 'online_sincrono', 'online_asincrono'], {
+        message: 'La modalidad debe ser presencial, online_sincrono u online_asincrono',
     })
-    modalidad: 'presencial' | 'online_sincrono';
+    modalidad: 'presencial' | 'online_sincrono' | 'online_asincrono';
 
     @ApiProperty({ enum: ['interno', 'externo'], example: 'interno' })
     @IsNotEmpty({ message: 'El tipo de instructor es requerido' })
@@ -74,10 +74,20 @@ export class CreateCourseSessionDto {
     @IsDateString()
     fechaInicioPeriodo: string;
 
-    @ApiProperty({ example: '2026-08-15T18:00:00' })
+    @ApiPropertyOptional({
+        example: '2026-08-15T18:00:00',
+        nullable: true,
+        description: 'Fin del periodo. En Online Asíncrono puede ir en null u omitirse: significa fecha indeterminada',
+    })
+    // Obligatoria para presencial y online síncrono; en online asíncrono es opcional (null = indeterminada)
+    @ValidateIf(
+        (o) =>
+            o.modalidad !== 'online_asincrono' ||
+            (o.fechaFinPeriodo !== null && o.fechaFinPeriodo !== undefined && o.fechaFinPeriodo !== ''),
+    )
     @IsNotEmpty({ message: 'La fecha de fin del periodo es requerida' })
-    @IsDateString()
-    fechaFinPeriodo: string;
+    @IsDateString({}, { message: 'La fecha de fin del periodo debe ser una fecha válida' })
+    fechaFinPeriodo?: string | null;
 
     @ApiPropertyOptional({ example: 'Sala A - Edificio Principal' })
     @IsOptional()

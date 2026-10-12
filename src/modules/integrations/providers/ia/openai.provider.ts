@@ -729,4 +729,137 @@ async evaluateRoleplayCall(
     return { idEvaluacion, scoreGlobal };
 }
 
+
+    // CURSOS ONLINE ASÍNCRONO (réplica de SimuPro)
+    // Obtiene y desencripta las credenciales de OpenAI de la empresa.
+    // Es el mismo bloque que repiten los métodos de arriba, extraído para reutilizarlo.
+    private async getCredentials(companyId: number): Promise<{ apiKey: string; model: string }> {
+        const integracion = await this.prisma.integraciones.findFirst({
+            where: {
+                idEmpresa: companyId,
+                isConnected: true,
+                CatIntegracionesProvedores: { code: 'OPENAI' },
+            },
+            include: { CatIntegracionesProvedores: true },
+        });
+
+        if (!integracion) {
+            throw new BadRequestException('OpenAI no está configurado o conectado para esta empresa.');
+        }
+
+        const metadata = integracion.metadata as any;
+
+        return {
+            apiKey: this.encryptionService.decrypt(metadata.apiKey),
+            model: metadata.defaultModel || 'gpt-4o',
+        };
+    }
+
+    // Genera con IA la estructura completa de un curso: módulos, lecciones, puntos clave y quiz.
+    // Solo consulta a OpenAI y regresa el JSON; quien lo valida y lo guarda en BD es CourseContentService.
+    async generateCourseStructure(
+        companyId: number,
+        params: { titulo: string; prompt: string; numModulos?: number; nivel?: string; idioma?: string },
+    ): Promise<any> {
+        // 1. Obtener y desencriptar las credenciales de la empresa
+        const { apiKey, model } = await this.getCredentials(companyId);
+
+        const numModulos = params.numModulos ?? 3;
+        const nivel = params.nivel || 'Intermedio';
+        const idioma = params.idioma || 'Español México';
+        // Con más módulos se piden menos lecciones para no pasar el límite de tokens de la respuesta
+        const leccionesPorModulo = numModulos <= 3 ? 3 : 2;
+        // BASICO | INTERMEDIO | AVANZADO (sin acentos, igual que SimuPro)
+        const nivelClave = nivel.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+
+        // 2. Armar el prompt (mismo diseño instruccional que usa SimuPro)
+        const systemPrompt = `Eres un experto en diseño instruccional y creación de cursos de capacitación corporativa.
+Tu tarea es crear cursos estructurados, prácticos y orientados a resultados de negocio.
+Siempre respondes en JSON válido sin markdown.`;
+
+        const userPrompt = `Crea un curso de capacitación con las siguientes especificaciones:
+
+TÍTULO DEL CURSO: ${params.titulo}
+DESCRIPCIÓN: ${params.prompt}
+NÚMERO DE MÓDULOS: ${numModulos}
+LECCIONES POR MÓDULO: ${leccionesPorModulo}
+PREGUNTAS DE QUIZ POR LECCIÓN: 3
+NIVEL: ${nivel}
+IDIOMA: ${idioma}
+
+REGLAS:
+- El contenido se basa principalmente en la DESCRIPCIÓN; el título solo da contexto.
+- Cada módulo tiene exactamente ${leccionesPorModulo} lecciones y cada lección exactamente 3 preguntas de quiz.
+- "content" tiene 3-4 párrafos de 3-5 oraciones cada uno, separados con \\n\\n.
+- Cada pregunta tiene 4 opciones plausibles y una sola correcta; varía la posición de la respuesta correcta.
+- Los "keyPoints" son frases cortas (máximo 12 palabras) sin punto final.
+
+Responde ÚNICAMENTE con este JSON (sin markdown, sin explicaciones adicionales):
+{
+  "title": "Título del curso",
+  "description": "Descripción del curso en 2-3 oraciones",
+  "targetAudience": "A quién va dirigido",
+  "level": "${nivelClave}",
+  "modules": [
+    {
+      "title": "Título del módulo",
+      "objective": "Objetivo de aprendizaje del módulo",
+      "lessons": [
+        {
+          "title": "Título de la lección",
+          "objective": "Al finalizar esta lección, el alumno podrá...",
+          "content": "Párrafo 1\\n\\nPárrafo 2\\n\\nPárrafo 3",
+          "keyPoints": ["Punto clave 1", "Punto clave 2", "Punto clave 3"],
+          "quiz": [
+            {
+              "question": "Pregunta de evaluación",
+              "options": ["Opción A", "Opción B", "Opción C", "Opción D"],
+              "correctIndex": 0,
+              "explanation": "Por qué esta es la respuesta correcta"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}`;
+
+        // 3. Pedirle a OpenAI el curso en formato JSON
+        try {
+            const response = await axios.post(
+                'https://api.openai.com/v1/chat/completions',
+                {
+                    model: model,
+                    response_format: { type: 'json_object' },
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt },
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 16000,
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+
+            const choice = response.data.choices[0];
+            const rawContent = choice?.message?.content;
+            if (!rawContent) throw new Error('No se recibió respuesta de la IA');
+
+            // Si la respuesta se cortó por límite de tokens, el JSON viene incompleto
+            if (choice.finish_reason === 'length') {
+                throw new Error('La respuesta de la IA quedó incompleta. Intenta con menos módulos.');
+            }
+
+            return JSON.parse(rawContent);
+        } catch (error) {
+            const errorMsg = error.response?.data?.error?.message || error.message;
+            throw new BadRequestException(`Error al generar el curso con OpenAI: ${errorMsg}`);
+        }
+    }
+
 }
