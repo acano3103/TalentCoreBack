@@ -6,6 +6,7 @@ import { DjangoPasswordHasher } from '../../../common/utils/django-password.util
 import { v4 as uuidv4 } from 'uuid';
 import { MODULE_BLUEPRINTS, PERMISSION_BLUEPRINTS, ROLE_NAMES } from './blueprints/tenant-blueprints';
 import { UpdateTenantModulesDto } from './dto/update-tenant-modules.dto';
+import { CreateTenantModuleDto } from './dto/create-tenant-module.dto';
 
 @Injectable()
 export class TenantsService {
@@ -397,5 +398,93 @@ export class TenantsService {
 
     // Si no existe registro o activo es falsy, retorna false
     return Boolean(feature?.activo);
+  }
+
+  async findRolesByTenantId(tenantId: number) {
+    const tenant = await this.prisma.catTenants.findUnique({
+      where: { idTenant: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`Tenant con id ${tenantId} no encontrado`);
+    }
+
+    const roles = await this.prisma.catRoles.findMany({
+      where: { idTenant: tenantId, activo: true },
+    });
+    return roles;
+  }
+
+  async findModulesByTenantId(tenantId: number) {
+    const tenant = await this.prisma.catTenants.findUnique({
+      where: { idTenant: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`Tenant con id ${tenantId} no encontrado`);
+    }
+
+    const modules = await this.prisma.catModulos.findMany({
+      where: { idTenant: tenantId, Activo: true },
+    });
+    return modules;
+  }
+
+  async createModuleWithPermissions(tenantId: number, dto: CreateTenantModuleDto) {
+    // 1. Validar existencia del Tenant
+    const tenant = await this.prisma.catTenants.findUnique({
+      where: { idTenant: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`Tenant con id ${tenantId} no encontrado`);
+    }
+
+    const { modulo, permisos } = dto;
+
+    // 2. Ejecutar transacción atómica
+    return await this.prisma.$transaction(async (tx) => {
+      // a) Insertar el nuevo módulo en CatModulos
+      const nuevoModulo = await tx.catModulos.create({
+        data: {
+          idTenant: tenantId,
+          Descripcion: modulo.descripcion,
+          Codigo: modulo.codigo,
+          idPadre: modulo.idPadre ?? null,
+          Activo: modulo.activo ?? true,
+        },
+      });
+
+      // b) Si se enviaron permisos para los roles, insertarlos masivamente
+      if (permisos && permisos.length > 0) {
+        const permisosData = permisos.map((p) => ({
+          idTenant: tenantId,
+          idRol: p.idRol,
+          idModulo: nuevoModulo.idModulo,
+          puedeVer: Boolean(p.puedeVer),
+          puedeCrear: Boolean(p.puedeCrear),
+          puedeActualizar: Boolean(p.puedeActualizar),
+          puedeEliminar: Boolean(p.puedeEliminar),
+          activo: true,
+        }));
+
+        await tx.relRolPermisos.createMany({
+          data: permisosData,
+        });
+      }
+
+      // c) Retornar el módulo creado con sus permisos recién asociados
+      const permisosCreados = await tx.relRolPermisos.findMany({
+        where: {
+          idModulo: nuevoModulo.idModulo,
+          idTenant: tenantId,
+        },
+      });
+
+      return {
+        modulo: nuevoModulo,
+        permisos: permisosCreados,
+      };
+    });
   }
 }

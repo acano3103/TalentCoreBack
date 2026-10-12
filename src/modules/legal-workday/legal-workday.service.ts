@@ -1,13 +1,14 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { DEFAULT_LEGAL_WORKDAY_CONFIG, LegalConfigItem, LegalWorkdayStatusResponse } from './interfaces/legal-workday.interface';
 import { ToggleLegalWorkDayDto } from './dto/toggle-legal-work-day.dto';
 
 @Injectable()
 export class LegalWorkdayService {
     constructor(private readonly prisma: PrismaService) { }
 
-    async getStatus(user: ActiveUserDto, companyId: number) {
+    async getStatus(user: ActiveUserDto, companyId: number): Promise<LegalWorkdayStatusResponse> {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
@@ -22,19 +23,45 @@ export class LegalWorkdayService {
             },
         });
 
-        const isEnabled = config.length > 0 && config.some((c: any) => Boolean(c.activo));
+        const isEnabled = config.length > 0 && config.some((c) => Boolean(c.activo));
+
+        if (!isEnabled || config.length === 0) {
+            const now = new Date();
+            const defaultConfig: LegalConfigItem = {
+                idConfiguracion: 0,
+                idTenant: user.idTenant,
+                idEmpresa: companyId,
+                anio: now.getFullYear(),
+                ...DEFAULT_LEGAL_WORKDAY_CONFIG,
+                fechaRegistro: now,
+                fechaActualizacion: now,
+            };
+
+            return {
+                isEnabled: false,
+                config: [defaultConfig],
+            };
+        }
 
         return {
-            isEnabled,
-            config: config.map((c: any) => ({
-                ...c,
+            isEnabled: true,
+            config: config.map((c) => ({
+                idConfiguracion: c.idConfiguracion,
+                idTenant: c.idTenant,
+                idEmpresa: c.idEmpresa,
+                codigoPais: c.codigoPais,
+                anio: c.anio,
                 horasSemana: Number(c.horasSemana),
                 horasDia: Number(c.horasDia),
                 extraSemanalMax: Number(c.extraSemanalMax),
                 extraDiarioMax: Number(c.extraDiarioMax),
+                diasConExtraMax: Number(c.diasConExtraMax ?? DEFAULT_LEGAL_WORKDAY_CONFIG.diasConExtraMax),
                 factorDentro: Number(c.factorDentro),
                 factorFuera: Number(c.factorFuera),
                 primaDominical: Number(c.primaDominical),
+                activo: Boolean(c.activo),
+                fechaRegistro: c.fechaRegistro,
+                fechaActualizacion: c.fechaActualizacion,
             })),
         };
     }

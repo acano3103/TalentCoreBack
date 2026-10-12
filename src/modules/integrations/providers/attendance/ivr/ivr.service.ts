@@ -15,12 +15,11 @@ export class IvrService {
             throw new BadRequestException('El número de empleado no es válido');
         }
 
-        const idTenant = await resolverTenantUnico(this.prisma);
+        // const idTenant = await resolverTenantUnico(this.prisma);
         const employee = await this.prisma.empleados.findFirst({
             where: {
                 numeroEmpleado: cleanEmployeeNumber,
                 activo: true,
-                idTenant,
             },
         });
 
