@@ -83,7 +83,6 @@ export class WorkShiftsService {
                 : Prisma.sql`AND 1 = 0`;
         }
 
-
         // 4. Conteo de empleados con expediente completo (idEstatus = 4)
         const countResult = await this.prisma.$queryRaw<{ total: bigint }[]>`
             SELECT COUNT(DISTINCT ep.idEmpleado) as total
@@ -115,7 +114,7 @@ export class WorkShiftsService {
             };
         }
 
-        // 5. Empleados paginados
+        // 5. Empleados paginados (ahora incluye siteFilterSql)
         const empleados = await this.prisma.$queryRaw<any[]>`
             SELECT 
                 ep.idEmpleado,
@@ -132,6 +131,7 @@ export class WorkShiftsService {
                 AND ep.activo = 1
                 -- AND exp.idEstatus = 4
                 ${searchFilter}
+                ${siteFilterSql}
             ORDER BY ep.primerApellido ASC, ep.nombre ASC
             LIMIT ${limit} OFFSET ${offset}
         `;
