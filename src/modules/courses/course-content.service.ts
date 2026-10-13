@@ -23,7 +23,7 @@ export class CourseContentService {
     // ==========================================
 
     // Regresa el tenant del usuario o truena si no tiene (mismo criterio que Roleplays)
-    private getTenantOrThrow(user: ActiveUserDto): number {
+    getTenantOrThrow(user: ActiveUserDto): number {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
@@ -52,7 +52,7 @@ export class CourseContentService {
     }
 
     // Valida que la sesión exista, sea de la empresa y del tenant del usuario, y que sea Online Asíncrono
-    private async getAsyncSession(companyId: number, sessionId: number, idTenant: number) {
+    async getAsyncSession(companyId: number, sessionId: number, idTenant: number) {
         const session = await this.prismaService.cursoSesiones.findFirst({
             where: {
                 idSesion: sessionId,
@@ -205,7 +205,7 @@ export class CourseContentService {
     }
 
     // Arma las slides de una lección: 1 de introducción, hasta 3 de contenido, 1 por punto clave y 1 de resumen
-    private buildSlides(lesson: GeneratedLesson): Slide[] {
+    buildSlides(lesson: GeneratedLesson): Slide[] {
         const slides: Slide[] = [];
         let index = 0;
 
