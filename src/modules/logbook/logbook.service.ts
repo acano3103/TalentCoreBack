@@ -91,7 +91,6 @@ export class LogbookService {
 
         const where = await this.buildWhere(user, companyId, search, idSite, idUnidadOperativa);
 
-        // Filtro por fecha inicial (o rango del día si se envía YYYY-MM-DD)
         if (startDate) {
             const parsedDate = new Date(startDate);
             if (!isNaN(parsedDate.getTime())) {
@@ -102,7 +101,6 @@ export class LogbookService {
         }
 
         try {
-            // Consulta en paralelo para optimizar tiempos de respuesta
             const [total, registros] = await Promise.all([
                 this.prisma.registrosAsistencia.count({ where }),
                 this.prisma.registrosAsistencia.findMany({
@@ -110,7 +108,7 @@ export class LogbookService {
                     skip,
                     take: limit,
                     orderBy: {
-                        fechaHoraRegistro: 'desc', // Clave: registros más recientes primero
+                        fechaHoraRegistro: 'desc',
                     },
                     include: {
                         Empleados: {
@@ -126,15 +124,52 @@ export class LogbookService {
                 }),
             ]);
 
-            // Mapeo limpio para el frontend
+            // 1. Extraer los IDs únicos de sitio detectados en esta página
+            const siteIds = Array.from(
+                new Set(
+                    registros
+                        .map((r) => r.idSitioDetectado)
+                        .filter((id): id is number => id !== null && id !== undefined)
+                )
+            );
+
+            // 2. Consultar en lote los nombres (Descripcion) desde CatSites
+            let sitesMap = new Map<number, string>();
+            if (siteIds.length > 0) {
+                // Nota: Cambia 'catSites' por el nombre del modelo exacto en tu schema.prisma (e.g. catSites o CatSites)
+                const sites = await this.prisma.catSites.findMany({
+                    where: {
+                        idSite: { in: siteIds },
+                    },
+                    select: {
+                        idSite: true,
+                        Descripcion: true,
+                    },
+                });
+
+                sitesMap = new Map(
+                    sites.map((s) => [s.idSite, s.Descripcion ?? `Sitio #${s.idSite}`])
+                );
+            }
+
+            // 3. Mapeo limpio para el frontend integrando la resolución
             const data: LogbookItemDto[] = registros.map((reg) => {
                 const emp = reg.Empleados;
                 const nombreCompleto = [emp?.nombre, emp?.primerApellido, emp?.segundoApellido]
                     .filter(Boolean)
                     .join(' ');
 
+                // Prioridad: 
+                // 1) Nombre del sitio si idSitioDetectado existe y se encuentra en CatSites
+                // 2) Fallback a 'Sitio #ID' si idSitioDetectado existe pero no se encontró en la BD
+                // 3) Nombre del dispositivo
+                // 4) null
+                const ubicacionDispositivo = reg.idSitioDetectado
+                    ? (sitesMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
+                    : (reg.nombreDispositivo ?? null);
+
                 return {
-                    idRegistro: reg.idRegistro.toString(), // Conversión de BigInt a String
+                    idRegistro: reg.idRegistro.toString(),
                     empleado: {
                         idEmpleado: emp?.idEmpleado ?? reg.idEmpleado,
                         numeroEmpleado: emp?.numeroEmpleado ?? null,
@@ -143,7 +178,7 @@ export class LogbookService {
                     fechaHoraRegistro: reg.fechaHoraRegistro,
                     tipo: reg.tipo,
                     canal: reg.canal,
-                    ubicacionDispositivo: this.resolveUbicacion(reg),
+                    ubicacionDispositivo,
                     geocerca: {
                         resultado: reg.resultadoGeocerca,
                         latitud: reg.latitud ? Number(reg.latitud) : null,
@@ -235,7 +270,7 @@ export class LogbookService {
             { header: 'Fecha', key: 'fecha', width: 14, value: (r) => formatFecha(r.fechaHoraRegistro) },
             { header: 'Hora', key: 'hora', width: 14, value: (r) => formatHora(r.fechaHoraRegistro) },
             { header: 'Tipo', key: 'tipo', width: 12, value: (r) => this.humanize(r.tipo) },
-                       { header: 'Canal', key: 'canal', width: 16, value: (r) => (r.canal ? CANAL_LABELS[r.canal] ?? this.humanize(r.canal) : '') },
+            { header: 'Canal', key: 'canal', width: 16, value: (r) => (r.canal ? CANAL_LABELS[r.canal] ?? this.humanize(r.canal) : '') },
             { header: 'Ubicación', key: 'ubicacion', width: 28, value: (r) => this.resolveUbicacion(r) },
             { header: 'Geocerca', key: 'geocerca', width: 16, value: (r) => this.humanize(r.resultadoGeocerca) },
             { header: 'Evidencia', key: 'evidencia', width: 12, value: (r) => (r.urlFoto ? 'Sí' : 'No') },
