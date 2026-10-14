@@ -2606,3 +2606,25 @@ enum ConfiguracionFlujoPaso_modoAsignacionRol {
   CUALQUIERA
   ESPECIFICO
 }
+
+model CursoScormProgresos {
+  idScormProgreso     Int       @id @default(autoincrement())
+  idTenant            Int
+  idParticipante      Int       @unique(map: "uk_scorm_progreso_participante")
+  idPaqueteScorm      Int
+  estatusLeccion      String?   @db.VarChar(30)
+  estatusExito        String?   @db.VarChar(20)
+  calificacion        Decimal?  @db.Decimal(5, 2)
+  ubicacion           String?   @db.VarChar(1000)
+  datosSuspension     String?   @db.MediumText
+  tiempoTotal         String?   @db.VarChar(30)
+  datosCmi            Json?
+  totalIntentos       Int       @default(0)
+  fechaUltimoGuardado DateTime? @db.DateTime(0)
+  creadoEn            DateTime? @default(now()) @db.Timestamp(0)
+  actualizadoEn       DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([idPaqueteScorm], map: "idx_scorm_progreso_paquete")
+  @@index([idTenant], map: "idx_scorm_progreso_tenant")
+}
+

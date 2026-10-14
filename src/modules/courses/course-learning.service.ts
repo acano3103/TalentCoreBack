@@ -6,7 +6,6 @@ import { RegisterActivityDto } from './dto/register-activity.dto';
 import { CourseTrackingService } from './course-tracking.service';
 import { QuizQuestion, Slide } from './interfaces/course-content.interface';
 
-// Calificación mínima cuando el curso no tiene calificacionAprobatoria configurada (mismo default que CourseContentService)
 const CALIFICACION_APROBATORIA_DEFAULT = 70;
 
 type ModoAvance = 'libre' | 'video_completo' | 'aprobar_quiz' | 'video_y_quiz';
@@ -28,10 +27,8 @@ export class CourseLearningService {
         private readonly trackingService: CourseTrackingService,
     ) { }
 
-    // ==========================================
     // HELPERS PRIVADOS
-    // ==========================================
-
+   
     private getTenantOrThrow(user: ActiveUserDto): number {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
@@ -65,7 +62,7 @@ export class CourseLearningService {
     }
 
     // Inscripción del empleado a una sesión Online Asíncrono de su empresa y tenant
-    private async getParticipation(companyId: number, sessionId: number, user: ActiveUserDto) {
+    async getParticipation(companyId: number, sessionId: number, user: ActiveUserDto) {
         const idTenant = this.getTenantOrThrow(user);
         const idEmpleado = await this.getEmployeeId(companyId, user, idTenant);
 
@@ -93,7 +90,7 @@ export class CourseLearningService {
         return { participacion, idTenant, idEmpleado };
     }
 
-    private async getContent(sessionId: number, idTenant: number) {
+    async getContent(sessionId: number, idTenant: number) {
         return this.prismaService.cursoContenidos.findFirst({
             where: { idSesion: sessionId, idTenant, activo: true },
             include: {
@@ -107,7 +104,7 @@ export class CourseLearningService {
 
     // El curso solo se puede tomar dentro del periodo y si la sesión no está cancelada ni finalizada
     // fechaFinPeriodo en null = periodo indeterminado: el curso no vence
-    private getAvailability(session: { estatus: string; fechaInicioPeriodo: Date; fechaFinPeriodo: Date | null }) {
+    getAvailability(session: { estatus: string; fechaInicioPeriodo: Date; fechaFinPeriodo: Date | null }) {
         const ahora = new Date();
         const fecha = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -122,12 +119,10 @@ export class CourseLearningService {
         return { disponible: true, motivo: null };
     }
 
-    // libre: cualquier orden. Los demás modos: en orden, una lección se desbloquea al completar la anterior.
     private isSequential(modo: ModoAvance) {
         return modo !== 'libre';
     }
 
-    // Modos con quiz: la lección solo cuenta como completada si se aprueba su quiz
     private requiresPassing(modo: ModoAvance) {
         return modo === 'aprobar_quiz' || modo === 'video_y_quiz';
     }
@@ -175,10 +170,7 @@ export class CourseLearningService {
         };
     }
 
-    // ==========================================
     // MIS CURSOS
-    // ==========================================
-
     // Cursos Online Asíncrono asignados al empleado logueado, con su avance
     async findMyCourses(companyId: number, user: ActiveUserDto) {
         const idTenant = this.getTenantOrThrow(user);
@@ -240,10 +232,7 @@ export class CourseLearningService {
             });
     }
 
-    // ==========================================
     // TOMAR UN CURSO
-    // ==========================================
-
     // Curso completo para el player. El quiz va SIN correctIndex ni explicación; las lecciones bloqueadas van sin contenido.
     async findMyCourse(companyId: number, sessionId: number, user: ActiveUserDto) {
         const { participacion, idTenant } = await this.getParticipation(companyId, sessionId, user);
@@ -265,7 +254,7 @@ export class CourseLearningService {
         };
 
         if (!contenido) {
-            return { ...base, modoAvance: null, leccionesCompletadas: 0, totalLecciones: 0, porcentajeAvance: 0, contenido: null };
+            return { ...base, tipoContenido: null, modoAvance: null, leccionesCompletadas: 0, totalLecciones: 0, porcentajeAvance: 0, contenido: null };
         }
 
         const modo = contenido.modoAvance as ModoAvance;
@@ -280,6 +269,7 @@ export class CourseLearningService {
 
         return {
             ...base,
+            tipoContenido: contenido.tipoContenido,
             modoAvance: modo,
             ...this.buildProgressSummary(lessonIds, progressMap),
             contenido: {
@@ -317,10 +307,8 @@ export class CourseLearningService {
         };
     }
 
-    // ==========================================
-    // GUARDAR AVANCE DE UNA LECCIÓN
-    // ==========================================
 
+    // GUARDAR AVANCE DE UNA LECCIÓN
     // Califica el quiz en el servidor, guarda el avance (se conserva la mejor calificación) y, si ya terminó
     // todas las lecciones, cierra la participación con calificacionFinal y estatus completado / reprobado.
     async submitLessonProgress(
@@ -338,6 +326,9 @@ export class CourseLearningService {
 
         const contenido = await this.getContent(sessionId, idTenant);
         if (!contenido) throw new BadRequestException('El curso aún no tiene contenido.');
+        if (contenido.tipoContenido === 'scorm') {
+            throw new BadRequestException('El avance de un curso SCORM lo reporta el propio paquete.');
+        }
 
         const lecciones = this.flattenLessons(contenido);
         const posicion = lecciones.findIndex((l) => l.idLeccion === lessonId);
@@ -475,7 +466,6 @@ export class CourseLearningService {
             }
 
             if (terminado) {
-                // Seguimiento: fecha y hora de conclusión (solo la primera vez que termina)
                 await this.trackingService.registerCourseEnd(tx, participante, ahora, {
                     calificacionFinal,
                     estatusAsignacion,
@@ -499,7 +489,6 @@ export class CourseLearningService {
             calificacionAprobatoria: aprobatoria,
             aprobada,
             leccionCompletada: completada,
-            // La respuesta correcta y la explicación solo se revelan si aprobó este intento (para no regalar el reintento)
             resultados: quiz.map((q, i) => ({
                 correcta: correctas[i],
                 ...(aprobada ? { correctIndex: q.correctIndex, explanation: q.explanation } : {}),
@@ -509,10 +498,8 @@ export class CourseLearningService {
         };
     }
 
-    // ==========================================
-    // SEGUIMIENTO DE ACTIVIDAD (PARA REPORTES)
-    // ==========================================
-
+    
+    // SEGUIMIENTO DE ACTIVIDAD (PARA REPORTES)  
     // El player avisa cuando abre una lección y cada 60 s mientras está visible (latido).
     // Solo registra seguimiento; no cambia el avance ni la calificación.
     async registerActivity(companyId: number, sessionId: number, dto: RegisterActivityDto, user: ActiveUserDto) {

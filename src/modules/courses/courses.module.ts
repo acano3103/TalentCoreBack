@@ -12,10 +12,13 @@ import { CourseTrackingController } from './course-tracking.controller';
 import { CourseTrackingService } from './course-tracking.service';
 import { CourseNativeContentController } from './course-native-content.controller';
 import { CourseNativeContentService } from './course-native-content.service';
+import { CourseScormController } from './course-scorm.controller';
+import { CourseScormService } from './course-scorm.service';
+import { MediaPathModule } from 'src/common/services/media-path.module';
 
 @Module({
-  imports: [IntegrationsModule],
-  controllers: [CoursesController, CourseContentController, CourseLearningController, CourseTrackingController, CourseNativeContentController],
-  providers: [CoursesService, CourseContentService, CourseLearningService, CourseTrackingService, CourseNativeContentService, ConfigService, EncryptionService],
+  imports: [IntegrationsModule, MediaPathModule],
+  controllers: [CoursesController, CourseContentController, CourseLearningController, CourseTrackingController, CourseNativeContentController, CourseScormController],
+  providers: [CoursesService, CourseContentService, CourseLearningService, CourseTrackingService, CourseNativeContentService, CourseScormService, ConfigService, EncryptionService],
 })
 export class CoursesModule { }
