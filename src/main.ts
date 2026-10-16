@@ -12,6 +12,7 @@ import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
 import { LogbookModule } from './modules/logbook/logbook.module';
 import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashboard/attendance-dashboard.module';
 import { UsersModule } from './modules/users/users.module';
+import { INCIDENTS_SUBMODULES } from './modules/incidents/incidents.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -65,7 +66,7 @@ async function bootstrap() {
       },
       {
         name: 'Web App',
-        tags: ['Attendance Dashboard', 'Work Shifts', 'Logbook', 'Users'],
+        tags: ['Users', 'Attendance Dashboard', 'Work Shifts', 'Logbook', 'Vacations'],
       },
       {
         name: 'Integrations',
@@ -75,7 +76,7 @@ async function bootstrap() {
     .build();
 
   const mobileDocument = SwaggerModule.createDocument(app, mobileConfig, {
-    include: [MobileModule, ...MOBILE_SUBMODULES, AttendanceModule, WorkShiftsModule, LogbookModule, AttendanceDashboardModule, UsersModule],
+    include: [MobileModule, ...MOBILE_SUBMODULES, AttendanceModule, WorkShiftsModule, LogbookModule, AttendanceDashboardModule, UsersModule, ...INCIDENTS_SUBMODULES],
   });
 
   // 3. Montar Scalar para la App Móvil

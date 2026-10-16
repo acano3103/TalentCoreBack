@@ -7,5 +7,6 @@ import { IntegrationsModule } from '../integrations/integrations.module';
   imports: [IntegrationsModule],
   controllers: [EmployeesController],
   providers: [EmployeesService],
+  exports: [EmployeesService]
 })
 export class EmployeesModule { }

@@ -45,6 +45,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module';
 import { existsSync } from 'fs';
 import { AttendanceReportsModule } from './modules/reports/attendance-reports/attendance-reports.module';
 import { PersonnelConfigModule } from './modules/config/personnel-config/personnel-config.module';
+import { IncidentsModule } from './modules/incidents/incidents.module';
 
 // Determina dinámicamente la ruta correcta de public
 const publicDistPath = join(process.cwd(), 'dist', 'public');
@@ -115,7 +116,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     AttendanceTrackingConfigModule,
     AttendanceModule,
     AttendanceReportsModule,
-    PersonnelConfigModule
+    PersonnelConfigModule,
+    IncidentsModule
   ],
   controllers: [],
   providers: [GeofencesService],
