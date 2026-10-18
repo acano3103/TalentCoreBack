@@ -23,7 +23,7 @@ import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 export class InternalMovementsController {
   constructor(
     private readonly internalMovementsService: InternalMovementsService,
-  ) {}
+  ) { }
 
   @Post('movements')
   @ApiOperation({
@@ -130,7 +130,7 @@ export class InternalMovementsController {
 export class CompanyMovementsController {
   constructor(
     private readonly internalMovementsService: InternalMovementsService,
-  ) {}
+  ) { }
 
   @Get('requests')
   @ApiOperation({

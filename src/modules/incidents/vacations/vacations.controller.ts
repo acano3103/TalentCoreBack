@@ -23,6 +23,7 @@ import { CreateVacationRequestDto } from './dto/create-vacation-request.dto';
 export class VacationsController {
   constructor(private readonly vacationsService: VacationsService) { }
 
+  // Obtiene el balance de vacaciones de un empleado
   @Get('balance/:employeeId')
   @ApiOperation({ summary: 'Get employee vacation balance', description: 'Get an employee vacation balance and business policy constraints for a specific period.', })
   @ApiResponse({ status: 200, description: 'Employee vacation balance retrieved successfully' })
@@ -36,6 +37,7 @@ export class VacationsController {
     return this.vacationsService.getEmployeeBalance(activeUser, companyId, employeeId);
   }
 
+  // Crea una solicitud de vacaciones
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create vacation request', description: 'Registers a new vacation incident for the employee or their subordinate.', })
