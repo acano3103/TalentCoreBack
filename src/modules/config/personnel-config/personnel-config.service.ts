@@ -386,7 +386,7 @@ export class PersonnelConfigService {
     });
 
     if (!pasos || pasos.length === 0) {
-      throw new NotFoundException('No existe flujo configurado para este trámite.');
+      throw new NotFoundException(`No existe flujo configurado para el tipo de movimiento con Id: ${idTipoMovimiento}.`);
     }
 
     // 2. Traer catálogos para resolver nombres

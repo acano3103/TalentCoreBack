@@ -11,4 +11,4 @@ import { NotificationsModule } from 'src/modules/notifications/notifications.mod
   controllers: [InternalMovementsController, CompanyMovementsController],
   providers: [InternalMovementsService],
 })
-export class InternalMovementsModule {}
+export class InternalMovementsModule { }

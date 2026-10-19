@@ -25,6 +25,12 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Variables de entorno (asistencia móvil)
+
+`MOBILE_DEVICES_AUTO_APPROVE` (default `false`). **Temporal; apagar cuando exista la pantalla de aprobación de RH.**
+
+Con `true` (booleano o el texto `true`), un dispositivo nuevo queda `APROBADO` al registrarse y uno que ya estaba `PENDIENTE` del mismo empleado pasa a `APROBADO` la siguiente vez que la app abre. No revierte dispositivos `BLOQUEADO` ni `BAJA`. Al arrancar el API con la bandera activa se escribe una advertencia en el log. Con `false` o sin la variable, el registro sigue dejando el dispositivo en `PENDIENTE`.
+
 ## Project setup
 
 ```bash

@@ -42,6 +42,18 @@ export class EmployeesController {
     return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager);
   }
 
+  // Endpoint que obtiene a todos los subordinados de un empleado
+  @Get('subordinates')
+  @ApiOperation({ summary: 'Get all subordinates', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Subordinates retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async getSubordinates(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.employeesService.findSubordinates(activeUser, companyId);
+  }
+
   // Endpint para obtener un empleado por su id
   @Get('/:employeeId')
   @ApiOperation({ summary: 'Get employee by id', description: SWAGGER_AUTH_DESCRIPTION })

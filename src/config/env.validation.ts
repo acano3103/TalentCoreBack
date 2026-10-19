@@ -13,6 +13,9 @@ export const envValidationSchema = Joi.object({
     MOBILE_USE_CAPTCHA: Joi.boolean().default(false),
     MOBILE_USE_TOKEN_2FA: Joi.boolean().default(false),
     MOBILE_ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
+    // Temporal: aprueba dispositivos móviles nuevos sin revisión de RH.
+    // Apagar cuando exista la pantalla de aprobación de RH.
+    MOBILE_DEVICES_AUTO_APPROVE: Joi.boolean().default(false),
     MOBILE_MIN_APP_VERSION: Joi.string().default('1.0.0'),
     ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
     MAIL_HOST: Joi.string().required(),

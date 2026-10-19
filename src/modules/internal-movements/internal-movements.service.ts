@@ -14,7 +14,7 @@ export class InternalMovementsService {
   constructor(
     private prisma: PrismaService,
     private readonly notifications: NotificationDispatcher,
-  ) {}
+  ) { }
 
   async create(
     user: ActiveUserDto,

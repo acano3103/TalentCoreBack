@@ -5,5 +5,6 @@ import { PersonnelConfigController } from './personnel-config.controller';
 @Module({
   controllers: [PersonnelConfigController],
   providers: [PersonnelConfigService],
+  exports: [PersonnelConfigService],
 })
-export class PersonnelConfigModule {}
+export class PersonnelConfigModule { }

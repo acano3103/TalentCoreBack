@@ -2,6 +2,7 @@ export type TipoAsistencia = 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | null;
 
 export interface EmployeeQueryResult {
     idEmpleado: number;
+    numeroEmpleado: string;
     nombre: string;
     primerApellido: string;
     segundoApellido: string;
@@ -9,6 +10,7 @@ export interface EmployeeQueryResult {
     rfc: string;
     correo: string;
     telefonoMovil: string;
+    fechaIngreso: Date;
     idPuesto: number;
     nombrePuesto: string;
     idTipoPuesto: number;
@@ -41,6 +43,8 @@ export interface EmployeeQueryResult {
     idModalidadHorario?: number | null;
     ModalidadHorario?: string | null;
     tieneUsuarioActivo?: number | boolean;
+    horarios: EmployeeSchedule[];
+    asistencia: ConfiguracionAsistenciaEmpleado;
 }
 
 export interface EmployeeSchedule {
@@ -81,8 +85,14 @@ export interface ConfiguracionAsistenciaEmpleado {
     didsAutorizados: DidAutorizadoEmpleado[];
 }
 
-export interface EmployeeDetailResponse extends EmployeeQueryResult {
-    tieneUsuarioActivo: boolean;
-    horarios: EmployeeSchedule[];
-    asistencia: ConfiguracionAsistenciaEmpleado;
+export interface SubordinateResponse {
+    idEmpleado: number;
+    nombre: string;
+    primerApellido: string;
+    segundoApellido: string | null;
+    numeroEmpleado: string | null;
+    idJefeInmediato: number | null;
+    idPuesto: number | null;
+    nombrePuesto: string | null;
+    nivelJerarquico: number; // 1 = Directo, 2+ = Indirecto
 }

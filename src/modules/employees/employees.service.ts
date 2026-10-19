@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { EmployeeQueryResult, EmployeeDetailResponse, EmployeeSchedule } from './interfaces/employee.interface';
+import { EmployeeQueryResult, EmployeeSchedule, SubordinateResponse } from './interfaces/employee.interface';
 import { SaveSalaryDto } from './dto/save-salary.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { Prisma } from 'generated/prisma/client';
@@ -18,7 +18,7 @@ export class EmployeesService {
   ) { }
 
   // Método que obtiene un empleado por su id con horarios, sedes autorizadas y DIDs
-  async findOne(companyId: number, employeeId: number): Promise<EmployeeDetailResponse> {
+  async findOne(companyId: number, employeeId: number): Promise<EmployeeQueryResult> {
     const employeePromise = this.prisma.$queryRaw<EmployeeQueryResult[]>`
     SELECT 
       ep.idEmpleado,
@@ -30,6 +30,7 @@ export class EmployeesService {
       ep.rfc,
       ep.correo,
       ep.telefonoMovil,
+      ep.fechaIngreso,
       p.idPuesto,
       p.nombrePuesto,
       tp.idTipoPuesto,
@@ -851,5 +852,87 @@ export class EmployeesService {
       success: true,
       message: `Jefe inmediato asignado correctamente a ${employee.nombre} ${employee.primerApellido}.`,
     };
+  }
+
+  async findSubordinates(
+    activeUser: ActiveUserDto,
+    companyId: number,
+  ): Promise<SubordinateResponse[]> {
+    const employee = await this.prisma.empleados.findFirst({
+      where: {
+        idUsuario: activeUser.uuid,
+        idEmpresa: companyId,
+        idTenant: activeUser.idTenant,
+        activo: true,
+      },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('La persona que está consultando no tiene un registro de empleado activo.');
+    }
+
+    const rawSubordinates = await this.prisma.$queryRaw<any[]>`
+      WITH RECURSIVE SubordinatesTree AS (
+        -- Caso base: Subordinados directos (Nivel 1)
+        SELECT 
+          e.idEmpleado,
+          e.nombre,
+          e.primerApellido,
+          e.segundoApellido,
+          e.numeroEmpleado,
+          e.idJefeInmediato,
+          e.idPuesto,
+          1 AS nivelJerarquico
+        FROM Empleados e
+        WHERE e.idJefeInmediato = ${employee.idEmpleado}
+          AND e.idEmpresa = ${companyId}
+          AND e.idTenant = ${activeUser.idTenant}
+          AND e.activo = 1
+
+        UNION ALL
+
+        -- Paso recursivo: Subordinados de los subordinados (Nivel 2, 3...)
+        SELECT 
+          sub.idEmpleado,
+          sub.nombre,
+          sub.primerApellido,
+          sub.segundoApellido,
+          sub.numeroEmpleado,
+          sub.idJefeInmediato,
+          sub.idPuesto,
+          CAST(st.nivelJerarquico + 1 AS UNSIGNED) AS nivelJerarquico
+        FROM Empleados sub
+        INNER JOIN SubordinatesTree st ON sub.idJefeInmediato = st.idEmpleado
+        WHERE sub.idEmpresa = ${companyId}
+          AND sub.idTenant = ${activeUser.idTenant}
+          AND sub.activo = 1
+      )
+      SELECT 
+        st.idEmpleado,
+        st.nombre,
+        st.primerApellido,
+        st.segundoApellido,
+        st.numeroEmpleado,
+        st.idJefeInmediato,
+        st.idPuesto,
+        p.NombrePuesto AS nombrePuesto,
+        st.nivelJerarquico
+      FROM SubordinatesTree st
+      LEFT JOIN CatPuestos p ON st.idPuesto = p.idPuesto
+      ORDER BY st.nivelJerarquico ASC, st.nombre ASC;
+    `;
+
+    // Mapeamos para garantizar que cualquier BigInt se serialice como Number estándar
+    return rawSubordinates.map((sub) => ({
+      idEmpleado: Number(sub.idEmpleado),
+      nombre: sub.nombre,
+      primerApellido: sub.primerApellido,
+      segundoApellido: sub.segundoApellido,
+      numeroEmpleado: sub.numeroEmpleado,
+      idJefeInmediato: sub.idJefeInmediato !== null ? Number(sub.idJefeInmediato) : null,
+      idPuesto: sub.idPuesto !== null ? Number(sub.idPuesto) : null,
+      nombrePuesto: sub.nombrePuesto,
+      nivelJerarquico: Number(sub.nivelJerarquico),
+    }));
   }
 }

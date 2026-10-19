@@ -919,6 +919,7 @@ model auth_user {
   AsignacionAprobador               AsignacionAprobador[]
   Empleados                         Empleados[]
   HistoricoMovimientos              HistoricoMovimientos[]
+  PasosAprobacionIncidencia         PasosAprobacionIncidencia[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
   RelUsuarioSite                    RelUsuarioSite[]
@@ -1097,58 +1098,63 @@ model RelAreasUbicaciones {
 }
 
 model Empleados {
-  idEmpleado                                        Int                      @id @default(autoincrement())
-  numeroEmpleado                                    String?                  @db.VarChar(20)
-  idTenant                                          Int?
-  idEmpresa                                         Int?
-  idUsuario                                         String?                  @db.VarChar(36)
-  idPuesto                                          Int?
-  idJefeInmediato                                   Int?
-  idSite                                            Int?
-  nombre                                            String?                  @db.VarChar(100)
-  primerApellido                                    String?                  @db.VarChar(100)
-  segundoApellido                                   String?                  @db.VarChar(100)
-  idCampania                                        Int?
-  idTipoSanguineo                                   Int?
-  numeroSeguroSocial                                String?                  @db.VarChar(15)
-  idEstadoCivil                                     Int?
-  fechaNacimiento                                   DateTime?                @db.Date
-  fechaIngreso                                      DateTime?                @db.Date
-  curp                                              String?                  @db.VarChar(18)
-  rfc                                               String?                  @db.VarChar(18)
-  correo                                            String?                  @db.VarChar(250)
-  telefonoMovil                                     String?                  @db.VarChar(15)
-  telefonoLocal                                     String?                  @db.VarChar(15)
-  idNivelEstudios                                   Int?
-  tieneInfonavit                                    Boolean?
-  tieneHijos                                        Boolean?
-  FechaRegistro                                     DateTime?                @default(now()) @db.Timestamp(0)
-  usuarioRegistro                                   String?                  @db.VarChar(250)
-  idModalidad                                       Int?
-  idGenero                                          Int?
-  numeroInfonavit                                   String?                  @db.VarChar(30)
-  numeroHijos                                       Int?
-  imagenFirmaAutografa                              String?                  @db.VarChar(500)
-  uploadLink                                        String?                  @db.VarChar(500)
-  token                                             String?                  @db.VarChar(500)
-  activo                                            Boolean                  @default(true)
-  artemisUserId                                     String?                  @db.VarChar(50)
-  artemisSyncedAt                                   DateTime?                @db.DateTime(0)
-  Contratos                                         Contratos[]
-  CursoParticipantes                                CursoParticipantes[]
-  CursoSesiones                                     CursoSesiones[]
-  DispositivosAsistencia                            DispositivosAsistencia[]
-  CatPuestos                                        CatPuestos?              @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
-  Empleados                                         Empleados?               @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
-  other_Empleados                                   Empleados[]              @relation("EmpleadosToEmpleados")
-  auth_user                                         auth_user?               @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
-  Expedientes                                       Expedientes[]
-  HistorialSalarios                                 HistorialSalarios[]
-  JornadasEmpleado                                  JornadasEmpleado[]
-  MovimientosInternos                               MovimientosInternos[]
-  RegistrosAsistencia                               RegistrosAsistencia[]
-  Vacantes                                          Vacantes[]
-  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados Vacantes[]               @relation("Vacantes_idReclutadorAsignadoToEmpleados")
+  idEmpleado                                                                       Int                         @id @default(autoincrement())
+  numeroEmpleado                                                                   String?                     @db.VarChar(20)
+  idTenant                                                                         Int?
+  idEmpresa                                                                        Int?
+  idUsuario                                                                        String?                     @db.VarChar(36)
+  idPuesto                                                                         Int?
+  idJefeInmediato                                                                  Int?
+  idSite                                                                           Int?
+  nombre                                                                           String?                     @db.VarChar(100)
+  primerApellido                                                                   String?                     @db.VarChar(100)
+  segundoApellido                                                                  String?                     @db.VarChar(100)
+  idCampania                                                                       Int?
+  idTipoSanguineo                                                                  Int?
+  numeroSeguroSocial                                                               String?                     @db.VarChar(15)
+  idEstadoCivil                                                                    Int?
+  fechaNacimiento                                                                  DateTime?                   @db.Date
+  fechaIngreso                                                                     DateTime?                   @db.Date
+  curp                                                                             String?                     @db.VarChar(18)
+  rfc                                                                              String?                     @db.VarChar(18)
+  correo                                                                           String?                     @db.VarChar(250)
+  telefonoMovil                                                                    String?                     @db.VarChar(15)
+  telefonoLocal                                                                    String?                     @db.VarChar(15)
+  idNivelEstudios                                                                  Int?
+  tieneInfonavit                                                                   Boolean?
+  tieneHijos                                                                       Boolean?
+  FechaRegistro                                                                    DateTime?                   @default(now()) @db.Timestamp(0)
+  usuarioRegistro                                                                  String?                     @db.VarChar(250)
+  idModalidad                                                                      Int?
+  idGenero                                                                         Int?
+  numeroInfonavit                                                                  String?                     @db.VarChar(30)
+  numeroHijos                                                                      Int?
+  imagenFirmaAutografa                                                             String?                     @db.VarChar(500)
+  uploadLink                                                                       String?                     @db.VarChar(500)
+  token                                                                            String?                     @db.VarChar(500)
+  activo                                                                           Boolean                     @default(true)
+  artemisUserId                                                                    String?                     @db.VarChar(50)
+  artemisSyncedAt                                                                  DateTime?                   @db.DateTime(0)
+  ArchivosSolicitudes                                                              ArchivosSolicitudes[]
+  Contratos                                                                        Contratos[]
+  CursoParticipantes                                                               CursoParticipantes[]
+  CursoSesiones                                                                    CursoSesiones[]
+  DispositivosAsistencia                                                           DispositivosAsistencia[]
+  CatPuestos                                                                       CatPuestos?                 @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
+  Empleados                                                                        Empleados?                  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
+  other_Empleados                                                                  Empleados[]                 @relation("EmpleadosToEmpleados")
+  auth_user                                                                        auth_user?                  @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  Expedientes                                                                      Expedientes[]
+  HistorialSalarios                                                                HistorialSalarios[]
+  JornadasEmpleado                                                                 JornadasEmpleado[]
+  MovimientosInternos                                                              MovimientosInternos[]
+  PasosAprobacionIncidencia                                                        PasosAprobacionIncidencia[]
+  RegistrosAsistencia                                                              RegistrosAsistencia[]
+  SolicitudesIncidencias_SolicitudesIncidencias_idAprobadorToEmpleados             SolicitudesIncidencias[]    @relation("SolicitudesIncidencias_idAprobadorToEmpleados")
+  SolicitudesIncidencias_SolicitudesIncidencias_idEmpleadoToEmpleados              SolicitudesIncidencias[]    @relation("SolicitudesIncidencias_idEmpleadoToEmpleados")
+  SolicitudesIncidencias_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados SolicitudesIncidencias[]    @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados")
+  Vacantes                                                                         Vacantes[]
+  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados                                Vacantes[]                  @relation("Vacantes_idReclutadorAsignadoToEmpleados")
 
   @@unique([idTenant, numeroEmpleado], map: "UK_Empleado_Tenant_Numero")
   @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
@@ -1622,6 +1628,7 @@ model CursoParticipantes {
   CursoLeccionProgresos        CursoLeccionProgresos[]
   Empleados                    Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
   CursoSesiones                CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
+  CursoScormProgresos          CursoScormProgresos?
   CursoSeguimientoParticipante CursoSeguimientoParticipante?
 
   @@unique([idSesion, idEmpleado], map: "uk_sesion_empleado")
@@ -1684,6 +1691,7 @@ model CatTipoMovimiento {
   CatModuloFlujo               CatModuloFlujo                 @relation(fields: [idModuloFlujo], references: [idModuloFlujo], map: "fk_TipoMovimiento_ModuloFlujo")
   ConfiguracionFlujoPaso       ConfiguracionFlujoPaso[]
   ConfiguracionPasosAprobacion ConfiguracionPasosAprobacion[]
+  SolicitudesIncidencias       SolicitudesIncidencias[]
 
   @@index([idModuloFlujo], map: "fk_TipoMovimiento_ModuloFlujo")
 }
@@ -2339,15 +2347,16 @@ model CursoModulos {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model CursoPaquetesScorm {
-  idPaqueteScorm  Int                        @id @default(autoincrement())
-  idTenant        Int
-  idContenido     Int                        @unique(map: "uk_scorm_contenido")
-  version         CursoPaquetesScorm_version @default(scorm_12)
-  archivoInicio   String                     @db.VarChar(500)
-  rutaArchivo     String                     @db.VarChar(500)
-  nombreArchivo   String?                    @db.VarChar(255)
-  creadoEn        DateTime?                  @default(now()) @db.Timestamp(0)
-  CursoContenidos CursoContenidos            @relation(fields: [idContenido], references: [idContenido], onDelete: Cascade, onUpdate: NoAction, map: "fk_scorm_contenido")
+  idPaqueteScorm      Int                        @id @default(autoincrement())
+  idTenant            Int
+  idContenido         Int                        @unique(map: "uk_scorm_contenido")
+  version             CursoPaquetesScorm_version @default(scorm_12)
+  archivoInicio       String                     @db.VarChar(500)
+  rutaArchivo         String                     @db.VarChar(500)
+  nombreArchivo       String?                    @db.VarChar(255)
+  creadoEn            DateTime?                  @default(now()) @db.Timestamp(0)
+  CursoContenidos     CursoContenidos            @relation(fields: [idContenido], references: [idContenido], onDelete: Cascade, onUpdate: NoAction, map: "fk_scorm_contenido")
+  CursoScormProgresos CursoScormProgresos[]
 
   @@index([idTenant], map: "idx_scorm_tenant")
 }
@@ -2391,6 +2400,138 @@ model SolicitudAprobacionPaso {
 
   @@index([idUsuarioAprobadorAsignado, estado], map: "idx_aprobador_pendiente")
   @@index([idModuloFlujo, idSolicitud, paso], map: "idx_solicitud_estado")
+}
+
+model CursoScormProgresos {
+  idScormProgreso     Int                @id @default(autoincrement())
+  idTenant            Int
+  idParticipante      Int                @unique(map: "uk_scorm_progreso_participante")
+  idPaqueteScorm      Int
+  estatusLeccion      String?            @db.VarChar(30)
+  estatusExito        String?            @db.VarChar(20)
+  calificacion        Decimal?           @db.Decimal(5, 2)
+  ubicacion           String?            @db.VarChar(1000)
+  datosSuspension     String?            @db.MediumText
+  tiempoTotal         String?            @db.VarChar(30)
+  datosCmi            Json?
+  totalIntentos       Int                @default(0)
+  fechaUltimoGuardado DateTime?          @db.DateTime(0)
+  creadoEn            DateTime?          @default(now()) @db.Timestamp(0)
+  actualizadoEn       DateTime?          @default(now()) @db.Timestamp(0)
+  CursoPaquetesScorm  CursoPaquetesScorm @relation(fields: [idPaqueteScorm], references: [idPaqueteScorm], onDelete: Cascade, onUpdate: NoAction, map: "fk_scorm_progreso_paquete")
+  CursoParticipantes  CursoParticipantes @relation(fields: [idParticipante], references: [idParticipante], onDelete: Cascade, onUpdate: NoAction, map: "fk_scorm_progreso_participante")
+
+  @@index([idPaqueteScorm], map: "idx_scorm_progreso_paquete")
+  @@index([idTenant], map: "idx_scorm_progreso_tenant")
+}
+
+model SolicitudesIncidencias {
+  idSolicitud                                                         Int                            @id @default(autoincrement())
+  idTenant                                                            Int
+  idEmpresa                                                           Int
+  idEmpleado                                                          Int
+  idTipoMovimiento                                                    Int
+  solicitadoPorIdEmpleado                                             Int
+  fechaInicio                                                         DateTime                       @db.Date
+  fechaFin                                                            DateTime                       @db.Date
+  totalDiasLaborales                                                  Decimal                        @default(0.00) @db.Decimal(5, 2)
+  estatus                                                             SolicitudesIncidencias_estatus @default(PENDIENTE)
+  pasoActual                                                          Int                            @default(1)
+  totalPasos                                                          Int                            @default(1)
+  idAprobador                                                         Int?
+  fechaRespuesta                                                      DateTime?                      @db.DateTime(0)
+  motivoRechazo                                                       String?                        @db.Text
+  comentarios                                                         String?                        @db.Text
+  fechaRegistro                                                       DateTime                       @default(now()) @db.Timestamp(0)
+  PasosAprobacionIncidencia                                           PasosAprobacionIncidencia[]
+  Empleados_SolicitudesIncidencias_idAprobadorToEmpleados             Empleados?                     @relation("SolicitudesIncidencias_idAprobadorToEmpleados", fields: [idAprobador], references: [idEmpleado], map: "fk_solicitudes_aprobador")
+  Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados              Empleados                      @relation("SolicitudesIncidencias_idEmpleadoToEmpleados", fields: [idEmpleado], references: [idEmpleado], map: "fk_solicitudes_empleado")
+  Empleados_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados Empleados                      @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados", fields: [solicitadoPorIdEmpleado], references: [idEmpleado], map: "fk_solicitudes_solicitante")
+  CatTipoMovimiento                                                   CatTipoMovimiento              @relation(fields: [idTipoMovimiento], references: [idTipoMovimiento], map: "fk_solicitudes_tipo_movimiento")
+  SolicitudesPermisosDetalle                                          SolicitudesPermisosDetalle?
+  SolicitudesVacacionesDetalle                                        SolicitudesVacacionesDetalle?
+
+  @@index([idAprobador], map: "fk_solicitudes_aprobador")
+  @@index([solicitadoPorIdEmpleado], map: "fk_solicitudes_solicitante")
+  @@index([idTipoMovimiento], map: "fk_solicitudes_tipo_movimiento")
+  @@index([idEmpleado, idTipoMovimiento, estatus], map: "idx_solicitudes_empleado_tipo")
+  @@index([idEmpresa, idTenant], map: "idx_solicitudes_empresa_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model SolicitudesVacacionesDetalle {
+  idVacacionDetalle      Int                    @id @default(autoincrement())
+  idSolicitud            Int                    @unique(map: "uk_vacaciones_solicitud")
+  periodoAnio            Int
+  diasPrimaVacacional    Decimal?               @default(0.00) @db.Decimal(5, 2)
+  SolicitudesIncidencias SolicitudesIncidencias @relation(fields: [idSolicitud], references: [idSolicitud], onDelete: Cascade, map: "fk_vacaciones_solicitud")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model PasosAprobacionIncidencia {
+  idPasoAprobacion       Int                                     @id @default(autoincrement())
+  idSolicitud            Int
+  paso                   Int
+  tipoAprobador          PasosAprobacionIncidencia_tipoAprobador
+  idRolAprobador         Int?
+  estatus                PasosAprobacionIncidencia_estatus       @default(PENDIENTE)
+  idUsuarioAprobador     String?                                 @db.VarChar(36)
+  idEmpleadoAprobador    Int?
+  comentarios            String?                                 @db.Text
+  fechaRespuesta         DateTime?                               @db.DateTime(0)
+  fechaCreacion          DateTime                                @default(now()) @db.Timestamp(0)
+  fechaActualizacion     DateTime?                               @db.Timestamp(0)
+  Empleados              Empleados?                              @relation(fields: [idEmpleadoAprobador], references: [idEmpleado], map: "fk_pasos_incidencias_empleado")
+  SolicitudesIncidencias SolicitudesIncidencias                  @relation(fields: [idSolicitud], references: [idSolicitud], onDelete: Cascade, map: "fk_pasos_incidencias_solicitud")
+  auth_user              auth_user?                              @relation(fields: [idUsuarioAprobador], references: [uuid], map: "fk_pasos_incidencias_usuario")
+
+  @@unique([idSolicitud, paso], map: "uk_pasos_incidencia_paso")
+  @@index([idEmpleadoAprobador], map: "fk_pasos_incidencias_empleado")
+  @@index([idUsuarioAprobador], map: "fk_pasos_incidencias_usuario")
+  @@index([estatus], map: "idx_pasos_incidencia_estatus")
+  @@index([idSolicitud], map: "idx_pasos_incidencia_solicitud")
+}
+
+model SolicitudesPermisosDetalle {
+  idPermisoDetalle       Int                                     @id @default(autoincrement())
+  idSolicitud            Int                                     @unique(map: "uk_permisos_solicitud")
+  tipoPermiso            String                                  @db.VarChar(50)
+  tipoGoce               SolicitudesPermisosDetalle_tipoGoce
+  tipoDuracion           SolicitudesPermisosDetalle_tipoDuracion
+  horaInicio             DateTime?                               @db.Time(0)
+  horaFin                DateTime?                               @db.Time(0)
+  regresaATrabajar       Boolean                                 @default(false)
+  duracion               Decimal                                 @default(0.00) @db.Decimal(7, 2)
+  motivo                 String                                  @db.Text
+  observaciones          String?                                 @db.Text
+  solicitadoPorLider     Boolean                                 @default(false)
+  archivoNombreOriginal  String?                                 @db.VarChar(255)
+  archivoRuta            String?                                 @db.VarChar(500)
+  fechaRegistro          DateTime                                @default(now()) @db.Timestamp(0)
+  SolicitudesIncidencias SolicitudesIncidencias                  @relation(fields: [idSolicitud], references: [idSolicitud], onDelete: Cascade, map: "fk_permisos_solicitud")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ArchivosSolicitudes {
+  idArchivoSolicitud Int       @id @default(autoincrement())
+  idTenant           Int
+  idEmpresa          Int
+  idEmpleado         Int
+  moduloSolicitud    String    @db.VarChar(30)
+  idSolicitud        Int
+  nombreOriginal     String    @db.VarChar(255)
+  nombreAlmacenado   String    @db.VarChar(255)
+  rutaRelativa       String    @db.VarChar(700)
+  mimeType           String?   @db.VarChar(150)
+  tamanoBytes        BigInt    @default(0) @db.UnsignedBigInt
+  usuarioRegistro    String?   @db.VarChar(100)
+  fechaRegistro      DateTime  @default(now()) @db.DateTime(0)
+  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_archivos_empleado")
+
+  @@index([idEmpleado], map: "fk_archivos_empleado")
+  @@index([idTenant, idEmpresa, idEmpleado], map: "idx_archivos_empleado")
+  @@index([idTenant, idEmpresa], map: "idx_archivos_empresa")
+  @@index([moduloSolicitud, idSolicitud], map: "idx_archivos_solicitud")
 }
 
 enum Entrevistas_interview_type {
@@ -2607,24 +2748,31 @@ enum ConfiguracionFlujoPaso_modoAsignacionRol {
   ESPECIFICO
 }
 
-model CursoScormProgresos {
-  idScormProgreso     Int       @id @default(autoincrement())
-  idTenant            Int
-  idParticipante      Int       @unique(map: "uk_scorm_progreso_participante")
-  idPaqueteScorm      Int
-  estatusLeccion      String?   @db.VarChar(30)
-  estatusExito        String?   @db.VarChar(20)
-  calificacion        Decimal?  @db.Decimal(5, 2)
-  ubicacion           String?   @db.VarChar(1000)
-  datosSuspension     String?   @db.MediumText
-  tiempoTotal         String?   @db.VarChar(30)
-  datosCmi            Json?
-  totalIntentos       Int       @default(0)
-  fechaUltimoGuardado DateTime? @db.DateTime(0)
-  creadoEn            DateTime? @default(now()) @db.Timestamp(0)
-  actualizadoEn       DateTime? @default(now()) @db.Timestamp(0)
-
-  @@index([idPaqueteScorm], map: "idx_scorm_progreso_paquete")
-  @@index([idTenant], map: "idx_scorm_progreso_tenant")
+enum SolicitudesIncidencias_estatus {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+  CANCELADA
 }
 
+enum PasosAprobacionIncidencia_tipoAprobador {
+  JERARQUIA
+  ROL
+  AREA
+}
+
+enum PasosAprobacionIncidencia_estatus {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+}
+
+enum SolicitudesPermisosDetalle_tipoGoce {
+  CON_GOCE
+  SIN_GOCE
+}
+
+enum SolicitudesPermisosDetalle_tipoDuracion {
+  DIAS
+  HORAS
+}
