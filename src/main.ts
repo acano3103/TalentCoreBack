@@ -24,6 +24,9 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
@@ -66,7 +69,7 @@ async function bootstrap() {
       },
       {
         name: 'Web App',
-        tags: ['Users', 'Attendance Dashboard', 'Work Shifts', 'Logbook', 'Incidents', 'Vacations'],
+        tags: ['Users', 'Attendance Dashboard', 'Work Shifts', 'Logbook', 'Incidents', 'Vacations', 'Permissions'],
       },
       {
         name: 'Integrations',

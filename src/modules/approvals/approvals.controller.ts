@@ -26,6 +26,7 @@ export class ApprovalsController {
     return this.approvalsService.getPendingApprovals(activeUser, companyId);
   }
 
+  // Obtiene el detalle de una solicitud pendiente
   @Get('/requests/detail')
   @ApiOperation({ summary: 'Get pending approval request detail', description: 'Get pending approval request detail.', })
   @ApiResponse({ status: 200, description: 'Pending approval request detail retrieved successfully', })

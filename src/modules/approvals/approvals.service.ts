@@ -6,6 +6,7 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PersonnelConfigService } from '../config/personnel-config/personnel-config.service';
 import { GetApprovalRequestDetailDto } from './dto/get-approval-request-detail.dto';
 import { obtenerIniciales } from './utils/approvals.utils';
+import { IncidentsService } from '../incidents/incidents.service';
 
 @Injectable()
 export class ApprovalsService {
@@ -14,6 +15,7 @@ export class ApprovalsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly personnelConfig: PersonnelConfigService,
+        private readonly incidentsService: IncidentsService,
     ) { }
 
     // BANDEJA UNIFICADA: Listado de pendientes que requieren la aprobación del usuario
@@ -467,7 +469,7 @@ export class ApprovalsService {
         // 2. Consultar los detalles según el módulo de origen.
         switch (request.origenModulo) {
             case 'INCIDENCIA':
-                return this.obtenerDetalleIncidenciaAutorizada(
+                return this.incidentsService.obtenerDetalleIncidenciaAutorizada(
                     activeUser,
                     companyId,
                     request,
@@ -488,261 +490,72 @@ export class ApprovalsService {
         }
     }
 
-
-    async obtenerDetalleIncidenciaAutorizada(
-        activeUser: ActiveUserDto,
-        companyId: number,
-        request: any,
-        soloPendientes: boolean = false,
+    async aprobarAutomaticamenteSinFlujoAprobacion(
+        idTenant: number,
+        idEmpresa: number,
+        idTipoMovimiento: number,
+        idSolicitud: number,
     ) {
-        const codigo = request.codigoTipoSolicitud?.toUpperCase();
-
-        // Por ahora, solo implementamos vacaciones.
-        if (codigo !== 'VACACIONES' && request.idTipoMovimiento !== 6) {
-            throw new BadRequestException(
-                'El detalle de este tipo de incidencia todavía no está implementado.',
-            );
-        }
-
-        // 1. Consultar la solicitud principal.
-        const solicitud = await this.prisma.solicitudesIncidencias.findFirst({
+        const existe = await this.prisma.solicitudesIncidencias.findFirst({
             where: {
-                idSolicitud: request.idOrigen,
-                idTenant: activeUser.idTenant,
-                idEmpresa: companyId,
-                idTipoMovimiento: request.idTipoMovimiento,
-            },
-            select: {
-                idSolicitud: true,
-                idTenant: true,
-                idEmpresa: true,
-                idEmpleado: true,
-                solicitadoPorIdEmpleado: true,
-                idTipoMovimiento: true,
-                fechaInicio: true,
-                fechaFin: true,
-                totalDiasLaborales: true,
-                estatus: true,
-                idAprobador: true,
-                fechaRespuesta: true,
-                motivoRechazo: true,
-                comentarios: true,
-                fechaRegistro: true,
+                idTenant,
+                idEmpresa,
+                idSolicitud,
+                idTipoMovimiento,
             },
         });
 
-        if (!solicitud) {
+        if (!existe) {
             throw new NotFoundException(
-                'La solicitud no existe o no tienes permiso para consultarla.',
+                'La solicitud no existe.',
             );
         }
 
-        // Solo mostrar el detalle mientras la solicitud sea revisable.
-        // La autorización se comprobó previamente en getApprovalRequestDetail.
-        if (soloPendientes) {
-            if (solicitud.estatus !== 'PENDIENTE') {
-                throw new BadRequestException(
-                    'Esta solicitud ya no se encuentra pendiente de aprobación.',
-                );
-            }
-        }
-
-        // 2. Consultar el detalle complementario de vacaciones.
-        const vacacionesDetalle =
-            await this.prisma.solicitudesVacacionesDetalle.findUnique({
-                where: {
-                    idSolicitud: solicitud.idSolicitud,
-                },
-                select: {
-                    idVacacionDetalle: true,
-                    idSolicitud: true,
-                    periodoAnio: true,
-                    diasPrimaVacacional: true,
-                },
-            });
-
-        if (!vacacionesDetalle) {
-            throw new NotFoundException(
-                'No se encontró el detalle complementario de vacaciones.',
-            );
-        }
-
-        // 3. Obtener el flujo configurado para este tipo de solicitud.
-        const flujoConfigurado =
-            await this.prisma.configuracionFlujoPaso.findMany({
-                where: {
-                    idTenant: activeUser.idTenant,
-                    idEmpresa: companyId,
-                    idTipoMovimiento: solicitud.idTipoMovimiento,
-                    activo: true,
-                },
-                orderBy: {
-                    paso: 'asc',
-                },
-                select: {
-                    idConfiguracionPaso: true,
-                    paso: true,
-                    codigoTipoSolicitud: true,
-                    idModuloFlujo: true,
-                    tipoAprobador: true,
-                    nivelJerarquia: true,
-                    autoAprobarSiSolicitante: true,
-                    idRolAprobador: true,
-                    modoAsignacionRol: true,
-                    idUsuarioFijoRol: true,
-                },
-            });
-
-        if (flujoConfigurado.length === 0) {
-            throw new NotFoundException(
-                'No se encontró el flujo de aprobación de esta solicitud.',
-            );
-        }
-
-        // 4. Obtener los pasos ejecutados y sus respuestas.
-        const pasosEjecutados =
-            await this.prisma.pasosAprobacionIncidencia.findMany({
-                where: {
-                    idSolicitud: solicitud.idSolicitud,
-                },
-                orderBy: {
-                    paso: 'asc',
-                },
-                select: {
-                    idPasoAprobacion: true,
-                    idSolicitud: true,
-                    paso: true,
-                    tipoAprobador: true,
-                    idRolAprobador: true,
-                    estatus: true,
-                    idUsuarioAprobador: true,
-                    idEmpleadoAprobador: true,
-                    comentarios: true,
-                    fechaRespuesta: true,
-                },
-            });
-
-        // 5. Resolver los nombres de los usuarios que ya respondieron.
-        const usuariosIds = [
-            ...new Set(
-                pasosEjecutados
-                    .map((paso) => paso.idUsuarioAprobador)
-                    .filter((id): id is string => Boolean(id)),
-            ),
-        ];
-
-        const usuarios = usuariosIds.length
-            ? await this.prisma.auth_user.findMany({
-                where: {
-                    idTenant: activeUser.idTenant,
-                    uuid: { in: usuariosIds },
-                },
-                select: {
-                    uuid: true,
-                    first_name: true,
-                    last_name: true,
-                    username: true,
-                },
-            })
-            : [];
-
-        const usuariosMap = new Map(
-            usuarios.map((usuario) => [
-                usuario.uuid,
-                `${usuario.first_name ?? ''} ${usuario.last_name ?? ''}`.trim() ||
-                usuario.username,
-            ]),
-        );
-
-        const pasosMap = new Map(
-            pasosEjecutados.map((paso) => [paso.paso, paso]),
-        );
-
-        // 5. Obtener los nombres de los roles configurados.
-        const rolesIds = [
-            ...new Set(
-                flujoConfigurado
-                    .map((paso) => paso.idRolAprobador)
-                    .filter((id): id is number => id !== null),
-            ),
-        ];
-
-        // Sustituye catRoles y sus campos por los nombres reales de tu schema.prisma.
-        const roles = rolesIds.length
-            ? await this.prisma.catRoles.findMany({
-                where: {
-                    idTenant: activeUser.idTenant,
-                    idRol: { in: rolesIds },
-                },
-                select: {
-                    idRol: true,
-                    descripcion: true,
-                },
-            })
-            : [];
-
-        const rolesMap = new Map(
-            roles.map((rol) => [rol.idRol, rol.descripcion]),
-        );
-
-        // 6. Construir la línea del tiempo.
-        // Los pasos configurados que todavía no se han ejecutado aparecen pendientes.
-        const pasos = flujoConfigurado.map((config) => {
-            const ejecutado = pasosMap.get(config.paso);
-
-            return {
-                paso: config.paso,
-                estatus: ejecutado?.estatus ?? 'PENDIENTE',
-                tipoAprobador: config.tipoAprobador,
-                nivelJerarquia: config.nivelJerarquia,
-                idRolAprobador: config.idRolAprobador,
-                nombreRolAprobador: config.idRolAprobador
-                    ? rolesMap.get(config.idRolAprobador) ?? null
-                    : null,
-                modoAsignacionRol: config.modoAsignacionRol,
-                idUsuarioFijoRol: config.idUsuarioFijoRol,
-
-                idPasoAprobacion:
-                    ejecutado?.idPasoAprobacion ?? null,
-
-                idUsuarioAprobador:
-                    ejecutado?.idUsuarioAprobador ?? null,
-
-                idEmpleadoAprobador:
-                    ejecutado?.idEmpleadoAprobador ?? null,
-
-                nombreUsuarioAprobador: ejecutado?.idUsuarioAprobador
-                    ? usuariosMap.get(ejecutado.idUsuarioAprobador) ?? null
-                    : null,
-
-                comentarios: ejecutado?.comentarios ?? null,
-                fechaRespuesta: ejecutado?.fechaRespuesta ?? null,
-            };
+        // Buscar el flujo de aprobación.
+        const flujo = await this.prisma.configuracionFlujoPaso.findFirst({
+            where: {
+                idTenant,
+                idEmpresa,
+                idTipoMovimiento,
+                activo: true,
+            },
         });
 
-        const pasoActual = pasos.find(
-            (paso) =>
-                paso.estatus === 'PENDIENTE' &&
-                paso.paso === request.pasoActual,
-        );
+        if (!flujo) {
+            this.logger.warn('No existe un flujo de aprobación para el tipo de movimiento ' + idTipoMovimiento + ' , se aprueba en automático ');
 
-        // 7. Responder al frontend.
-        return {
-            solicitud: {
-                ...solicitud,
-                tipo: 'VACACIONES',
-                tipoMovimientoNombre: request.tipoMovimientoNombre,
-                empleadoNombreCompleto: request.empleadoNombreCompleto,
-                empleadoIniciales: request.empleadoIniciales,
-                vacaciones: vacacionesDetalle,
-            },
+            await this.prisma.solicitudesIncidencias.update({
+                where: {
+                    idTenant,
+                    idEmpresa,
+                    idSolicitud,
+                    idTipoMovimiento,
+                },
+                data: {
+                    estatus: 'APROBADA',
+                    pasoActual: 1,
+                    fechaRespuesta: new Date(),
+                },
+            });
 
-            flujo: {
-                pasoActual: pasoActual?.paso ?? request.pasoActual,
-                totalPasos: pasos.length,
-                pasos,
-            },
-        };
+            // Crear un paso de aprobación
+            await this.prisma.pasosAprobacionIncidencia.create({
+                data: {
+                    idSolicitud,
+                    paso: 1,
+                    tipoAprobador: 'JERARQUIA',
+                    idRolAprobador: null,
+                    estatus: 'APROBADA',
+                    idUsuarioAprobador: null,
+                    idEmpleadoAprobador: null,
+                    comentarios: 'Aprobada automáticamente por falta de flujo de aprobación.',
+                    fechaRespuesta: new Date(),
+                },
+            });
+            return 'Solicitud aprobada automaticamente por falta de flujo de aprobación.';
+        } else {
+            return 'Flujo de aprobación encontrado';
+        }
     }
 
 }

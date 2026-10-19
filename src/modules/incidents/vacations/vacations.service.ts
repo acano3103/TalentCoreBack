@@ -8,18 +8,8 @@ import { PersonnelConfigService } from 'src/modules/config/personnel-config/pers
 import { EmployeeQueryResult } from 'src/modules/employees/interfaces/employee.interface';
 import { SolicitudesIncidencias_estatus } from 'generated/prisma/enums';
 import { CreateVacationRequestDto } from './dto/create-vacation-request.dto';
-
-const DIAS_SEMANA_MAP: Record<string, number> = {
-  domingo: 0,
-  lunes: 1,
-  martes: 2,
-  miércoles: 3,
-  miercoles: 3,
-  jueves: 4,
-  viernes: 5,
-  sábado: 6,
-  sabado: 6,
-};
+import { DIAS_SEMANA_MAP } from '../constants/incidents.constants';
+import { ApprovalsService } from 'src/modules/approvals/approvals.service';
 
 @Injectable()
 export class VacationsService {
@@ -29,6 +19,7 @@ export class VacationsService {
     private readonly prisma: PrismaService,
     private readonly employeeService: EmployeesService,
     private readonly personnelConfig: PersonnelConfigService,
+    private readonly approvalsService: ApprovalsService,
   ) { }
 
   /**
@@ -295,6 +286,14 @@ export class VacationsService {
 
       return solicitud;
     });
+
+    // Aprobar la solicitud automaticamente si no tiene flujo de aprobación
+    await this.approvalsService.aprobarAutomaticamenteSinFlujoAprobacion(
+      activeUser.idTenant,
+      companyId,
+      vacationTipoMovimiento.idTipoMovimiento,
+      newRequest.idSolicitud,
+    );
 
     return {
       message: 'Solicitud de vacaciones registrada con éxito.',

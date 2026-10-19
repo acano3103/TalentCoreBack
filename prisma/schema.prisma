@@ -1135,6 +1135,7 @@ model Empleados {
   activo                                                                           Boolean                     @default(true)
   artemisUserId                                                                    String?                     @db.VarChar(50)
   artemisSyncedAt                                                                  DateTime?                   @db.DateTime(0)
+  ArchivosSolicitudes                                                              ArchivosSolicitudes[]
   Contratos                                                                        Contratos[]
   CursoParticipantes                                                               CursoParticipantes[]
   CursoSesiones                                                                    CursoSesiones[]
@@ -2447,6 +2448,7 @@ model SolicitudesIncidencias {
   Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados              Empleados                      @relation("SolicitudesIncidencias_idEmpleadoToEmpleados", fields: [idEmpleado], references: [idEmpleado], map: "fk_solicitudes_empleado")
   Empleados_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados Empleados                      @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados", fields: [solicitadoPorIdEmpleado], references: [idEmpleado], map: "fk_solicitudes_solicitante")
   CatTipoMovimiento                                                   CatTipoMovimiento              @relation(fields: [idTipoMovimiento], references: [idTipoMovimiento], map: "fk_solicitudes_tipo_movimiento")
+  SolicitudesPermisosDetalle                                          SolicitudesPermisosDetalle?
   SolicitudesVacacionesDetalle                                        SolicitudesVacacionesDetalle?
 
   @@index([idAprobador], map: "fk_solicitudes_aprobador")
@@ -2488,6 +2490,48 @@ model PasosAprobacionIncidencia {
   @@index([idUsuarioAprobador], map: "fk_pasos_incidencias_usuario")
   @@index([estatus], map: "idx_pasos_incidencia_estatus")
   @@index([idSolicitud], map: "idx_pasos_incidencia_solicitud")
+}
+
+model SolicitudesPermisosDetalle {
+  idPermisoDetalle       Int                                     @id @default(autoincrement())
+  idSolicitud            Int                                     @unique(map: "uk_permisos_solicitud")
+  tipoPermiso            String                                  @db.VarChar(50)
+  tipoGoce               SolicitudesPermisosDetalle_tipoGoce
+  tipoDuracion           SolicitudesPermisosDetalle_tipoDuracion
+  horaInicio             DateTime?                               @db.Time(0)
+  horaFin                DateTime?                               @db.Time(0)
+  regresaATrabajar       Boolean                                 @default(false)
+  duracion               Decimal                                 @default(0.00) @db.Decimal(7, 2)
+  motivo                 String                                  @db.Text
+  observaciones          String?                                 @db.Text
+  solicitadoPorLider     Boolean                                 @default(false)
+  archivoNombreOriginal  String?                                 @db.VarChar(255)
+  archivoRuta            String?                                 @db.VarChar(500)
+  fechaRegistro          DateTime                                @default(now()) @db.Timestamp(0)
+  SolicitudesIncidencias SolicitudesIncidencias                  @relation(fields: [idSolicitud], references: [idSolicitud], onDelete: Cascade, map: "fk_permisos_solicitud")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ArchivosSolicitudes {
+  idArchivoSolicitud Int       @id @default(autoincrement())
+  idTenant           Int
+  idEmpresa          Int
+  idEmpleado         Int
+  moduloSolicitud    String    @db.VarChar(30)
+  idSolicitud        Int
+  nombreOriginal     String    @db.VarChar(255)
+  nombreAlmacenado   String    @db.VarChar(255)
+  rutaRelativa       String    @db.VarChar(700)
+  mimeType           String?   @db.VarChar(150)
+  tamanoBytes        BigInt    @default(0) @db.UnsignedBigInt
+  usuarioRegistro    String?   @db.VarChar(100)
+  fechaRegistro      DateTime  @default(now()) @db.DateTime(0)
+  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_archivos_empleado")
+
+  @@index([idEmpleado], map: "fk_archivos_empleado")
+  @@index([idTenant, idEmpresa, idEmpleado], map: "idx_archivos_empleado")
+  @@index([idTenant, idEmpresa], map: "idx_archivos_empresa")
+  @@index([moduloSolicitud, idSolicitud], map: "idx_archivos_solicitud")
 }
 
 enum Entrevistas_interview_type {
@@ -2721,4 +2765,14 @@ enum PasosAprobacionIncidencia_estatus {
   PENDIENTE
   APROBADA
   RECHAZADA
+}
+
+enum SolicitudesPermisosDetalle_tipoGoce {
+  CON_GOCE
+  SIN_GOCE
+}
+
+enum SolicitudesPermisosDetalle_tipoDuracion {
+  DIAS
+  HORAS
 }
