@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
@@ -167,6 +167,199 @@ export class IncidentsService {
         };
     }
 
+    async findAllRequested(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        query: QueryIncidentsDto,
+    ) {
+        const page = Math.max(1, query.page ?? 1);
+        const limit = Math.min(100, Math.max(1, query.limit ?? 10));
+        const search = query.search?.trim();
+        const { status } = query;
+
+        // Obtener el empleado asociado al usuario autenticado.
+        const empleadoActual = await this.prisma.empleados.findFirst({
+            where: {
+                idUsuario: activeUser.uuid,
+                idTenant: activeUser.idTenant,
+                idEmpresa: companyId,
+            },
+            select: {
+                idEmpleado: true,
+            },
+        });
+
+        if (!empleadoActual) {
+            throw new NotFoundException(
+                'No se encontró un empleado asociado al usuario autenticado.',
+            );
+        }
+
+        const idEmpleadoActual = empleadoActual.idEmpleado;
+
+        const where: Prisma.SolicitudesIncidenciasWhereInput = {
+            idTenant: activeUser.idTenant,
+            idEmpresa: companyId,
+
+            // El empleado puede ver:
+            // 1. Incidencias solicitadas para él mismo.
+            // 2. Incidencias que él solicitó para otra persona.
+            OR: [
+                { idEmpleado: idEmpleadoActual },
+                { solicitadoPorIdEmpleado: idEmpleadoActual },
+            ],
+        };
+
+        // Filtro opcional por estatus.
+        if (status) {
+            where.estatus = status;
+        }
+
+        // Búsqueda.
+        if (search) {
+            where.AND = [
+                {
+                    OR: [
+                        {
+                            comentarios: {
+                                contains: search,
+                            },
+                        },
+                        {
+                            CatTipoMovimiento: {
+                                is: {
+                                    nombre: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            CatTipoMovimiento: {
+                                is: {
+                                    codigo: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                                is: {
+                                    nombre: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                                is: {
+                                    primerApellido: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                                is: {
+                                    segundoApellido: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                },
+            ];
+        }
+
+        const [total, solicitudes] = await this.prisma.$transaction([
+            this.prisma.solicitudesIncidencias.count({
+                where,
+            }),
+
+            this.prisma.solicitudesIncidencias.findMany({
+                where,
+
+                include: {
+                    Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                        select: {
+                            idEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                            idJefeInmediato: true,
+
+                            CatPuestos: {
+                                select: {
+                                    idPuesto: true,
+                                    idArea: true,
+                                },
+                            },
+                        },
+                    },
+
+                    CatTipoMovimiento: true,
+                },
+
+                orderBy: [
+                    {
+                        fechaRegistro: 'desc',
+                    },
+                    {
+                        idSolicitud: 'desc',
+                    },
+                ],
+
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+        ]);
+
+        const requests = solicitudes.map((inc) => {
+            const empleado =
+                inc.Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
+
+            const nombreCompleto = [
+                empleado?.nombre,
+                empleado?.primerApellido,
+                empleado?.segundoApellido,
+            ]
+                .filter(Boolean)
+                .join(' ');
+
+            return {
+                idOrigen: inc.idSolicitud,
+                origenModulo: ModuloOrigenEnum.INCIDENCIA,
+                idEmpleado: empleado?.idEmpleado ?? inc.idEmpleado,
+                empleadoNombreCompleto: nombreCompleto || 'Sin empleado',
+                empleadoIniciales: obtenerIniciales(empleado?.nombre ?? '', empleado?.primerApellido ?? ''),
+                comentarioOMotivo: inc.comentarios ?? null,
+                idTipoMovimiento: inc.idTipoMovimiento,
+                tipoMovimientoNombre: inc.CatTipoMovimiento?.nombre ?? 'Incidencia',
+                codigoTipoSolicitud: inc.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
+                estatusCodigo: inc.estatus,
+                estatusNombre: inc.estatus,
+                fechaSolicitud: inc.fechaRegistro,
+                solicitud: inc,
+            };
+        });
+
+        return {
+            requests,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+                hasNextPage: page * limit < total,
+                hasPreviousPage: page > 1,
+            },
+        };
+    }
+
     async getIncidentRequestDetail(
         activeUser: ActiveUserDto,
         companyId: number,
@@ -253,6 +446,115 @@ export class IncidentsService {
         );
     }
 
+    async getIncidentRequestedDetail(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        query: GetIncidentRequestDetailDto,
+    ) {
+        if (query.origenModulo !== 'INCIDENCIA') {
+            throw new BadRequestException(
+                'El módulo de la solicitud no es válido.',
+            );
+        }
+
+        // Obtener el empleado asociado al usuario autenticado.
+        const empleadoActual = await this.prisma.empleados.findFirst({
+            where: {
+                idUsuario: activeUser.uuid,
+                idTenant: activeUser.idTenant,
+                idEmpresa: companyId,
+            },
+            select: {
+                idEmpleado: true,
+            },
+        });
+
+        if (!empleadoActual) {
+            throw new NotFoundException(
+                'No se encontró un empleado asociado al usuario autenticado.',
+            );
+        }
+
+        const idEmpleadoActual = empleadoActual.idEmpleado;
+
+        const incidencia =
+            await this.prisma.solicitudesIncidencias.findFirst({
+                where: {
+                    idSolicitud: query.idOrigen,
+
+                    // Seguridad por tenant y empresa.
+                    idTenant: activeUser.idTenant,
+                    idEmpresa: companyId,
+
+                    // El usuario solamente puede consultar:
+                    // 1. Incidencias solicitadas para él mismo.
+                    // 2. Incidencias que él solicitó para otra persona.
+                    OR: [
+                        {
+                            idEmpleado: idEmpleadoActual,
+                        },
+                        {
+                            solicitadoPorIdEmpleado: idEmpleadoActual,
+                        },
+                    ],
+                },
+
+                include: {
+                    Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                        select: {
+                            idEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                        },
+                    },
+
+                    CatTipoMovimiento: true,
+                },
+            });
+
+        // Importante:
+        // Si existe la solicitud pero no pertenece al usuario actual,
+        // tampoco la revelamos. Para él simplemente "no existe".
+        if (!incidencia) {
+            throw new NotFoundException(
+                'La solicitud no existe.',
+            );
+        }
+
+        const empleado = incidencia.Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
+
+        const nombreCompleto = [
+            empleado?.nombre,
+            empleado?.primerApellido,
+            empleado?.segundoApellido,
+        ]
+            .filter(Boolean)
+            .join(' ');
+
+        const request = {
+            idOrigen: incidencia.idSolicitud,
+            origenModulo: ModuloOrigenEnum.INCIDENCIA,
+            idEmpleado: empleado?.idEmpleado ?? incidencia.idEmpleado,
+            empleadoNombreCompleto: nombreCompleto || 'Sin empleado',
+            empleadoIniciales: obtenerIniciales(empleado?.nombre ?? '', empleado?.primerApellido ?? ''),
+            comentarioOMotivo: incidencia.comentarios ?? null,
+            idTipoMovimiento: incidencia.idTipoMovimiento,
+            tipoMovimientoNombre: incidencia.CatTipoMovimiento?.nombre ?? 'Incidencia',
+            codigoTipoSolicitud: incidencia.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
+            estatusCodigo: incidencia.estatus,
+            fechaSolicitud: incidencia.fechaRegistro,
+            pasoActual: incidencia.pasoActual ?? 1,
+        };
+
+        return this.obtenerDetalleIncidenciaAutorizada(
+            activeUser,
+            companyId,
+            request,
+            false,
+        );
+    }
+
     // ------------------------------------------------------------------
     // Helpers 
     // ------------------------------------------------------------------
@@ -264,7 +566,6 @@ export class IncidentsService {
         soloPendientes: boolean = false,
     ) {
         const codigo = String(request.codigoTipoSolicitud ?? '').trim().toUpperCase();
-        console.log(codigo);
 
         // Resolver el tipo de incidencia.
         const esVacaciones = codigo === 'VACACIONES' || request.idTipoMovimiento === 6;

@@ -1,12 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, UnauthorizedException } from '@nestjs/common';
 import { ActionApprovalDto } from './dto/approve-reject-action.dto';
-import { ModuloOrigenEnum, AccionAprobacionEnum } from './enums/approval-origin.enum';
+import { ModuloOrigenEnum, AccionAprobacionEnum, AccionCancelacionEnum } from './enums/approval-origin.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PersonnelConfigService } from '../config/personnel-config/personnel-config.service';
 import { GetApprovalRequestDetailDto } from './dto/get-approval-request-detail.dto';
 import { obtenerIniciales } from './utils/approvals.utils';
 import { IncidentsService } from '../incidents/incidents.service';
+import { CancelApprovalDto } from './dto/cancel-action.dto';
 
 @Injectable()
 export class ApprovalsService {
@@ -438,6 +439,133 @@ export class ApprovalsService {
         }
 
         throw new BadRequestException('Módulo de origen no reconocido');
+    }
+
+    // Esta función cancela una solicitud por el solicitante o el solicitado
+    async cancelRequest(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        dto: CancelApprovalDto,
+    ) {
+        // A. Obtener el empleado asociado al usuario autenticado
+        const currentEmployee = await this.prisma.empleados.findFirst({
+            where: {
+                idTenant: activeUser.idTenant,
+                idEmpresa: companyId,
+                idUsuario: activeUser.uuid,
+                activo: true,
+            },
+            select: {
+                idEmpleado: true,
+            },
+        });
+
+        const currentEmployeeId = currentEmployee?.idEmpleado ?? null;
+
+        if (!currentEmployeeId) {
+            throw new UnauthorizedException(
+                'El usuario autenticado no tiene un empleado asociado.',
+            );
+        }
+
+        // B. Manejo para INCIDENCIAS
+        if (dto.origenModulo === ModuloOrigenEnum.INCIDENCIA) {
+            const solicitud =
+                await this.prisma.solicitudesIncidencias.findFirst({
+                    where: {
+                        idSolicitud: dto.idOrigen,
+                        idTenant: activeUser.idTenant,
+                        idEmpresa: companyId,
+
+                        // El usuario debe ser:
+                        // 1. El empleado para quien se creó la solicitud, o
+                        // 2. El empleado que realizó la solicitud.
+                        OR: [
+                            {
+                                idEmpleado: currentEmployeeId,
+                            },
+                            {
+                                solicitadoPorIdEmpleado: currentEmployeeId,
+                            },
+                        ],
+                    },
+                    select: {
+                        idSolicitud: true,
+                        idEmpleado: true,
+                        solicitadoPorIdEmpleado: true,
+                        estatus: true,
+                        comentarios: true,
+                    },
+                });
+
+            /*
+             * Si no existe o no pertenece al usuario actual,
+             * devolvemos 404 para no revelar información sobre
+             * solicitudes de otros empleados.
+             */
+            if (!solicitud) {
+                throw new NotFoundException(
+                    'La solicitud de incidencia no existe.',
+                );
+            }
+
+            // C. Solo se puede cancelar una solicitud pendiente
+            if (solicitud.estatus !== 'PENDIENTE') {
+                throw new BadRequestException(
+                    'La solicitud ya no se encuentra en estatus pendiente y no puede ser cancelada.',
+                );
+            }
+
+            // D. Validar que la acción solicitada sea CANCELAR
+            if (dto.accion !== AccionCancelacionEnum.CANCELAR) {
+                throw new BadRequestException(
+                    'La acción de cancelación no es válida.',
+                );
+            }
+
+            // E. Validar el motivo de cancelación
+            const comentario = dto.comentarios?.trim();
+
+            if (!comentario) {
+                throw new BadRequestException(
+                    'Debes indicar el motivo de la cancelación.',
+                );
+            }
+
+            // F. Cancelar la solicitud
+            await this.prisma.$transaction(async (tx) => {
+                await tx.solicitudesIncidencias.update({
+                    where: {
+                        idSolicitud: solicitud.idSolicitud,
+                    },
+                    data: {
+                        estatus: 'CANCELADA',
+                        comentarios: comentario,
+                        fechaRespuesta: new Date(),
+                    },
+                });
+            });
+
+            return {
+                message: 'Solicitud cancelada exitosamente',
+                idOrigen: solicitud.idSolicitud,
+                estatus: 'CANCELADA',
+            };
+        }
+
+        // G. Manejo para MOVIMIENTOS INTERNOS
+        if (dto.origenModulo === ModuloOrigenEnum.MOVIMIENTO_INTERNO) {
+            // Aquí posteriormente podemos aplicar exactamente la misma
+            // validación sobre MovimientosInternos.
+
+            return {
+                message: 'Movimiento interno cancelado correctamente',
+            };
+        }
+
+        throw new BadRequestException(
+            'Módulo de origen no reconocido.',
+        );
     }
 
     async getApprovalRequestDetail(

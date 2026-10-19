@@ -7,3 +7,7 @@ export enum AccionAprobacionEnum {
     APROBAR = 'APROBAR',
     RECHAZAR = 'RECHAZAR',
 }
+
+export enum AccionCancelacionEnum {
+    CANCELAR = 'CANCELAR',
+}
