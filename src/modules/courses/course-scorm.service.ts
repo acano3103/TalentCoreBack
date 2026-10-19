@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 import { Response } from 'express';
 import * as fs from 'fs-extra';
 import * as JSZip from 'jszip';
-import { join, posix, resolve, sep } from 'path';
+import { dirname, join, posix, resolve, sep } from 'path';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { MediaPathService } from 'src/common/services/media-path.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
@@ -13,7 +13,7 @@ import { CourseLearningService } from './course-learning.service';
 import { CourseTrackingService } from './course-tracking.service';
 import { CommitScormDto } from './dto/commit-scorm.dto';
 import { joinPackagePath, parseScormManifest, ScormVersion } from './utils/scorm-manifest.util';
-import { readResult, sanitizeCmi, scormTimeToSeconds, secondsToScormTime } from './utils/scorm-cmi.util';
+import { readInteractions, readResult, sanitizeCmi, scormTimeToSeconds, secondsToScormTime } from './utils/scorm-cmi.util';
 
 const CALIFICACION_APROBATORIA_DEFAULT = 70;
 const TAMANO_MAXIMO_ZIP = 200 * 1024 * 1024;
@@ -23,6 +23,19 @@ const MAXIMO_DATOS_CMI = 256 * 1024;
 const SUBCARPETA_SCORM = 'cursos-scorm';
 
 type ZipFile = Awaited<ReturnType<typeof JSZip.loadAsync>>;
+
+// Nombre de carpeta legible, con el mismo criterio que los logos de empresas: sin acentos ni símbolos y "_" por espacios
+function carpetaLegible(texto: string | null | undefined, porDefecto: string) {
+    const limpio = (texto ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9\s_-]/g, '')
+        .trim()
+        .replace(/\s+/g, '_')
+        .toUpperCase()
+        .slice(0, 60);
+    return limpio || porDefecto;
+}
 
 export interface ArchivoSubido {
     originalname: string;
@@ -143,8 +156,19 @@ export class CourseScormService {
         }
 
         // 2. Descomprimir en {MEDIA_ROOT_PATH}/{slug del tenant}/cursos-scorm/{id aleatorio}
-        const carpeta = randomUUID();
-        const destino = await this.mediaPathService.getTenantPath(this.mediaRoot, idTenant, join(SUBCARPETA_SCORM, carpeta));
+        // {tenant}/cursos-scorm/{EMPRESA}/{CURSO}/sesion-{id}_{código}: ordenado por empresa y curso como los expedientes.
+        // El código corto evita que la ruta se pueda adivinar (media se publica en /media) y que un reemplazo pise al anterior.
+        const empresa = await this.prismaService.catEmpresas.findFirst({
+            where: { idEmpresa: companyId },
+            select: { nombre_comercial: true },
+        });
+        const carpeta = join(
+            SUBCARPETA_SCORM,
+            carpetaLegible(empresa?.nombre_comercial, `EMPRESA_${companyId}`),
+            carpetaLegible(nombreCurso, `CURSO_${session.idCurso}`),
+            `sesion-${sessionId}_${randomBytes(4).toString('hex')}`,
+        );
+        const destino = await this.mediaPathService.getTenantPath(this.mediaRoot, idTenant, carpeta);
         const rutaArchivo = posix.join(...destino.slice(this.mediaRoot.length).split(sep).filter(Boolean));
 
         try {
@@ -221,7 +245,7 @@ export class CourseScormService {
             if (anterior) await this.removeFolder(anterior);
             this.logger.log(`Paquete SCORM cargado en contenido #${idContenido} (${totalArchivos} archivos, ${manifiesto.version})`);
         } catch (e) {
-            await fs.remove(destino).catch(() => undefined);
+            await this.removeFolder(posix.join(...destino.slice(this.mediaRoot.length).split(sep).filter(Boolean)));
             throw e;
         }
 
@@ -229,10 +253,20 @@ export class CourseScormService {
         return { message: `Paquete SCORM cargado: ${manifiesto.titulo}`, ...detalle };
     }
 
+    // Borra la carpeta de un paquete y las carpetas de curso / empresa que queden vacías (sin salir de cursos-scorm)
     private async removeFolder(rutaRelativa: string) {
         const carpeta = resolve(this.mediaRoot, rutaRelativa);
-        if (carpeta.startsWith(this.mediaRoot + sep) && carpeta.includes(`${sep}${SUBCARPETA_SCORM}${sep}`)) {
-            await fs.remove(carpeta).catch((e) => this.logger.warn(`No se pudo borrar ${carpeta}: ${e.message}`));
+        if (!carpeta.startsWith(this.mediaRoot + sep) || !carpeta.includes(`${sep}${SUBCARPETA_SCORM}${sep}`)) return;
+        try {
+            await fs.remove(carpeta);
+            let padre = dirname(carpeta);
+            while (!padre.endsWith(`${sep}${SUBCARPETA_SCORM}`) && padre.includes(`${sep}${SUBCARPETA_SCORM}${sep}`)) {
+                if ((await fs.readdir(padre)).length > 0) break;
+                await fs.rmdir(padre);
+                padre = dirname(padre);
+            }
+        } catch (e: any) {
+            this.logger.warn(`No se pudo borrar ${carpeta}: ${e.message}`);
         }
     }
 
@@ -399,13 +433,15 @@ export class CourseScormService {
                 (resultadoSesion.calificacion != null && resultadoSesion.calificacion > 0);
             if (dto.terminado && esIntento) {
                 const calificacionIntento = resultadoSesion.calificacion ?? (resultadoSesion.aprobado ? 100 : 0);
+                // Preguntas del quiz del paquete (si las reporta): qué contestó y si fue correcta
+                const preguntas = readInteractions(dto.valores);
                 await this.trackingService.recordQuizAttempt(tx, participante, {
                     idLeccion: leccion.idLeccion,
                     calificacion: calificacionIntento,
                     aprobado: resultadoSesion.aprobado ?? calificacionIntento >= aprobatoria,
-                    respuestas: [],
-                    totalPreguntas: 0,
-                    respuestasCorrectas: 0,
+                    respuestas: preguntas,
+                    totalPreguntas: preguntas.length,
+                    respuestasCorrectas: preguntas.filter((p) => p.correcta).length,
                     yaAprobadaAntes: participacion.estatusAsignacion === 'completado',
                     ahora,
                 });
