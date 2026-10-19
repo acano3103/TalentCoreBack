@@ -5,8 +5,10 @@ import {
     InternalServerErrorException,
     Logger,
     NotFoundException,
+    OnModuleInit,
     UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Prisma } from 'generated/prisma/client';
 import type { DispositivosAsistencia_estatus } from 'generated/prisma/enums';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -19,6 +21,11 @@ const MENSAJE_PENDIENTE =
 
 const MENSAJE_VINCULADO_OTRO =
     'Este dispositivo ya está vinculado a otro colaborador.';
+
+const USUARIO_APROBACION_AUTOMATICA = 'AUTO (MOBILE_DEVICES_AUTO_APPROVE)';
+
+const AVISO_APROBACION_AUTOMATICA =
+    'MOBILE_DEVICES_AUTO_APPROVE está activo: los dispositivos móviles nuevos se aprueban sin revisión de RH.';
 
 const ESTADOS_DISPOSITIVO: DispositivosAsistencia_estatus[] = [
     'PENDIENTE',
@@ -33,10 +40,19 @@ export type MobileDeviceUser = ActiveUserDto & {
 };
 
 @Injectable()
-export class MobileDevicesService {
+export class MobileDevicesService implements OnModuleInit {
     private readonly logger = new Logger(MobileDevicesService.name);
 
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly configService: ConfigService,
+    ) {}
+
+    onModuleInit() {
+        if (this.autoApproveEnabled()) {
+            this.logger.warn(AVISO_APROBACION_AUTOMATICA);
+        }
+    }
 
     async register(user: MobileDeviceUser, dto: RegisterDeviceDto) {
         const { idEmpleado, idEmpresa, idTenant } = this.resolverIdentidadMovil(user);
@@ -55,6 +71,28 @@ export class MobileDevicesService {
                 throw new ConflictException(MENSAJE_VINCULADO_OTRO);
             }
 
+            if (this.autoApproveEnabled() && existing.estatus === 'PENDIENTE') {
+                const updated = await this.prisma.$transaction(async (tx) => {
+                    const device = await tx.dispositivosAsistencia.update({
+                        where: { idDispositivo: existing.idDispositivo },
+                        data: {
+                            modelo: dto.modelo ?? existing.modelo,
+                            versionApp: dto.versionApp ?? existing.versionApp,
+                            pushToken: dto.pushToken ?? existing.pushToken,
+                            ultimoUso: new Date(),
+                            estatus: 'APROBADO',
+                            fechaAprobacion: new Date(),
+                            usuarioAprobacion: USUARIO_APROBACION_AUTOMATICA,
+                        },
+                    });
+
+                    await this.registrarAprobacionAutomatica(user, idEmpresa, device.idDispositivo, dto, tx);
+                    return device;
+                });
+
+                return this.toRegisterResponse(updated);
+            }
+
             const updated = await this.prisma.dispositivosAsistencia.update({
                 where: { idDispositivo: existing.idDispositivo },
                 data: {
@@ -69,6 +107,32 @@ export class MobileDevicesService {
         }
 
         try {
+            if (this.autoApproveEnabled()) {
+                const created = await this.prisma.$transaction(async (tx) => {
+                    const device = await tx.dispositivosAsistencia.create({
+                        data: {
+                            idTenant,
+                            idEmpresa,
+                            idEmpleado,
+                            identificadorDispositivo: dto.identificadorDispositivo,
+                            plataforma: dto.plataforma,
+                            modelo: dto.modelo,
+                            versionApp: dto.versionApp,
+                            pushToken: dto.pushToken,
+                            estatus: 'APROBADO',
+                            fechaAprobacion: new Date(),
+                            usuarioAprobacion: USUARIO_APROBACION_AUTOMATICA,
+                            ultimoUso: new Date(),
+                        },
+                    });
+
+                    await this.registrarAprobacionAutomatica(user, idEmpresa, device.idDispositivo, dto, tx);
+                    return device;
+                });
+
+                return this.toRegisterResponse(created);
+            }
+
             const created = await this.prisma.dispositivosAsistencia.create({
                 data: {
                     idTenant,
@@ -247,6 +311,30 @@ export class MobileDevicesService {
 
             return updated;
         });
+    }
+
+    private autoApproveEnabled() {
+        const value = this.configService.get('MOBILE_DEVICES_AUTO_APPROVE', 'false');
+        return value === true || value === 'true';
+    }
+
+    private async registrarAprobacionAutomatica(
+        user: MobileDeviceUser,
+        companyId: number,
+        idDispositivo: number,
+        dto: RegisterDeviceDto,
+        tx: Prisma.TransactionClient,
+    ) {
+        await this.registrarHistorico(user, companyId, {
+            accion: 'APROBAR_AUTOMATICO',
+            idRegistro: String(idDispositivo),
+            descripcion: `Dispositivo ${idDispositivo} aprobado automáticamente (MOBILE_DEVICES_AUTO_APPROVE)`,
+            detalles: {
+                identificadorDispositivo: dto.identificadorDispositivo,
+                plataforma: dto.plataforma ?? null,
+                modelo: dto.modelo ?? null,
+            },
+        }, tx);
     }
 
     private resolverIdentidadMovil(user: MobileDeviceUser) {
