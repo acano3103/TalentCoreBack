@@ -167,6 +167,7 @@ export class IncidentsService {
         };
     }
 
+
     async findAllRequested(
         activeUser: ActiveUserDto,
         companyId: number,
@@ -183,16 +184,27 @@ export class IncidentsService {
                 idUsuario: activeUser.uuid,
                 idTenant: activeUser.idTenant,
                 idEmpresa: companyId,
+                activo: true,
             },
             select: {
                 idEmpleado: true,
             },
         });
 
+        // Si el usuario aún no tiene empleado asociado, devolver
+        // una respuesta vacía en lugar de lanzar una excepción.
         if (!empleadoActual) {
-            throw new NotFoundException(
-                'No se encontró un empleado asociado al usuario autenticado.',
-            );
+            return {
+                requests: [],
+                pagination: {
+                    page,
+                    limit,
+                    total: 0,
+                    totalPages: 0,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                },
+            };
         }
 
         const idEmpleadoActual = empleadoActual.idEmpleado;
@@ -306,10 +318,10 @@ export class IncidentsService {
 
                 orderBy: [
                     {
-                        fechaRegistro: 'desc',
+                        fechaRegistro: "desc",
                     },
                     {
-                        idSolicitud: 'desc',
+                        idSolicitud: "desc",
                     },
                 ],
 
@@ -328,18 +340,23 @@ export class IncidentsService {
                 empleado?.segundoApellido,
             ]
                 .filter(Boolean)
-                .join(' ');
+                .join(" ");
 
             return {
                 idOrigen: inc.idSolicitud,
                 origenModulo: ModuloOrigenEnum.INCIDENCIA,
                 idEmpleado: empleado?.idEmpleado ?? inc.idEmpleado,
-                empleadoNombreCompleto: nombreCompleto || 'Sin empleado',
-                empleadoIniciales: obtenerIniciales(empleado?.nombre ?? '', empleado?.primerApellido ?? ''),
+                empleadoNombreCompleto: nombreCompleto || "Sin empleado",
+                empleadoIniciales: obtenerIniciales(
+                    empleado?.nombre ?? "",
+                    empleado?.primerApellido ?? "",
+                ),
                 comentarioOMotivo: inc.comentarios ?? null,
                 idTipoMovimiento: inc.idTipoMovimiento,
-                tipoMovimientoNombre: inc.CatTipoMovimiento?.nombre ?? 'Incidencia',
-                codigoTipoSolicitud: inc.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
+                tipoMovimientoNombre:
+                    inc.CatTipoMovimiento?.nombre ?? "Incidencia",
+                codigoTipoSolicitud:
+                    inc.CatTipoMovimiento?.codigo ?? "INCIDENCIA",
                 estatusCodigo: inc.estatus,
                 estatusNombre: inc.estatus,
                 fechaSolicitud: inc.fechaRegistro,
@@ -359,6 +376,7 @@ export class IncidentsService {
             },
         };
     }
+
 
     async getIncidentRequestDetail(
         activeUser: ActiveUserDto,
