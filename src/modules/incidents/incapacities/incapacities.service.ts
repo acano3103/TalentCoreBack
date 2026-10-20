@@ -4,13 +4,15 @@ import { CreateIncapacityDto } from './dto/create-incapacity.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { MediaPathService } from 'src/common/services/media-path.service';
 import { PermissionsService } from '../permissions/permissions.service';
+import { ApprovalsService } from 'src/modules/approvals/approvals.service';
 
 @Injectable()
 export class IncapacitiesService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly mediaPathService: MediaPathService,
-        private readonly permissionsService: PermissionsService
+        private readonly permissionsService: PermissionsService,
+        private approvalsService: ApprovalsService,
     ) { }
 
     async createIncapacity(
@@ -336,6 +338,13 @@ export class IncapacitiesService {
                     fechaRegistro: true,
                 },
             });
+        // Aprobar la solicitud automaticamente si no tiene flujo de aprobación
+        await this.approvalsService.aprobarAutomaticamenteSinFlujoAprobacion(
+            activeUser.idTenant,
+            companyId,
+            tipoMovimiento.idTipoMovimiento,
+            solicitud.idSolicitud,
+        );
 
         // 12. Respuesta.
         // El flujo de aprobaciones se mantiene fuera de este método.
