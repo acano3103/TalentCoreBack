@@ -429,30 +429,18 @@ export class IncidentsService {
         const request = {
             idOrigen: incidencia.idSolicitud,
             origenModulo: ModuloOrigenEnum.INCIDENCIA,
-
             idEmpleado: empleado?.idEmpleado ?? incidencia.idEmpleado,
-
             empleadoNombreCompleto: nombreCompleto,
-
             empleadoIniciales: obtenerIniciales(
                 empleado?.nombre ?? '',
                 empleado?.primerApellido ?? '',
             ),
-
             comentarioOMotivo: incidencia.comentarios ?? null,
-
             idTipoMovimiento: incidencia.idTipoMovimiento,
-
-            tipoMovimientoNombre:
-                incidencia.CatTipoMovimiento?.nombre ?? 'Incidencia',
-
-            codigoTipoSolicitud:
-                incidencia.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
-
+            tipoMovimientoNombre: incidencia.CatTipoMovimiento?.nombre ?? 'Incidencia',
+            codigoTipoSolicitud: incidencia.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
             estatusCodigo: incidencia.estatus,
-
             fechaSolicitud: incidencia.fechaRegistro,
-
             pasoActual: incidencia.pasoActual ?? 1,
         };
 
@@ -577,19 +565,23 @@ export class IncidentsService {
     // Helpers 
     // ------------------------------------------------------------------
 
+
     async obtenerDetalleIncidenciaAutorizada(
         activeUser: ActiveUserDto,
         companyId: number,
         request: any,
         soloPendientes: boolean = false,
     ) {
-        const codigo = String(request.codigoTipoSolicitud ?? '').trim().toUpperCase();
+        const codigo = String(
+            request.codigoTipoSolicitud ?? '',
+        ).trim().toUpperCase();
 
         // Resolver el tipo de incidencia.
         const esVacaciones = codigo === 'VACACIONES' || request.idTipoMovimiento === 6;
         const esPermiso = ['PERMISO_SIN_GOCE', 'PERMISO_CON_GOCE'].includes(codigo);
+        const esIncapacidad = codigo === 'INCAPACIDAD_MEDICA';
 
-        if (!esVacaciones && !esPermiso) {
+        if (!esVacaciones && !esPermiso && !esIncapacidad) {
             throw new BadRequestException(
                 'El detalle de este tipo de incidencia todavía no está implementado.',
             );
@@ -630,21 +622,28 @@ export class IncidentsService {
             );
         }
 
-        // En el contexto de aprobaciones, no permitir revisar
-        // una solicitud que ya dejó de estar pendiente.
+        // En el contexto de aprobaciones, solo permitir pendientes.
         if (soloPendientes && solicitud.estatus !== 'PENDIENTE') {
             throw new BadRequestException(
                 'Esta solicitud ya no se encuentra pendiente de aprobación.',
             );
         }
 
-        // 2. Consultar el detalle específico de cada tipo.
+        // 2. Consultar el detalle específico.
+        const tipoDetalle = esVacaciones
+            ? 'VACACIONES'
+            : esPermiso
+                ? 'PERMISOS'
+                : 'INCAPACIDADES';
+
         const detalle = await this.obtenerDetalleComplementarioIncidencia(
             solicitud.idSolicitud,
-            esVacaciones ? 'VACACIONES' : 'PERMISOS',
+            tipoDetalle,
+            activeUser.idTenant,
+            companyId,
         );
 
-        // 3. Construir el flujo o el historial de aprobación.
+        // 3. Construir el flujo o historial de aprobación.
         const flujo = await this.construirFlujoIncidencia(
             activeUser,
             companyId,
@@ -656,7 +655,7 @@ export class IncidentsService {
         return {
             solicitud: {
                 ...solicitud,
-                tipo: esVacaciones ? 'VACACIONES' : 'PERMISOS',
+                tipo: tipoDetalle,
                 tipoMovimientoNombre: request.tipoMovimientoNombre,
                 codigoTipoSolicitud: request.codigoTipoSolicitud,
                 empleadoNombreCompleto: request.empleadoNombreCompleto,
@@ -667,9 +666,13 @@ export class IncidentsService {
         };
     }
 
+
+
     private async obtenerDetalleComplementarioIncidencia(
         idSolicitud: number,
-        tipo: 'VACACIONES' | 'PERMISOS',
+        tipo: 'VACACIONES' | 'PERMISOS' | 'INCAPACIDADES',
+        idTenant: number,
+        idEmpresa: number,
     ) {
         switch (tipo) {
             case 'VACACIONES': {
@@ -731,6 +734,8 @@ export class IncidentsService {
                 const archivo =
                     await this.prisma.archivosSolicitudes.findFirst({
                         where: {
+                            idTenant,
+                            idEmpresa,
                             moduloSolicitud: 'INCIDENCIAS',
                             idSolicitud,
                         },
@@ -754,6 +759,81 @@ export class IncidentsService {
                             archivo?.rutaRelativa ??
                             permiso.archivoRuta ??
                             null,
+                    },
+                };
+            }
+
+            case 'INCAPACIDADES': {
+                const incapacidad =
+                    await this.prisma.solicitudesIncapacidadesDetalle.findUnique({
+                        where: {
+                            idSolicitud,
+                        },
+                        select: {
+                            idIncapacidadDetalle: true,
+                            idSolicitud: true,
+                            tipoIncapacidad: true,
+                            numeroCertificado: true,
+                            institucionMedica: true,
+                            observaciones: true,
+                            solicitadoPorLider: true,
+                            fechaRegistro: true,
+                        },
+                    });
+
+                if (!incapacidad) {
+                    throw new NotFoundException(
+                        'No se encontró el detalle complementario de la incapacidad médica.',
+                    );
+                }
+
+                const archivo =
+                    await this.prisma.archivosSolicitudes.findFirst({
+                        where: {
+                            idTenant,
+                            idEmpresa,
+                            moduloSolicitud: 'INCIDENCIAS',
+                            idSolicitud,
+                        },
+                        orderBy: {
+                            fechaRegistro: 'desc',
+                        },
+                        select: {
+                            idArchivoSolicitud: true,
+                            nombreOriginal: true,
+                            nombreAlmacenado: true,
+                            rutaRelativa: true,
+                            mimeType: true,
+                            tamanoBytes: true,
+                            fechaRegistro: true,
+                        },
+                    });
+
+                return {
+                    incapacidad: {
+                        ...incapacidad,
+                        archivoNombreOriginal:
+                            archivo?.nombreOriginal ?? null,
+                        archivoRuta:
+                            archivo?.rutaRelativa ?? null,
+                        archivo: archivo
+                            ? {
+                                idArchivoSolicitud:
+                                    archivo.idArchivoSolicitud,
+                                nombreOriginal:
+                                    archivo.nombreOriginal,
+                                nombreAlmacenado:
+                                    archivo.nombreAlmacenado,
+                                rutaRelativa:
+                                    archivo.rutaRelativa,
+                                mimeType:
+                                    archivo.mimeType,
+                                tamanoBytes:
+                                    archivo.tamanoBytes?.toString() ?? null,
+                                fechaRegistro:
+                                    archivo.fechaRegistro,
+                            }
+                            : null,
                     },
                 };
             }

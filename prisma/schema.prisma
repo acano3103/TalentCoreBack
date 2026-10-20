@@ -1144,6 +1144,7 @@ model Empleados {
   Empleados                                                                        Empleados?                  @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                                                  Empleados[]                 @relation("EmpleadosToEmpleados")
   auth_user                                                                        auth_user?                  @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  EmpleadosBiometricos                                                             EmpleadosBiometricos?
   Expedientes                                                                      Expedientes[]
   HistorialSalarios                                                                HistorialSalarios[]
   JornadasEmpleado                                                                 JornadasEmpleado[]
@@ -2426,28 +2427,29 @@ model CursoScormProgresos {
 }
 
 model SolicitudesIncidencias {
-  idSolicitud                                                         Int                            @id @default(autoincrement())
+  idSolicitud                                                         Int                              @id @default(autoincrement())
   idTenant                                                            Int
   idEmpresa                                                           Int
   idEmpleado                                                          Int
   idTipoMovimiento                                                    Int
   solicitadoPorIdEmpleado                                             Int
-  fechaInicio                                                         DateTime                       @db.Date
-  fechaFin                                                            DateTime                       @db.Date
-  totalDiasLaborales                                                  Decimal                        @default(0.00) @db.Decimal(5, 2)
-  estatus                                                             SolicitudesIncidencias_estatus @default(PENDIENTE)
-  pasoActual                                                          Int                            @default(1)
-  totalPasos                                                          Int                            @default(1)
+  fechaInicio                                                         DateTime                         @db.Date
+  fechaFin                                                            DateTime                         @db.Date
+  totalDiasLaborales                                                  Decimal                          @default(0.00) @db.Decimal(5, 2)
+  estatus                                                             SolicitudesIncidencias_estatus   @default(PENDIENTE)
+  pasoActual                                                          Int                              @default(1)
+  totalPasos                                                          Int                              @default(1)
   idAprobador                                                         Int?
-  fechaRespuesta                                                      DateTime?                      @db.DateTime(0)
-  motivoRechazo                                                       String?                        @db.Text
-  comentarios                                                         String?                        @db.Text
-  fechaRegistro                                                       DateTime                       @default(now()) @db.Timestamp(0)
+  fechaRespuesta                                                      DateTime?                        @db.DateTime(0)
+  motivoRechazo                                                       String?                          @db.Text
+  comentarios                                                         String?                          @db.Text
+  fechaRegistro                                                       DateTime                         @default(now()) @db.Timestamp(0)
   PasosAprobacionIncidencia                                           PasosAprobacionIncidencia[]
-  Empleados_SolicitudesIncidencias_idAprobadorToEmpleados             Empleados?                     @relation("SolicitudesIncidencias_idAprobadorToEmpleados", fields: [idAprobador], references: [idEmpleado], map: "fk_solicitudes_aprobador")
-  Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados              Empleados                      @relation("SolicitudesIncidencias_idEmpleadoToEmpleados", fields: [idEmpleado], references: [idEmpleado], map: "fk_solicitudes_empleado")
-  Empleados_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados Empleados                      @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados", fields: [solicitadoPorIdEmpleado], references: [idEmpleado], map: "fk_solicitudes_solicitante")
-  CatTipoMovimiento                                                   CatTipoMovimiento              @relation(fields: [idTipoMovimiento], references: [idTipoMovimiento], map: "fk_solicitudes_tipo_movimiento")
+  SolicitudesIncapacidadesDetalle                                     SolicitudesIncapacidadesDetalle?
+  Empleados_SolicitudesIncidencias_idAprobadorToEmpleados             Empleados?                       @relation("SolicitudesIncidencias_idAprobadorToEmpleados", fields: [idAprobador], references: [idEmpleado], map: "fk_solicitudes_aprobador")
+  Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados              Empleados                        @relation("SolicitudesIncidencias_idEmpleadoToEmpleados", fields: [idEmpleado], references: [idEmpleado], map: "fk_solicitudes_empleado")
+  Empleados_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados Empleados                        @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados", fields: [solicitadoPorIdEmpleado], references: [idEmpleado], map: "fk_solicitudes_solicitante")
+  CatTipoMovimiento                                                   CatTipoMovimiento                @relation(fields: [idTipoMovimiento], references: [idTipoMovimiento], map: "fk_solicitudes_tipo_movimiento")
   SolicitudesPermisosDetalle                                          SolicitudesPermisosDetalle?
   SolicitudesVacacionesDetalle                                        SolicitudesVacacionesDetalle?
 
@@ -2532,6 +2534,41 @@ model ArchivosSolicitudes {
   @@index([idTenant, idEmpresa, idEmpleado], map: "idx_archivos_empleado")
   @@index([idTenant, idEmpresa], map: "idx_archivos_empresa")
   @@index([moduloSolicitud, idSolicitud], map: "idx_archivos_solicitud")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model EmpleadosBiometricos {
+  idEmpleadoBiometrico   Int       @id @default(autoincrement())
+  idEmpleado             Int       @unique(map: "uk_empleado_biometrico_empleado")
+  idTenant               Int
+  idEmpresa              Int
+  personId               String?   @db.VarChar(50)
+  externalId             String    @db.VarChar(50)
+  estatus                String?   @db.VarChar(30)
+  departmentExternalId   String    @db.VarChar(50)
+  accessLevelExternalIds Json?
+  fechaAlta              DateTime? @db.DateTime(0)
+  fechaRostro            DateTime? @db.DateTime(0)
+  fechaHuellas           DateTime? @db.DateTime(0)
+  huellasDedos           Json?
+  usuarioRegistro        String?   @db.VarChar(250)
+  fechaRegistro          DateTime  @default(now()) @db.DateTime(0)
+  fechaActualizacion     DateTime  @default(now()) @db.DateTime(0)
+  Empleados              Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "fk_empleado_biometrico_empleado")
+
+  @@index([idEmpresa], map: "idx_empleado_biometrico_empresa")
+}
+
+model SolicitudesIncapacidadesDetalle {
+  idIncapacidadDetalle   Int                    @id @default(autoincrement())
+  idSolicitud            Int                    @unique(map: "uk_incapacidades_solicitud")
+  tipoIncapacidad        String                 @db.VarChar(50)
+  numeroCertificado      String?                @db.VarChar(100)
+  institucionMedica      String?                @db.VarChar(255)
+  observaciones          String?                @db.Text
+  solicitadoPorLider     Boolean                @default(false)
+  fechaRegistro          DateTime               @default(now()) @db.Timestamp(0)
+  SolicitudesIncidencias SolicitudesIncidencias @relation(fields: [idSolicitud], references: [idSolicitud], onDelete: Cascade, map: "fk_incapacidades_solicitud")
 }
 
 enum Entrevistas_interview_type {
