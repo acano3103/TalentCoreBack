@@ -535,4 +535,21 @@ export class CourseLearningService {
         );
         return { registrado: true, repaso: yaCompletada };
     }
+
+    // Nombre del empleado logueado para el saludo de Mis cursos
+    async findMyProfile(companyId: number, user: ActiveUserDto) {
+        const idTenant = this.getTenantOrThrow(user);
+        const idEmpleado = await this.getEmployeeId(companyId, user, idTenant);
+        const empleado = await this.prismaService.empleados.findUnique({
+            where: { idEmpleado },
+            select: { nombre: true, primerApellido: true },
+        });
+        const nombre = (empleado?.nombre || user.first_name || '').trim();
+        const apellido = (empleado?.primerApellido || user.last_name || '').trim();
+        return {
+            idEmpleado,
+            nombre,
+            nombreCompleto: [nombre, apellido].filter(Boolean).join(' '),
+        };
+    }
 }

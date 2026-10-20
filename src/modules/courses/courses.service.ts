@@ -430,6 +430,10 @@ export class CoursesService {
               CursoParticipantes: true, // Retorna la cantidad total de inscritos
             },
           },
+          // Tipo de contenido de las sesiones Online Asíncrono (scorm, nativo, ia) para mostrarlo en el historial
+          CursoContenidos: {
+            select: { tipoContenido: true },
+          },
         },
         skip: skip,
         take: limit,
@@ -450,7 +454,7 @@ export class CoursesService {
 
     // 6. Formatear la respuesta
     const formattedSessions = sessions.map((session) => {
-      const { Empleados, _count, CatCursos, ...sessionData } = session;
+      const { Empleados, _count, CatCursos, CursoContenidos, ...sessionData } = session;
 
       let nombreInstructor = '';
       if (session.tipoInstructor === 'interno' && Empleados) {
@@ -464,6 +468,7 @@ export class CoursesService {
         nombreCurso: CatCursos.Descripcion,
         nombreInstructor,
         totAsistentes: _count.CursoParticipantes,
+        tipoContenido: CursoContenidos?.tipoContenido ?? null,
       };
     });
 

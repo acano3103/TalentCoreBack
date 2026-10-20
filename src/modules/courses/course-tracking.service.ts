@@ -115,7 +115,8 @@ export class CourseTrackingService {
             idLeccion: number;
             calificacion: number;
             aprobado: boolean;
-            respuestas: number[];
+            // Índices elegidos (quiz nativo / IA) o preguntas reportadas por un paquete SCORM
+            respuestas: unknown[];
             totalPreguntas: number;
             respuestasCorrectas: number;
             yaAprobadaAntes: boolean;
@@ -138,7 +139,7 @@ export class CourseTrackingService {
                 aprobado: params.aprobado,
                 totalPreguntas: params.totalPreguntas,
                 respuestasCorrectas: params.respuestasCorrectas,
-                respuestas: params.respuestas,
+                respuestas: JSON.parse(JSON.stringify(params.respuestas)),
                 tipoIntento,
                 fechaIntento: params.ahora,
             },
