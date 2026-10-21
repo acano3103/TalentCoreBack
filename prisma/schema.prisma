@@ -2776,3 +2776,26 @@ enum SolicitudesPermisosDetalle_tipoDuracion {
   DIAS
   HORAS
 }
+
+
+// Biométricos ZKBio: relación empleado ↔ persona en ZKBio (solo empleados dados de alta en el biométrico)
+model EmpleadosBiometricos {
+  idEmpleadoBiometrico   Int       @id @default(autoincrement())
+  idEmpleado             Int       @unique(map: "uk_empleado_biometrico_empleado")
+  idTenant               Int
+  idEmpresa              Int
+  personId               String?   @db.VarChar(50)
+  externalId             String    @db.VarChar(50)
+  estatus                String?   @db.VarChar(30)
+  departmentExternalId   String    @db.VarChar(50)
+  accessLevelExternalIds Json?
+  fechaAlta              DateTime? @db.DateTime(0)
+  fechaRostro            DateTime? @db.DateTime(0)
+  fechaHuellas           DateTime? @db.DateTime(0)
+  huellasDedos           Json?
+  usuarioRegistro        String?   @db.VarChar(250)
+  fechaRegistro          DateTime  @default(now()) @db.DateTime(0)
+  fechaActualizacion     DateTime  @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([idEmpresa], map: "idx_empleado_biometrico_empresa")
+}

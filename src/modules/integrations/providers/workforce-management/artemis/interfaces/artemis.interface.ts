@@ -32,6 +32,27 @@ export interface ZkBioPerson {
     status: string | null;
 }
 
+// POST /persons — obligatorios: externalId, employeeNumber, firstName, lastName, departmentExternalId
+export interface ZkBioCreatePersonRequest {
+    externalId: string;
+    employeeNumber: string;
+    firstName: string;
+    lastName: string;
+    departmentExternalId: string;
+    email?: string | null;
+    mobilePhone?: string | null;
+    accessProfileExternalId?: string | null;
+    accessLevelExternalIds?: string[] | null;
+    birthday?: string | null; // YYYY-MM-DD
+    hireDate?: string | null; // YYYY-MM-DD
+}
+
+// Departamento padre de la empresa en ZKBio (guardado en metadata de la integración ZKBIO)
+export interface ZkBioParentDepartment {
+    externalId: string;
+    name: string | null;
+}
+
 // Formato de error de la API: { code, message, correlationId }
 export interface ZkBioError {
     code?: string;

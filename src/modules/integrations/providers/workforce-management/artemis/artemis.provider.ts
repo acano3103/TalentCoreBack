@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from "@nestjs/common";
-import { IArtemisProvider, ZkBioAccessLevel, ZkBioDepartment, ZkBioError } from "./interfaces/artemis.interface";
+import { IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
 import { PrismaService } from "src/prisma/prisma.service";
 import { EncryptionService } from "src/common/utils/encryption.util";
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
@@ -26,10 +26,18 @@ export class ArtemisProvider implements IArtemisProvider {
         });
         if (isConnected) throw new BadRequestException(`${nombreProveedor} ya está conectado`);
 
-        // Biométricos (ZKBIO): se valida la API key contra la ZkBio Integration API antes de guardarla
+        // Biométricos (ZKBIO): se valida la API key y el departamento padre (rama de la empresa en ZKBio) antes de guardarlos
+        let metadataExtra: Record<string, unknown> = {};
         if (proveedor?.code === 'ZKBIO') {
             if (!apiKey) throw new BadRequestException('Captura la API key de biométricos.');
-            await this.validateZkBioApiKey(apiKey);
+            const departamentoPadreId = String(dto.departamentoPadreExternalId ?? '').trim();
+            if (!departamentoPadreId) throw new BadRequestException('Captura el ID del departamento padre de la empresa en ZKBio.');
+
+            const departamentos = await this.validateZkBioApiKey(apiKey);
+            const padre = departamentos.find((d) => String(d.departmentExternalId) === departamentoPadreId);
+            if (!padre) throw new BadRequestException(`El departamento padre ${departamentoPadreId} no existe en ZKBio.`);
+
+            metadataExtra = { departamentoPadre: { externalId: departamentoPadreId, name: padre.name ?? null } };
         }
 
         await this.prisma.$transaction(async (tx) => {
@@ -40,6 +48,7 @@ export class ArtemisProvider implements IArtemisProvider {
                     isConnected: true,
                     metadata: {
                         apiKey: this.encryptionService.encrypt(apiKey),
+                        ...metadataExtra,
                     }
                 }
             });
@@ -199,6 +208,35 @@ export class ArtemisProvider implements IArtemisProvider {
         return this.zkBioRequest<ZkBioAccessLevel[]>(companyId, { method: 'GET', url: '/access-levels' });
     }
 
+    // Departamento padre de la empresa en ZKBio (se captura al conectar): delimita qué departamentos puede usar
+    async getBiometricParentDepartment(companyId: number): Promise<ZkBioParentDepartment | null> {
+        const integracion = await this.prisma.integraciones.findFirst({
+            where: {
+                idEmpresa: companyId,
+                isConnected: true,
+                CatIntegracionesProvedores: { code: 'ZKBIO' }
+            }
+        });
+        const padre = (integracion?.metadata as any)?.departamentoPadre;
+        if (!padre?.externalId) return null;
+        return { externalId: String(padre.externalId), name: padre.name ?? null };
+    }
+
+    // Da de alta a la persona en ZKBio (POST /persons). La Idempotency-Key evita duplicados al reintentar.
+    async createBiometricPerson(companyId: number, person: ZkBioCreatePersonRequest, idempotencyKey: string): Promise<ZkBioPerson> {
+        return this.zkBioRequest<ZkBioPerson>(companyId, {
+            method: 'POST',
+            url: '/persons',
+            data: person,
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        });
+    }
+
+    // Consulta a la persona en ZKBio (estatus del alta)
+    async getBiometricPerson(companyId: number, personId: string): Promise<ZkBioPerson> {
+        return this.zkBioRequest<ZkBioPerson>(companyId, { method: 'GET', url: `/persons/${encodeURIComponent(personId)}` });
+    }
+
     private getZkBioBaseUrl(): string {
         const baseUrl = process.env.ZKBIO_BASE_URL?.trim().replace(/\/+$/, '');
         if (!baseUrl) throw new ServiceUnavailableException('Falta configurar ZKBIO_BASE_URL en el servidor.');
@@ -223,13 +261,14 @@ export class ArtemisProvider implements IArtemisProvider {
         return this.encryptionService.decrypt(metadata.apiKey);
     }
 
-    // Al conectar: valida la API key consultando un endpoint que la requiere
-    private async validateZkBioApiKey(apiKey: string) {
+    // Al conectar: valida la API key consultando el catálogo de departamentos (también sirve para validar el padre)
+    private async validateZkBioApiKey(apiKey: string): Promise<ZkBioDepartment[]> {
         try {
-            await axios.get(`${this.getZkBioBaseUrl()}/departments`, {
+            const response = await axios.get<ZkBioDepartment[]>(`${this.getZkBioBaseUrl()}/departments`, {
                 headers: { 'X-Api-Key': apiKey },
                 timeout: 10000,
             });
+            return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
             throw this.toZkBioException(error);
         }
