@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetActiveUser } from 'src/modules/auth/decorators/active-user.decorator';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -41,5 +41,22 @@ export class PermissionsController {
     @UploadedFile() archivo?: Express.Multer.File,
   ): Promise<any> {
     return this.permissionsService.createPermission(activeUser, companyId, dto, archivo);
+  }
+
+  // Subir comprobante de un permiso
+  @Patch(':idSolicitud/attachment')
+  @UseInterceptors(FileInterceptor('archivo', { limits: { fileSize: 10 * 1024 * 1024, } }))
+  @ApiOperation({ summary: 'Subir comprobante de un permiso', description: 'Adjunta un comprobante a una solicitud de permiso existente.' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Comprobante guardado correctamente.' })
+  @ApiResponse({ status: 400, description: 'Archivo inválido o plazo de carga vencido.' })
+  @ApiResponse({ status: 404, description: 'Solicitud no encontrada.' })
+  async uploadPermissionAttachment(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idSolicitud', ParseIntPipe) idSolicitud: number,
+    @UploadedFile() archivo?: Express.Multer.File,
+  ) {
+    return this.permissionsService.uploadPermissionAttachment(activeUser, companyId, idSolicitud, archivo);
   }
 }

@@ -4,6 +4,7 @@ import {
     InternalServerErrorException,
     Logger,
     NotFoundException,
+    UnauthorizedException,
 } from '@nestjs/common';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { PersonnelConfigService } from 'src/modules/config/personnel-config/personnel-config.service';
@@ -591,5 +592,251 @@ export class PermissionsService {
                 })),
             },
         };
+    }
+
+    async uploadPermissionAttachment(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        idSolicitud: number,
+        archivo: Express.Multer.File | undefined,
+    ) {
+        // 1. Validar los identificadores.
+        if (
+            !Number.isInteger(companyId) ||
+            companyId < 1 ||
+            !Number.isInteger(idSolicitud) ||
+            idSolicitud < 1
+        ) {
+            throw new BadRequestException(
+                'La empresa o la solicitud no son válidas.',
+            );
+        }
+
+        // 2. Validar que se haya enviado un archivo.
+        if (!archivo) {
+            throw new BadRequestException('Debes seleccionar un comprobante.');
+        }
+
+        if (!archivo.buffer?.length) {
+            throw new BadRequestException(
+                'El archivo recibido no contiene datos.',
+            );
+        }
+
+        if (archivo.size > 10 * 1024 * 1024) {
+            throw new BadRequestException(
+                'El archivo no debe exceder los 10 MB.',
+            );
+        }
+
+        // 3. Resolver al empleado autenticado.
+        const empleadoActual = await this.prisma.empleados.findFirst({
+            where: {
+                idUsuario: activeUser.uuid,
+                idEmpresa: companyId,
+                idTenant: activeUser.idTenant,
+                activo: true,
+            },
+            select: {
+                idEmpleado: true,
+            },
+        });
+
+        if (!empleadoActual) {
+            throw new UnauthorizedException(
+                'No se encontró un empleado activo para el usuario actual.',
+            );
+        }
+
+        // 4. Consultar la solicitud y comprobar el acceso.
+        const solicitud = await this.prisma.solicitudesIncidencias.findFirst({
+            where: {
+                idSolicitud,
+                idTenant: activeUser.idTenant,
+                idEmpresa: companyId,
+                OR: [
+                    { idEmpleado: empleadoActual.idEmpleado },
+                    { solicitadoPorIdEmpleado: empleadoActual.idEmpleado },
+                ],
+            },
+            select: {
+                idSolicitud: true,
+                idTenant: true,
+                idEmpresa: true,
+                idEmpleado: true,
+                idTipoMovimiento: true,
+                fechaRegistro: true,
+                estatus: true,
+            },
+        });
+
+        if (!solicitud) {
+            throw new NotFoundException(
+                'No se encontró la solicitud o no tienes acceso a ella.',
+            );
+        }
+
+        // 5. Confirmar que la solicitud corresponde a un permiso.
+        const tipoMovimiento =
+            await this.prisma.catTipoMovimiento.findFirst({
+                where: {
+                    idTipoMovimiento: solicitud.idTipoMovimiento,
+                    idModuloFlujo: 1,
+                    activo: true,
+                },
+                select: {
+                    codigo: true,
+                },
+            });
+
+        if (
+            !tipoMovimiento ||
+            !['PERMISO_CON_GOCE', 'PERMISO_SIN_GOCE'].includes(
+                tipoMovimiento.codigo,
+            )
+        ) {
+            throw new BadRequestException(
+                'Esta solicitud no corresponde a un permiso.',
+            );
+        }
+
+        // 6. No permitir cargas para solicitudes canceladas.
+        if (solicitud.estatus === 'CANCELADA') {
+            throw new BadRequestException(
+                'No puedes adjuntar un comprobante a una solicitud cancelada.',
+            );
+        }
+
+        // 7. Obtener la configuración vigente desde el backend.
+        const config = await this.personnelConfig.getConfiguracionPersonal(
+            activeUser.idTenant,
+            companyId,
+        );
+
+        const configPermisos = config?.permisosEIncapacidades;
+
+        if (!configPermisos?.comprobanteObligatorio) {
+            throw new BadRequestException(
+                'La configuración actual no requiere comprobante.',
+            );
+        }
+
+        const horasLimite =
+            configPermisos.horasLimiteSubirComprobante;
+
+        if (
+            typeof horasLimite !== 'number' ||
+            !Number.isFinite(horasLimite) ||
+            horasLimite <= 0 ||
+            !solicitud.fechaRegistro
+        ) {
+            throw new BadRequestException(
+                'No se pudo validar el plazo para subir el comprobante.',
+            );
+        }
+
+        const fechaLimite = new Date(
+            solicitud.fechaRegistro.getTime() +
+            horasLimite * 60 * 60 * 1000,
+        );
+
+        if (Date.now() >= fechaLimite.getTime()) {
+            throw new BadRequestException(
+                'El plazo para subir el comprobante ha vencido.',
+            );
+        }
+
+        // 8. Comprobar si ya existe un archivo para esta solicitud.
+        const archivoExistente =
+            await this.prisma.archivosSolicitudes.findFirst({
+                where: {
+                    idTenant: activeUser.idTenant,
+                    idEmpresa: companyId,
+                    moduloSolicitud: 'INCIDENCIAS',
+                    idSolicitud: solicitud.idSolicitud,
+                },
+                select: {
+                    idArchivoSolicitud: true,
+                },
+            });
+
+        if (archivoExistente) {
+            throw new BadRequestException(
+                'Esta solicitud ya tiene un comprobante adjunto.',
+            );
+        }
+
+        // 9. Guardar el archivo físico y registrar sus metadatos.
+        let rutaRelativaGuardada: string | undefined;
+
+        try {
+            const archivoGuardado = await this.mediaPathService.saveFile(
+                archivo,
+                {
+                    idTenant: activeUser.idTenant,
+                    subfolder:
+                        `solicitudes/incidencias/permisos/${solicitud.idSolicitud}`,
+                },
+            );
+
+            rutaRelativaGuardada = archivoGuardado.rutaRelativa;
+
+            const registroArchivo =
+                await this.prisma.archivosSolicitudes.create({
+                    data: {
+                        idTenant: activeUser.idTenant,
+                        idEmpresa: companyId,
+                        idEmpleado: solicitud.idEmpleado,
+                        moduloSolicitud: 'INCIDENCIAS',
+                        idSolicitud: solicitud.idSolicitud,
+                        nombreOriginal: archivoGuardado.nombreOriginal,
+                        nombreAlmacenado: archivoGuardado.nombreAlmacenado,
+                        rutaRelativa: archivoGuardado.rutaRelativa,
+                        mimeType: archivoGuardado.mimeType,
+                        tamanoBytes: BigInt(archivoGuardado.tamanoBytes),
+                        usuarioRegistro: activeUser.uuid,
+                    },
+                    select: {
+                        idArchivoSolicitud: true,
+                        nombreOriginal: true,
+                        rutaRelativa: true,
+                        mimeType: true,
+                        tamanoBytes: true,
+                        fechaRegistro: true,
+                    },
+                });
+
+            return {
+                message: 'Comprobante guardado correctamente.',
+                data: {
+                    ...registroArchivo,
+                    tamanoBytes: registroArchivo.tamanoBytes.toString(),
+                },
+            };
+        } catch (error) {
+            // Si se guardó el archivo físico pero falló el registro,
+            // intentar eliminarlo para no dejar archivos huérfanos.
+            if (rutaRelativaGuardada) {
+                try {
+                    await this.mediaPathService.deleteFile(
+                        rutaRelativaGuardada,
+                    );
+                } catch {
+                    // Conservamos el error original.
+                }
+            }
+
+            if (
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException ||
+                error instanceof UnauthorizedException
+            ) {
+                throw error;
+            }
+
+            throw new InternalServerErrorException(
+                'No fue posible guardar el comprobante.',
+            );
+        }
     }
 }

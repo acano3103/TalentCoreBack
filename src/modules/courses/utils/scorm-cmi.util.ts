@@ -96,3 +96,71 @@ export function secondsToScormTime(version: ScormVersion, totalSeconds: number):
     if (version === 'scorm_2004') return `PT${h}H${m}M${s}S`;
     return `${String(h).padStart(4, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
+
+export interface InteraccionScorm {
+    id: string;
+    // Texto legible para el reporte (Captivate codifica la pregunta en el id: "54756_Sucede_cuando...")
+    pregunta: string;
+    tipo: string | null;
+    descripcion: string | null;
+    respuesta: string | null;
+    respuestaCorrecta: string | null;
+    resultado: string | null;
+    correcta: boolean;
+}
+
+// Captivate manda textos con "_" en lugar de espacios y a veces codificados como URL (%20)
+function legible(valor: string | null | undefined): string | null {
+    if (valor == null || valor === '') return null;
+    let texto = valor;
+    try {
+        texto = decodeURIComponent(texto);
+    } catch {
+        // si no es una URL válida se deja como viene
+    }
+    return texto.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function respuestaLegible(tipo: string | null, valor: string | null | undefined) {
+    if (tipo === 'true-false' && valor) {
+        if (/^(t|true)$/i.test(valor)) return 'Verdadero';
+        if (/^(f|false)$/i.test(valor)) return 'Falso';
+    }
+    return legible(valor);
+}
+
+// Preguntas que el paquete reporta (cmi.interactions.N.*). Si una pregunta se contesta varias veces
+// en la misma sesión (reintento dentro del quiz) se queda la última respuesta.
+export function readInteractions(valores: Record<string, unknown>): InteraccionScorm[] {
+    const porIndice = new Map<number, Record<string, string>>();
+    for (const [key, value] of Object.entries(valores ?? {})) {
+        const m = /^cmi\.interactions\.(\d+)\.(.+)$/.exec(key);
+        if (!m || value == null) continue;
+        const i = Number(m[1]);
+        if (i > 500) continue;
+        if (!porIndice.has(i)) porIndice.set(i, {});
+        porIndice.get(i)![m[2]] = String(value).slice(0, 500);
+    }
+
+    const porId = new Map<string, InteraccionScorm>();
+    [...porIndice.entries()]
+        .sort(([a], [b]) => a - b)
+        .forEach(([i, d]) => {
+            const id = d.id || `pregunta_${i + 1}`;
+            const resultado = (d.result ?? '').toLowerCase() || null;
+            porId.delete(id); // la última respuesta queda al final, en orden
+            const tipo = d.type ?? null;
+            const textoId = legible(id.replace(/^\d+_/, '')) ?? '';
+            porId.set(id, {
+                id,
+                pregunta: legible(d.description) || (/^Interaction \d+$/i.test(textoId) || !textoId ? `Pregunta ${i + 1}` : textoId),
+                tipo,
+                descripcion: d.description ?? null,
+                respuesta: respuestaLegible(tipo, d.student_response ?? d.learner_response),
+                respuestaCorrecta: respuestaLegible(tipo, d['correct_responses.0.pattern']),
+                resultado,
+                correcta: resultado === 'correct',
+            });
+        });
+    return [...porId.values()].slice(0, 200);
+}

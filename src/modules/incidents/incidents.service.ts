@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
@@ -167,6 +167,217 @@ export class IncidentsService {
         };
     }
 
+
+    async findAllRequested(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        query: QueryIncidentsDto,
+    ) {
+        const page = Math.max(1, query.page ?? 1);
+        const limit = Math.min(100, Math.max(1, query.limit ?? 10));
+        const search = query.search?.trim();
+        const { status } = query;
+
+        // Obtener el empleado asociado al usuario autenticado.
+        const empleadoActual = await this.prisma.empleados.findFirst({
+            where: {
+                idUsuario: activeUser.uuid,
+                idTenant: activeUser.idTenant,
+                idEmpresa: companyId,
+                activo: true,
+            },
+            select: {
+                idEmpleado: true,
+            },
+        });
+
+        // Si el usuario aún no tiene empleado asociado, devolver
+        // una respuesta vacía en lugar de lanzar una excepción.
+        if (!empleadoActual) {
+            return {
+                requests: [],
+                pagination: {
+                    page,
+                    limit,
+                    total: 0,
+                    totalPages: 0,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                },
+            };
+        }
+
+        const idEmpleadoActual = empleadoActual.idEmpleado;
+
+        const where: Prisma.SolicitudesIncidenciasWhereInput = {
+            idTenant: activeUser.idTenant,
+            idEmpresa: companyId,
+
+            // El empleado puede ver:
+            // 1. Incidencias solicitadas para él mismo.
+            // 2. Incidencias que él solicitó para otra persona.
+            OR: [
+                { idEmpleado: idEmpleadoActual },
+                { solicitadoPorIdEmpleado: idEmpleadoActual },
+            ],
+        };
+
+        // Filtro opcional por estatus.
+        if (status) {
+            where.estatus = status;
+        }
+
+        // Búsqueda.
+        if (search) {
+            where.AND = [
+                {
+                    OR: [
+                        {
+                            comentarios: {
+                                contains: search,
+                            },
+                        },
+                        {
+                            CatTipoMovimiento: {
+                                is: {
+                                    nombre: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            CatTipoMovimiento: {
+                                is: {
+                                    codigo: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                                is: {
+                                    nombre: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                                is: {
+                                    primerApellido: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                                is: {
+                                    segundoApellido: {
+                                        contains: search,
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                },
+            ];
+        }
+
+        const [total, solicitudes] = await this.prisma.$transaction([
+            this.prisma.solicitudesIncidencias.count({
+                where,
+            }),
+
+            this.prisma.solicitudesIncidencias.findMany({
+                where,
+
+                include: {
+                    Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                        select: {
+                            idEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                            idJefeInmediato: true,
+
+                            CatPuestos: {
+                                select: {
+                                    idPuesto: true,
+                                    idArea: true,
+                                },
+                            },
+                        },
+                    },
+
+                    CatTipoMovimiento: true,
+                },
+
+                orderBy: [
+                    {
+                        fechaRegistro: "desc",
+                    },
+                    {
+                        idSolicitud: "desc",
+                    },
+                ],
+
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+        ]);
+
+        const requests = solicitudes.map((inc) => {
+            const empleado =
+                inc.Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
+
+            const nombreCompleto = [
+                empleado?.nombre,
+                empleado?.primerApellido,
+                empleado?.segundoApellido,
+            ]
+                .filter(Boolean)
+                .join(" ");
+
+            return {
+                idOrigen: inc.idSolicitud,
+                origenModulo: ModuloOrigenEnum.INCIDENCIA,
+                idEmpleado: empleado?.idEmpleado ?? inc.idEmpleado,
+                empleadoNombreCompleto: nombreCompleto || "Sin empleado",
+                empleadoIniciales: obtenerIniciales(
+                    empleado?.nombre ?? "",
+                    empleado?.primerApellido ?? "",
+                ),
+                comentarioOMotivo: inc.comentarios ?? null,
+                idTipoMovimiento: inc.idTipoMovimiento,
+                tipoMovimientoNombre:
+                    inc.CatTipoMovimiento?.nombre ?? "Incidencia",
+                codigoTipoSolicitud:
+                    inc.CatTipoMovimiento?.codigo ?? "INCIDENCIA",
+                estatusCodigo: inc.estatus,
+                estatusNombre: inc.estatus,
+                fechaSolicitud: inc.fechaRegistro,
+                solicitud: inc,
+            };
+        });
+
+        return {
+            requests,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+                hasNextPage: page * limit < total,
+                hasPreviousPage: page > 1,
+            },
+        };
+    }
+
+
     async getIncidentRequestDetail(
         activeUser: ActiveUserDto,
         companyId: number,
@@ -218,30 +429,127 @@ export class IncidentsService {
         const request = {
             idOrigen: incidencia.idSolicitud,
             origenModulo: ModuloOrigenEnum.INCIDENCIA,
-
             idEmpleado: empleado?.idEmpleado ?? incidencia.idEmpleado,
-
             empleadoNombreCompleto: nombreCompleto,
-
             empleadoIniciales: obtenerIniciales(
                 empleado?.nombre ?? '',
                 empleado?.primerApellido ?? '',
             ),
-
             comentarioOMotivo: incidencia.comentarios ?? null,
-
             idTipoMovimiento: incidencia.idTipoMovimiento,
-
-            tipoMovimientoNombre:
-                incidencia.CatTipoMovimiento?.nombre ?? 'Incidencia',
-
-            codigoTipoSolicitud:
-                incidencia.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
-
+            tipoMovimientoNombre: incidencia.CatTipoMovimiento?.nombre ?? 'Incidencia',
+            codigoTipoSolicitud: incidencia.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
             estatusCodigo: incidencia.estatus,
-
             fechaSolicitud: incidencia.fechaRegistro,
+            pasoActual: incidencia.pasoActual ?? 1,
+        };
 
+        return this.obtenerDetalleIncidenciaAutorizada(
+            activeUser,
+            companyId,
+            request,
+            false,
+        );
+    }
+
+    async getIncidentRequestedDetail(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        query: GetIncidentRequestDetailDto,
+    ) {
+        if (query.origenModulo !== 'INCIDENCIA') {
+            throw new BadRequestException(
+                'El módulo de la solicitud no es válido.',
+            );
+        }
+
+        // Obtener el empleado asociado al usuario autenticado.
+        const empleadoActual = await this.prisma.empleados.findFirst({
+            where: {
+                idUsuario: activeUser.uuid,
+                idTenant: activeUser.idTenant,
+                idEmpresa: companyId,
+            },
+            select: {
+                idEmpleado: true,
+            },
+        });
+
+        if (!empleadoActual) {
+            throw new NotFoundException(
+                'No se encontró un empleado asociado al usuario autenticado.',
+            );
+        }
+
+        const idEmpleadoActual = empleadoActual.idEmpleado;
+
+        const incidencia =
+            await this.prisma.solicitudesIncidencias.findFirst({
+                where: {
+                    idSolicitud: query.idOrigen,
+
+                    // Seguridad por tenant y empresa.
+                    idTenant: activeUser.idTenant,
+                    idEmpresa: companyId,
+
+                    // El usuario solamente puede consultar:
+                    // 1. Incidencias solicitadas para él mismo.
+                    // 2. Incidencias que él solicitó para otra persona.
+                    OR: [
+                        {
+                            idEmpleado: idEmpleadoActual,
+                        },
+                        {
+                            solicitadoPorIdEmpleado: idEmpleadoActual,
+                        },
+                    ],
+                },
+
+                include: {
+                    Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+                        select: {
+                            idEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                        },
+                    },
+
+                    CatTipoMovimiento: true,
+                },
+            });
+
+        // Importante:
+        // Si existe la solicitud pero no pertenece al usuario actual,
+        // tampoco la revelamos. Para él simplemente "no existe".
+        if (!incidencia) {
+            throw new NotFoundException(
+                'La solicitud no existe.',
+            );
+        }
+
+        const empleado = incidencia.Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
+
+        const nombreCompleto = [
+            empleado?.nombre,
+            empleado?.primerApellido,
+            empleado?.segundoApellido,
+        ]
+            .filter(Boolean)
+            .join(' ');
+
+        const request = {
+            idOrigen: incidencia.idSolicitud,
+            origenModulo: ModuloOrigenEnum.INCIDENCIA,
+            idEmpleado: empleado?.idEmpleado ?? incidencia.idEmpleado,
+            empleadoNombreCompleto: nombreCompleto || 'Sin empleado',
+            empleadoIniciales: obtenerIniciales(empleado?.nombre ?? '', empleado?.primerApellido ?? ''),
+            comentarioOMotivo: incidencia.comentarios ?? null,
+            idTipoMovimiento: incidencia.idTipoMovimiento,
+            tipoMovimientoNombre: incidencia.CatTipoMovimiento?.nombre ?? 'Incidencia',
+            codigoTipoSolicitud: incidencia.CatTipoMovimiento?.codigo ?? 'INCIDENCIA',
+            estatusCodigo: incidencia.estatus,
+            fechaSolicitud: incidencia.fechaRegistro,
             pasoActual: incidencia.pasoActual ?? 1,
         };
 
@@ -257,20 +565,23 @@ export class IncidentsService {
     // Helpers 
     // ------------------------------------------------------------------
 
+
     async obtenerDetalleIncidenciaAutorizada(
         activeUser: ActiveUserDto,
         companyId: number,
         request: any,
         soloPendientes: boolean = false,
     ) {
-        const codigo = String(request.codigoTipoSolicitud ?? '').trim().toUpperCase();
-        console.log(codigo);
+        const codigo = String(
+            request.codigoTipoSolicitud ?? '',
+        ).trim().toUpperCase();
 
         // Resolver el tipo de incidencia.
         const esVacaciones = codigo === 'VACACIONES' || request.idTipoMovimiento === 6;
         const esPermiso = ['PERMISO_SIN_GOCE', 'PERMISO_CON_GOCE'].includes(codigo);
+        const esIncapacidad = codigo === 'INCAPACIDAD_MEDICA';
 
-        if (!esVacaciones && !esPermiso) {
+        if (!esVacaciones && !esPermiso && !esIncapacidad) {
             throw new BadRequestException(
                 'El detalle de este tipo de incidencia todavía no está implementado.',
             );
@@ -311,21 +622,28 @@ export class IncidentsService {
             );
         }
 
-        // En el contexto de aprobaciones, no permitir revisar
-        // una solicitud que ya dejó de estar pendiente.
+        // En el contexto de aprobaciones, solo permitir pendientes.
         if (soloPendientes && solicitud.estatus !== 'PENDIENTE') {
             throw new BadRequestException(
                 'Esta solicitud ya no se encuentra pendiente de aprobación.',
             );
         }
 
-        // 2. Consultar el detalle específico de cada tipo.
+        // 2. Consultar el detalle específico.
+        const tipoDetalle = esVacaciones
+            ? 'VACACIONES'
+            : esPermiso
+                ? 'PERMISOS'
+                : 'INCAPACIDADES';
+
         const detalle = await this.obtenerDetalleComplementarioIncidencia(
             solicitud.idSolicitud,
-            esVacaciones ? 'VACACIONES' : 'PERMISOS',
+            tipoDetalle,
+            activeUser.idTenant,
+            companyId,
         );
 
-        // 3. Construir el flujo o el historial de aprobación.
+        // 3. Construir el flujo o historial de aprobación.
         const flujo = await this.construirFlujoIncidencia(
             activeUser,
             companyId,
@@ -337,7 +655,7 @@ export class IncidentsService {
         return {
             solicitud: {
                 ...solicitud,
-                tipo: esVacaciones ? 'VACACIONES' : 'PERMISOS',
+                tipo: tipoDetalle,
                 tipoMovimientoNombre: request.tipoMovimientoNombre,
                 codigoTipoSolicitud: request.codigoTipoSolicitud,
                 empleadoNombreCompleto: request.empleadoNombreCompleto,
@@ -348,9 +666,13 @@ export class IncidentsService {
         };
     }
 
+
+
     private async obtenerDetalleComplementarioIncidencia(
         idSolicitud: number,
-        tipo: 'VACACIONES' | 'PERMISOS',
+        tipo: 'VACACIONES' | 'PERMISOS' | 'INCAPACIDADES',
+        idTenant: number,
+        idEmpresa: number,
     ) {
         switch (tipo) {
             case 'VACACIONES': {
@@ -412,6 +734,8 @@ export class IncidentsService {
                 const archivo =
                     await this.prisma.archivosSolicitudes.findFirst({
                         where: {
+                            idTenant,
+                            idEmpresa,
                             moduloSolicitud: 'INCIDENCIAS',
                             idSolicitud,
                         },
@@ -435,6 +759,81 @@ export class IncidentsService {
                             archivo?.rutaRelativa ??
                             permiso.archivoRuta ??
                             null,
+                    },
+                };
+            }
+
+            case 'INCAPACIDADES': {
+                const incapacidad =
+                    await this.prisma.solicitudesIncapacidadesDetalle.findUnique({
+                        where: {
+                            idSolicitud,
+                        },
+                        select: {
+                            idIncapacidadDetalle: true,
+                            idSolicitud: true,
+                            tipoIncapacidad: true,
+                            numeroCertificado: true,
+                            institucionMedica: true,
+                            observaciones: true,
+                            solicitadoPorLider: true,
+                            fechaRegistro: true,
+                        },
+                    });
+
+                if (!incapacidad) {
+                    throw new NotFoundException(
+                        'No se encontró el detalle complementario de la incapacidad médica.',
+                    );
+                }
+
+                const archivo =
+                    await this.prisma.archivosSolicitudes.findFirst({
+                        where: {
+                            idTenant,
+                            idEmpresa,
+                            moduloSolicitud: 'INCIDENCIAS',
+                            idSolicitud,
+                        },
+                        orderBy: {
+                            fechaRegistro: 'desc',
+                        },
+                        select: {
+                            idArchivoSolicitud: true,
+                            nombreOriginal: true,
+                            nombreAlmacenado: true,
+                            rutaRelativa: true,
+                            mimeType: true,
+                            tamanoBytes: true,
+                            fechaRegistro: true,
+                        },
+                    });
+
+                return {
+                    incapacidad: {
+                        ...incapacidad,
+                        archivoNombreOriginal:
+                            archivo?.nombreOriginal ?? null,
+                        archivoRuta:
+                            archivo?.rutaRelativa ?? null,
+                        archivo: archivo
+                            ? {
+                                idArchivoSolicitud:
+                                    archivo.idArchivoSolicitud,
+                                nombreOriginal:
+                                    archivo.nombreOriginal,
+                                nombreAlmacenado:
+                                    archivo.nombreAlmacenado,
+                                rutaRelativa:
+                                    archivo.rutaRelativa,
+                                mimeType:
+                                    archivo.mimeType,
+                                tamanoBytes:
+                                    archivo.tamanoBytes?.toString() ?? null,
+                                fechaRegistro:
+                                    archivo.fechaRegistro,
+                            }
+                            : null,
                     },
                 };
             }

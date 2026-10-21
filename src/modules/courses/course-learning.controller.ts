@@ -29,6 +29,19 @@ export class CourseLearningController {
         return this.courseLearningService.findMyCourses(companyId, activeUser);
     }
 
+    // Endpoint con el nombre del empleado logueado para el saludo de Mis cursos (debe ir antes de :sessionId)
+    @Get('me')
+    @ApiOperation({ summary: 'Name of the logged employee for the My Courses greeting', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Employee name' })
+    @ApiResponse({ status: 404, description: 'The user has no employee in this company' })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    findMyProfile(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @GetActiveUser() activeUser: ActiveUserDto,
+    ) {
+        return this.courseLearningService.findMyProfile(companyId, activeUser);
+    }
+
     // Endpoint para abrir un curso asignado (lecciones y quiz SIN respuestas correctas)
     @Get(':sessionId')
     @ApiOperation({ summary: 'Get an assigned async course to take it (quiz without answers)', description: SWAGGER_AUTH_DESCRIPTION })

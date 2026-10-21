@@ -151,6 +151,7 @@ export class UsersService {
 
     // Hashear el password con formato Django (PBKDF2-SHA256)
     const hashedPassword = DjangoPasswordHasher.hash(dto.password);
+    if (dto.phone !== undefined) dto.phone = dto.phone.replace(/\D/g, '');
 
     // Ejecutar transacciones atómicas distribuidas en base a la nueva estructura relacional
     const newUserId = await this.prisma.$transaction(async (tx) => {
@@ -281,7 +282,7 @@ export class UsersService {
     if (dto.first_name !== undefined) userData.first_name = dto.first_name;
     if (dto.last_name !== undefined) userData.last_name = dto.last_name;
     if (dto.email !== undefined) userData.email = dto.email;
-    if (dto.phone !== undefined) userData.phone = dto.phone;
+    if (dto.phone !== undefined) userData.phone = dto.phone.replace(/\D/g, '');
     if (dto.is_active !== undefined) userData.is_active = dto.is_active;
 
     if (dto.password) {

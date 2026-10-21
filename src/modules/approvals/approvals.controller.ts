@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Param, ParseIntPipe, Query, Patch } from '@nestjs/common';
 import { ApprovalsService } from './approvals.service';
 import { ActionApprovalDto } from './dto/approve-reject-action.dto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
@@ -6,6 +6,7 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetApprovalRequestDetailDto } from './dto/get-approval-request-detail.dto';
+import { CancelApprovalDto } from './dto/cancel-action.dto';
 
 @ApiTags('Approvals')
 @ApiBearerAuth()
@@ -52,5 +53,18 @@ export class ApprovalsController {
     @Body() dto: ActionApprovalDto,
   ) {
     return this.approvalsService.processApprovalAction(activeUser, companyId, dto);
+  }
+
+  // Realiza la cancelación de una sulicitud por el solicitante o el solicitado
+  @Patch('/requests/cancel')
+  @ApiOperation({ summary: 'Cancel an approval request', description: 'Cancel an approval request.', })
+  @ApiResponse({ status: 200, description: 'Approval request cancelled successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  async cancelRequest(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() dto: CancelApprovalDto,
+  ) {
+    return this.approvalsService.cancelRequest(activeUser, companyId, dto);
   }
 }

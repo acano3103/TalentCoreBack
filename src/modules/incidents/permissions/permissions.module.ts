@@ -10,5 +10,6 @@ import { ApprovalsModule } from 'src/modules/approvals/approvals.module';
   imports: [PersonnelConfigModule, EmployeesModule, MediaPathModule, ApprovalsModule],
   controllers: [PermissionsController],
   providers: [PermissionsService],
+  exports: [PermissionsService],
 })
 export class PermissionsModule { }
