@@ -1,8 +1,8 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common";
-import { IArtemisProvider } from "./interfaces/artemis.interface";
+import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from "@nestjs/common";
+import { IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
 import { PrismaService } from "src/prisma/prisma.service";
 import { EncryptionService } from "src/common/utils/encryption.util";
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, AxiosRequestConfig } from "axios";
 import { formatTimeToHHMMSS, mapDayToArtemisId } from "./helpers/artemis.helper";
 
 @Injectable()
@@ -16,12 +16,29 @@ export class ArtemisProvider implements IArtemisProvider {
     ) { }
 
     async connect(companyId: number, providerId: number, dto: any): Promise<any> {
-        const { apiKey } = dto;
+        const proveedor = await this.prisma.catIntegracionesProvedores.findUnique({ where: { id: providerId } });
+        const nombreProveedor = proveedor?.name ?? 'Artemis';
+        // Biométricos (ZKBIO): la key se guarda sin espacios al inicio o al final
+        const apiKey: string = proveedor?.code === 'ZKBIO' ? dto.apiKey?.trim() : dto.apiKey;
 
         const isConnected = await this.prisma.integraciones.findFirst({
             where: { idEmpresa: companyId, providerId: providerId, isConnected: true }
         });
-        if (isConnected) throw new BadRequestException('Artemis ya está conectado');
+        if (isConnected) throw new BadRequestException(`${nombreProveedor} ya está conectado`);
+
+        // Biométricos (ZKBIO): se valida la API key y el departamento padre (rama de la empresa en ZKBio) antes de guardarlos
+        let metadataExtra: Record<string, unknown> = {};
+        if (proveedor?.code === 'ZKBIO') {
+            if (!apiKey) throw new BadRequestException('Captura la API key de biométricos.');
+            const departamentoPadreId = String(dto.departamentoPadreExternalId ?? '').trim();
+            if (!departamentoPadreId) throw new BadRequestException('Captura el ID del departamento padre de la empresa en ZKBio.');
+
+            const departamentos = await this.validateZkBioApiKey(apiKey);
+            const padre = departamentos.find((d) => String(d.departmentExternalId) === departamentoPadreId);
+            if (!padre) throw new BadRequestException(`El departamento padre ${departamentoPadreId} no existe en ZKBio.`);
+
+            metadataExtra = { departamentoPadre: { externalId: departamentoPadreId, name: padre.name ?? null } };
+        }
 
         await this.prisma.$transaction(async (tx) => {
             await tx.integraciones.create({
@@ -31,15 +48,19 @@ export class ArtemisProvider implements IArtemisProvider {
                     isConnected: true,
                     metadata: {
                         apiKey: this.encryptionService.encrypt(apiKey),
+                        ...metadataExtra,
                     }
                 }
             });
         });
 
-        return { message: 'Artemis conectado exitosamente' };
+        return { message: `${nombreProveedor} conectado exitosamente` };
     }
 
     async disconnect(companyId: number, providerId: number) {
+        const proveedor = await this.prisma.catIntegracionesProvedores.findUnique({ where: { id: providerId } });
+        const nombreProveedor = proveedor?.name ?? 'Artemis';
+
         try {
             await this.prisma.$transaction(async (tx) => {
                 await tx.integraciones.delete({
@@ -52,9 +73,9 @@ export class ArtemisProvider implements IArtemisProvider {
                 });
             });
 
-            return { message: 'Artemis desconectado exitosamente' };
+            return { message: `${nombreProveedor} desconectado exitosamente` };
         } catch (error) {
-            throw new BadRequestException('Error al desconectar Artemis');
+            throw new BadRequestException(`Error al desconectar ${nombreProveedor}`);
         }
     }
 
@@ -171,5 +192,129 @@ export class ArtemisProvider implements IArtemisProvider {
 
             throw new BadRequestException(error.message || 'Error inesperado al conectar con Artemis');
         }
+    }
+
+    // ===== Biométricos ZKBio (ZkBio Integration API) =====
+    // La API key es por empresa: integración ZKBIO en Integraciones (metadata.apiKey encriptada).
+    // La URL base es la misma para todos: ZKBIO_BASE_URL en el .env.
+
+    // Catálogo de departamentos del biométrico
+    async getBiometricDepartments(companyId: number): Promise<ZkBioDepartment[]> {
+        return this.zkBioRequest<ZkBioDepartment[]>(companyId, { method: 'GET', url: '/departments' });
+    }
+
+    // Catálogo de niveles de acceso del biométrico
+    async getBiometricAccessLevels(companyId: number): Promise<ZkBioAccessLevel[]> {
+        return this.zkBioRequest<ZkBioAccessLevel[]>(companyId, { method: 'GET', url: '/access-levels' });
+    }
+
+    // Departamento padre de la empresa en ZKBio (se captura al conectar): delimita qué departamentos puede usar
+    async getBiometricParentDepartment(companyId: number): Promise<ZkBioParentDepartment | null> {
+        const integracion = await this.prisma.integraciones.findFirst({
+            where: {
+                idEmpresa: companyId,
+                isConnected: true,
+                CatIntegracionesProvedores: { code: 'ZKBIO' }
+            }
+        });
+        const padre = (integracion?.metadata as any)?.departamentoPadre;
+        if (!padre?.externalId) return null;
+        return { externalId: String(padre.externalId), name: padre.name ?? null };
+    }
+
+    // Da de alta a la persona en ZKBio (POST /persons). La Idempotency-Key evita duplicados al reintentar.
+    async createBiometricPerson(companyId: number, person: ZkBioCreatePersonRequest, idempotencyKey: string): Promise<ZkBioPerson> {
+        return this.zkBioRequest<ZkBioPerson>(companyId, {
+            method: 'POST',
+            url: '/persons',
+            data: person,
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        });
+    }
+
+    // Consulta a la persona en ZKBio (estatus del alta)
+    async getBiometricPerson(companyId: number, personId: string): Promise<ZkBioPerson> {
+        return this.zkBioRequest<ZkBioPerson>(companyId, { method: 'GET', url: `/persons/${encodeURIComponent(personId)}` });
+    }
+
+    private getZkBioBaseUrl(): string {
+        const baseUrl = process.env.ZKBIO_BASE_URL?.trim().replace(/\/+$/, '');
+        if (!baseUrl) throw new ServiceUnavailableException('Falta configurar ZKBIO_BASE_URL en el servidor.');
+        return baseUrl;
+    }
+
+    // Obtiene la API key de biométricos de la empresa (integración ZKBIO conectada)
+    private async getZkBioApiKey(companyId: number): Promise<string> {
+        const integracion = await this.prisma.integraciones.findFirst({
+            where: {
+                idEmpresa: companyId,
+                isConnected: true,
+                CatIntegracionesProvedores: { code: 'ZKBIO' }
+            }
+        });
+
+        if (!integracion) throw new BadRequestException('Biométricos ZKBio no está configurado o conectado para esta empresa.');
+
+        const metadata = integracion.metadata as any;
+        if (!metadata?.apiKey) throw new BadRequestException('La integración de biométricos no tiene API key guardada.');
+
+        return this.encryptionService.decrypt(metadata.apiKey);
+    }
+
+    // Al conectar: valida la API key consultando el catálogo de departamentos (también sirve para validar el padre)
+    private async validateZkBioApiKey(apiKey: string): Promise<ZkBioDepartment[]> {
+        try {
+            const response = await axios.get<ZkBioDepartment[]>(`${this.getZkBioBaseUrl()}/departments`, {
+                headers: { 'X-Api-Key': apiKey },
+                timeout: 10000,
+            });
+            return Array.isArray(response.data) ? response.data : [];
+        } catch (error) {
+            throw this.toZkBioException(error);
+        }
+    }
+
+    // Llamada a la ZkBio Integration API con la API key de la empresa
+    private async zkBioRequest<T>(companyId: number, config: AxiosRequestConfig): Promise<T> {
+        const apiKey = await this.getZkBioApiKey(companyId);
+
+        try {
+            const response = await axios.request<T>({
+                ...config,
+                baseURL: this.getZkBioBaseUrl(),
+                timeout: config.timeout ?? 15000,
+                headers: { ...(config.headers as Record<string, string> | undefined), 'X-Api-Key': apiKey },
+            });
+            return response.data;
+        } catch (error) {
+            throw this.toZkBioException(error);
+        }
+    }
+
+    // Traduce los errores de la API ({ code, message, correlationId }) a excepciones de Nest.
+    // Nunca se loguean la API key ni los datos biométricos.
+    private toZkBioException(error: unknown): HttpException {
+        if (error instanceof HttpException) return error;
+        if (!axios.isAxiosError(error)) {
+            this.logger.error(`Error inesperado en ZkBio API: ${(error as Error)?.message}`);
+            return new ServiceUnavailableException('Error inesperado al conectar con el servicio de biométricos.');
+        }
+
+        const axiosError = error as AxiosError<ZkBioError>;
+        const status = axiosError.response?.status;
+        const body = axiosError.response?.data;
+        const correlationId = body?.correlationId ?? axiosError.response?.headers?.['x-correlation-id'];
+        const ref = correlationId ? ` (ref: ${correlationId})` : '';
+        const detail = body?.message || body?.code || axiosError.message;
+
+        this.logger.error(`Error en ZkBio API (${status ?? axiosError.code}): ${body?.code ?? ''} ${detail}${ref}`);
+
+        if (!status) return new ServiceUnavailableException(`No se pudo conectar con el servicio de biométricos. Intenta de nuevo.${ref}`);
+        if (status === 401) return new BadRequestException(`La API key de biométricos es inválida o fue revocada.${ref}`);
+        if (status === 404) return new NotFoundException(`Biométricos: ${detail}${ref}`);
+        if (status === 409) return new ConflictException(`Biométricos: ${detail}${ref}`);
+        if (status === 400 || status === 422) return new UnprocessableEntityException(`Biométricos: ${detail}${ref}`);
+        if (status >= 500) return new ServiceUnavailableException(`El servicio de biométricos no está disponible. Intenta de nuevo.${ref}`);
+        return new BadRequestException(`Biométricos: ${detail}${ref}`);
     }
 }

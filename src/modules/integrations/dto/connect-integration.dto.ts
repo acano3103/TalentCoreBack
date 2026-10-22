@@ -1,5 +1,5 @@
-import { IsString, IsOptional } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ConnectIntegrationDto {
     @ApiProperty({ example: '6avZ0UcjRmuK4O8Lx_xUAA' })
@@ -21,4 +21,11 @@ export class ConnectIntegrationDto {
     @IsString()
     @IsOptional()
     apiKey?: string;
+
+    // Solo Biométricos ZKBio: departamento padre de la empresa en ZKBio (delimita los departamentos que puede usar)
+    @ApiPropertyOptional({ example: '4' })
+    @IsString()
+    @IsOptional()
+    @MaxLength(50)
+    departamentoPadreExternalId?: string;
 }
