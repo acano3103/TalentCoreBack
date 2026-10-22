@@ -1,18 +1,15 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { InternalMovementsService } from './internal-movements.service';
-import {
-  InternalMovementsController,
-  CompanyMovementsController,
-} from './internal-movements.controller';
-import { NotificationsModule } from 'src/modules/notifications/notifications.module';
+import { InternalMovementsController } from './internal-movements.controller';
 import { ApprovalsModule } from '../approvals/approvals.module';
+import { MediaPathModule } from 'src/common/services/media-path.module';
 
 @Module({
   imports: [
-    NotificationsModule,
+    MediaPathModule,
     forwardRef(() => ApprovalsModule),
   ],
-  controllers: [InternalMovementsController, CompanyMovementsController],
+  controllers: [InternalMovementsController],
   providers: [InternalMovementsService],
   exports: [InternalMovementsService],
 })

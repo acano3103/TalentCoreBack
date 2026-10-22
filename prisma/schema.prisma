@@ -1534,6 +1534,7 @@ model MovimientosInternos {
   idPlanCarrera                                                    Int?
   idTipoMoneda                                                     Int?
   idPeriodicidadPago                                               Int?
+  DetalleBajasPersonal                                             DetalleBajasPersonal?
   Empleados_MovimientosInternos_idAprobadorToEmpleados             Empleados?                         @relation("MovimientosInternos_idAprobadorToEmpleados", fields: [idAprobador], references: [idEmpleado], map: "FK_MovInternos_Aprobador")
   Empleados                                                        Empleados                          @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_MovInternos_Empleado")
   Empleados_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados Empleados                          @relation("MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados", fields: [solicitadoPorIdEmpleado], references: [idEmpleado], map: "FK_MovInternos_Solicitante")
@@ -2584,6 +2585,14 @@ model PasosAprobacionMovimientoInterno {
   @@index([idEmpleadoAprobador], map: "idx_pasos_movimiento_empleado")
   @@index([estatus], map: "idx_pasos_movimiento_estatus")
   @@index([idUsuarioAprobador], map: "idx_pasos_movimiento_usuario")
+}
+
+model DetalleBajasPersonal {
+  idDetalleBaja       Int                 @id @default(autoincrement())
+  idMovimiento        Int                 @unique(map: "uq_detalle_baja_movimiento")
+  datosBaja           Json
+  fechaRegistro       DateTime            @default(now()) @db.DateTime(0)
+  MovimientosInternos MovimientosInternos @relation(fields: [idMovimiento], references: [idMovimiento], map: "fk_detalle_baja_movimiento")
 }
 
 enum Entrevistas_interview_type {
