@@ -626,7 +626,7 @@ export class ApprovalsService {
                     },
                     data: {
                         estatus: 'CANCELADA',
-                        comentarios: comentario,
+                        motivoRechazo: comentario,
                         fechaRespuesta: new Date(),
                     },
                 });
@@ -641,11 +641,69 @@ export class ApprovalsService {
 
         // G. Manejo para MOVIMIENTOS INTERNOS
         if (dto.origenModulo === ModuloOrigenEnum.MOVIMIENTO_INTERNO) {
-            // Aquí posteriormente podemos aplicar exactamente la misma
-            // validación sobre MovimientosInternos.
+            const solicitud =
+                await this.prisma.movimientosInternos.findFirst({
+                    where: {
+                        idMovimiento: dto.idOrigen,
+                        idTenant: activeUser.idTenant,
+                        idEmpresa: companyId,
+                    },
+                    select: {
+                        idMovimiento: true,
+                        idEmpleado: true,
+                        solicitadoPorIdEmpleado: true,
+                        estatus: true,
+                        motivo: true,
+                    },
+                });
+
+            if (!solicitud) {
+                throw new NotFoundException(
+                    'El movimiento interno no existe.',
+                );
+            }
+
+            // C. Solo se puede cancelar una solicitud pendiente
+            if (solicitud.estatus !== 'PENDIENTE') {
+                throw new BadRequestException(
+                    'El movimiento interno ya no se encuentra en estatus pendiente y no puede ser cancelado.',
+                );
+            }
+
+            // D. Validar que la acción solicitada sea CANCELAR
+            if (dto.accion !== AccionCancelacionEnum.CANCELAR) {
+                throw new BadRequestException(
+                    'La acción de cancelación no es válida.',
+                );
+            }
+
+            // E. Validar el motivo de cancelación
+            const comentario = dto.comentarios?.trim();
+
+            if (!comentario) {
+                throw new BadRequestException(
+                    'Debes indicar el motivo de la cancelación.',
+                );
+            }
+
+            // F. Cancelar la solicitud
+            await this.prisma.$transaction(async (tx) => {
+                await tx.movimientosInternos.update({
+                    where: {
+                        idMovimiento: solicitud.idMovimiento,
+                    },
+                    data: {
+                        estatus: 'CANCELADA',
+                        motivoRechazo: comentario,
+                        fechaRespuesta: new Date(),
+                    },
+                });
+            });
 
             return {
-                message: 'Movimiento interno cancelado correctamente',
+                message: 'Movimiento interno cancelado exitosamente',
+                idOrigen: solicitud.idMovimiento,
+                estatus: 'CANCELADA',
             };
         }
 
