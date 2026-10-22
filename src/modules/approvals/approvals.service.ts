@@ -20,242 +20,242 @@ export class ApprovalsService {
     ) { }
 
     // BANDEJA UNIFICADA: Listado de pendientes que requieren la aprobación del usuario
-    async getPendingApprovals(activeUser: ActiveUserDto, companyId: number) {
-        try {
-            // A. Obtener empleado vinculado al usuario
-            const currentEmployee = await this.prisma.empleados.findFirst({
-                where: {
-                    idTenant: activeUser.idTenant,
-                    idEmpresa: companyId,
-                    idUsuario: activeUser.uuid,
-                    activo: true,
-                },
-                select: { idEmpleado: true, idPuesto: true },
-            });
-            const currentEmployeeId = currentEmployee?.idEmpleado ?? null;
+    // async getPendingApprovals(activeUser: ActiveUserDto, companyId: number) {
+    //     try {
+    //         // A. Obtener empleado vinculado al usuario
+    //         const currentEmployee = await this.prisma.empleados.findFirst({
+    //             where: {
+    //                 idTenant: activeUser.idTenant,
+    //                 idEmpresa: companyId,
+    //                 idUsuario: activeUser.uuid,
+    //                 activo: true,
+    //             },
+    //             select: { idEmpleado: true, idPuesto: true },
+    //         });
+    //         const currentEmployeeId = currentEmployee?.idEmpleado ?? null;
 
-            // B. Obtener roles del usuario
-            const userRolesRaw = await this.prisma.relUsuarioRol.findMany({
-                where: { idUsuario: (activeUser as any).id ?? activeUser.uuid },
-                select: { idRol: true },
-            });
-            const currentUserRoleIds = new Set<number>(userRolesRaw.map((r) => r.idRol));
+    //         // B. Obtener roles del usuario
+    //         const userRolesRaw = await this.prisma.relUsuarioRol.findMany({
+    //             where: { idUsuario: (activeUser as any).id ?? activeUser.uuid },
+    //             select: { idRol: true },
+    //         });
+    //         const currentUserRoleIds = new Set<number>(userRolesRaw.map((r) => r.idRol));
 
-            // Cache local de configuraciones de flujo
-            const flujosCache = new Map<number, any>();
+    //         // Cache local de configuraciones de flujo
+    //         const flujosCache = new Map<number, any>();
 
-            const obtenerFlujoConfig = async (idTipoMov: number) => {
-                if (!flujosCache.has(idTipoMov)) {
-                    try {
-                        const flujo = await this.personnelConfig.obtenerFlujoPorTipoMovimiento(
-                            activeUser.idTenant,
-                            companyId,
-                            idTipoMov,
-                        );
+    //         const obtenerFlujoConfig = async (idTipoMov: number) => {
+    //             if (!flujosCache.has(idTipoMov)) {
+    //                 try {
+    //                     const flujo = await this.personnelConfig.obtenerFlujoPorTipoMovimiento(
+    //                         activeUser.idTenant,
+    //                         companyId,
+    //                         idTipoMov,
+    //                     );
 
-                        flujosCache.set(idTipoMov, flujo);
-                    } catch (error) {
-                        // Si no existe un flujo configurado, se ignora este tipo de movimiento.
-                        if (error instanceof NotFoundException) {
-                            this.logger.warn(`Se ignora el tipo de movimiento ${idTipoMov}: no tiene flujo de aprobación configurado.`,);
-                            flujosCache.set(idTipoMov, null);
-                        } else {
-                            // Los errores distintos a la ausencia de flujo deben seguir reportándose.
-                            throw error;
-                        }
-                    }
-                }
+    //                     flujosCache.set(idTipoMov, flujo);
+    //                 } catch (error) {
+    //                     // Si no existe un flujo configurado, se ignora este tipo de movimiento.
+    //                     if (error instanceof NotFoundException) {
+    //                         this.logger.warn(`Se ignora el tipo de movimiento ${idTipoMov}: no tiene flujo de aprobación configurado.`,);
+    //                         flujosCache.set(idTipoMov, null);
+    //                     } else {
+    //                         // Los errores distintos a la ausencia de flujo deben seguir reportándose.
+    //                         throw error;
+    //                     }
+    //                 }
+    //             }
 
-                return flujosCache.get(idTipoMov);
-            };
+    //             return flujosCache.get(idTipoMov);
+    //         };
 
-            // ----------------------------------------------------
-            // C. Consultar INCIDENCIAS pendientes
-            // ----------------------------------------------------
-            const incidencias = await this.prisma.solicitudesIncidencias.findMany({
-                where: {
-                    idTenant: activeUser.idTenant,
-                    idEmpresa: companyId,
-                    estatus: 'PENDIENTE',
-                },
-                include: {
-                    Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
-                        select: {
-                            idEmpleado: true,
-                            nombre: true,
-                            primerApellido: true,
-                            segundoApellido: true,
-                            idJefeInmediato: true,
-                            CatPuestos: { select: { idPuesto: true, idArea: true } },
-                            Empleados: { select: { idEmpleado: true, idJefeInmediato: true } },
-                        },
-                    },
-                    CatTipoMovimiento: true,
-                },
-                orderBy: { fechaRegistro: 'desc' },
-            });
+    //         // ----------------------------------------------------
+    //         // C. Consultar INCIDENCIAS pendientes
+    //         // ----------------------------------------------------
+    //         const incidencias = await this.prisma.solicitudesIncidencias.findMany({
+    //             where: {
+    //                 idTenant: activeUser.idTenant,
+    //                 idEmpresa: companyId,
+    //                 estatus: 'PENDIENTE',
+    //             },
+    //             include: {
+    //                 Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados: {
+    //                     select: {
+    //                         idEmpleado: true,
+    //                         nombre: true,
+    //                         primerApellido: true,
+    //                         segundoApellido: true,
+    //                         idJefeInmediato: true,
+    //                         CatPuestos: { select: { idPuesto: true, idArea: true } },
+    //                         Empleados: { select: { idEmpleado: true, idJefeInmediato: true } },
+    //                     },
+    //                 },
+    //                 CatTipoMovimiento: true,
+    //             },
+    //             orderBy: { fechaRegistro: 'desc' },
+    //         });
 
-            const pendientesIncidencias: any[] = [];
+    //         const pendientesIncidencias: any[] = [];
 
-            for (const inc of incidencias) {
-                const flujo = await obtenerFlujoConfig(inc.idTipoMovimiento);
+    //         for (const inc of incidencias) {
+    //             const flujo = await obtenerFlujoConfig(inc.idTipoMovimiento);
 
-                // Si no tiene flujo configurado o no tiene pasos, se ignora.
-                if (!flujo?.pasos?.length) continue;
+    //             // Si no tiene flujo configurado o no tiene pasos, se ignora.
+    //             if (!flujo?.pasos?.length) continue;
 
-                const pasoNum = (inc as any).pasoActual ?? 1;
-                const pasoConfig = flujo.pasos.find((p: any) => p.paso === pasoNum);
-                if (!pasoConfig) continue;
+    //             const pasoNum = (inc as any).pasoActual ?? 1;
+    //             const pasoConfig = flujo.pasos.find((p: any) => p.paso === pasoNum);
+    //             if (!pasoConfig) continue;
 
-                const solicitante = (inc as any).Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
-                if (!solicitante) continue;
+    //             const solicitante = (inc as any).Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
+    //             if (!solicitante) continue;
 
-                const puedeAprobar = this.validarPermisoPaso({
-                    pasoConfig,
-                    solicitante,
-                    currentEmployeeId,
-                    currentUserRoleIds,
-                    activeUser,
-                });
+    //             const puedeAprobar = this.validarPermisoPaso({
+    //                 pasoConfig,
+    //                 solicitante,
+    //                 currentEmployeeId,
+    //                 currentUserRoleIds,
+    //                 activeUser,
+    //             });
 
-                if (puedeAprobar) {
-                    const nombreCompleto = [
-                        solicitante.nombre,
-                        solicitante.primerApellido,
-                        solicitante.segundoApellido,
-                    ]
-                        .filter(Boolean)
-                        .join(' ');
+    //             if (puedeAprobar) {
+    //                 const nombreCompleto = [
+    //                     solicitante.nombre,
+    //                     solicitante.primerApellido,
+    //                     solicitante.segundoApellido,
+    //                 ]
+    //                     .filter(Boolean)
+    //                     .join(' ');
 
-                    pendientesIncidencias.push({
-                        idOrigen: inc.idSolicitud,
-                        origenModulo: ModuloOrigenEnum.INCIDENCIA,
-                        idEmpleado: solicitante.idEmpleado,
-                        empleadoNombreCompleto: nombreCompleto,
-                        empleadoIniciales: obtenerIniciales(
-                            solicitante.nombre,
-                            solicitante.primerApellido,
-                        ),
-                        comentarioOMotivo: inc.comentarios || null,
-                        idTipoMovimiento: inc.idTipoMovimiento,
-                        tipoMovimientoNombre: inc.CatTipoMovimiento?.nombre || 'Incidencia',
-                        codigoTipoSolicitud: inc.CatTipoMovimiento?.codigo || 'INCIDENCIA',
-                        estatusCodigo: `PENDIENTE_PASO_${pasoNum}`,
-                        estatusNombre: `PENDIENTE (${pasoConfig.nombreRol || pasoConfig.tipoAprobador})`,
-                        pasoActual: pasoNum,
-                        totalPasos: flujo.totalPasos || flujo.pasos.length,
-                        fechaSolicitud: inc.fechaRegistro,
-                        requiereMiAprobacion: true,
-                    });
-                }
-            }
+    //                 pendientesIncidencias.push({
+    //                     idOrigen: inc.idSolicitud,
+    //                     origenModulo: ModuloOrigenEnum.INCIDENCIA,
+    //                     idEmpleado: solicitante.idEmpleado,
+    //                     empleadoNombreCompleto: nombreCompleto,
+    //                     empleadoIniciales: obtenerIniciales(
+    //                         solicitante.nombre,
+    //                         solicitante.primerApellido,
+    //                     ),
+    //                     comentarioOMotivo: inc.comentarios || null,
+    //                     idTipoMovimiento: inc.idTipoMovimiento,
+    //                     tipoMovimientoNombre: inc.CatTipoMovimiento?.nombre || 'Incidencia',
+    //                     codigoTipoSolicitud: inc.CatTipoMovimiento?.codigo || 'INCIDENCIA',
+    //                     estatusCodigo: `PENDIENTE_PASO_${pasoNum}`,
+    //                     estatusNombre: `PENDIENTE (${pasoConfig.nombreRol || pasoConfig.tipoAprobador})`,
+    //                     pasoActual: pasoNum,
+    //                     totalPasos: flujo.totalPasos || flujo.pasos.length,
+    //                     fechaSolicitud: inc.fechaRegistro,
+    //                     requiereMiAprobacion: true,
+    //                 });
+    //             }
+    //         }
 
-            // ----------------------------------------------------
-            // D. Consultar MOVIMIENTOS INTERNOS pendientes
-            // ----------------------------------------------------
-            const movimientos = await this.prisma.movimientosInternos.findMany({
-                where: {
-                    idEmpresa: companyId,
-                    idEstatusMovimiento: { in: [1, 2, 3, 4, 5] },
-                },
-                include: {
-                    Empleados: {
-                        select: {
-                            idEmpleado: true,
-                            nombre: true,
-                            primerApellido: true,
-                            segundoApellido: true,
-                            idJefeInmediato: true,
-                            CatPuestos: { select: { idPuesto: true, idArea: true } },
-                            Empleados: { select: { idEmpleado: true, idJefeInmediato: true } },
-                        },
-                    },
-                    PasosAprobacionMovimiento: {
-                        where: { idEstatus: 1 },
-                        orderBy: { paso: 'asc' },
-                        take: 1,
-                    },
-                },
-                orderBy: { fechaRegistro: 'desc' },
-            });
+    //         // ----------------------------------------------------
+    //         // D. Consultar MOVIMIENTOS INTERNOS pendientes
+    //         // ----------------------------------------------------
+    //         const movimientos = await this.prisma.movimientosInternos.findMany({
+    //             where: {
+    //                 idEmpresa: companyId,
+    //                 idEstatusMovimiento: { in: [1, 2, 3, 4, 5] },
+    //             },
+    //             include: {
+    //                 Empleados: {
+    //                     select: {
+    //                         idEmpleado: true,
+    //                         nombre: true,
+    //                         primerApellido: true,
+    //                         segundoApellido: true,
+    //                         idJefeInmediato: true,
+    //                         CatPuestos: { select: { idPuesto: true, idArea: true } },
+    //                         Empleados: { select: { idEmpleado: true, idJefeInmediato: true } },
+    //                     },
+    //                 },
+    //                 PasosAprobacionMovimiento: {
+    //                     where: { idEstatus: 1 },
+    //                     orderBy: { paso: 'asc' },
+    //                     take: 1,
+    //                 },
+    //             },
+    //             orderBy: { fechaRegistro: 'desc' },
+    //         });
 
-            const pendientesMovimientos: any[] = [];
+    //         const pendientesMovimientos: any[] = [];
 
-            for (const mov of movimientos) {
-                const tipoMovimiento = await this.prisma.catTipoMovimiento.findFirst({ where: { nombre: mov.tipoMovimiento } });
-                if (!tipoMovimiento) continue;
-                const idTipoMov = tipoMovimiento.idTipoMovimiento;
-                const flujo = await obtenerFlujoConfig(idTipoMov);
+    //         for (const mov of movimientos) {
+    //             const tipoMovimiento = await this.prisma.catTipoMovimiento.findFirst({ where: { nombre: mov.tipoMovimiento } });
+    //             if (!tipoMovimiento) continue;
+    //             const idTipoMov = tipoMovimiento.idTipoMovimiento;
+    //             const flujo = await obtenerFlujoConfig(idTipoMov);
 
-                // Si no tiene flujo configurado o no tiene pasos, se ignora.
-                if (!flujo?.pasos?.length) continue;
+    //             // Si no tiene flujo configurado o no tiene pasos, se ignora.
+    //             if (!flujo?.pasos?.length) continue;
 
-                const pasoActivo = mov.PasosAprobacionMovimiento?.[0];
-                const pasoNum = pasoActivo?.paso ?? 1;
-                const pasoConfig = flujo.pasos.find((p: any) => p.paso === pasoNum);
-                if (!pasoConfig) continue;
+    //             const pasoActivo = mov.PasosAprobacionMovimiento?.[0];
+    //             const pasoNum = pasoActivo?.paso ?? 1;
+    //             const pasoConfig = flujo.pasos.find((p: any) => p.paso === pasoNum);
+    //             if (!pasoConfig) continue;
 
-                const solicitante = mov.Empleados;
-                if (!solicitante) continue;
+    //             const solicitante = mov.Empleados;
+    //             if (!solicitante) continue;
 
-                const puedeAprobar = this.validarPermisoPaso({
-                    pasoConfig,
-                    solicitante,
-                    currentEmployeeId,
-                    currentUserRoleIds,
-                    activeUser,
-                });
+    //             const puedeAprobar = this.validarPermisoPaso({
+    //                 pasoConfig,
+    //                 solicitante,
+    //                 currentEmployeeId,
+    //                 currentUserRoleIds,
+    //                 activeUser,
+    //             });
 
-                if (puedeAprobar) {
-                    const nombreCompleto = [
-                        solicitante.nombre,
-                        solicitante.primerApellido,
-                        solicitante.segundoApellido,
-                    ]
-                        .filter(Boolean)
-                        .join(' ');
+    //             if (puedeAprobar) {
+    //                 const nombreCompleto = [
+    //                     solicitante.nombre,
+    //                     solicitante.primerApellido,
+    //                     solicitante.segundoApellido,
+    //                 ]
+    //                     .filter(Boolean)
+    //                     .join(' ');
 
-                    pendientesMovimientos.push({
-                        idOrigen: mov.idMovimiento,
-                        origenModulo: ModuloOrigenEnum.MOVIMIENTO_INTERNO,
-                        idEmpleado: solicitante.idEmpleado,
-                        empleadoNombreCompleto: nombreCompleto,
-                        empleadoIniciales: obtenerIniciales(
-                            solicitante.nombre || '',
-                            solicitante.primerApellido || '',
-                        ),
-                        comentarioOMotivo: mov.motivo || null,
-                        idTipoMovimiento: idTipoMov,
-                        tipoMovimientoNombre: (mov as any).tipoMovimiento || 'Movimiento Interno',
-                        codigoTipoSolicitud: 'MOVIMIENTO_INTERNO',
-                        estatusCodigo: `PENDIENTE_PASO_${pasoNum}`,
-                        estatusNombre: `PENDIENTE (${pasoConfig.nombreRol || pasoConfig.tipoAprobador})`,
-                        pasoActual: pasoNum,
-                        totalPasos: flujo.totalPasos || flujo.pasos.length,
-                        fechaSolicitud: mov.fechaRegistro,
-                        requiereMiAprobacion: true,
-                    });
-                }
-            }
+    //                 pendientesMovimientos.push({
+    //                     idOrigen: mov.idMovimiento,
+    //                     origenModulo: ModuloOrigenEnum.MOVIMIENTO_INTERNO,
+    //                     idEmpleado: solicitante.idEmpleado,
+    //                     empleadoNombreCompleto: nombreCompleto,
+    //                     empleadoIniciales: obtenerIniciales(
+    //                         solicitante.nombre || '',
+    //                         solicitante.primerApellido || '',
+    //                     ),
+    //                     comentarioOMotivo: mov.motivo || null,
+    //                     idTipoMovimiento: idTipoMov,
+    //                     tipoMovimientoNombre: (mov as any).tipoMovimiento || 'Movimiento Interno',
+    //                     codigoTipoSolicitud: 'MOVIMIENTO_INTERNO',
+    //                     estatusCodigo: `PENDIENTE_PASO_${pasoNum}`,
+    //                     estatusNombre: `PENDIENTE (${pasoConfig.nombreRol || pasoConfig.tipoAprobador})`,
+    //                     pasoActual: pasoNum,
+    //                     totalPasos: flujo.totalPasos || flujo.pasos.length,
+    //                     fechaSolicitud: mov.fechaRegistro,
+    //                     requiereMiAprobacion: true,
+    //                 });
+    //             }
+    //         }
 
-            // ----------------------------------------------------
-            // E. Unificar y ordenar por fecha más reciente
-            // ----------------------------------------------------
-            const all = [...pendientesIncidencias, ...pendientesMovimientos].sort(
-                (a, b) =>
-                    new Date(b.fechaSolicitud).getTime() -
-                    new Date(a.fechaSolicitud).getTime(),
-            );
+    //         // ----------------------------------------------------
+    //         // E. Unificar y ordenar por fecha más reciente
+    //         // ----------------------------------------------------
+    //         const all = [...pendientesIncidencias, ...pendientesMovimientos].sort(
+    //             (a, b) =>
+    //                 new Date(b.fechaSolicitud).getTime() -
+    //                 new Date(a.fechaSolicitud).getTime(),
+    //         );
 
-            return {
-                count: all.length,
-                requests: all,
-            };
-        } catch (error) {
-            console.error('ERROR EN getPendingApprovals:', error);
-            throw error;
-        }
-    }
+    //         return {
+    //             count: all.length,
+    //             requests: all,
+    //         };
+    //     } catch (error) {
+    //         console.error('ERROR EN getPendingApprovals:', error);
+    //         throw error;
+    //     }
+    // }
 
 
     /**
@@ -568,122 +568,209 @@ export class ApprovalsService {
         );
     }
 
-    async getApprovalRequestDetail(
-        activeUser: ActiveUserDto,
-        companyId: number,
-        query: GetApprovalRequestDetailDto,
-    ) {
-        // 1. Reutilizar la lógica existente de autorización.
-        const pendingResponse = await this.getPendingApprovals(
-            activeUser,
-            companyId,
-        );
+    // async getApprovalRequestDetail(
+    //     activeUser: ActiveUserDto,
+    //     companyId: number,
+    //     query: GetApprovalRequestDetailDto,
+    // ) {
+    //     // 1. Reutilizar la lógica existente de autorización.
+    //     const pendingResponse = await this.getPendingApprovals(
+    //         activeUser,
+    //         companyId,
+    //     );
 
-        const request = pendingResponse.requests.find(
-            (item) =>
-                item.origenModulo === query.origenModulo &&
-                item.idOrigen === query.idOrigen &&
-                item.requiereMiAprobacion === true,
-        );
+    //     const request = pendingResponse.requests.find(
+    //         (item) =>
+    //             item.origenModulo === query.origenModulo &&
+    //             item.idOrigen === query.idOrigen &&
+    //             item.requiereMiAprobacion === true,
+    //     );
 
-        if (!request) {
-            // No revelar si existe una solicitud que el usuario
-            // no tiene permiso para consultar.
-            throw new NotFoundException(
-                'La solicitud no existe o no tienes permiso para consultarla.',
-            );
-        }
+    //     if (!request) {
+    //         // No revelar si existe una solicitud que el usuario
+    //         // no tiene permiso para consultar.
+    //         throw new NotFoundException(
+    //             'La solicitud no existe o no tienes permiso para consultarla.',
+    //         );
+    //     }
 
-        // 2. Consultar los detalles según el módulo de origen.
-        switch (request.origenModulo) {
-            case 'INCIDENCIA':
-                return this.incidentsService.obtenerDetalleIncidenciaAutorizada(
-                    activeUser,
-                    companyId,
-                    request,
-                    true
-                );
+    //     // 2. Consultar los detalles según el módulo de origen.
+    //     switch (request.origenModulo) {
+    //         case 'INCIDENCIA':
+    //             return this.incidentsService.obtenerDetalleIncidenciaAutorizada(
+    //                 activeUser,
+    //                 companyId,
+    //                 request,
+    //                 true
+    //             );
 
-            // case 'MOVIMIENTO_INTERNO':
-            //     return this.obtenerDetalleMovimientoAutorizado(
-            //         activeUser,
-            //         companyId,
-            //         request,
-            //     );
+    //         // case 'MOVIMIENTO_INTERNO':
+    //         //     return this.obtenerDetalleMovimientoAutorizado(
+    //         //         activeUser,
+    //         //         companyId,
+    //         //         request,
+    //         //     );
 
-            default:
-                throw new BadRequestException(
-                    'El módulo de la solicitud no es válido.',
-                );
-        }
-    }
+    //         default:
+    //             throw new BadRequestException(
+    //                 'El módulo de la solicitud no es válido.',
+    //             );
+    //     }
+    // }
 
     async aprobarAutomaticamenteSinFlujoAprobacion(
         idTenant: number,
         idEmpresa: number,
         idTipoMovimiento: number,
         idSolicitud: number,
+        moduloOrigen: 'INCIDENCIA' | 'MOVIMIENTO_INTERNO' = 'INCIDENCIA',
     ) {
-        const existe = await this.prisma.solicitudesIncidencias.findFirst({
-            where: {
-                idTenant,
-                idEmpresa,
-                idSolicitud,
-                idTipoMovimiento,
-            },
-        });
+        // 1. Validar que la solicitud exista en el módulo correspondiente.
+        let existe = false;
+
+        if (moduloOrigen === 'INCIDENCIA') {
+            const solicitud =
+                await this.prisma.solicitudesIncidencias.findFirst({
+                    where: {
+                        idTenant,
+                        idEmpresa,
+                        idSolicitud,
+                        idTipoMovimiento,
+                    },
+                    select: {
+                        idSolicitud: true,
+                    },
+                });
+
+            existe = !!solicitud;
+        } else if (moduloOrigen === 'MOVIMIENTO_INTERNO') {
+            const movimiento =
+                await this.prisma.movimientosInternos.findFirst({
+                    where: {
+                        idTenant,
+                        idEmpresa,
+                        idMovimiento: idSolicitud,
+                        idTipoMovimiento,
+                    },
+                    select: {
+                        idMovimiento: true,
+                    },
+                });
+
+            existe = !!movimiento;
+        }
 
         if (!existe) {
             throw new NotFoundException(
-                'La solicitud no existe.',
+                'La solicitud no existe en el módulo indicado.',
             );
         }
 
-        // Buscar el flujo de aprobación.
-        const flujo = await this.prisma.configuracionFlujoPaso.findFirst({
-            where: {
-                idTenant,
-                idEmpresa,
-                idTipoMovimiento,
-                activo: true,
-            },
-        });
-
-        if (!flujo) {
-            this.logger.warn('No existe un flujo de aprobación para el tipo de movimiento ' + idTipoMovimiento + ' , se aprueba en automático ');
-
-            await this.prisma.solicitudesIncidencias.update({
+        // 2. Buscar el flujo de aprobación configurado.
+        const flujo =
+            await this.prisma.configuracionFlujoPaso.findFirst({
                 where: {
                     idTenant,
                     idEmpresa,
-                    idSolicitud,
                     idTipoMovimiento,
-                },
-                data: {
-                    estatus: 'APROBADA',
-                    pasoActual: 1,
-                    fechaRespuesta: new Date(),
+                    activo: true,
                 },
             });
 
-            // Crear un paso de aprobación
-            await this.prisma.pasosAprobacionIncidencia.create({
-                data: {
-                    idSolicitud,
-                    paso: 1,
-                    tipoAprobador: 'JERARQUIA',
-                    idRolAprobador: null,
-                    estatus: 'APROBADA',
-                    idUsuarioAprobador: null,
-                    idEmpleadoAprobador: null,
-                    comentarios: 'Aprobada automáticamente por falta de flujo de aprobación.',
-                    fechaRespuesta: new Date(),
-                },
-            });
-            return 'Solicitud aprobada automaticamente por falta de flujo de aprobación.';
-        } else {
+        // Si existe un flujo, no aprobar automáticamente.
+        if (flujo) {
             return 'Flujo de aprobación encontrado';
         }
+
+        this.logger.warn(
+            `No existe un flujo de aprobación para el tipo de movimiento ${idTipoMovimiento}; ` +
+            `se aprobará automáticamente. Módulo: ${moduloOrigen}.`,
+        );
+
+        // 3. Aprobar la solicitud en el módulo correspondiente.
+        if (moduloOrigen === 'INCIDENCIA') {
+            await this.prisma.$transaction(async (tx) => {
+                const actualizacion =
+                    await tx.solicitudesIncidencias.updateMany({
+                        where: {
+                            idTenant,
+                            idEmpresa,
+                            idSolicitud,
+                            idTipoMovimiento,
+                        },
+                        data: {
+                            estatus: 'APROBADA',
+                            pasoActual: 1,
+                            fechaRespuesta: new Date(),
+                        },
+                    });
+
+                if (actualizacion.count === 0) {
+                    throw new NotFoundException(
+                        'No se encontró la solicitud de incidencia para aprobar.',
+                    );
+                }
+
+                // El paso de aprobación se registra únicamente para incidencias.
+                await tx.pasosAprobacionIncidencia.create({
+                    data: {
+                        idSolicitud,
+                        paso: 1,
+                        tipoAprobador: 'JERARQUIA',
+                        idRolAprobador: null,
+                        estatus: 'APROBADA',
+                        idUsuarioAprobador: null,
+                        idEmpleadoAprobador: null,
+                        comentarios:
+                            'Aprobada automáticamente por falta de flujo de aprobación.',
+                        fechaRespuesta: new Date(),
+                    },
+                });
+            });
+        } else {
+            // MOVIMIENTO_INTERNO
+            await this.prisma.$transaction(async (tx) => {
+                const fechaRespuesta = new Date();
+
+                const actualizacion =
+                    await tx.movimientosInternos.updateMany({
+                        where: {
+                            idTenant,
+                            idEmpresa,
+                            idMovimiento: idSolicitud,
+                            idTipoMovimiento,
+                        },
+                        data: {
+                            estatus: 'APROBADA',
+                            pasoActual: 1,
+                            fechaRespuesta,
+                        },
+                    });
+
+                if (actualizacion.count === 0) {
+                    throw new NotFoundException(
+                        'No se encontró el movimiento interno para aprobar.',
+                    );
+                }
+
+                await tx.pasosAprobacionMovimientoInterno.create({
+                    data: {
+                        idMovimiento: idSolicitud,
+                        paso: 1,
+                        tipoAprobador: 'JERARQUIA',
+                        idRolAprobador: null,
+                        estatus: 'APROBADA',
+                        idUsuarioAprobador: null,
+                        idEmpleadoAprobador: null,
+                        comentarios:
+                            'Aprobado automáticamente por falta de flujo de aprobación.',
+                        fechaRespuesta,
+                    },
+                });
+            });
+        }
+
+        return 'Solicitud aprobada automaticamente por falta de flujo de aprobación.';
     }
 
 }
