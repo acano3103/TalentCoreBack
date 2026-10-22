@@ -37,6 +37,8 @@ export class IntegrationsFactory {
                 throw new BadRequestException('Proveedor Gemini aún no implementado');
             case 'ARTEMIS':
                 return this.artemisProvider;
+            case 'ZKBIO': // Biométricos: sus funciones viven en ArtemisProvider
+                return this.artemisProvider;
             default:
                 throw new BadRequestException(`No hay un provider configurado para: ${providerCat.code}`);
         }
