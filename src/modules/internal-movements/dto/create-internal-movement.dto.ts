@@ -2,6 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateInternalMovementDto {
+  @ApiProperty()
+  @IsNumber()
+  idEmpleado: number;
+
   @ApiProperty({
     description:
       'Tipo de movimiento (Promoción, Cambio de Área, Ajuste Salarial, Reubicación)',
