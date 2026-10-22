@@ -565,7 +565,6 @@ export class IncidentsService {
     // Helpers 
     // ------------------------------------------------------------------
 
-
     async obtenerDetalleIncidenciaAutorizada(
         activeUser: ActiveUserDto,
         companyId: number,

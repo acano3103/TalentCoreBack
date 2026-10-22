@@ -16,31 +16,31 @@ export class ApprovalsController {
   constructor(private readonly approvalsService: ApprovalsService) { }
 
   // Obtiene todas las solicitudes pendientes del usuario
-  // @Get('/requests/pending')
-  // @ApiOperation({ summary: 'Get all pending approvals', description: 'Get all pending approvals of the company.', })
-  // @ApiResponse({ status: 200, description: 'All pending approvals retrieved successfully' })
-  // @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
-  // async getPendingApprovals(
-  //   @GetActiveUser() activeUser: ActiveUserDto,
-  //   @Param('companyId', ParseIntPipe) companyId: number,
-  // ) {
-  //   return this.approvalsService.getPendingApprovals(activeUser, companyId);
-  // }
+  @Get('/requests/pending')
+  @ApiOperation({ summary: 'Get all pending approvals', description: 'Get all pending approvals of the company.', })
+  @ApiResponse({ status: 200, description: 'All pending approvals retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  async getPendingApprovals(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.approvalsService.getPendingApprovals(activeUser, companyId);
+  }
 
-  // // Obtiene el detalle de una solicitud pendiente
-  // @Get('/requests/detail')
-  // @ApiOperation({ summary: 'Get pending approval request detail', description: 'Get pending approval request detail.', })
-  // @ApiResponse({ status: 200, description: 'Pending approval request detail retrieved successfully', })
-  // @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.', })
-  // @ApiResponse({ status: 403, description: 'The user does not have permission to review this request', })
-  // @ApiResponse({ status: 404, description: 'La solicitud no existe', })
-  // async getApprovalRequestDetail(
-  //   @GetActiveUser() activeUser: ActiveUserDto,
-  //   @Param('companyId', ParseIntPipe) companyId: number,
-  //   @Query() query: GetApprovalRequestDetailDto,
-  // ) {
-  //   return this.approvalsService.getApprovalRequestDetail(activeUser, companyId, query);
-  // }
+  // Obtiene el detalle de una solicitud pendiente
+  @Get('/requests/detail')
+  @ApiOperation({ summary: 'Get pending approval request detail', description: 'Get pending approval request detail.', })
+  @ApiResponse({ status: 200, description: 'Pending approval request detail retrieved successfully', })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.', })
+  @ApiResponse({ status: 403, description: 'The user does not have permission to review this request', })
+  @ApiResponse({ status: 404, description: 'La solicitud no existe', })
+  async getApprovalRequestDetail(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query() query: GetApprovalRequestDetailDto,
+  ) {
+    return this.approvalsService.getApprovalRequestDetail(activeUser, companyId, query);
+  }
 
   // Realiza la acción (aprobar o rechazar) de una solicitud
   @Post('/requests/action')

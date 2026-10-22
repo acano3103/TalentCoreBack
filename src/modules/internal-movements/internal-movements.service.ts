@@ -305,172 +305,65 @@ export class InternalMovementsService {
     };
   }
 
-  async getInternalMovementRequestDetail(
-    activeUser: ActiveUserDto,
-    companyId: number,
-    query: GetInternalMovementRequestDetailDto,
-  ) {
-    if (query.origenModulo !== "MOVIMIENTO_INTERNO") {
-      throw new BadRequestException(
-        'El módulo de la solicitud no es válido.',
-      );
+  async getInternalMovementRequestDetail(activeUser: ActiveUserDto, companyId: number, query: GetInternalMovementRequestDetailDto) {
+    if (query.origenModulo !== 'MOVIMIENTO_INTERNO') {
+      throw new BadRequestException('El módulo de la solicitud no es válido.');
     }
 
-    const movimiento =
-      await this.prisma.movimientosInternos.findFirst({
-        where: {
-          idMovimiento: query.idOrigen,
-          idTenant: activeUser.idTenant,
-          idEmpresa: companyId,
-        },
-        include: {
-          Empleados: {
-            select: {
-              idEmpleado: true,
-              nombre: true,
-              primerApellido: true,
-              segundoApellido: true,
-              idJefeInmediato: true,
-              idPuesto: true,
-              idSite: true,
-            },
+    const movimiento = await this.prisma.movimientosInternos.findFirst({
+      where: {
+        idMovimiento: query.idOrigen,
+        idTenant: activeUser.idTenant,
+        idEmpresa: companyId,
+      },
+      include: {
+        Empleados: {
+          select: {
+            idEmpleado: true,
+            nombre: true,
+            primerApellido: true,
+            segundoApellido: true,
           },
-
-          Empleados_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados: {
-            select: {
-              idEmpleado: true,
-              nombre: true,
-              primerApellido: true,
-              segundoApellido: true,
-            },
-          },
-
-          CatTipoMovimiento: true,
         },
-      });
+        CatTipoMovimiento: {
+          select: {
+            nombre: true,
+            codigo: true,
+          },
+        },
+      },
+    });
 
     if (!movimiento) {
-      throw new NotFoundException(
-        'El movimiento interno no existe.',
-      );
+      throw new NotFoundException('El movimiento interno no existe.');
     }
 
     const empleado = movimiento.Empleados;
 
-    const nombreCompleto = [
-      empleado?.nombre,
-      empleado?.primerApellido,
-      empleado?.segundoApellido,
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    const solicitante =
-      movimiento.Empleados_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados;
-
-    const solicitanteNombreCompleto = [
-      solicitante?.nombre,
-      solicitante?.primerApellido,
-      solicitante?.segundoApellido,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const nombreCompleto = [empleado?.nombre, empleado?.primerApellido, empleado?.segundoApellido].filter(Boolean).join(' ');
 
     const request = {
       idOrigen: movimiento.idMovimiento,
       origenModulo: ModuloOrigenEnum.MOVIMIENTO_INTERNO,
       idEmpleado: empleado?.idEmpleado ?? movimiento.idEmpleado,
       empleadoNombreCompleto: nombreCompleto || 'Sin empleado',
-      empleadoIniciales: obtenerIniciales(
-        empleado?.nombre ?? '',
-        empleado?.primerApellido ?? '',
-      ),
+      empleadoIniciales: obtenerIniciales(empleado?.nombre ?? '', empleado?.primerApellido ?? ''),
       comentarios: movimiento.motivo ?? null,
       idTipoMovimiento: movimiento.idTipoMovimiento,
-      tipoMovimientoNombre:
-        movimiento.CatTipoMovimiento?.nombre ??
-        'Movimiento interno',
-      codigoTipoSolicitud:
-        movimiento.CatTipoMovimiento?.codigo ??
-        'MOVIMIENTO_INTERNO',
+      tipoMovimientoNombre: movimiento.CatTipoMovimiento?.nombre ?? 'Movimiento interno',
+      codigoTipoSolicitud: movimiento.CatTipoMovimiento?.codigo ?? 'MOVIMIENTO_INTERNO',
       estatusCodigo: movimiento.estatus,
       estatusNombre: movimiento.estatus,
       fechaSolicitud: movimiento.fechaRegistro,
       pasoActual: movimiento.pasoActual ?? 1,
     };
 
-    const flujo = await this.construirFlujoMovimientoInterno(
+    return this.obtenerDetalleMovimientoAutorizado(
       activeUser,
       companyId,
-      movimiento,
       request,
+      false
     );
-
-    return {
-      solicitud: {
-        // CAMPOS GENERALES DE LA SOLICITUD
-        idOrigen: movimiento.idMovimiento,
-        tipo: 'MOVIMIENTO_INTERNO',
-        idEmpleado:
-          empleado?.idEmpleado ?? movimiento.idEmpleado,
-        empleadoNombreCompleto:
-          nombreCompleto || 'Sin empleado',
-        empleadoIniciales: obtenerIniciales(
-          empleado?.nombre ?? '',
-          empleado?.primerApellido ?? '',
-        ),
-        tipoMovimientoNombre:
-          movimiento.CatTipoMovimiento?.nombre ??
-          'Movimiento interno',
-        codigoTipoSolicitud:
-          movimiento.CatTipoMovimiento?.codigo ??
-          'MOVIMIENTO_INTERNO',
-        estatus: movimiento.estatus,
-        fechaRegistro: movimiento.fechaRegistro,
-        fechaRespuesta: movimiento.fechaRespuesta,
-        comentarios: movimiento.motivo ?? null,
-        motivoRechazo: movimiento.motivoRechazo ?? null,
-        // INFORMACIÓN DEL SOLICITANTE
-        solicitadoPorIdEmpleado: movimiento.solicitadoPorIdEmpleado,
-        solicitanteNombreCompleto: solicitanteNombreCompleto || null,
-        solicitante: solicitante
-          ? {
-            idEmpleado: solicitante.idEmpleado,
-            nombre: solicitante.nombre,
-            primerApellido: solicitante.primerApellido,
-            segundoApellido: solicitante.segundoApellido,
-          }
-          : null,
-        // MOVIMIENTO INTERNO
-        movimientoInterno: {
-          idMovimiento: movimiento.idMovimiento,
-          idTipoMovimiento: movimiento.idTipoMovimiento,
-          fechaEfectiva: movimiento.fechaEfectiva,
-          idPuestoAnterior: movimiento.idPuestoAnterior,
-          idPuestoNuevo: movimiento.idPuestoNuevo,
-          idAreaAnterior: movimiento.idAreaAnterior,
-          idAreaNueva: movimiento.idAreaNueva,
-          idJefeAnterior: movimiento.idJefeAnterior,
-          idJefeNuevo: movimiento.idJefeNuevo,
-          idEmpresaAnterior: movimiento.idEmpresaAnterior,
-          idEmpresaNueva: movimiento.idEmpresaNueva,
-          idSiteAnterior: movimiento.idSiteAnterior,
-          idSiteNuevo: movimiento.idSiteNuevo,
-          salarioBrutoAnterior: movimiento.salarioBrutoAnterior,
-          salarioBrutoNuevo: movimiento.salarioBrutoNuevo,
-          salarioNetoAnterior: movimiento.salarioNetoAnterior,
-          salarioNetoNuevo: movimiento.salarioNetoNuevo,
-          idTipoMoneda: movimiento.idTipoMoneda,
-          idPeriodicidadPago: movimiento.idPeriodicidadPago,
-          motivo: movimiento.motivo,
-          causaBaja: movimiento.causaBaja,
-          solicitadoPorIdEmpleado: movimiento.solicitadoPorIdEmpleado,
-          solicitanteNombreCompleto: solicitanteNombreCompleto || null,
-        },
-      },
-
-      flujo,
-    };
   }
 
   async createMovementRequest(
@@ -1440,4 +1333,119 @@ export class InternalMovementsService {
   //       requests: pendingForUser,
   //     };
   //   }
+
+  async obtenerDetalleMovimientoAutorizado(
+    activeUser: ActiveUserDto,
+    companyId: number,
+    request: any,
+    soloPendientes: boolean = false
+  ) {
+
+    if (request.origenModulo !== 'MOVIMIENTO_INTERNO') {
+      throw new BadRequestException('El módulo de la solicitud no es válido.');
+    }
+
+    const movimiento = await this.prisma.movimientosInternos.findFirst({
+      where: {
+        idMovimiento: request.idOrigen,
+        idTenant: activeUser.idTenant,
+        idEmpresa: companyId,
+        idTipoMovimiento: request.idTipoMovimiento,
+      },
+      include: {
+        Empleados: {
+          select: {
+            idEmpleado: true,
+            nombre: true,
+            primerApellido: true,
+            segundoApellido: true,
+            idJefeInmediato: true,
+            idPuesto: true,
+            idSite: true,
+          },
+        },
+        Empleados_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados: {
+          select: {
+            idEmpleado: true,
+            nombre: true,
+            primerApellido: true,
+            segundoApellido: true,
+          },
+        },
+        CatTipoMovimiento: true,
+      },
+    });
+
+    if (!movimiento) {
+      throw new NotFoundException('El movimiento interno no existe o no tienes permiso para consultarlo.');
+    }
+
+    if (soloPendientes && movimiento.estatus !== 'PENDIENTE') {
+      throw new BadRequestException('Este movimiento interno ya no se encuentra pendiente de aprobación.');
+    }
+
+    const empleado = movimiento.Empleados;
+    const nombreCompleto = [empleado?.nombre, empleado?.primerApellido, empleado?.segundoApellido].filter(Boolean).join(' ');
+    const solicitante = movimiento.Empleados_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados;
+    const solicitanteNombreCompleto = [solicitante?.nombre, solicitante?.primerApellido, solicitante?.segundoApellido].filter(Boolean).join(' ');
+
+    const flujo = await this.construirFlujoMovimientoInterno(
+      activeUser,
+      companyId,
+      movimiento,
+      request
+    );
+
+    return {
+      solicitud: {
+        idOrigen: movimiento.idMovimiento,
+        tipo: 'MOVIMIENTO_INTERNO',
+        idEmpleado: empleado?.idEmpleado ?? movimiento.idEmpleado,
+        empleadoNombreCompleto: nombreCompleto || 'Sin empleado',
+        empleadoIniciales: obtenerIniciales(empleado?.nombre ?? '', empleado?.primerApellido ?? ''),
+        tipoMovimientoNombre: movimiento.CatTipoMovimiento?.nombre ?? 'Movimiento interno',
+        codigoTipoSolicitud: movimiento.CatTipoMovimiento?.codigo ?? 'MOVIMIENTO_INTERNO',
+        estatus: movimiento.estatus,
+        fechaRegistro: movimiento.fechaRegistro,
+        fechaRespuesta: movimiento.fechaRespuesta,
+        comentarios: movimiento.motivo ?? null,
+        motivoRechazo: movimiento.motivoRechazo ?? null,
+        solicitadoPorIdEmpleado: movimiento.solicitadoPorIdEmpleado,
+        solicitanteNombreCompleto: solicitanteNombreCompleto || null,
+        solicitante: solicitante ? {
+          idEmpleado: solicitante.idEmpleado,
+          nombre: solicitante.nombre,
+          primerApellido: solicitante.primerApellido,
+          segundoApellido: solicitante.segundoApellido,
+        } : null,
+        movimientoInterno: {
+          idMovimiento: movimiento.idMovimiento,
+          idTipoMovimiento: movimiento.idTipoMovimiento,
+          fechaEfectiva: movimiento.fechaEfectiva,
+          idPuestoAnterior: movimiento.idPuestoAnterior,
+          idPuestoNuevo: movimiento.idPuestoNuevo,
+          idAreaAnterior: movimiento.idAreaAnterior,
+          idAreaNueva: movimiento.idAreaNueva,
+          idJefeAnterior: movimiento.idJefeAnterior,
+          idJefeNuevo: movimiento.idJefeNuevo,
+          idEmpresaAnterior: movimiento.idEmpresaAnterior,
+          idEmpresaNueva: movimiento.idEmpresaNueva,
+          idSiteAnterior: movimiento.idSiteAnterior,
+          idSiteNuevo: movimiento.idSiteNuevo,
+          salarioBrutoAnterior: movimiento.salarioBrutoAnterior,
+          salarioBrutoNuevo: movimiento.salarioBrutoNuevo,
+          salarioNetoAnterior: movimiento.salarioNetoAnterior,
+          salarioNetoNuevo: movimiento.salarioNetoNuevo,
+          idTipoMoneda: movimiento.idTipoMoneda,
+          idPeriodicidadPago: movimiento.idPeriodicidadPago,
+          motivo: movimiento.motivo,
+          causaBaja: movimiento.causaBaja,
+          solicitadoPorIdEmpleado: movimiento.solicitadoPorIdEmpleado,
+          solicitanteNombreCompleto: solicitanteNombreCompleto || null,
+        },
+      },
+      flujo,
+    };
+  }
+
 }

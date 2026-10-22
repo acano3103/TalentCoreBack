@@ -14,5 +14,6 @@ import { ApprovalsModule } from '../approvals/approvals.module';
   ],
   controllers: [InternalMovementsController, CompanyMovementsController],
   providers: [InternalMovementsService],
+  exports: [InternalMovementsService],
 })
 export class InternalMovementsModule { }

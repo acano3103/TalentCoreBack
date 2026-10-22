@@ -4,6 +4,7 @@ import { ApprovalsService } from './approvals.service';
 import { ApprovalsController } from './approvals.controller';
 import { PersonnelConfigModule } from '../config/personnel-config/personnel-config.module';
 import { IncidentsModule } from '../incidents/incidents.module';
+import { InternalMovementsModule } from '../internal-movements/internal-movements.module';
 
 @Module({
   controllers: [ApprovalsController],
@@ -11,6 +12,7 @@ import { IncidentsModule } from '../incidents/incidents.module';
   imports: [
     PersonnelConfigModule,
     forwardRef(() => IncidentsModule),
+    forwardRef(() => InternalMovementsModule)
   ],
   exports: [ApprovalsService],
 })
