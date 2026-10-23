@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from "@nestjs/common";
-import { IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
+import { IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioFacePhoto, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
 import { PrismaService } from "src/prisma/prisma.service";
 import { EncryptionService } from "src/common/utils/encryption.util";
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
@@ -235,6 +235,20 @@ export class ArtemisProvider implements IArtemisProvider {
     // Consulta a la persona en ZKBio (estatus del alta)
     async getBiometricPerson(companyId: number, personId: string): Promise<ZkBioPerson> {
         return this.zkBioRequest<ZkBioPerson>(companyId, { method: 'GET', url: `/persons/${encodeURIComponent(personId)}` });
+    }
+
+    // Sube la foto del rostro de la persona (PUT /persons/{personId}/face, multipart campo "photo", JPG o PNG, máx. 5 MB).
+    // La foto solo se reenvía a ZKBio: no se guarda en TalentCore.
+    async uploadBiometricFace(companyId: number, personId: string, photo: ZkBioFacePhoto): Promise<void> {
+        const form = new FormData();
+        form.append('photo', new Blob([new Uint8Array(photo.buffer)], { type: photo.mimetype }), photo.filename);
+
+        await this.zkBioRequest<unknown>(companyId, {
+            method: 'PUT',
+            url: `/persons/${encodeURIComponent(personId)}/face`,
+            data: form,
+            timeout: 30000,
+        });
     }
 
     private getZkBioBaseUrl(): string {

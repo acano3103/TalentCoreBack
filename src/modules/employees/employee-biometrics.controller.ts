@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
-import { EmployeeBiometricsService } from './employee-biometrics.service';
+import { BiometricPhotoUpload, EmployeeBiometricsService, MAX_FOTO_ROSTRO_BYTES } from './employee-biometrics.service';
 import { CreateBiometricPersonDto } from './dto/create-biometric-person.dto';
 
 // Endpoints de biométricos del empleado (ZkBio Integration API vía integración de la empresa)
@@ -69,5 +70,24 @@ export class EmployeeBiometricsController {
         @Body() dto: CreateBiometricPersonDto,
     ) {
         return this.employeeBiometricsService.registerEmployee(activeUser, companyId, employeeId, dto);
+    }
+
+    // Endpoint que sube la foto del rostro del empleado al biométrico (multipart, campo "foto")
+    @Put('employees/:employeeId/biometrics/face')
+    @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: MAX_FOTO_ROSTRO_BYTES + 1024 * 1024, files: 1 } }))
+    @ApiConsumes('multipart/form-data')
+    @ApiBody({ schema: { type: 'object', properties: { foto: { type: 'string', format: 'binary', description: 'JPG o PNG, máx. 5 MB' } } } })
+    @ApiOperation({ summary: 'Upload employee face photo to the biometric system (ZKBio)', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Face photo registered in ZKBio' })
+    @ApiResponse({ status: 400, description: 'Employee not registered, missing or invalid photo' })
+    @ApiResponse({ status: 422, description: 'ZKBio did not detect a face in the photo' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    uploadFace(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('employeeId', ParseIntPipe) employeeId: number,
+        @UploadedFile() foto: BiometricPhotoUpload,
+    ) {
+        return this.employeeBiometricsService.uploadFace(activeUser, companyId, employeeId, foto);
     }
 }
