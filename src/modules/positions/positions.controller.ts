@@ -18,7 +18,7 @@ import { ExcelExportService } from 'src/common/services/excel-export.service';
 @ApiBearerAuth()
 @Controller('companies/:companyId/positions')
 export class PositionsController {
-        constructor(
+    constructor(
         private readonly service: PositionsService,
         private readonly excelExportService: ExcelExportService,
     ) { }
@@ -43,10 +43,6 @@ export class PositionsController {
     ) {
         return this.service.findAllRequests(companyId, activeUser, page, limit, filterByUser, estatusId, search);
     }
-
-
-
-    
 
     // Obtiene el catalogo de estatus de solicitudes
     @Get('requests/status')
@@ -126,11 +122,6 @@ export class PositionsController {
         return this.service.findAll(activeUser, companyId, page, querySearch, limit, aprobada);
     }
 
-
-
-
-
-
     // Exporta a Excel todos los puestos que cumplan los filtros (sin paginar)
     @Get('export')
     @ApiBearerAuth()
@@ -158,7 +149,6 @@ export class PositionsController {
         this.excelExportService.send(res, buffer, 'Catalogo_de_Puestos');
     }
 
-    
     // Obtiene los catálogos necesarios para la creación de un puesto
     @Get('/catalogs')
     @ApiBearerAuth()
@@ -187,6 +177,21 @@ export class PositionsController {
         @Query('specific', new DefaultValuePipe(1), ParseIntPipe) specific: number,
     ) {
         return this.service.findOne(activeUser, companyId, positionId, specific);
+    }
+
+    // Obtenemos la lista de puestos de una area especifica
+    @Get('area/:areaId')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get positions by area', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Positions obtained successfully' })
+    @ApiResponse({ status: 404, description: 'Positions not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async findByArea(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('areaId', ParseIntPipe) areaId: number,
+    ) {
+        return this.service.findByArea(activeUser, companyId, areaId);
     }
 
     // Actualiza un puesto completo con todos sus datos

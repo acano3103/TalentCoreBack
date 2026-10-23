@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe, Put, ParseBoolPipe } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { SaveSalaryDto } from './dto/save-salary.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
@@ -10,6 +10,7 @@ import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 import { UpdateImmediateBossDto } from './dto/update-immediate-boss.dto';
 
+@ApiTags('Employees')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/employees')
@@ -79,7 +80,6 @@ export class EmployeesController {
   }
 
   // Endpoint para obtener los candidatos a jefe inmediato según el puesto
-  @UseGuards(JwtAuthGuard)
   @Get('positions/:positionId/bosses/options')
   @ApiOperation({ summary: 'Get available immediate boss candidates for a position', description: 'Returns active employees currently holding the supervisor position defined for this job position' })
   @ApiResponse({ status: 200, description: 'Boss options retrieved successfully' })
@@ -135,7 +135,6 @@ export class EmployeesController {
   }
 
   // Endpoint para asignar o actualizar el jefe inmediato de un empleado
-  @UseGuards(JwtAuthGuard)
   @Patch(':employeeId/immediate-boss')
   @ApiOperation({ summary: 'Update employee immediate boss', description: 'Updates the immediate boss (idJefeInmediato) of a specific employee', })
   @ApiResponse({ status: 200, description: 'Immediate boss updated successfully' })

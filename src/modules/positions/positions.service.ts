@@ -23,7 +23,7 @@ import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-expor
 
 @Injectable()
 export class PositionsService {
-     constructor(
+    constructor(
         private readonly prisma: PrismaService,
         private readonly notifications: NotificationDispatcher,
         private readonly configService: ConfigService,
@@ -70,7 +70,7 @@ export class PositionsService {
             companyId,
             filters.search?.trim() ?? '',
             aprobada,
-        { activo: filters.activo, fechaDesde: filters.fechaDesde, fechaHasta: filters.fechaHasta, pendiente: filters.pendiente },
+            { activo: filters.activo, fechaDesde: filters.fechaDesde, fechaHasta: filters.fechaHasta, pendiente: filters.pendiente },
         );
 
         // En SQL crudo los booleanos pueden venir como 1/0 y los decimales como Decimal
@@ -141,6 +141,13 @@ export class PositionsService {
         }
     }
 
+    async findByArea(activeUser: ActiveUserDto, companyId: number, areaId: number) {
+        const positions = await this.prisma.catPuestos.findMany({
+            where: { Activo: true, aprobada: true, idTenant: activeUser.idTenant, idEmpresa: companyId, idArea: areaId },
+            select: { idPuesto: true, NombrePuesto: true, DescripcionPuesto: true }
+        });
+        return positions;
+    }
 
     async getSchedule(activeUser: ActiveUserDto, companyId: number, positionId: number) {
         const position = await this.prisma.catPuestos.findFirst({
