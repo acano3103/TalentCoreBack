@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import { normalizarCurp } from 'src/common/utils/curp.util';
 
 import { CurpRenapoResult, Nom151Result, NubariumStandardResult, VigenciaCalculada } from '../interfaces/nubarium.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -59,7 +60,7 @@ private esCampoConstanciaFiscal(campo: string): boolean {
      * 1. Consulta CURP en RENAPO vía Nubarium (Solo texto)
      */
     async consultarCurpRenapo(curp: string): Promise<CurpRenapoResult> {
-        const curpLimpia = (curp || '').trim().toUpperCase();
+        const curpLimpia = normalizarCurp(curp);
 
         const resultado: CurpRenapoResult = {
             success: false,
@@ -398,6 +399,8 @@ const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https
                 }
             } else {
                 this.setInfraestructuraError(resultado, resp.status, data?.message || data?.error || `[INFRA] Error HTTP ${resp.status}`);
+                // Si Nubarium falla, el documento no se bloquea: la vigencia se calcula con los días por defecto del documento
+                resultado.vigencia = this.calcularVigencia(campoNormalizado, {}, diasVigenciaDefault ?? null);
             }
         } catch (error: any) {
             const status = error.response?.status || 503;
@@ -410,6 +413,11 @@ const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https
             resultado.respuesta_json = dataError;
             this.setInfraestructuraError(resultado, status, msg);
             this.logger.error(`Error de infraestructura en Nubarium: ${error.message}`);
+            // Si Nubarium falla (timeout, 404, sin conexión), el documento no se bloquea:
+            // la vigencia se calcula con los días por defecto del documento (si no se había calculado ya)
+            if (!resultado.vigencia?.fechaVencimiento) {
+                resultado.vigencia = this.calcularVigencia(campoNormalizado, {}, diasVigenciaDefault ?? null);
+            }
         } finally {
             // Persistir la bitácora en la Base de Datos compartiendo el contexto de la transacción
             await this.guardarValidacionDb(

@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as fs from 'fs-extra';
 import { DocumentoAceptado, DocumentoRechazado } from './interfaces/digital-files.interface';
 import { NubariumService } from './services/nubarium.service';
+import { esCurpValida, normalizarCurp } from 'src/common/utils/curp.util';
 import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { Cron } from '@nestjs/schedule';
 import { generateEmployeeAndLink } from '../postulations/services/credentials.service';
@@ -596,7 +597,7 @@ export class DigitalFilesService {
     usuarioRegistro: string,
     idTenant: number,
   ) {
-    const curp = empleadoData.curp?.toUpperCase().trim();
+    const curp = normalizarCurp(empleadoData.curp);
     if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
     // Validar el CURP contra RENAPO antes de continuar
     const resultadoCurp = await this.nubariumService.consultarCurpRenapo(curp);
@@ -850,7 +851,7 @@ export class DigitalFilesService {
 
     const idCampania = idCampaniaRaw ? parseInt(idCampaniaRaw, 10) : null;
     const usuarioRegistro = user?.username || 'sistema';
-    const curp = empleadoData.curp?.toUpperCase().trim();
+    const curp = normalizarCurp(empleadoData.curp);
 
     if (!curp) throw new BadRequestException('El CURP del empleado es obligatorio');
 
@@ -1478,6 +1479,12 @@ export class DigitalFilesService {
     const faltantes = requiredFields.filter((f) => data[f] === undefined || data[f] === null || data[f] === '');
     if (faltantes.length > 0) throw new BadRequestException(`Faltan los siguientes campos: ${faltantes.join(', ')}`);
 
+    // CURP sin espacios ni caracteres invisibles y con formato válido (evita guardar CURP incompletas, p. ej. al pegarlas)
+    const curpNormalizada = normalizarCurp(data.curp);
+    if (!esCurpValida(curpNormalizada)) {
+      throw new BadRequestException(`La CURP "${curpNormalizada}" no tiene un formato válido. Debe tener 18 caracteres.`);
+    }
+
     // Aseguramos que los horarios incluyan la modalidad de asistencia diaria
     const formattedSchedules = Array.isArray(data.schedules)
       ? data.schedules.map((s: any) => ({
@@ -1495,7 +1502,7 @@ export class DigitalFilesService {
         nombre: data.nombre,
         apellido1: data.apellido1,
         apellido2: data.apellido2 || '',
-        curp: data.curp.toUpperCase().trim(),
+        curp: curpNormalizada,
         correo: data.correo,
         telefono: data.telefono,
         numeroEmpleado: data.numeroEmpleado ? String(data.numeroEmpleado).trim() : null,
@@ -1805,7 +1812,7 @@ export class DigitalFilesService {
       const rawNombre = row.getCell(1).text?.trim();
       const rawApellido1 = row.getCell(2).text?.trim();
       const rawApellido2 = row.getCell(3).text?.trim() || '';
-      const rawCurp = row.getCell(4).text?.trim().toUpperCase();
+      const rawCurp = normalizarCurp(row.getCell(4).text);
       const rawCorreo = row.getCell(5).text?.trim().toLowerCase();
       const rawTelefono = row.getCell(6).text?.trim();
       const rawPuesto = row.getCell(7).text?.trim();
