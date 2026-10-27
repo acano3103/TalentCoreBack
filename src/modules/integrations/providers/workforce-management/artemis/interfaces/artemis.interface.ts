@@ -53,6 +53,13 @@ export interface ZkBioParentDepartment {
     name: string | null;
 }
 
+// Foto del rostro para PUT /persons/{personId}/face
+export interface ZkBioFacePhoto {
+    buffer: Buffer;
+    mimetype: 'image/jpeg' | 'image/png';
+    filename: string;
+}
+
 // Formato de error de la API: { code, message, correlationId }
 export interface ZkBioError {
     code?: string;

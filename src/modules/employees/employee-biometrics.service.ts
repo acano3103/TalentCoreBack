@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
@@ -12,6 +12,24 @@ export const BIOMETRIC_PROVIDER_CODE = 'ZKBIO';
 
 // Estatus de ZKBio que indica que la persona ya quedó registrada
 const ESTATUS_ACTIVO = 'Active';
+
+// Foto recibida por multer (en memoria; no se guarda en disco)
+export interface BiometricPhotoUpload {
+    buffer: Buffer;
+    size: number;
+    originalname?: string;
+    mimetype?: string;
+}
+
+// Límite de ZKBio para la foto del rostro
+export const MAX_FOTO_ROSTRO_BYTES = 5 * 1024 * 1024;
+
+// Tipo real de la imagen por su contenido (no por la extensión ni por lo que diga el navegador)
+const detectarTipoImagen = (buffer: Buffer): 'image/jpeg' | 'image/png' | null => {
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+    if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+    return null;
+};
 
 // Fecha de BD (columna DATE) a "YYYY-MM-DD" como la espera ZKBio
 const toIsoDate = (fecha?: Date | null): string | null => (fecha ? new Date(fecha).toISOString().slice(0, 10) : null);
@@ -280,5 +298,57 @@ export class EmployeeBiometricsService {
             personId: registro.personId,
             estatus: registro.estatus,
         };
+    }
+
+    // Sube la foto del rostro del empleado a ZKBio (el empleado ya debe estar dado de alta). La foto no se guarda en TalentCore.
+    async uploadFace(activeUser: ActiveUserDto, companyId: number, employeeId: number, foto?: BiometricPhotoUpload) {
+        const idTenant = this.getTenantOrThrow(activeUser);
+        await this.getEmployeeOrThrow(idTenant, companyId, employeeId);
+
+        const registro = await this.prisma.empleadosBiometricos.findFirst({
+            where: { idEmpleado: employeeId, idEmpresa: companyId, idTenant },
+        });
+        if (!registro?.personId) throw new BadRequestException('Primero da de alta al empleado en el biométrico.');
+
+        if (!foto?.buffer?.length) throw new BadRequestException('Selecciona una foto del rostro.');
+        if (foto.size > MAX_FOTO_ROSTRO_BYTES) throw new BadRequestException('La foto no debe pesar más de 5 MB.');
+        const tipo = detectarTipoImagen(foto.buffer);
+        if (!tipo) throw new BadRequestException('La foto debe ser una imagen JPG o PNG.');
+
+        const provider = await this.getBiometricProvider(activeUser, companyId);
+        try {
+            await provider.uploadBiometricFace(companyId, registro.personId, {
+                buffer: foto.buffer,
+                mimetype: tipo,
+                filename: `rostro-${registro.externalId}.${tipo === 'image/png' ? 'png' : 'jpg'}`,
+            });
+        } catch (error) {
+            // 422 de ZKBio (FaceNotDetected, InvalidBiometricData): se agrega cómo tomar una mejor foto
+            if (error instanceof UnprocessableEntityException) {
+                throw new UnprocessableEntityException(`${error.message} — Usa una foto de frente, con buena luz y sin lentes oscuros ni gorra.`);
+            }
+            throw error;
+        }
+
+        const ahora = new Date();
+        await this.prisma.$transaction(async (tx) => {
+            await tx.empleadosBiometricos.update({
+                where: { idEmpleadoBiometrico: registro.idEmpleadoBiometrico },
+                data: { fechaRostro: ahora },
+            });
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'UPDATE',
+                    tablaOrigen: 'EmpleadosBiometricos',
+                    idRegistro: String(registro.idEmpleadoBiometrico),
+                    descripcion: `Rostro del empleado #${employeeId} (${registro.externalId}) ${registro.fechaRostro ? 'actualizado' : 'registrado'} en el biométrico ZKBio por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: ahora,
+                },
+            });
+        });
+
+        return { message: 'Rostro registrado en el biométrico.', fechaRostro: ahora };
     }
 }
