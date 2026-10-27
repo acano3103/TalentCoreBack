@@ -664,27 +664,27 @@ export class CatalogsSeedService implements OnModuleInit {
     private async seedTiposMovimiento() {
         const tipos = [
             // idModuloFlujo = 1 (Incidencias y Permisos)
-            { idModuloFlujo: 1, codigo: 'VACACIONES', nombre: 'Solicitud de Vacaciones', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'PERMISO_CON_GOCE', nombre: 'Permiso con Goce de Sueldo', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'PERMISO_SIN_GOCE', nombre: 'Permiso sin Goce de Sueldo', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'INCAPACIDAD_MEDICA', nombre: 'Incapacidad Médica (IMSS/Certificado)', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'PERMUTA_TURNO', nombre: 'Permuta o Cambio de Turno', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'DIAS_ECONOMICOS', nombre: 'Días Económicos / Personales', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'HOMEOFFICE_TEMPORAL', nombre: 'Permiso de Trabajo Remoto (Home Office)', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'HORAS_EXTRAS', nombre: 'Autorización de Tiempo Extra', activo: 1 },
+            { idTipoMovimiento: 1, idModuloFlujo: 1, codigo: 'VACACIONES', nombre: 'Solicitud de Vacaciones', activo: 1 },
+            { idTipoMovimiento: 2, idModuloFlujo: 1, codigo: 'PERMISO_CON_GOCE', nombre: 'Permiso con Goce de Sueldo', activo: 1 },
+            { idTipoMovimiento: 3, idModuloFlujo: 1, codigo: 'PERMISO_SIN_GOCE', nombre: 'Permiso sin Goce de Sueldo', activo: 1 },
+            { idTipoMovimiento: 4, idModuloFlujo: 1, codigo: 'INCAPACIDAD_MEDICA', nombre: 'Incapacidad Médica (IMSS/Certificado)', activo: 1 },
+            { idTipoMovimiento: 5, idModuloFlujo: 1, codigo: 'PERMUTA_TURNO', nombre: 'Permuta o Cambio de Turno', activo: 1 },
+            { idTipoMovimiento: 6, idModuloFlujo: 1, codigo: 'DIAS_ECONOMICOS', nombre: 'Días Económicos / Personales', activo: 1 },
+            { idTipoMovimiento: 7, idModuloFlujo: 1, codigo: 'HOMEOFFICE_TEMPORAL', nombre: 'Permiso de Trabajo Remoto (Home Office)', activo: 1 },
+            { idTipoMovimiento: 8, idModuloFlujo: 1, codigo: 'HORAS_EXTRAS', nombre: 'Autorización de Tiempo Extra', activo: 1 },
 
             // idModuloFlujo = 2 (Movimientos de Personal)
-            { idModuloFlujo: 2, codigo: 'PROMOCION', nombre: 'Promoción', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'CAMBIO_AREA', nombre: 'Cambio de Área', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'AJUSTE_SALARIAL', nombre: 'Ajuste Salarial', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'REUBICACION_GEOGRAFICA', nombre: 'Reubicación Geográfica', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'BAJA_PERSONAL', nombre: 'Baja de Personal', activo: 1 },
+            { idTipoMovimiento: 9, idModuloFlujo: 2, codigo: 'PROMOCION', nombre: 'Promoción', activo: 1 },
+            { idTipoMovimiento: 10, idModuloFlujo: 2, codigo: 'CAMBIO_AREA', nombre: 'Cambio de Área', activo: 1 },
+            { idTipoMovimiento: 11, idModuloFlujo: 2, codigo: 'AJUSTE_SALARIAL', nombre: 'Ajuste Salarial', activo: 1 },
+            { idTipoMovimiento: 12, idModuloFlujo: 2, codigo: 'REUBICACION_GEOGRAFICA', nombre: 'Reubicación Geográfica', activo: 1 },
+            { idTipoMovimiento: 13, idModuloFlujo: 2, codigo: 'BAJA_PERSONAL', nombre: 'Baja de Personal', activo: 1 },
         ];
 
         for (const tipo of tipos) {
             await this.prisma.$queryRaw`
-                INSERT INTO CatTipoMovimiento (idModuloFlujo, codigo, nombre, activo)
-                VALUES (${tipo.idModuloFlujo}, ${tipo.codigo}, ${tipo.nombre}, ${tipo.activo})
+                INSERT INTO CatTipoMovimiento (idTipoMovimiento, idModuloFlujo, codigo, nombre, activo)
+                VALUES (${tipo.idTipoMovimiento}, ${tipo.idModuloFlujo}, ${tipo.codigo}, ${tipo.nombre}, ${tipo.activo})
                 ON DUPLICATE KEY UPDATE 
                     nombre = VALUES(nombre),
                     activo = VALUES(activo);
