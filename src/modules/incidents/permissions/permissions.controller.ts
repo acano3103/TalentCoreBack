@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -16,9 +16,9 @@ export class PermissionsController {
 
   // Obtiene el balance de permisos de un empleado
   @Get('balance/:employeeId')
-  @ApiOperation({ summary: 'Obtener saldo de permisos', description: 'Obtiene el balance de permisos de un empleado' })
-  @ApiResponse({ status: 200, description: 'Saldo de permisos del empleado' })
-  @ApiResponse({ status: 404, description: 'Empleado no encontrado' })
+  @ApiOperation({ summary: 'Get permissions balance', description: 'Get an employee permissions balance.' })
+  @ApiResponse({ status: 200, description: 'Employee permissions balance retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Employee not found.' })
   getEmployeesPermissionBalance(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
@@ -29,11 +29,12 @@ export class PermissionsController {
 
   // Crear solicitud de permiso
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('archivo'))
-  @ApiOperation({ summary: 'Crear solicitud de permiso', description: 'Crea una solicitud de permiso para un empleado' })
-  @ApiResponse({ status: 201, description: 'Solicitud de permiso creada correctamente', })
-  @ApiResponse({ status: 400, description: 'Datos de la solicitud inválidos', })
-  @ApiResponse({ status: 404, description: 'Empleado no encontrado', })
+  @ApiOperation({ summary: 'Create permission request', description: 'Registers a new permission incident for the employee or their subordinate.' })
+  @ApiResponse({ status: 201, description: 'Permission request created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad Request. Validation or business rule errors.' })
+  @ApiResponse({ status: 404, description: 'Target or requester employee not found.' })
   createPermission(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
@@ -46,11 +47,11 @@ export class PermissionsController {
   // Subir comprobante de un permiso
   @Patch(':idSolicitud/attachment')
   @UseInterceptors(FileInterceptor('archivo', { limits: { fileSize: 10 * 1024 * 1024, } }))
-  @ApiOperation({ summary: 'Subir comprobante de un permiso', description: 'Adjunta un comprobante a una solicitud de permiso existente.' })
+  @ApiOperation({ summary: 'Upload permission attachment', description: 'Uploads a proof document to an existing permission request.' })
   @ApiConsumes('multipart/form-data')
-  @ApiResponse({ status: 200, description: 'Comprobante guardado correctamente.' })
-  @ApiResponse({ status: 400, description: 'Archivo inválido o plazo de carga vencido.' })
-  @ApiResponse({ status: 404, description: 'Solicitud no encontrada.' })
+  @ApiResponse({ status: 200, description: 'Attachment uploaded successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid file or upload deadline expired.' })
+  @ApiResponse({ status: 404, description: 'Permission request not found.' })
   async uploadPermissionAttachment(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,

@@ -27,7 +27,9 @@ export class IncapacitiesService {
         }
 
         if (archivo && archivo.size > 10 * 1024 * 1024) {
-            throw new BadRequestException('El archivo no debe exceder los 10 MB.');
+            throw new BadRequestException(
+                'El archivo no debe exceder los 10 MB.',
+            );
         }
 
         if (
@@ -64,14 +66,15 @@ export class IncapacitiesService {
             );
         }
 
-        // 3. Obtener balance, configuración y horario del empleado.
-        const balanceData = await this.permissionsService.getEmployeeBalance(
-            activeUser,
-            companyId,
-            dto.idEmpleado,
-        );
+        // 3. Obtener balance y configuración del empleado.
+        const balanceData =
+            await this.permissionsService.getEmployeeBalance(
+                activeUser,
+                companyId,
+                dto.idEmpleado,
+            );
 
-        const { constraints, schedule } = balanceData;
+        const { constraints } = balanceData;
 
         // 4. Validar el comprobante según la configuración.
         const comprobanteObligatorio =
@@ -91,7 +94,9 @@ export class IncapacitiesService {
                 );
             }
 
-            const date = new Date(`${value}T00:00:00.000Z`);
+            const date = new Date(
+                `${value}T00:00:00.000Z`,
+            );
 
             if (
                 Number.isNaN(date.getTime()) ||
@@ -114,37 +119,52 @@ export class IncapacitiesService {
             );
         }
 
-        // 6. Calcular días laborales usando el horario del empleado.
-        const workingDays = new Set<number>(
-            (schedule?.workingDays ?? []).map(Number),
-        );
+        // 6. RESPETAR EL TOTAL DE DÍAS CALCULADO EN EL FRONTEND.
+        //
+        // El frontend es quien determina si se cuentan:
+        // - únicamente los días laborales, o
+        // - todos los días corridos incluyendo días de descanso.
+        //
+        // Por lo tanto, el backend NO vuelve a calcular los días
+        // utilizando workingDays.
+        const totalDiasLaborales = Number(dto.totalDiasLaborales);
 
-        if (workingDays.size === 0) {
-            throw new BadRequestException(
-                'El empleado no tiene días laborales configurados.',
-            );
-        }
-
-        let totalDiasLaborales = 0;
-
-        for (
-            let current = new Date(startDate);
-            current <= endDate;
-            current.setUTCDate(current.getUTCDate() + 1)
+        if (
+            !Number.isInteger(totalDiasLaborales) ||
+            totalDiasLaborales < 1
         ) {
-            if (workingDays.has(current.getUTCDay())) {
-                totalDiasLaborales++;
-            }
-        }
-
-        if (totalDiasLaborales < 1) {
             throw new BadRequestException(
-                'El rango seleccionado no contiene días laborables.',
+                'El total de días de la incapacidad debe ser un número entero mayor a cero.',
             );
         }
 
-        // 7. Validar el tipo de incapacidad.
-        const tipoIncapacidad = String(dto.tipoIncapacidad ?? '')
+        // 7. Validar que el total recibido sea razonable respecto al rango.
+        //
+        // Como el frontend puede enviar:
+        // - días laborales, o
+        // - días corridos,
+        //
+        // el máximo permitido siempre será la cantidad de días
+        // calendario existentes entre fechaInicio y fechaFin.
+        const diferenciaMilisegundos =
+            endDate.getTime() - startDate.getTime();
+
+        const diasCalendario =
+            Math.floor(
+                diferenciaMilisegundos /
+                (1000 * 60 * 60 * 24),
+            ) + 1;
+
+        if (totalDiasLaborales > diasCalendario) {
+            throw new BadRequestException(
+                'El total de días de la incapacidad no puede ser mayor al número de días del periodo seleccionado.',
+            );
+        }
+
+        // 8. Validar el tipo de incapacidad.
+        const tipoIncapacidad = String(
+            dto.tipoIncapacidad ?? '',
+        )
             .trim()
             .toUpperCase()
             .replace(/[\s-]+/g, '_');
@@ -157,13 +177,17 @@ export class IncapacitiesService {
             'OTRO',
         ];
 
-        if (!tiposIncapacidadPermitidos.includes(tipoIncapacidad)) {
+        if (
+            !tiposIncapacidadPermitidos.includes(
+                tipoIncapacidad,
+            )
+        ) {
             throw new BadRequestException(
                 `El tipo de incapacidad "${dto.tipoIncapacidad}" no es válido.`,
             );
         }
 
-        // 8. Buscar el tipo de movimiento.
+        // 9. Buscar el tipo de movimiento.
         const tipoMovimiento =
             await this.prisma.catTipoMovimiento.findFirst({
                 where: {
@@ -183,7 +207,7 @@ export class IncapacitiesService {
             );
         }
 
-        // 9. Crear la solicitud general y su detalle en una transacción.
+        // 10. Crear la solicitud general y su detalle en una transacción.
         const solicitud = await this.prisma.$transaction(
             async (tx) => {
                 const nuevaSolicitud =
@@ -198,23 +222,34 @@ export class IncapacitiesService {
                                 requesterEmployee.idEmpleado,
                             fechaInicio: startDate,
                             fechaFin: endDate,
+
+                            // IMPORTANTE:
+                            // Se guarda exactamente el valor
+                            // calculado por el frontend.
                             totalDiasLaborales,
+
                             estatus: 'PENDIENTE',
-                            comentarios: dto.observaciones?.trim() || null,
+                            comentarios:
+                                dto.observaciones?.trim() ||
+                                null,
                         },
                     });
 
                 await tx.solicitudesIncapacidadesDetalle.create({
                     data: {
-                        idSolicitud: nuevaSolicitud.idSolicitud,
+                        idSolicitud:
+                            nuevaSolicitud.idSolicitud,
                         tipoIncapacidad,
                         numeroCertificado:
-                            dto.numeroCertificado?.trim() || null,
+                            dto.numeroCertificado?.trim() ||
+                            null,
                         institucionMedica:
-                            dto.institucionMedica?.trim() || null,
+                            dto.institucionMedica?.trim() ||
+                            null,
                         observaciones:
                             dto.observaciones?.trim() || null,
-                        solicitadoPorLider: dto.solicitadoPorLider,
+                        solicitadoPorLider:
+                            dto.solicitadoPorLider,
                     },
                 });
 
@@ -222,13 +257,15 @@ export class IncapacitiesService {
             },
         );
 
-        // 10. Guardar el archivo físico y sus metadatos.
-        // La tabla de archivos es compartida por las incidencias.
+        // 11. Guardar el archivo físico y sus metadatos.
         const rutasArchivosGuardados: string[] = [];
 
         try {
             if (archivo) {
-                if (!archivo.buffer || archivo.buffer.length === 0) {
+                if (
+                    !archivo.buffer ||
+                    archivo.buffer.length === 0
+                ) {
                     throw new BadRequestException(
                         'El archivo recibido no contiene datos.',
                     );
@@ -261,7 +298,8 @@ export class IncapacitiesService {
                             archivoGuardado.nombreAlmacenado,
                         rutaRelativa:
                             archivoGuardado.rutaRelativa,
-                        mimeType: archivoGuardado.mimeType,
+                        mimeType:
+                            archivoGuardado.mimeType,
                         tamanoBytes: BigInt(
                             archivoGuardado.tamanoBytes,
                         ),
@@ -271,19 +309,21 @@ export class IncapacitiesService {
             }
         } catch (error) {
             // Si falla el guardado, intentamos eliminar los archivos físicos.
-
             await Promise.all(
-                rutasArchivosGuardados.map(async (ruta) => {
-                    try {
-                        await this.mediaPathService.deleteFile(ruta);
-                    } catch {
-                        // Conservamos el error original.
-                    }
-                }),
+                rutasArchivosGuardados.map(
+                    async (ruta) => {
+                        try {
+                            await this.mediaPathService.deleteFile(
+                                ruta,
+                            );
+                        } catch {
+                            // Conservamos el error original.
+                        }
+                    },
+                ),
             );
 
             // Eliminar los registros de la solicitud incompleta.
-
             await this.prisma.$transaction(async (tx) => {
                 await tx.archivosSolicitudes.deleteMany({
                     where: {
@@ -294,15 +334,19 @@ export class IncapacitiesService {
                     },
                 });
 
-                await tx.solicitudesIncapacidadesDetalle.deleteMany({
-                    where: {
-                        idSolicitud: solicitud.idSolicitud,
+                await tx.solicitudesIncapacidadesDetalle.deleteMany(
+                    {
+                        where: {
+                            idSolicitud:
+                                solicitud.idSolicitud,
+                        },
                     },
-                });
+                );
 
                 await tx.solicitudesIncidencias.delete({
                     where: {
-                        idSolicitud: solicitud.idSolicitud,
+                        idSolicitud:
+                            solicitud.idSolicitud,
                     },
                 });
             });
@@ -319,7 +363,7 @@ export class IncapacitiesService {
             );
         }
 
-        // 11. Consultar los archivos asociados a la solicitud.
+        // 12. Consultar los archivos asociados a la solicitud.
         const archivos =
             await this.prisma.archivosSolicitudes.findMany({
                 where: {
@@ -338,7 +382,8 @@ export class IncapacitiesService {
                     fechaRegistro: true,
                 },
             });
-        // Aprobar la solicitud automaticamente si no tiene flujo de aprobación
+
+        // Aprobar la solicitud automaticamente si no tiene flujo de aprobación.
         await this.approvalsService.aprobarAutomaticamenteSinFlujoAprobacion(
             activeUser.idTenant,
             companyId,
@@ -346,22 +391,33 @@ export class IncapacitiesService {
             solicitud.idSolicitud,
         );
 
-        // 12. Respuesta.
-        // El flujo de aprobaciones se mantiene fuera de este método.
+        // 13. Respuesta.
         return {
-            message: 'Solicitud de incapacidad registrada con éxito.',
+            message:
+                'Solicitud de incapacidad registrada con éxito.',
+
             data: {
                 ...solicitud,
+
+                // Se devuelve exactamente el valor recibido
+                // desde el frontend.
                 totalDiasLaborales,
+
                 tipoIncapacidad,
+
                 numeroCertificado:
                     dto.numeroCertificado?.trim() || null,
+
                 institucionMedica:
                     dto.institucionMedica?.trim() || null,
-                solicitadoPorLider: dto.solicitadoPorLider,
+
+                solicitadoPorLider:
+                    dto.solicitadoPorLider,
+
                 archivos: archivos.map((item) => ({
                     ...item,
-                    tamanoBytes: item.tamanoBytes.toString(),
+                    tamanoBytes:
+                        item.tamanoBytes.toString(),
                 })),
             },
         };

@@ -28,6 +28,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedPositionTypes(); /** CatTipoPuesto */
             await this.seedPublicationTypes(); /** CatTiposPublicacion */
             await this.seedEducationLevels(); /** CatEscolaridad */
+            await this.seedMaritalStatus(); /** CatEstadoCivil */
             // await this.seedSalaryLevels(); /** CatNivelesSalario */
             await this.seedTiposUbicacion(); /** CatTiposUbicacion */
             await this.seedEstatusSolicitudPuesto(); /** CatEstatusSolicitudPuesto */
@@ -488,6 +489,28 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.prisma.$queryRaw`
             INSERT INTO CatEscolaridad (idNivelEstudios, Descripcion, Activo)
             VALUES (${nivel.id}, ${nivel.descripcion}, ${nivel.activo})
+            ON DUPLICATE KEY UPDATE 
+                Descripcion = VALUES(Descripcion),
+                Activo = VALUES(Activo);
+        `;
+        }
+    }
+
+    // Seeds initial marital status into the database.
+    private async seedMaritalStatus() {
+        const estadosCiviles = [
+            { id: 1, descripcion: 'SOLTERO(A)', activo: 1 },
+            { id: 2, descripcion: 'CASADO(A)', activo: 1 },
+            { id: 3, descripcion: 'UNIÓN LIBRE', activo: 1 },
+            { id: 4, descripcion: 'DIVORCIADO(A)', activo: 1 },
+            { id: 5, descripcion: 'VIUDO(A)', activo: 1 },
+            { id: 6, descripcion: 'SEPARADO(A)', activo: 1 },
+        ];
+
+        for (const estadoCivil of estadosCiviles) {
+            await this.prisma.$queryRaw`
+            INSERT INTO CatEstadoCivil (idEstadoCivil, Descripcion, Activo)
+            VALUES (${estadoCivil.id}, ${estadoCivil.descripcion}, ${estadoCivil.activo})
             ON DUPLICATE KEY UPDATE 
                 Descripcion = VALUES(Descripcion),
                 Activo = VALUES(Activo);
