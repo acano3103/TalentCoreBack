@@ -8,6 +8,11 @@ import { ApprovalsModule } from 'src/modules/approvals/approvals.module';
 @Module({
   controllers: [IncapacitiesController],
   providers: [IncapacitiesService],
-  imports: [MediaPathModule, PermissionsModule, forwardRef(() => ApprovalsModule),]
+  imports: [
+    MediaPathModule,
+    PermissionsModule,
+    forwardRef(() => ApprovalsModule),
+  ],
+  exports: [IncapacitiesService],
 })
 export class IncapacitiesModule { }

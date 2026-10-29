@@ -1,4 +1,4 @@
-import { Body, Controller, Param, ParseIntPipe, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Param, ParseIntPipe, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { IncapacitiesService } from './incapacities.service';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -16,11 +16,12 @@ export class IncapacitiesController {
 
   // Crear solicitud de incapacidad
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('archivo'))
-  @ApiOperation({ summary: 'Crear solicitud de incapacidad', description: 'Crea una solicitud de incapacidad para un empleado.' })
-  @ApiResponse({ status: 201, description: 'Solicitud de incapacidad creada correctamente.' })
-  @ApiResponse({ status: 400, description: 'Datos de la solicitud inválidos.' })
-  @ApiResponse({ status: 404, description: 'Empleado o tipo de movimiento no encontrado.' })
+  @ApiOperation({ summary: 'Create an incapacity request', description: 'Creates an incapacity request for an employee.' })
+  @ApiResponse({ status: 201, description: 'Incapacity request created successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid request data.' })
+  @ApiResponse({ status: 404, description: 'Employee or movement type not found.' })
   createIncapacity(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,

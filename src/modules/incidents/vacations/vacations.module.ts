@@ -14,5 +14,6 @@ import { ApprovalsModule } from 'src/modules/approvals/approvals.module';
     PersonnelConfigModule,
     forwardRef(() => ApprovalsModule),
   ],
+  exports: [VacationsService]
 })
 export class VacationsModule { }

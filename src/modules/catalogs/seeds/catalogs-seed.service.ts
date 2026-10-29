@@ -28,6 +28,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedPositionTypes(); /** CatTipoPuesto */
             await this.seedPublicationTypes(); /** CatTiposPublicacion */
             await this.seedEducationLevels(); /** CatEscolaridad */
+            await this.seedMaritalStatus(); /** CatEstadoCivil */
             // await this.seedSalaryLevels(); /** CatNivelesSalario */
             await this.seedTiposUbicacion(); /** CatTiposUbicacion */
             await this.seedEstatusSolicitudPuesto(); /** CatEstatusSolicitudPuesto */
@@ -495,6 +496,28 @@ export class CatalogsSeedService implements OnModuleInit {
         }
     }
 
+    // Seeds initial marital status into the database.
+    private async seedMaritalStatus() {
+        const estadosCiviles = [
+            { id: 1, descripcion: 'SOLTERO(A)', activo: 1 },
+            { id: 2, descripcion: 'CASADO(A)', activo: 1 },
+            { id: 3, descripcion: 'UNIÓN LIBRE', activo: 1 },
+            { id: 4, descripcion: 'DIVORCIADO(A)', activo: 1 },
+            { id: 5, descripcion: 'VIUDO(A)', activo: 1 },
+            { id: 6, descripcion: 'SEPARADO(A)', activo: 1 },
+        ];
+
+        for (const estadoCivil of estadosCiviles) {
+            await this.prisma.$queryRaw`
+            INSERT INTO CatEstadoCivil (idEstadoCivil, Descripcion, Activo)
+            VALUES (${estadoCivil.id}, ${estadoCivil.descripcion}, ${estadoCivil.activo})
+            ON DUPLICATE KEY UPDATE 
+                Descripcion = VALUES(Descripcion),
+                Activo = VALUES(Activo);
+        `;
+        }
+    }
+
     // Seeds initial salary levels into the database.
     // private async seedSalaryLevels() {
     //     const nivelesSalario = [
@@ -664,27 +687,27 @@ export class CatalogsSeedService implements OnModuleInit {
     private async seedTiposMovimiento() {
         const tipos = [
             // idModuloFlujo = 1 (Incidencias y Permisos)
-            { idModuloFlujo: 1, codigo: 'VACACIONES', nombre: 'Solicitud de Vacaciones', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'PERMISO_CON_GOCE', nombre: 'Permiso con Goce de Sueldo', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'PERMISO_SIN_GOCE', nombre: 'Permiso sin Goce de Sueldo', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'INCAPACIDAD_MEDICA', nombre: 'Incapacidad Médica (IMSS/Certificado)', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'PERMUTA_TURNO', nombre: 'Permuta o Cambio de Turno', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'DIAS_ECONOMICOS', nombre: 'Días Económicos / Personales', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'HOMEOFFICE_TEMPORAL', nombre: 'Permiso de Trabajo Remoto (Home Office)', activo: 1 },
-            { idModuloFlujo: 1, codigo: 'HORAS_EXTRAS', nombre: 'Autorización de Tiempo Extra', activo: 1 },
+            { idTipoMovimiento: 1, idModuloFlujo: 1, codigo: 'VACACIONES', nombre: 'Solicitud de Vacaciones', activo: 1 },
+            { idTipoMovimiento: 2, idModuloFlujo: 1, codigo: 'PERMISO_CON_GOCE', nombre: 'Permiso con Goce de Sueldo', activo: 1 },
+            { idTipoMovimiento: 3, idModuloFlujo: 1, codigo: 'PERMISO_SIN_GOCE', nombre: 'Permiso sin Goce de Sueldo', activo: 1 },
+            { idTipoMovimiento: 4, idModuloFlujo: 1, codigo: 'INCAPACIDAD_MEDICA', nombre: 'Incapacidad Médica (IMSS/Certificado)', activo: 1 },
+            { idTipoMovimiento: 5, idModuloFlujo: 1, codigo: 'PERMUTA_TURNO', nombre: 'Permuta o Cambio de Turno', activo: 1 },
+            { idTipoMovimiento: 6, idModuloFlujo: 1, codigo: 'DIAS_ECONOMICOS', nombre: 'Días Económicos / Personales', activo: 1 },
+            { idTipoMovimiento: 7, idModuloFlujo: 1, codigo: 'HOMEOFFICE_TEMPORAL', nombre: 'Permiso de Trabajo Remoto (Home Office)', activo: 1 },
+            { idTipoMovimiento: 8, idModuloFlujo: 1, codigo: 'HORAS_EXTRAS', nombre: 'Autorización de Tiempo Extra', activo: 1 },
 
             // idModuloFlujo = 2 (Movimientos de Personal)
-            { idModuloFlujo: 2, codigo: 'PROMOCION', nombre: 'Promoción', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'CAMBIO_AREA', nombre: 'Cambio de Área', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'AJUSTE_SALARIAL', nombre: 'Ajuste Salarial', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'REUBICACION_GEOGRAFICA', nombre: 'Reubicación Geográfica', activo: 1 },
-            { idModuloFlujo: 2, codigo: 'BAJA_PERSONAL', nombre: 'Baja de Personal', activo: 1 },
+            { idTipoMovimiento: 9, idModuloFlujo: 2, codigo: 'PROMOCION', nombre: 'Promoción', activo: 1 },
+            { idTipoMovimiento: 10, idModuloFlujo: 2, codigo: 'CAMBIO_AREA', nombre: 'Cambio de Área', activo: 1 },
+            { idTipoMovimiento: 11, idModuloFlujo: 2, codigo: 'AJUSTE_SALARIAL', nombre: 'Ajuste Salarial', activo: 1 },
+            { idTipoMovimiento: 12, idModuloFlujo: 2, codigo: 'REUBICACION_GEOGRAFICA', nombre: 'Reubicación Geográfica', activo: 1 },
+            { idTipoMovimiento: 13, idModuloFlujo: 2, codigo: 'BAJA_PERSONAL', nombre: 'Baja de Personal', activo: 1 },
         ];
 
         for (const tipo of tipos) {
             await this.prisma.$queryRaw`
-                INSERT INTO CatTipoMovimiento (idModuloFlujo, codigo, nombre, activo)
-                VALUES (${tipo.idModuloFlujo}, ${tipo.codigo}, ${tipo.nombre}, ${tipo.activo})
+                INSERT INTO CatTipoMovimiento (idTipoMovimiento, idModuloFlujo, codigo, nombre, activo)
+                VALUES (${tipo.idTipoMovimiento}, ${tipo.idModuloFlujo}, ${tipo.codigo}, ${tipo.nombre}, ${tipo.activo})
                 ON DUPLICATE KEY UPDATE 
                     nombre = VALUES(nombre),
                     activo = VALUES(activo);

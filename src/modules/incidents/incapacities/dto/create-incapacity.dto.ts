@@ -34,6 +34,10 @@ export class CreateIncapacityDto {
     @IsString()
     fechaFin: string;
 
+    @IsInt()
+    @Min(1)
+    totalDiasLaborales: number;
+
     @IsOptional()
     @IsString()
     @MaxLength(100)

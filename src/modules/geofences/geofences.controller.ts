@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -16,7 +16,7 @@ export class GeofencesController {
 
     // Obtiene todas las geocercas de una empresa
     @Get()
-    @ApiOperation({ summary: 'Get all geofences', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiOperation({ summary: 'Get all geofences', description: 'Retrieves all geofences for a company.' })
     @ApiResponse({ status: 200, description: 'Geofences obtained successfully' })
     @ApiResponse({ status: 404, description: 'Geofences not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
@@ -29,9 +29,9 @@ export class GeofencesController {
 
     // Crea una nueva geocerca
     @Post()
-    @ApiOperation({ summary: 'Create geofence', description: SWAGGER_AUTH_DESCRIPTION })
-    @ApiResponse({ status: 200, description: 'Cost center created successfully' })
-    @ApiResponse({ status: 404, description: 'Cost center not found' })
+    @ApiOperation({ summary: 'Create geofence', description: 'Creates a complete geofence for a company.' })
+    @ApiResponse({ status: 200, description: 'Geofence created successfully' })
+    @ApiResponse({ status: 404, description: 'Geofence not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
     async create(
         @GetActiveUser() user: ActiveUserDto,
@@ -39,5 +39,34 @@ export class GeofencesController {
         @Body() createGeofenceDto: CreateGeofenceDto,
     ) {
         return await this.geofenceService.create(user, companyId, createGeofenceDto);
+    }
+
+    // Actualiza una geocerca
+    @Patch(':geofenceId')
+    @ApiOperation({ summary: 'Update geofence', description: 'Updates an existing geofence and synchronizes its polygon vertices.', })
+    @ApiResponse({ status: 200, description: 'Geofence updated successfully', })
+    @ApiResponse({ status: 404, description: 'Geofence not found or does not belong to the company', })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid', })
+    async update(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('geofenceId', ParseIntPipe) geofenceId: number,
+        @Body() updateGeofenceDto: CreateGeofenceDto,
+    ) {
+        return await this.geofenceService.update(user, companyId, geofenceId, updateGeofenceDto);
+    }
+
+    // Elimina una geocerca
+    @Delete(':geofenceId')
+    @ApiOperation({ summary: 'Delete geofence', description: 'Deletes a complete geofence by ID.' })
+    @ApiResponse({ status: 200, description: 'Geofence deleted successfully' })
+    @ApiResponse({ status: 404, description: 'Geofence not found' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    async delete(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('geofenceId', ParseIntPipe) geofenceId: number,
+    ) {
+        return await this.geofenceService.delete(user, companyId, geofenceId);
     }
 }
