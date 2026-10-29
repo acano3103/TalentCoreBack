@@ -364,7 +364,7 @@ export class EmployeeBiometricsService {
         });
         if (!registro?.personId) throw new BadRequestException('Primero da de alta al empleado en el biométrico.');
 
-        // ZKBio solo permite una huella de coacción por persona (la nueva reemplaza a la anterior)
+        // ZKBio solo permite una huella de coacción por persona
         const dedosCoaccion = new Set(dto.fingerprints.filter((f) => f.isDuress).map((f) => f.fingerIndex));
         if (dedosCoaccion.size > 1) throw new BadRequestException('Solo se permite una huella de coacción por persona.');
 
@@ -377,10 +377,9 @@ export class EmployeeBiometricsService {
 
         // La misma plantilla repetida no aporta nada (por ejemplo, un doble clic al capturar)
         const unicas = [...new Map(huellas.map((h) => [`${h.fingerIndex}|${h.formatVersion}|${h.templateBase64}`, h])).values()];
-        const dedosEnviados = [...new Set(unicas.map((h) => h.fingerIndex))].sort((a, b) => a - b);
-        // ZKBio agrega o reemplaza por fingerIndex, así que el registro queda con los dedos que ya tenía más los enviados
-        const anteriores = Array.isArray(registro.huellasDedos) ? (registro.huellasDedos as unknown[]).filter((d): d is number => typeof d === 'number') : [];
-        const dedos = [...new Set([...anteriores, ...dedosEnviados])].sort((a, b) => a - b);
+        // Probado contra ZKBio: cada PUT reemplaza TODAS las huellas de la persona por las enviadas,
+        // así que el registro queda solo con los dedos de este envío
+        const dedos = [...new Set(unicas.map((h) => h.fingerIndex))].sort((a, b) => a - b);
 
         const provider = await this.getBiometricProvider(activeUser, companyId);
         try {
@@ -406,7 +405,7 @@ export class EmployeeBiometricsService {
                     accion: 'UPDATE',
                     tablaOrigen: 'EmpleadosBiometricos',
                     idRegistro: String(registro.idEmpleadoBiometrico),
-                    descripcion: `Huellas del empleado #${employeeId} (${registro.externalId}) enviadas al biométrico ZKBio (dedos ${dedosEnviados.join(', ')}) por ${activeUser.first_name} ${activeUser.last_name}`,
+                    descripcion: `Huellas del empleado #${employeeId} (${registro.externalId}) enviadas al biométrico ZKBio (dedos ${dedos.join(', ')}; reemplazan a las anteriores) por ${activeUser.first_name} ${activeUser.last_name}`,
                     fechaCreacion: ahora,
                 },
             });
