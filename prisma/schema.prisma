@@ -2664,13 +2664,6 @@ enum RelEmpleadosDidsExcepciones_TipoExcepcion {
   EXTRA
 }
 
-enum RelEmpleadosSites_MetodoAsistencia {
-  IVR
-  BIOMETRICO
-  APP_MOVIL
-  CUALQUIERA
-}
-
 enum RegistrosAsistencia_canal {
   APP_MOVIL
   IVR
@@ -2855,4 +2848,12 @@ enum PasosAprobacionMovimientoInterno_estatus {
   PENDIENTE
   APROBADA
   RECHAZADA
+}
+
+enum RelEmpleadosSites_MetodoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
+  NFC
+  CUALQUIERA
 }

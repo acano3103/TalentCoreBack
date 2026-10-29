@@ -22,13 +22,13 @@ export class AttendanceSiteItemDto {
 
     @ApiPropertyOptional({
         example: 'IVR',
-        enum: ['IVR', 'BIOMETRICO', 'APP_MOVIL'],
+        enum: ['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC'],
         nullable: true,
         description: 'Mecanismo de asistencia asignado en esta sede',
     })
     @IsOptional()
-    @IsIn(['IVR', 'BIOMETRICO', 'APP_MOVIL', null])
-    metodoAsistencia?: 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | null;
+    @IsIn(['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC', null])
+    metodoAsistencia?: 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | 'NFC' | null;
 }
 
 export class AttendanceDidExceptionItemDto {

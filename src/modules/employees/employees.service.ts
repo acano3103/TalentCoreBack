@@ -28,8 +28,10 @@ export class EmployeesService {
       ep.segundoApellido,
       ep.curp,
       ep.rfc,
+      ep.numeroSeguroSocial,
       ep.correo,
       ep.telefonoMovil,
+      ep.fechaNacimiento,
       ep.fechaIngreso,
       p.idPuesto,
       p.nombrePuesto,
@@ -358,6 +360,7 @@ export class EmployeesService {
     const employeesPromise = this.prisma.$queryRaw`
       SELECT 
         ep.idEmpleado,
+        ep.numeroEmpleado,
         ep.nombre,
         ep.primerApellido,
         ep.segundoApellido,
