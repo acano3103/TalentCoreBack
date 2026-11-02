@@ -5,6 +5,7 @@ import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { ArtemisProvider } from '../integrations/providers/workforce-management/artemis/artemis.provider';
 import { ZkBioCreatePersonRequest } from '../integrations/providers/workforce-management/artemis/interfaces/artemis.interface';
 import { CreateBiometricPersonDto } from './dto/create-biometric-person.dto';
+import { UploadBiometricFingerprintsDto } from './dto/upload-biometric-fingerprints.dto';
 import { buildDepartmentBranch } from './utils/biometric-departments.util';
 
 // Código del catálogo CatIntegracionesProvedores para la integración de biométricos (ZkBio Integration API)
@@ -350,5 +351,66 @@ export class EmployeeBiometricsService {
         });
 
         return { message: 'Rostro registrado en el biométrico.', fechaRostro: ahora };
+    }
+
+    // Envía a ZKBio las huellas capturadas con el lector (el empleado ya debe estar dado de alta).
+    // Las plantillas no se guardan en TalentCore: solo qué dedos se enviaron y cuándo.
+    async uploadFingerprints(activeUser: ActiveUserDto, companyId: number, employeeId: number, dto: UploadBiometricFingerprintsDto) {
+        const idTenant = this.getTenantOrThrow(activeUser);
+        await this.getEmployeeOrThrow(idTenant, companyId, employeeId);
+
+        const registro = await this.prisma.empleadosBiometricos.findFirst({
+            where: { idEmpleado: employeeId, idEmpresa: companyId, idTenant },
+        });
+        if (!registro?.personId) throw new BadRequestException('Primero da de alta al empleado en el biométrico.');
+
+        // ZKBio solo permite una huella de coacción por persona
+        const dedosCoaccion = new Set(dto.fingerprints.filter((f) => f.isDuress).map((f) => f.fingerIndex));
+        if (dedosCoaccion.size > 1) throw new BadRequestException('Solo se permite una huella de coacción por persona.');
+
+        const huellas = dto.fingerprints.map((f) => ({
+            fingerIndex: f.fingerIndex,
+            templateBase64: f.templateBase64.trim(),
+            formatVersion: f.formatVersion.trim(),
+            isDuress: f.isDuress,
+        }));
+
+        // La misma plantilla repetida no aporta nada (por ejemplo, un doble clic al capturar)
+        const unicas = [...new Map(huellas.map((h) => [`${h.fingerIndex}|${h.formatVersion}|${h.templateBase64}`, h])).values()];
+        // Probado contra ZKBio: cada PUT reemplaza TODAS las huellas de la persona por las enviadas,
+        // así que el registro queda solo con los dedos de este envío
+        const dedos = [...new Set(unicas.map((h) => h.fingerIndex))].sort((a, b) => a - b);
+
+        const provider = await this.getBiometricProvider(activeUser, companyId);
+        try {
+            await provider.uploadBiometricFingerprints(companyId, registro.personId, unicas);
+        } catch (error) {
+            // 422 de ZKBio (InvalidBiometricData): la plantilla no sirve, hay que volver a capturar
+            if (error instanceof UnprocessableEntityException) {
+                throw new UnprocessableEntityException(`${error.message} — Vuelve a capturar la huella colocando el dedo completo y firme sobre el lector.`);
+            }
+            throw error;
+        }
+
+        const ahora = new Date();
+        await this.prisma.$transaction(async (tx) => {
+            await tx.empleadosBiometricos.update({
+                where: { idEmpleadoBiometrico: registro.idEmpleadoBiometrico },
+                data: { fechaHuellas: ahora, huellasDedos: dedos },
+            });
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'UPDATE',
+                    tablaOrigen: 'EmpleadosBiometricos',
+                    idRegistro: String(registro.idEmpleadoBiometrico),
+                    descripcion: `Huellas del empleado #${employeeId} (${registro.externalId}) enviadas al biométrico ZKBio (dedos ${dedos.join(', ')}; reemplazan a las anteriores) por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: ahora,
+                },
+            });
+        });
+
+        return { message: 'Huellas registradas en el biométrico.', fechaHuellas: ahora, huellasDedos: dedos };
     }
 }

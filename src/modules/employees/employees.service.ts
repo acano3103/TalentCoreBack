@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeeQueryResult, EmployeeSchedule, SubordinateResponse } from './interfaces/employee.interface';
 import { SaveSalaryDto } from './dto/save-salary.dto';
@@ -7,6 +7,7 @@ import { Prisma } from 'generated/prisma/client';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
+import { UpdateEmployeeGeneralDataDto } from './dto/update-employee-general-data.dto';
 
 @Injectable()
 export class EmployeesService {
@@ -236,13 +237,30 @@ export class EmployeesService {
     };
   }
 
-  // Método que registra el salario del empleado por primera vez
-  async saveSalary(user: ActiveUserDto, companyId: number, employeeId: number, salaryData: SaveSalaryDto) {
+  // Método que registra un nuevo salario para el empleado
+  async saveSalary(
+    user: ActiveUserDto,
+    companyId: number,
+    employeeId: number,
+    salaryData: SaveSalaryDto
+  ) {
     const { idEmpleado, idTipoMoneda, idPeriodicidadPago, salarioBruto, salarioNeto, bono, fechaInicioVigencia } = salaryData;
 
     await this.prisma.$transaction(async (tx) => {
-      // Registramos el salario del empleado en la db
-      const newSalary = await tx.historialSalarios.create({
+
+      // 1. Desactivamos cualquier salario anterior que esté activo
+      await tx.historialSalarios.updateMany({
+        where: {
+          idEmpleado: employeeId,
+          actual: true
+        },
+        data: {
+          actual: false
+        }
+      });
+
+      // 2. Registramos el nuevo salario como activo
+      await tx.historialSalarios.create({
         data: {
           idEmpleado,
           idTipoMoneda,
@@ -255,8 +273,9 @@ export class EmployeesService {
           fechaRegistro: new Date(),
           usuarioRegistro: user.uuid
         }
-      })
-      // Registramos el movimiento en el historico
+      });
+
+      // 3. Registramos el movimiento en el histórico
       await tx.historicoMovimientos.create({
         data: {
           idUsuario: user.id,
@@ -268,9 +287,76 @@ export class EmployeesService {
           fechaCreacion: new Date()
         }
       });
-    })
+
+    });
 
     return { message: 'Salario registrado exitosamente' };
+  }
+
+  // Esta funcion actualiza la información general del empleado
+  async updateEmployee(
+    activeUser: ActiveUserDto,
+    companyId: number,
+    employeeId: number,
+    employeeData: UpdateEmployeeGeneralDataDto,
+  ) {
+    try {
+      // Verificar que el empleado exista y pertenezca a la empresa seleccionada.
+      const employee = await this.prisma.empleados.findFirst({
+        where: { idEmpleado: employeeId, idEmpresa: companyId },
+      });
+
+      if (!employee) throw new NotFoundException('Employee not found in the selected company.');
+
+      // Construir únicamente los campos enviados en el DTO.
+      const data: any = {};
+
+      if (employeeData.nombre !== undefined) data.nombre = employeeData.nombre;
+      if (employeeData.primerApellido !== undefined) data.primerApellido = employeeData.primerApellido;
+      if (employeeData.segundoApellido !== undefined) data.segundoApellido = employeeData.segundoApellido;
+      if (employeeData.correo !== undefined) data.correo = employeeData.correo;
+      if (employeeData.telefonoMovil !== undefined) data.telefonoMovil = employeeData.telefonoMovil;
+      if (employeeData.numeroEmpleado !== undefined) data.numeroEmpleado = employeeData.numeroEmpleado;
+      if (employeeData.idSite !== undefined) data.idSite = employeeData.idSite;
+      if (employeeData.idPuesto !== undefined) data.idPuesto = employeeData.idPuesto;
+      if (employeeData.rfc !== undefined) data.rfc = employeeData.rfc;
+      if (employeeData.numeroSeguroSocial !== undefined) data.numeroSeguroSocial = employeeData.numeroSeguroSocial;
+      if (employeeData.curp !== undefined) data.curp = employeeData.curp;
+      if (employeeData.fechaNacimiento !== undefined) data.fechaNacimiento = new Date(employeeData.fechaNacimiento);
+
+      // Evitar hacer UPDATE vacío.
+      if (Object.keys(data).length === 0) {
+        return {
+          message: 'No changes were provided.',
+          employee,
+        };
+      }
+
+      // Actualizar únicamente los campos enviados.
+      const updatedEmployee = await this.prisma.empleados.update({
+        where: { idEmpleado: employeeId },
+        data,
+      });
+
+      this.logger.log(`Employee ${employeeId} general information updated by user ${activeUser?.id ?? 'unknown'}`);
+
+      return {
+        message: 'Información general del empleado actualizada correctamente.',
+        employee: updatedEmployee,
+      };
+
+    } catch (error: any) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) throw error;
+
+      // Manejar conflictos de UNIQUE KEY.
+      if (error?.code === 'P2002') {
+        this.logger.warn(`Duplicate employee data while updating employee ${employeeId}`);
+        throw new ConflictException('La información introducida del empleado ya existe.');
+      }
+
+      this.logger.error(`Error updating employee ${employeeId}`, error?.stack || error);
+      throw error;
+    }
   }
 
   // Método que obtiene a todos los empleados de la empresa
