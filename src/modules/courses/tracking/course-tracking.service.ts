@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 
 // Cliente de Prisma dentro de una transacción (mismo tipo que recibe el callback de $transaction)
 type TxClient = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
