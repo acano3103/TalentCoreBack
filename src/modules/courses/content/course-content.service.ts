@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
-import { IntegrationsFactory } from '../integrations/providers/factory.service';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
+import { IntegrationsFactory } from '../../integrations/providers/factory.service';
 import { GenerateAiContentDto } from './dto/generate-ai-content.dto';
 import { UpdateContentConfigDto } from './dto/update-content-config.dto';
 import { GeneratedCourse, GeneratedLesson, QuizQuestion, Slide } from './interfaces/course-content.interface';
