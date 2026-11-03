@@ -7,16 +7,16 @@ export interface LogbookItemDto {
     };
     fechaHoraRegistro: Date;
     tipo: 'ENTRADA' | 'SALIDA' | 'INICIO_COMIDA' | 'FIN_COMIDA';
-    canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL';
+    canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL' | 'CLOCK_WEB';
     ubicacionDispositivo: string | null;
     geocerca: {
         resultado:
-            | 'DENTRO'
-            | 'FUERA_PERMITIDA'
-            | 'FUERA_BLOQUEADA'
-            | 'NO_APLICA'
-            | 'SIN_UBICACION'
-            | 'PRECISION_INSUFICIENTE';
+        | 'DENTRO'
+        | 'FUERA_PERMITIDA'
+        | 'FUERA_BLOQUEADA'
+        | 'NO_APLICA'
+        | 'SIN_UBICACION'
+        | 'PRECISION_INSUFICIENTE';
         latitud: number | null;
         longitud: number | null;
     };

@@ -79,7 +79,6 @@ export class ArtemisService {
             throw new NotFoundException(`No se encontró un empleado activo con el número de colaborador "${numeroEmpleado}".`);
         }
 
-
         const canal = this.normalizarCanal(dto.FuenteAsistencia);
         const fechaChecadaDate = this.sanitizarFechaChecada(dto.FechaChecada);
         const idSite = await this.resolverSitio(dto, empleado.idEmpleado, numeroEmpleado);
