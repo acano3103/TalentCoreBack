@@ -2,9 +2,9 @@ import { Body, Controller, Get, Param, ParseIntPipe, Post, Res, UploadedFile, Us
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { GetActiveUser } from '../auth/decorators/active-user.decorator';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { GetActiveUser } from '../../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { ArchivoSubido, CourseScormService } from './course-scorm.service';
 import { CommitScormDto } from './dto/commit-scorm.dto';

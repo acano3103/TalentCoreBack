@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from "@nestjs/common";
-import { IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioFacePhoto, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
+import { IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioFacePhoto, ZkBioFingerprint, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
 import { PrismaService } from "src/prisma/prisma.service";
 import { EncryptionService } from "src/common/utils/encryption.util";
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
@@ -247,6 +247,18 @@ export class ArtemisProvider implements IArtemisProvider {
             method: 'PUT',
             url: `/persons/${encodeURIComponent(personId)}/face`,
             data: form,
+            timeout: 30000,
+        });
+    }
+
+    // Envía las plantillas de huella de la persona (PUT /persons/{personId}/fingerprints).
+    // Las plantillas las genera el agente ZKTeco en la PC del lector; aquí solo se transportan (no se guardan ni se loguean).
+    async uploadBiometricFingerprints(companyId: number, personId: string, fingerprints: ZkBioFingerprint[]): Promise<void> {
+        await this.zkBioRequest<unknown>(companyId, {
+            method: 'PUT',
+            url: `/persons/${encodeURIComponent(personId)}/fingerprints`,
+            data: { fingerprints },
+            headers: { 'Content-Type': 'application/json' },
             timeout: 30000,
         });
     }

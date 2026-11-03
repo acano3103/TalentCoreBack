@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { CourseContentService } from './course-content.service';
 import { SaveNativeContentDto } from './dto/save-native-content.dto';
 import { GeneratedCourse } from './interfaces/course-content.interface';

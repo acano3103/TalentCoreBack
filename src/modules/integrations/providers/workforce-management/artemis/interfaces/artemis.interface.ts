@@ -53,6 +53,14 @@ export interface ZkBioParentDepartment {
     name: string | null;
 }
 
+// Plantilla de huella para PUT /persons/{personId}/fingerprints
+export interface ZkBioFingerprint {
+    fingerIndex: number;       // 0 a 9 (templateNo de CVAccess)
+    templateBase64: string;
+    formatVersion: string;     // "10", "12" o "13"
+    isDuress: boolean;         // huella de coacción
+}
+
 // Foto del rostro para PUT /persons/{personId}/face
 export interface ZkBioFacePhoto {
     buffer: Buffer;

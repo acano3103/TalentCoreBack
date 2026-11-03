@@ -7,6 +7,7 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { BiometricPhotoUpload, EmployeeBiometricsService, MAX_FOTO_ROSTRO_BYTES } from './employee-biometrics.service';
 import { CreateBiometricPersonDto } from './dto/create-biometric-person.dto';
+import { UploadBiometricFingerprintsDto } from './dto/upload-biometric-fingerprints.dto';
 
 // Endpoints de biométricos del empleado (ZkBio Integration API vía integración de la empresa)
 @ApiTags('Employee Biometrics')
@@ -89,5 +90,21 @@ export class EmployeeBiometricsController {
         @UploadedFile() foto: BiometricPhotoUpload,
     ) {
         return this.employeeBiometricsService.uploadFace(activeUser, companyId, employeeId, foto);
+    }
+
+    // Endpoint que envía al biométrico las huellas capturadas con el lector (plantillas del agente ZKTeco)
+    @Put('employees/:employeeId/biometrics/fingerprints')
+    @ApiOperation({ summary: 'Upload employee fingerprint templates to the biometric system (ZKBio)', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Fingerprints registered in ZKBio' })
+    @ApiResponse({ status: 400, description: 'Employee not registered or invalid templates' })
+    @ApiResponse({ status: 422, description: 'ZKBio rejected the templates' })
+    @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    uploadFingerprints(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('employeeId', ParseIntPipe) employeeId: number,
+        @Body() dto: UploadBiometricFingerprintsDto,
+    ) {
+        return this.employeeBiometricsService.uploadFingerprints(activeUser, companyId, employeeId, dto);
     }
 }

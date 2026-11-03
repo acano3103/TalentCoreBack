@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { SubmitLessonProgressDto } from './dto/submit-lesson-progress.dto';
 import { RegisterActivityDto } from './dto/register-activity.dto';
-import { CourseTrackingService } from './course-tracking.service';
-import { QuizQuestion, Slide } from './interfaces/course-content.interface';
+import { CourseTrackingService } from '../tracking/course-tracking.service';
+import { QuizQuestion, Slide } from '../content/interfaces/course-content.interface';
 
 const CALIFICACION_APROBATORIA_DEFAULT = 70;
 
