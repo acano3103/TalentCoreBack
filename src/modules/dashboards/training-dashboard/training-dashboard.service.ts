@@ -36,6 +36,7 @@ interface ParticipacionRaw {
     scormUltimoGuardado: Date | null;
     asistencias: unknown;
     segundosAsistidos: unknown;
+    tieneContenido: unknown;
 }
 
 // Participación ya normalizada para los cálculos
@@ -48,6 +49,7 @@ interface Participacion {
     inicio: Date;
     fin: Date | null;
     estatusSesion: string;
+    sinContenido: boolean;
     idArea: number | null;
     area: string;
     iniciado: boolean;
@@ -199,7 +201,13 @@ export class TrainingDashboardService {
                 pu.idArea, a.Descripcion AS area,
                 sg.fechaPrimerAcceso, sg.fechaUltimaActividad, sg.fechaConclusion, sg.tiempoTotalSegundos,
                 sp.idScormProgreso, sp.tiempoTotal AS scormTiempoTotal, sp.fechaUltimoGuardado AS scormUltimoGuardado,
-                asis.asistencias, asis.segundosAsistidos
+                asis.asistencias, asis.segundosAsistidos,
+                EXISTS (
+                    SELECT 1 FROM CursoContenidos cc
+                    WHERE cc.idSesion = s.idSesion AND cc.activo = 1
+                        AND (EXISTS (SELECT 1 FROM CursoModulos m WHERE m.idContenido = cc.idContenido)
+                            OR EXISTS (SELECT 1 FROM CursoPaquetesScorm ps WHERE ps.idContenido = cc.idContenido))
+                ) AS tieneContenido
             FROM CursoParticipantes p
             INNER JOIN CursoSesiones s ON s.idSesion = p.idSesion
             INNER JOIN CatCursos c ON c.idCursos = s.idCurso
@@ -250,6 +258,8 @@ export class TrainingDashboardService {
             inicio,
             fin,
             estatusSesion: f.estatusSesion,
+            // En línea sin módulos ni SCORM: nadie puede avanzar
+            sinContenido: f.modalidad === 'online_asincrono' && !Number(f.tieneContenido),
             idArea: f.idArea === null || f.idArea === undefined ? null : Number(f.idArea),
             area: f.area || 'Sin área',
             iniciado: terminado || !!f.fechaPrimerAcceso || !!f.idScormProgreso || asistencias > 0,
@@ -257,7 +267,7 @@ export class TrainingDashboardService {
             reprobado,
             terminado,
             noAsistio: estatus === 'no_asistio',
-            calificacion: terminado ? this.toNumber(f.calificacionFinal) : null,
+            calificacion: terminado ? this.calificacionSobre100(this.toNumber(f.calificacionFinal), f.modalidad) : null,
             segundos,
             ultimaActividad,
             // Presencial no guarda fecha de conclusión: se toma el fin del periodo de la sesión
@@ -389,6 +399,7 @@ export class TrainingDashboardService {
                 fechaFin: g[0].fin!.toISOString(),
                 inscritos: g.length,
                 cumplimiento: this.porcentaje(g.filter((p) => p.aprobado).length, g.length),
+                sinContenido: g[0].sinContenido,
             }))
             .filter((s) => s.cumplimiento < CUMPLIMIENTO_BAJO)
             .sort((a, b) => a.fechaFin.localeCompare(b.fechaFin))
@@ -422,6 +433,12 @@ export class TrainingDashboardService {
             return Math.round(d * 86400 + h * 3600 + m * 60 + s);
         }
         return 0;
+    }
+
+    // En línea se califica de 0 a 100; presencial / en vivo de 0 a 10
+    private calificacionSobre100(valor: number | null, modalidad: ModalidadCurso): number | null {
+        if (valor === null) return null;
+        return modalidad !== 'online_asincrono' && valor <= 10 ? valor * 10 : valor;
     }
 
     private toNumber(v: unknown): number | null {

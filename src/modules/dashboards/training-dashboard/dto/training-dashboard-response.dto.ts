@@ -33,7 +33,7 @@ export interface TrainingDashboardResponseDto {
         horas: number;
     }[];
     alertas: {
-        sesionesPorVencer: { idSesion: number; idCurso: number; curso: string; fechaFin: string; inscritos: number; cumplimiento: number }[];
+        sesionesPorVencer: { idSesion: number; idCurso: number; curso: string; fechaFin: string; inscritos: number; cumplimiento: number; sinContenido: boolean }[];
         inactivos: number;
         vencidos: number;
         cursosAltaReprobacion: { idCurso: number; curso: string; terminados: number; reprobacion: number }[];
