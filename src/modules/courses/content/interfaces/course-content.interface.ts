@@ -1,6 +1,8 @@
 // Estructuras JSON del contenido de un curso Online Asíncrono.
 // Las llaves van en inglés porque son las mismas que usa SimuPro (así el reproductor se porta sin cambios).
 
+import { CourseMaterial } from '../../materials/course-materials.constants';
+
 export interface QuizQuestion {
     question: string;
     options: string[];
@@ -14,6 +16,7 @@ export interface GeneratedLesson {
     content: string;
     keyPoints: string[];
     quiz: QuizQuestion[];
+    materials?: CourseMaterial[];
 }
 
 export interface GeneratedModule {

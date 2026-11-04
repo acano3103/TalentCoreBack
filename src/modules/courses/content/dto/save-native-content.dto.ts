@@ -12,6 +12,7 @@ import {
     Min,
     ValidateNested,
 } from 'class-validator';
+import { CourseMaterialDto } from '../../materials/dto/course-material.dto';
 
 export class NativeQuizQuestionDto {
     @ApiProperty({ example: '¿Qué se necesita antes de usar los datos de un candidato?' })
@@ -76,6 +77,14 @@ export class NativeLessonDto {
     @ValidateNested({ each: true })
     @Type(() => NativeQuizQuestionDto)
     quiz?: NativeQuizQuestionDto[];
+
+    @ApiPropertyOptional({ type: [CourseMaterialDto] })
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(20, { message: 'Cada lección puede tener máximo 20 materiales' })
+    @ValidateNested({ each: true })
+    @Type(() => CourseMaterialDto)
+    materiales?: CourseMaterialDto[];
 }
 
 export class NativeModuleDto {
