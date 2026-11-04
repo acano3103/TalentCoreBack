@@ -1,16 +1,24 @@
-import { Controller, Get, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetActiveUser } from 'src/modules/auth/decorators/active-user.decorator';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { TrainingDashboardService } from './training-dashboard.service';
+import { TrainingParticipantsService } from './training-participants.service';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
+import { TrainingParticipantsFiltersDto, TrainingParticipantsQueryDto } from './dto/training-participants.dto';
 
 @ApiTags('Training Dashboard')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/training-dashboard')
 export class TrainingDashboardController {
-  constructor(private readonly trainingDashboardService: TrainingDashboardService) { }
+  constructor(
+    private readonly trainingDashboardService: TrainingDashboardService,
+    private readonly trainingParticipantsService: TrainingParticipantsService,
+    private readonly excelExportService: ExcelExportService,
+  ) { }
 
   // Endpoint con todas las métricas del tablero de capacitación (indicadores, embudo, tendencia, desgloses y alertas)
   @Get()
@@ -33,5 +41,32 @@ export class TrainingDashboardController {
     @Query('modalidad') modalidad?: string,
   ) {
     return this.trainingDashboardService.getMetrics(user, companyId, { desde, hasta, idCurso, idArea, modalidad });
+  }
+
+  // Reporte de participantes: una fila por inscripción, paginado y ordenado en el servidor
+  @Get('participants')
+  @ApiOperation({ summary: 'Training participants report', description: 'Same filters as the dashboard plus status and search; paginated and sorted' })
+  @ApiResponse({ status: 200, description: 'Participants obtained successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid filters' })
+  getParticipants(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query() query: TrainingParticipantsQueryDto,
+  ) {
+    return this.trainingParticipantsService.list(user, companyId, query);
+  }
+
+  // Exporta a Excel todos los participantes que cumplan los filtros (sin paginar)
+  @Get('participants/export')
+  @ApiOperation({ summary: 'Export training participants to Excel' })
+  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+  async exportParticipants(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query() query: TrainingParticipantsFiltersDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.trainingParticipantsService.export(user, companyId, query);
+    this.excelExportService.send(res, buffer, 'Participantes_Capacitacion');
   }
 }

@@ -16,6 +16,10 @@ export interface TrainingDashboardFilters {
 interface ParticipacionRaw {
     idParticipante: number;
     idEmpleado: number;
+    nombre: string | null;
+    primerApellido: string | null;
+    segundoApellido: string | null;
+    numeroEmpleado: string | null;
     estatusAsignacion: string | null;
     calificacionFinal: unknown;
     idSesion: number;
@@ -40,8 +44,11 @@ interface ParticipacionRaw {
 }
 
 // Participación ya normalizada para los cálculos
-interface Participacion {
+export interface Participacion {
+    idParticipante: number;
     idEmpleado: number;
+    empleado: string;
+    numeroEmpleado: string | null;
     idSesion: number;
     idCurso: number;
     curso: string;
@@ -59,9 +66,12 @@ interface Participacion {
     noAsistio: boolean;
     calificacion: number | null;
     segundos: number;
+    primerAcceso: Date | null;
     ultimaActividad: Date | null;
     conclusion: Date | null;
 }
+
+export type EstatusParticipante = 'aprobado' | 'reprobado' | 'en_progreso' | 'sin_iniciar' | 'vencido' | 'no_asistio';
 
 const MODALIDADES: ModalidadCurso[] = ['presencial', 'online_sincrono', 'online_asincrono'];
 const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -141,6 +151,33 @@ export class TrainingDashboardService {
         }
     }
 
+    // Participaciones del periodo con los mismos filtros del tablero (para el reporte de participantes)
+    async cargarParticipaciones(user: ActiveUserDto, companyId: number, filtros: TrainingDashboardFilters) {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+        const { desde, hasta } = this.resolverPeriodo(filtros.desde, filtros.hasta);
+        const participaciones = await this.obtenerParticipaciones(
+            companyId,
+            user.idTenant,
+            desde,
+            hasta,
+            this.parseEnteroOpcional(filtros.idCurso, 'idCurso'),
+            this.parseEnteroOpcional(filtros.idArea, 'idArea'),
+            this.parseModalidad(filtros.modalidad),
+        );
+        return { desde, hasta, participaciones };
+    }
+
+    // Estatus de una inscripción para el reporte (mismas reglas que los indicadores)
+    estatusDe(p: Participacion, ahora: Date): EstatusParticipante {
+        if (p.aprobado) return 'aprobado';
+        if (p.reprobado) return 'reprobado';
+        if (p.noAsistio) return 'no_asistio';
+        if (this.estaVencido(p, ahora)) return 'vencido';
+        return p.iniciado ? 'en_progreso' : 'sin_iniciar';
+    }
+
     // ---------- Filtros ----------
 
     // Periodo pedido (por defecto: del 1 de enero a hoy) y el periodo anterior de la misma duración
@@ -196,6 +233,7 @@ export class TrainingDashboardService {
         const filas = await this.prisma.$queryRaw<ParticipacionRaw[]>`
             SELECT
                 p.idParticipante, p.idEmpleado, p.estatusAsignacion, p.calificacionFinal,
+                e.nombre, e.primerApellido, e.segundoApellido, e.numeroEmpleado,
                 s.idSesion, s.idCurso, c.Descripcion AS curso, s.modalidad,
                 s.fechaInicioPeriodo, s.fechaFinPeriodo, s.estatus AS estatusSesion,
                 pu.idArea, a.Descripcion AS area,
@@ -250,7 +288,10 @@ export class TrainingDashboardService {
         const segundos = (this.toNumber(f.segundosAsistidos) ?? 0) + segundosLinea;
         const ultimaActividad = this.maxFecha(f.fechaUltimaActividad, f.scormUltimoGuardado);
         return {
+            idParticipante: Number(f.idParticipante),
             idEmpleado: Number(f.idEmpleado),
+            empleado: [f.nombre, f.primerApellido, f.segundoApellido].filter((x) => x?.trim()).join(' ') || `Empleado #${f.idEmpleado}`,
+            numeroEmpleado: f.numeroEmpleado?.trim() || null,
             idSesion: Number(f.idSesion),
             idCurso: Number(f.idCurso),
             curso: f.curso || `Curso #${f.idCurso}`,
@@ -269,6 +310,7 @@ export class TrainingDashboardService {
             noAsistio: estatus === 'no_asistio',
             calificacion: terminado ? this.calificacionSobre100(this.toNumber(f.calificacionFinal), f.modalidad) : null,
             segundos,
+            primerAcceso: f.fechaPrimerAcceso ? new Date(f.fechaPrimerAcceso) : null,
             ultimaActividad,
             // Presencial no guarda fecha de conclusión: se toma el fin del periodo de la sesión
             conclusion: f.fechaConclusion ? new Date(f.fechaConclusion) : terminado ? fin ?? inicio : null,
@@ -297,7 +339,7 @@ export class TrainingDashboardService {
     // En riesgo: no ha terminado, su periodo sigue vigente y
     //  - no ha entrado y la sesión termina en los próximos 7 días, o
     //  - entró pero lleva más de 14 días sin actividad
-    private estaEnRiesgo(p: Participacion, ahora: Date): boolean {
+    estaEnRiesgo(p: Participacion, ahora: Date): boolean {
         if (p.terminado || p.noAsistio) return false;
         if (p.fin && p.fin < ahora) return false; // ya está vencido
         if (!p.iniciado) {
