@@ -1,8 +1,8 @@
 import { Body, Controller, Param, ParseIntPipe, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { GetActiveUser } from '../auth/decorators/active-user.decorator';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { GetActiveUser } from '../../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { CourseNativeContentService } from './course-native-content.service';
 import { SaveNativeContentDto } from './dto/save-native-content.dto';

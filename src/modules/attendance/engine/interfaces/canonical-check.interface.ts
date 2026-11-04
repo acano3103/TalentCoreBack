@@ -4,7 +4,7 @@ export interface CanonicalCheck {
   idTenant: number;
   idEmpresa: number;
   idEmpleado: number;
-  canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL';
+  canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL' | 'CLOCK_WEB';
   /** null = que el motor lo infiera (Artemis, IVR). Explícito = se valida (móvil) */
   tipo: TipoChecada | null;
   /** Obligatorio. Ver la nota de modos en state-machine.ts */
@@ -43,6 +43,14 @@ export interface CanonicalCheck {
   urlFoto?: string | null;
   telefonoOrigen?: string | null;
   telefonoDestino?: string | null;
+  // Auditoría del registro web
+  idUsuarioRegistro?: string | null;
+  ipOrigen?: string | null;
+  userAgent?: string | null;
+  navegador?: string | null;
+  versionNavegador?: string | null;
+  sistemaOperativo?: string | null;
+  tipoDispositivo?: string | null;
 }
 
 export interface ResultadoCheck {

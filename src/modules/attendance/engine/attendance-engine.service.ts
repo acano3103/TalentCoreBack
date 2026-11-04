@@ -1363,6 +1363,13 @@ export class AttendanceEngineService {
       motivoFueraGeocerca: input.motivoFueraGeocerca ?? null,
       versionApp: input.versionApp ?? null,
       zonaHoraria: ctx.zonaHoraria,
+      idUsuarioRegistro: input.idUsuarioRegistro ?? null,
+      ipOrigen: input.ipOrigen ?? null,
+      userAgent: input.userAgent ?? null,
+      navegador: input.navegador ?? null,
+      versionNavegador: input.versionNavegador ?? null,
+      sistemaOperativo: input.sistemaOperativo ?? null,
+      tipoDispositivo: input.tipoDispositivo ?? null,
     };
   }
 

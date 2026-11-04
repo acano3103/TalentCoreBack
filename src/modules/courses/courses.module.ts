@@ -4,16 +4,16 @@ import { CoursesController } from './courses.controller';
 import { EncryptionService } from 'src/common/utils/encryption.util';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationsModule } from '../integrations/integrations.module';
-import { CourseContentController } from './course-content.controller';
-import { CourseContentService } from './course-content.service';
-import { CourseLearningController } from './course-learning.controller';
-import { CourseLearningService } from './course-learning.service';
-import { CourseTrackingController } from './course-tracking.controller';
-import { CourseTrackingService } from './course-tracking.service';
-import { CourseNativeContentController } from './course-native-content.controller';
-import { CourseNativeContentService } from './course-native-content.service';
-import { CourseScormController } from './course-scorm.controller';
-import { CourseScormService } from './course-scorm.service';
+import { CourseContentController } from './content/course-content.controller';
+import { CourseContentService } from './content/course-content.service';
+import { CourseLearningController } from './learning/course-learning.controller';
+import { CourseLearningService } from './learning/course-learning.service';
+import { CourseTrackingController } from './tracking/course-tracking.controller';
+import { CourseTrackingService } from './tracking/course-tracking.service';
+import { CourseNativeContentController } from './content/course-native-content.controller';
+import { CourseNativeContentService } from './content/course-native-content.service';
+import { CourseScormController } from './scorm/course-scorm.controller';
+import { CourseScormService } from './scorm/course-scorm.service';
 import { MediaPathModule } from 'src/common/services/media-path.module';
 
 @Module({

@@ -168,6 +168,8 @@ export class LogbookService {
                     ? (sitesMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
                     : (reg.nombreDispositivo ?? null);
 
+                // si ubicacionDispositivo sigue null regresamos la latitud y longitud si aplica 
+
                 return {
                     idRegistro: reg.idRegistro.toString(),
                     empleado: {
