@@ -82,6 +82,7 @@ export class CourseNativeContentService {
                         correctIndex: q.correctIndex,
                         explanation: this.clean(q.explanation),
                     })),
+                    materials: (l.materiales ?? []).map((m) => ({ ...m, nombre: this.clean(m.nombre), url: m.url?.trim() })),
                 })),
             })),
         };
@@ -127,6 +128,7 @@ export class CourseNativeContentService {
                                     puntosClave: toJson(lesson.keyPoints),
                                     slides: toJson(this.courseContentService.buildSlides(lesson)),
                                     quiz: toJson(lesson.quiz),
+                                    materiales: toJson(lesson.materials ?? []),
                                     estatusVideo: 'no_aplica',
                                     orden: li,
                                 })),

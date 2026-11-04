@@ -2308,6 +2308,7 @@ model CursoLeccionProgresos {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model CursoLecciones {
+  materiales             Json?
   idLeccion              Int                         @id @default(autoincrement())
   idTenant               Int
   idCursoModulo          Int
