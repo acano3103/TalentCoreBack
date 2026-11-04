@@ -1,18 +1,28 @@
 // Mapeo de día en texto a ID numérico
 export const mapDayToArtemisId = (dayName: string): number => {
-    const normalized = dayName?.trim().toLowerCase();
-    switch (normalized) {
-        case 'lunes': return 1;
-        case 'martes': return 2;
-        case 'miércoles':
-        case 'miercoles': return 3;
-        case 'jueves': return 4;
-        case 'viernes': return 5;
-        case 'sábado':
-        case 'sabado': return 6;
-        case 'domingo': return 7;
-        default: return 1;
+    const normalized = dayName
+        ?.trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const days: Record<string, number> = {
+        lunes: 1,
+        martes: 2,
+        miercoles: 3,
+        jueves: 4,
+        viernes: 5,
+        sabado: 6,
+        domingo: 7,
+    };
+
+    const dayId = days[normalized];
+
+    if (!dayId) {
+        throw new Error(`Día de la semana inválido: "${dayName}"`);
     }
+
+    return dayId;
 };
 
 // Extracción limpia de la hora en formato HH:mm:ss
@@ -28,4 +38,28 @@ export const formatTimeToHHMMSS = (dateValue: Date | string | null | undefined):
     }
 
     return "00:00:00";
+};
+
+// Mapeo de modalidad a formato de artemis
+export const mapModalityToArtemis = (
+    modality?: string | null,
+): 'PRESENCIAL' | 'HOME_OFFICE' | 'DESCANSO' => {
+    const normalized = modality?.trim().toUpperCase();
+
+    switch (normalized) {
+        case 'PRESENCIAL':
+            return 'PRESENCIAL';
+
+        case 'REMOTO':
+        case 'HOME_OFFICE':
+            return 'HOME_OFFICE';
+
+        case 'DESCANSO':
+            return 'DESCANSO';
+
+        default:
+            throw new Error(
+                `Modalidad no reconocida para Artemis: "${modality}"`
+            );
+    }
 };

@@ -74,3 +74,10 @@ export interface ZkBioError {
     message?: string;
     correlationId?: string;
 }
+
+export type ArtemisSchedule = {
+    diaId: number;
+    horaInicio: string;
+    horaFin: string;
+    modalidad: 'PRESENCIAL' | 'HOME_OFFICE' | 'DESCANSO';
+};

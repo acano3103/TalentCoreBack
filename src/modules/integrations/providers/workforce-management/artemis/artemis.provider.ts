@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from "@nestjs/common";
-import { IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioFacePhoto, ZkBioFingerprint, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
+import { ArtemisSchedule, IArtemisProvider, ZkBioAccessLevel, ZkBioCreatePersonRequest, ZkBioDepartment, ZkBioError, ZkBioFacePhoto, ZkBioFingerprint, ZkBioParentDepartment, ZkBioPerson } from "./interfaces/artemis.interface";
 import { PrismaService } from "src/prisma/prisma.service";
 import { EncryptionService } from "src/common/utils/encryption.util";
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
-import { formatTimeToHHMMSS, mapDayToArtemisId } from "./helpers/artemis.helper";
+import { formatTimeToHHMMSS, mapDayToArtemisId, mapModalityToArtemis } from "./helpers/artemis.helper";
 
 @Injectable()
 export class ArtemisProvider implements IArtemisProvider {
@@ -111,12 +111,9 @@ export class ArtemisProvider implements IArtemisProvider {
             }
         };
 
-        const formattedSchedules = (employee.schedules || []).map((schedule: any) => ({
-            diaId: mapDayToArtemisId(schedule.DiaSemana),
-            horaInicio: formatTimeToHHMMSS(schedule.HoraEntrada),
-            horaFin: formatTimeToHHMMSS(schedule.HoraSalida),
-            modalidad: schedule.Modalidad?.toUpperCase() ?? 'PRESENCIAL',
-        }));
+        const formattedSchedules = this.selectSchedulesForArtemis(
+            employee.schedules || [],
+        );
 
         const payload = {
             externalUserId: String(employee.externalEmployeeId),
@@ -186,13 +183,85 @@ export class ArtemisProvider implements IArtemisProvider {
             if (axios.isAxiosError(error)) {
                 const axiosError = error as AxiosError<any>;
                 const detail = axiosError.response?.data?.message || axiosError.response?.data?.detail || axiosError.message;
-                this.logger.error(`Error en Artemis API (${axiosError.response?.status}): ${JSON.stringify(axiosError.response?.data)}`);
+                this.logger.error(
+                    `[ARTEMIS][ERROR] Empleado ${employee.externalEmployeeId}`,
+                    JSON.stringify(
+                        {
+                            status: axiosError.response?.status,
+                            validationErrors: axiosError.response?.data?.errors,
+                            response: axiosError.response?.data,
+                        },
+                        null,
+                        2,
+                    ),
+                );
                 throw new BadRequestException(`Fallo al sincronizar con Artemis: ${detail}`);
             }
 
             throw new BadRequestException(error.message || 'Error inesperado al conectar con Artemis');
         }
     }
+
+    private selectSchedulesForArtemis = (
+        schedules: any[],
+    ): ArtemisSchedule[] => {
+        const schedulesByDay = new Map<number, any[]>();
+
+        for (const schedule of schedules || []) {
+            const diaId = mapDayToArtemisId(schedule.DiaSemana);
+
+            const current = schedulesByDay.get(diaId) || [];
+            current.push(schedule);
+
+            schedulesByDay.set(diaId, current);
+        }
+
+        const result: ArtemisSchedule[] = [];
+
+        for (const [diaId, daySchedules] of schedulesByDay) {
+            // Orden determinista: primero el registro más antiguo.
+            const ordered = [...daySchedules].sort(
+                (a, b) => a.idHorario - b.idHorario,
+            );
+
+            // Por ahora solo seleccionamos horarios válidos
+            // que no crucen la medianoche.
+            const validSchedules = ordered.filter(schedule => {
+                const inicio = formatTimeToHHMMSS(schedule.HoraEntrada);
+                const fin = formatTimeToHHMMSS(schedule.HoraSalida);
+
+                return inicio !== '00:00:00' &&
+                    fin !== '00:00:00' &&
+                    fin > inicio;
+            });
+
+            if (validSchedules.length === 0) {
+                throw new Error(
+                    `El día ${diaId} no tiene un horario válido para Artemis.`,
+                );
+            }
+
+            // Selección provisional: primer horario válido.
+            const selected = validSchedules[0];
+
+            result.push({
+                diaId,
+                horaInicio: formatTimeToHHMMSS(selected.HoraEntrada),
+                horaFin: formatTimeToHHMMSS(selected.HoraSalida),
+                modalidad: mapModalityToArtemis(selected.Modalidad),
+            });
+
+            if (ordered.length > 1) {
+                this.logger.warn(
+                    `[ARTEMIS] Día ${diaId}: se seleccionó el horario ` +
+                    `${selected.idHorario} y se omitieron ` +
+                    `${ordered.length - 1} registros adicionales.`,
+                );
+            }
+        }
+
+        return result.sort((a, b) => a.diaId - b.diaId);
+    };
 
     // ===== Biométricos ZKBio (ZkBio Integration API) =====
     // La API key es por empresa: integración ZKBIO en Integraciones (metadata.apiKey encriptada).
