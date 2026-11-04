@@ -1,4 +1,5 @@
 import {
+    ConflictException,
     HttpException,
     Injectable,
     Logger,
@@ -8,6 +9,7 @@ import {
 import { Prisma } from 'generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
 // La BD puede estar remota (VPN), asi que la transaccion interactiva lleva un
@@ -104,6 +106,168 @@ export class RolesService {
                 `findOne | rol=${id} | tenant=${user.idTenant}`,
                 'Ocurrio un error inesperado. Intenta de nuevo.',
                 'ERROR_INTERNO',
+            );
+        }
+    }
+
+    async findModulos(user: ActiveUserDto) {
+        try {
+            return await this.prismaService.catModulos.findMany({
+                where: {
+                    Activo: true,
+                    idTenant: user.idTenant,
+                },
+                select: {
+                    idModulo: true,
+                    Descripcion: true,
+                    Codigo: true,
+                    idPadre: true,
+                    Activo: true,
+                },
+                orderBy: { Descripcion: 'asc' },
+            });
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw this.errorInterno(
+                error,
+                `findModulos | tenant=${user.idTenant}`,
+                'Ocurrio un error inesperado. Intenta de nuevo.',
+                'ERROR_INTERNO',
+            );
+        }
+    }
+
+    async create(user: ActiveUserDto, dto: CreateRoleDto) {
+        const idTenant = user.idTenant;
+        const descripcion = dto.rol.descripcion;
+        const permisosPorModulo = new Map(dto.permisos.map((permiso) => [permiso.idModulo, permiso]));
+
+        try {
+            const { rolCreado, modulosConAcceso } = await this.prismaService.$transaction(
+                async (tx) => {
+                    // Nombre repetido en el tenant (incluye roles inactivos), comparando
+                    // LOWER(TRIM(descripcion)) en ambos lados. Se hace dentro de la
+                    // transaccion para que el 409 no dependa del momento de la lectura.
+                    const rolesExistentes = await tx.catRoles.findMany({
+                        where: {
+                            idTenant,
+                        },
+                        select: {
+                            descripcion: true,
+                        },
+                    });
+                    const nombreNormalizado = descripcion.trim().toLowerCase();
+                    const nombreRepetido = rolesExistentes.some(
+                        (rol) => rol.descripcion.trim().toLowerCase() === nombreNormalizado,
+                    );
+
+                    if (nombreRepetido) {
+                        throw new ConflictException({
+                            message: 'Ya existe un rol con ese nombre en tu empresa.',
+                            error: 'Conflict',
+                            code: 'ROL_DUPLICADO',
+                        });
+                    }
+
+                    const modulosActivos = await tx.catModulos.findMany({
+                        where: {
+                            Activo: true,
+                            idTenant,
+                        },
+                        select: {
+                            idModulo: true,
+                        },
+                    });
+                    const conjuntoActivos = new Set(modulosActivos.map((modulo) => modulo.idModulo));
+                    const idModulosRechazados = dto.permisos
+                        .map((permiso) => permiso.idModulo)
+                        .filter((idModulo) => !conjuntoActivos.has(idModulo));
+
+                    if (idModulosRechazados.length > 0) {
+                        throw new UnprocessableEntityException({
+                            message: 'Uno o mas modulos no estan disponibles para este rol.',
+                            code: 'MODULOS_INVALIDOS',
+                            detail: { idModulosRechazados },
+                        });
+                    }
+
+                    const permisosSinVer = dto.permisos
+                        .filter((permiso) => !permiso.ver && (permiso.crear || permiso.editar || permiso.eliminar))
+                        .map((permiso) => permiso.idModulo);
+
+                    if (permisosSinVer.length > 0) {
+                        throw new UnprocessableEntityException({
+                            message: 'Los permisos para crear, editar o eliminar requieren tambien el permiso de ver.',
+                            code: 'VER_REQUERIDO',
+                            detail: { idModulos: permisosSinVer },
+                        });
+                    }
+
+                    const rol = await tx.catRoles.create({
+                        data: {
+                            idTenant,
+                            descripcion,
+                            activo: true,
+                        },
+                    });
+
+                    // Una fila por cada modulo activo del tenant: los modulos que no
+                    // vienen en el payload quedan con los cuatro permisos en false.
+                    const filas = modulosActivos.map((modulo) => {
+                        const permiso = permisosPorModulo.get(modulo.idModulo);
+
+                        return {
+                            idTenant,
+                            idRol: rol.idRol,
+                            idModulo: modulo.idModulo,
+                            puedeVer: permiso?.ver ?? false,
+                            puedeCrear: permiso?.crear ?? false,
+                            puedeActualizar: permiso?.editar ?? false,
+                            puedeEliminar: permiso?.eliminar ?? false,
+                            activo: true,
+                        };
+                    });
+
+                    await tx.relRolPermisos.createMany({
+                        data: filas,
+                    });
+
+                    const rolConPermisos = await tx.catRoles.findUnique({
+                        where: {
+                            idRol: rol.idRol,
+                            idTenant,
+                        },
+                        include: this.permisosActivosInclude(idTenant),
+                    });
+
+                    if (!rolConPermisos) {
+                        throw new NotFoundException('Rol no encontrado o no pertenece a tu empresa.');
+                    }
+
+                    return {
+                        rolCreado: rolConPermisos,
+                        modulosConAcceso: filas.filter((fila) => fila.puedeVer).length,
+                    };
+                },
+                OPCIONES_TRANSACCION,
+            );
+
+            this.logger.log(
+                `Rol creado | idRol=${rolCreado.idRol} | tenant=${idTenant} | descripcion=${descripcion} | usuario=${user.id} | modulosConAcceso=${modulosConAcceso} | fecha=${new Date().toISOString()}`,
+            );
+
+            return rolCreado;
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw this.errorInterno(
+                error,
+                `create | tenant=${idTenant} | usuario=${user.id}`,
+                'No se pudo crear el rol. Intenta de nuevo.',
+                'ERROR_CREAR_ROL',
             );
         }
     }
