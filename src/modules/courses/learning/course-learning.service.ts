@@ -295,6 +295,7 @@ export class CourseLearningService {
                             slides: bloqueada ? [] : this.asSlides(leccion.slides),
                             // Solo pregunta y opciones: la respuesta correcta se queda en el servidor
                             quiz: bloqueada ? [] : quiz.map((q) => ({ question: q.question, options: q.options })),
+                            materiales: bloqueada || !Array.isArray(leccion.materiales) ? [] : leccion.materiales,
                             progreso: {
                                 completada: !!progreso?.fechaCompletado,
                                 calificacionQuiz: this.toNumber(progreso?.calificacionQuiz),
