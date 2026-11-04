@@ -922,6 +922,7 @@ model auth_user {
   PasosAprobacionIncidencia         PasosAprobacionIncidencia[]
   PasosAprobacionMovimientoInterno  PasosAprobacionMovimientoInterno[]
   PreferenciasNotificacionesUsuario PreferenciasNotificacionesUsuario[]
+  RegistrosAsistencia               RegistrosAsistencia[]
   RelUsuarioEmpresa                 RelUsuarioEmpresa[]
   RelUsuarioSite                    RelUsuarioSite[]
   SolicitudPuesto                   SolicitudPuesto[]
@@ -1995,6 +1996,13 @@ model RegistrosAsistencia {
   idTenant                Int
   idEmpresa               Int
   idEmpleado              Int
+  idUsuarioRegistro       String?                                  @db.VarChar(36)
+  ipOrigen                String?                                  @db.VarChar(45)
+  userAgent               String?                                  @db.VarChar(1000)
+  navegador               String?                                  @db.VarChar(100)
+  versionNavegador        String?                                  @db.VarChar(50)
+  sistemaOperativo        String?                                  @db.VarChar(100)
+  tipoDispositivo         String?                                  @db.VarChar(30)
   idJornada               Int?
   canal                   RegistrosAsistencia_canal
   telefonoOrigen          String?                                  @db.VarChar(20)
@@ -2025,6 +2033,7 @@ model RegistrosAsistencia {
   zonaHoraria             String?                                  @db.VarChar(50)
   Empleados               Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Registros_Empleados")
   JornadasEmpleado        JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: NoAction, map: "FK_Registros_Jornadas")
+  auth_user               auth_user?                               @relation(fields: [idUsuarioRegistro], references: [uuid], map: "FK_Registros_Usuario")
 
   @@index([idJornada], map: "FK_Registros_Jornadas")
   @@index([idEmpleado, fechaHoraRegistro], map: "IDX_Registros_Empleado_Fecha")
@@ -2032,6 +2041,7 @@ model RegistrosAsistencia {
   @@index([estatusProcesamiento], map: "IDX_Registros_Estatus")
   @@index([idDispositivo], map: "IDX_Registros_Dispositivo")
   @@index([telefonoOrigen], map: "IDX_Registros_TelefonoOrigen")
+  @@index([idUsuarioRegistro], map: "IDX_Registros_Usuario")
 }
 
 model ConfiguracionJornadaLegal {
@@ -2665,14 +2675,6 @@ enum RelEmpleadosDidsExcepciones_TipoExcepcion {
   EXTRA
 }
 
-enum RegistrosAsistencia_canal {
-  APP_MOVIL
-  IVR
-  BIOMETRICO
-  NFC
-  WEB_MANUAL
-}
-
 enum RegistrosAsistencia_tipo {
   ENTRADA
   SALIDA
@@ -2857,4 +2859,13 @@ enum RelEmpleadosSites_MetodoAsistencia {
   APP_MOVIL
   NFC
   CUALQUIERA
+}
+
+enum RegistrosAsistencia_canal {
+  APP_MOVIL
+  IVR
+  BIOMETRICO
+  NFC
+  WEB_MANUAL
+  CLOCK_WEB
 }

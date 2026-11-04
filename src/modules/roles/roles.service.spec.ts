@@ -2,10 +2,11 @@ jest.mock('src/prisma/prisma.service', () => ({
     PrismaService: class PrismaService {},
 }));
 
-import { HttpException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, HttpException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { CreateRoleDto } from './dto/create-role.dto';
 import { PermisoModuloDto, UpdateRoleDto } from './dto/update-role.dto';
 import { RolesService } from './roles.service';
 
@@ -18,7 +19,9 @@ describe('RolesService', () => {
 
     const txMock = {
         catRoles: {
+            findMany: jest.fn(),
             findUnique: jest.fn(),
+            create: jest.fn(),
             update: jest.fn(),
         },
         catModulos: {
@@ -26,6 +29,7 @@ describe('RolesService', () => {
         },
         relRolPermisos: {
             findMany: jest.fn(),
+            createMany: jest.fn(),
             upsert: jest.fn(),
             updateMany: jest.fn(),
         },
@@ -35,6 +39,9 @@ describe('RolesService', () => {
         catRoles: {
             findMany: jest.fn(),
             findUnique: jest.fn(),
+        },
+        catModulos: {
+            findMany: jest.fn(),
         },
         $transaction: jest.fn(),
     };
@@ -124,6 +131,275 @@ describe('RolesService', () => {
                 idTenant: 3,
                 CatModulos: { Activo: true, idTenant: 3 },
             });
+        });
+    });
+
+    describe('create (POST /roles)', () => {
+        const modulosActivos = [{ idModulo: 10 }, { idModulo: 11 }, { idModulo: 12 }];
+
+        const rolEnTransaccion = {
+            idRol: 501,
+            idTenant: 3,
+            descripcion: 'Nuevo rol',
+            activo: true,
+        };
+
+        const rolCreado = {
+            ...rolEnTransaccion,
+            RelRolPermisos: [],
+        };
+
+        const dtoCreate = (descripcion: string, permisos: PermisoModuloDto[] = []): CreateRoleDto => ({
+            rol: { descripcion },
+            permisos,
+        });
+
+        const filasCreadas = (): {
+            idRol: number;
+            idModulo: number;
+            idTenant: number;
+            puedeVer: boolean;
+            puedeCrear: boolean;
+            puedeActualizar: boolean;
+            puedeEliminar: boolean;
+            activo: boolean;
+        }[] => {
+            const args = (txMock.relRolPermisos.createMany.mock.calls[0] as unknown[])[0] as {
+                data: ReturnType<typeof filasCreadas>;
+            };
+            return args.data;
+        };
+
+        beforeEach(() => {
+            txMock.catRoles.findMany.mockResolvedValue([]);
+            txMock.catModulos.findMany.mockResolvedValue(modulosActivos);
+            txMock.catRoles.create.mockResolvedValue(rolEnTransaccion);
+            txMock.relRolPermisos.createMany.mockResolvedValue({ count: 3 });
+            txMock.catRoles.findUnique.mockResolvedValue(rolCreado);
+        });
+
+        it('crea el rol activo, con una fila por cada modulo activo del tenant y una unica transaccion', async () => {
+            const resultado = await service.create(
+                user,
+                dtoCreate('Nuevo rol', [permiso(10), permiso(11, { crear: true, editar: true })]),
+            );
+
+            expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+                maxWait: 15_000,
+                timeout: 20_000,
+            });
+            expect(txMock.catRoles.create).toHaveBeenCalledWith({
+                data: { idTenant: 3, descripcion: 'Nuevo rol', activo: true },
+            });
+
+            // Un solo createMany con una fila por modulo activo (3), con idTenant en cada una
+            expect(txMock.relRolPermisos.createMany).toHaveBeenCalledTimes(1);
+            expect(filasCreadas()).toEqual([
+                {
+                    idTenant: 3,
+                    idRol: 501,
+                    idModulo: 10,
+                    puedeVer: true,
+                    puedeCrear: false,
+                    puedeActualizar: false,
+                    puedeEliminar: false,
+                    activo: true,
+                },
+                {
+                    idTenant: 3,
+                    idRol: 501,
+                    idModulo: 11,
+                    puedeVer: true,
+                    puedeCrear: true,
+                    puedeActualizar: true,
+                    puedeEliminar: false,
+                    activo: true,
+                },
+                {
+                    idTenant: 3,
+                    idRol: 501,
+                    idModulo: 12,
+                    puedeVer: false,
+                    puedeCrear: false,
+                    puedeActualizar: false,
+                    puedeEliminar: false,
+                    activo: true,
+                },
+            ]);
+
+            // La respuesta tiene el mismo formato que GET /roles/:id
+            const lectura = (txMock.catRoles.findUnique.mock.calls[0] as unknown[])[0] as {
+                where: unknown;
+                include: { RelRolPermisos: { where: unknown } };
+            };
+            expect(lectura.where).toEqual({ idRol: 501, idTenant: 3 });
+            expect(lectura.include.RelRolPermisos.where).toEqual({
+                activo: true,
+                idTenant: 3,
+                CatModulos: { Activo: true, idTenant: 3 },
+            });
+            expect(resultado).toEqual(rolCreado);
+
+            // Un unico log despues del commit, con idRol, tenant, descripcion, usuario y accesos
+            expect(logSpy).toHaveBeenCalledTimes(1);
+            const mensaje = String(logSpy.mock.calls[0]?.[0]);
+            expect(mensaje).toContain('idRol=501');
+            expect(mensaje).toContain('tenant=3');
+            expect(mensaje).toContain('descripcion=Nuevo rol');
+            expect(mensaje).toContain('usuario=77');
+            expect(mensaje).toContain('modulosConAcceso=2');
+        });
+
+        it('con permisos vacios crea todos los modulos con los cuatro permisos en false', async () => {
+            const resultado = await service.create(user, dtoCreate('Solo lectura', []));
+
+            expect(txMock.catRoles.create).toHaveBeenCalledTimes(1);
+            expect(filasCreadas()).toHaveLength(3);
+            expect(
+                filasCreadas().every(
+                    (fila) => !fila.puedeVer && !fila.puedeCrear && !fila.puedeActualizar && !fila.puedeEliminar,
+                ),
+            ).toBe(true);
+            expect(resultado).toEqual(rolCreado);
+            expect(String(logSpy.mock.calls[0]?.[0])).toContain('modulosConAcceso=0');
+        });
+
+        it('devuelve 409 si ya existe un rol con ese nombre en el tenant (case y espacios distintos), sin escribir nada', async () => {
+            txMock.catRoles.findMany.mockResolvedValue([{ descripcion: '  admin  ' }, { descripcion: 'Otro' }]);
+
+            const error = await capturarError(service.create(user, dtoCreate('Admin')));
+
+            expect(error).toBeInstanceOf(ConflictException);
+            expect(error.getResponse()).toEqual(
+                expect.objectContaining({
+                    message: 'Ya existe un rol con ese nombre en tu empresa.',
+                    code: 'ROL_DUPLICADO',
+                }),
+            );
+            expect(error.getStatus()).toBe(409);
+            expect(txMock.catRoles.create).not.toHaveBeenCalled();
+            expect(txMock.relRolPermisos.createMany).not.toHaveBeenCalled();
+            expect(logSpy).not.toHaveBeenCalled();
+        });
+
+        it('devuelve 409 tambien si el rol existente esta inactivo (la lectura no filtra por activo)', async () => {
+            // La consulta solo filtra por idTenant: una fila inactiva con el mismo
+            // nombre tambien bloquea la creacion.
+            txMock.catRoles.findMany.mockResolvedValue([{ descripcion: '  Admin ' }]);
+
+            const error = await capturarError(service.create(user, dtoCreate('admin')));
+
+            expect(error).toBeInstanceOf(ConflictException);
+            expect(txMock.catRoles.create).not.toHaveBeenCalled();
+        });
+
+        it('devuelve 422 con idModulosRechazados si un idModulo no es modulo activo del tenant, sin crear el rol', async () => {
+            txMock.catModulos.findMany.mockResolvedValue([{ idModulo: 10 }]);
+
+            const error = await capturarError(
+                service.create(user, dtoCreate('Nuevo rol', [permiso(10), permiso(999)])),
+            );
+
+            expect(error).toBeInstanceOf(UnprocessableEntityException);
+            expect(error.getResponse()).toEqual(
+                expect.objectContaining({
+                    code: 'MODULOS_INVALIDOS',
+                    detail: { idModulosRechazados: [999] },
+                }),
+            );
+            expect(txMock.catRoles.create).not.toHaveBeenCalled();
+            expect(txMock.relRolPermisos.createMany).not.toHaveBeenCalled();
+            expect(logSpy).not.toHaveBeenCalled();
+        });
+
+        it('devuelve 422 con VER_REQUERIDO si crear/editar/eliminar vienen en true con ver en false', async () => {
+            const error = await capturarError(
+                service.create(user, dtoCreate('Nuevo rol', [permiso(10, { ver: false, crear: true })])),
+            );
+
+            expect(error).toBeInstanceOf(UnprocessableEntityException);
+            expect(error.getResponse()).toEqual(
+                expect.objectContaining({
+                    code: 'VER_REQUERIDO',
+                    detail: { idModulos: [10] },
+                }),
+            );
+            expect(txMock.catRoles.create).not.toHaveBeenCalled();
+            expect(logSpy).not.toHaveBeenCalled();
+        });
+
+        it('el tenant sale siempre del usuario autenticado, nunca del body', async () => {
+            await service.create(user, dtoCreate('Otro tenant', [permiso(10)]));
+
+            const argsCatalogo = (txMock.catModulos.findMany.mock.calls[0] as unknown[])[0] as {
+                where: Record<string, unknown>;
+            };
+            expect(argsCatalogo.where).toEqual({ Activo: true, idTenant: 3 });
+            expect(txMock.catRoles.create).toHaveBeenCalledWith({
+                data: { idTenant: 3, descripcion: 'Otro tenant', activo: true },
+            });
+        });
+
+        it('no registra auditoria si la transaccion falla y responde 500 generico con ERROR_CREAR_ROL', async () => {
+            txMock.catRoles.create.mockRejectedValueOnce(
+                new Error('Transaction API error ... C:\\Users\\dreyes\\Documents\\Talent\\TalentCoreBack\\roles.service.ts'),
+            );
+
+            const error = await capturarError(service.create(user, dtoCreate('Nuevo rol', [permiso(10)])));
+
+            expect(error).toBeInstanceOf(HttpException);
+            expect(error.getStatus()).toBe(500);
+            const respuesta = error.getResponse() as { message: string; code: string; error: string };
+            expect(respuesta.code).toBe('ERROR_CREAR_ROL');
+            expect(respuesta.error).toBe('Internal Server Error');
+            expect(respuesta.message).toBe('No se pudo crear el rol. Intenta de nuevo.');
+            expect(respuesta.message).not.toContain('C:\\');
+
+            expect(logSpy).not.toHaveBeenCalled();
+            expect(errorSpy).toHaveBeenCalledTimes(1);
+            expect(String(errorSpy.mock.calls[0]?.[0])).toContain('create | tenant=3 | usuario=77');
+            expect(String(errorSpy.mock.calls[0]?.[0])).toContain('C:\\Users\\dreyes');
+        });
+    });
+
+    describe('findModulos (GET /roles/modulos)', () => {
+        const modulosDelTenant = [
+            { idModulo: 10, Descripcion: 'Vacantes', Codigo: 'VAC', idPadre: null, Activo: true },
+        ];
+
+        it('devuelve solo los modulos activos del tenant con los campos que espera el frontend', async () => {
+            prismaMock.catModulos.findMany.mockResolvedValue(modulosDelTenant);
+
+            const resultado = await service.findModulos(user);
+
+            expect(resultado).toEqual(modulosDelTenant);
+            const args = (prismaMock.catModulos.findMany.mock.calls[0] as unknown[])[0] as {
+                where: unknown;
+                select: unknown;
+            };
+            expect(args.where).toEqual({ Activo: true, idTenant: 3 });
+            expect(args.select).toEqual({
+                idModulo: true,
+                Descripcion: true,
+                Codigo: true,
+                idPadre: true,
+                Activo: true,
+            });
+        });
+
+        it('responde 500 generico sin exponer el error crudo de Prisma', async () => {
+            prismaMock.catModulos.findMany.mockRejectedValue(
+                new Error('connect ECONNREFUSED 10.0.0.5 (C:\\Users\\dreyes\\prisma.service.ts)'),
+            );
+
+            const error = await capturarError(service.findModulos(user));
+
+            expect(error).toBeInstanceOf(HttpException);
+            expect(error.getStatus()).toBe(500);
+            const respuesta = error.getResponse() as { message: string; code: string };
+            expect(respuesta.code).toBe('ERROR_INTERNO');
+            expect(respuesta.message).not.toContain('C:\\');
+            expect(errorSpy).toHaveBeenCalledTimes(1);
         });
     });
 

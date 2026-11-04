@@ -7,7 +7,7 @@ export interface AttendanceDashboardResponseDto {
         excepciones: { total: number; pendientesValidacion: number };
     };
     distribucionCanales: {
-        canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL';
+        canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL' | 'CLOCK_WEB';
         label: string;
         total: number;
         porcentaje: number;
