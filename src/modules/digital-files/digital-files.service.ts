@@ -703,7 +703,7 @@ export class DigitalFilesService {
         // Si el tipo de documento requiere vencimiento pero no se pudo determinar
         // una fecha (ni por Nubarium ni por el cálculo genérico), se rechaza —
         // criterio de aceptación: la fecha de vencimiento es obligatoria en ese caso.
-        if (catDocumento?.requiereVencimiento && !resultadoNubarium.vigencia?.fechaVencimiento) {
+        if (catDocumento?.requiereVencimiento && !resultadoNubarium.vigencia?.fechaVencimiento && !resultadoNubarium.advertencia && !resultadoNubarium.error_infraestructura) {
           try {
             await fs.remove(rutaTemp);
           } catch (err) { }
@@ -734,7 +734,7 @@ export class DigitalFilesService {
           score: resultadoNubarium.score,
         };
 
-        if (resultadoNubarium.error_infraestructura) {
+        if (resultadoNubarium.error_infraestructura || resultadoNubarium.advertencia) {
           entry.advertencia = resultadoNubarium.motivo_rechazo;
         }
 
