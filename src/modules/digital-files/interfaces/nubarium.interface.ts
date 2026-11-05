@@ -8,6 +8,8 @@ export interface NubariumStandardResult {
     endpoint: string;
     error_infraestructura: boolean;
     vigencia?: VigenciaCalculada;
+    // Se aceptó sin poder validarlo (no se leyó, CURP con error de lectura, calle distinta)
+    advertencia?: string;
 }
 
 export interface VigenciaCalculada {
