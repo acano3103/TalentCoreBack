@@ -338,41 +338,43 @@ model CatPuestos {
 }
 
 model CatSites {
-  idSite                Int                      @id @default(autoincrement())
-  idTenant              Int                      @default(0)
-  idEmpresa             Int?
-  idUnidadOperativa     Int?
-  idTipoUbicacion       Int                      @default(1)
-  Descripcion           String?                  @db.VarChar(200)
-  EsPrincipal           Boolean?                 @default(false)
-  Calle                 String?                  @db.VarChar(250)
-  NoExterior            String?                  @db.VarChar(50)
-  NoInterior            String?                  @db.VarChar(50)
-  Colonia               String?                  @db.VarChar(150)
-  MunicipioDelegacion   String?                  @db.VarChar(150)
-  Estado                String?                  @db.VarChar(150)
-  CodigoPostal          String?                  @db.VarChar(10)
-  Pais                  String?                  @default("México") @db.VarChar(100)
-  Latitud               Decimal?                 @db.Decimal(10, 8)
-  Longitud              Decimal?                 @db.Decimal(11, 8)
-  idRegistroPatronal    Int?
-  ZonaFronteriza        Boolean?                 @default(false)
-  Activo                Boolean?                 @default(true)
-  FechaRegistro         DateTime?                @db.DateTime(0)
-  TipoAsistencia        CatSites_TipoAsistencia?
-  zonaHoraria           String                   @default("America/Mexico_City") @db.VarChar(50)
-  CatDispositivos       CatDispositivos[]
-  CatGeocercas          CatGeocercas[]
-  CatPuestos            CatPuestos[]
-  CatTiposUbicacion     CatTiposUbicacion        @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
-  CatUnidadesOperativas CatUnidadesOperativas?   @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
-  CatSitesDids          CatSitesDids[]
-  RelAreasUbicaciones   RelAreasUbicaciones[]
-  RelEmpleadosSites     RelEmpleadosSites[]
-  RelPuestosUbicaciones RelPuestosUbicaciones[]
-  RelSitesHorarios      RelSitesHorarios[]
-  RelUsuarioSite        RelUsuarioSite[]
-  Vacantes              Vacantes[]
+  idSite                        Int                             @id @default(autoincrement())
+  idTenant                      Int                             @default(0)
+  idEmpresa                     Int?
+  idUnidadOperativa             Int?
+  idTipoUbicacion               Int                             @default(1)
+  Descripcion                   String?                         @db.VarChar(200)
+  EsPrincipal                   Boolean?                        @default(false)
+  Calle                         String?                         @db.VarChar(250)
+  NoExterior                    String?                         @db.VarChar(50)
+  NoInterior                    String?                         @db.VarChar(50)
+  Colonia                       String?                         @db.VarChar(150)
+  MunicipioDelegacion           String?                         @db.VarChar(150)
+  Estado                        String?                         @db.VarChar(150)
+  CodigoPostal                  String?                         @db.VarChar(10)
+  Pais                          String?                         @default("México") @db.VarChar(100)
+  Latitud                       Decimal?                        @db.Decimal(10, 8)
+  Longitud                      Decimal?                        @db.Decimal(11, 8)
+  idRegistroPatronal            Int?
+  ZonaFronteriza                Boolean?                        @default(false)
+  Activo                        Boolean?                        @default(true)
+  FechaRegistro                 DateTime?                       @db.DateTime(0)
+  TipoAsistencia                CatSites_TipoAsistencia?
+  zonaHoraria                   String                          @default("America/Mexico_City") @db.VarChar(50)
+  CatDispositivos               CatDispositivos[]
+  CatGeocercas                  CatGeocercas[]
+  CatPuestos                    CatPuestos[]
+  CatTiposUbicacion             CatTiposUbicacion               @relation(fields: [idTipoUbicacion], references: [idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
+  CatUnidadesOperativas         CatUnidadesOperativas?          @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
+  CatSitesDids                  CatSitesDids[]
+  KioscoSites                   KioscoSites[]
+  RegistrosKioscoPorIdentificar RegistrosKioscoPorIdentificar[]
+  RelAreasUbicaciones           RelAreasUbicaciones[]
+  RelEmpleadosSites             RelEmpleadosSites[]
+  RelPuestosUbicaciones         RelPuestosUbicaciones[]
+  RelSitesHorarios              RelSitesHorarios[]
+  RelUsuarioSite                RelUsuarioSite[]
+  Vacantes                      Vacantes[]
 
   @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   @@index([idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
@@ -1100,67 +1102,74 @@ model RelAreasUbicaciones {
 }
 
 model Empleados {
-  idEmpleado                                                                       Int                                @id @default(autoincrement())
-  numeroEmpleado                                                                   String?                            @db.VarChar(20)
-  idTenant                                                                         Int?
-  idEmpresa                                                                        Int?
-  idUsuario                                                                        String?                            @db.VarChar(36)
-  idPuesto                                                                         Int?
-  idJefeInmediato                                                                  Int?
-  idSite                                                                           Int?
-  nombre                                                                           String?                            @db.VarChar(100)
-  primerApellido                                                                   String?                            @db.VarChar(100)
-  segundoApellido                                                                  String?                            @db.VarChar(100)
-  idCampania                                                                       Int?
-  idTipoSanguineo                                                                  Int?
-  numeroSeguroSocial                                                               String?                            @db.VarChar(15)
-  idEstadoCivil                                                                    Int?
-  fechaNacimiento                                                                  DateTime?                          @db.Date
-  fechaIngreso                                                                     DateTime?                          @db.Date
-  curp                                                                             String?                            @db.VarChar(18)
-  rfc                                                                              String?                            @db.VarChar(18)
-  correo                                                                           String?                            @db.VarChar(250)
-  telefonoMovil                                                                    String?                            @db.VarChar(15)
-  telefonoLocal                                                                    String?                            @db.VarChar(15)
-  idNivelEstudios                                                                  Int?
-  tieneInfonavit                                                                   Boolean?
-  tieneHijos                                                                       Boolean?
-  FechaRegistro                                                                    DateTime?                          @default(now()) @db.Timestamp(0)
-  usuarioRegistro                                                                  String?                            @db.VarChar(250)
-  idModalidad                                                                      Int?
-  idGenero                                                                         Int?
-  numeroInfonavit                                                                  String?                            @db.VarChar(30)
-  numeroHijos                                                                      Int?
-  imagenFirmaAutografa                                                             String?                            @db.VarChar(500)
-  uploadLink                                                                       String?                            @db.VarChar(500)
-  token                                                                            String?                            @db.VarChar(500)
-  activo                                                                           Boolean                            @default(true)
-  artemisUserId                                                                    String?                            @db.VarChar(50)
-  artemisSyncedAt                                                                  DateTime?                          @db.DateTime(0)
-  ArchivosSolicitudes                                                              ArchivosSolicitudes[]
-  Contratos                                                                        Contratos[]
-  CursoParticipantes                                                               CursoParticipantes[]
-  CursoSesiones                                                                    CursoSesiones[]
-  DispositivosAsistencia                                                           DispositivosAsistencia[]
-  CatPuestos                                                                       CatPuestos?                        @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
-  Empleados                                                                        Empleados?                         @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
-  other_Empleados                                                                  Empleados[]                        @relation("EmpleadosToEmpleados")
-  auth_user                                                                        auth_user?                         @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
-  EmpleadosBiometricos                                                             EmpleadosBiometricos?
-  Expedientes                                                                      Expedientes[]
-  HistorialSalarios                                                                HistorialSalarios[]
-  JornadasEmpleado                                                                 JornadasEmpleado[]
-  MovimientosInternos_MovimientosInternos_idAprobadorToEmpleados                   MovimientosInternos[]              @relation("MovimientosInternos_idAprobadorToEmpleados")
-  MovimientosInternos                                                              MovimientosInternos[]
-  MovimientosInternos_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados       MovimientosInternos[]              @relation("MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados")
-  PasosAprobacionIncidencia                                                        PasosAprobacionIncidencia[]
-  PasosAprobacionMovimientoInterno                                                 PasosAprobacionMovimientoInterno[]
-  RegistrosAsistencia                                                              RegistrosAsistencia[]
-  SolicitudesIncidencias_SolicitudesIncidencias_idAprobadorToEmpleados             SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idAprobadorToEmpleados")
-  SolicitudesIncidencias_SolicitudesIncidencias_idEmpleadoToEmpleados              SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idEmpleadoToEmpleados")
-  SolicitudesIncidencias_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados")
-  Vacantes                                                                         Vacantes[]
-  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados                                Vacantes[]                         @relation("Vacantes_idReclutadorAsignadoToEmpleados")
+  idEmpleado                                                                                 Int                                @id @default(autoincrement())
+  numeroEmpleado                                                                             String?                            @db.VarChar(20)
+  idTenant                                                                                   Int?
+  idEmpresa                                                                                  Int?
+  idUsuario                                                                                  String?                            @db.VarChar(36)
+  idPuesto                                                                                   Int?
+  idJefeInmediato                                                                            Int?
+  idSite                                                                                     Int?
+  nombre                                                                                     String?                            @db.VarChar(100)
+  primerApellido                                                                             String?                            @db.VarChar(100)
+  segundoApellido                                                                            String?                            @db.VarChar(100)
+  idCampania                                                                                 Int?
+  idTipoSanguineo                                                                            Int?
+  numeroSeguroSocial                                                                         String?                            @db.VarChar(15)
+  idEstadoCivil                                                                              Int?
+  fechaNacimiento                                                                            DateTime?                          @db.Date
+  fechaIngreso                                                                               DateTime?                          @db.Date
+  curp                                                                                       String?                            @db.VarChar(18)
+  rfc                                                                                        String?                            @db.VarChar(18)
+  correo                                                                                     String?                            @db.VarChar(250)
+  telefonoMovil                                                                              String?                            @db.VarChar(15)
+  telefonoLocal                                                                              String?                            @db.VarChar(15)
+  idNivelEstudios                                                                            Int?
+  tieneInfonavit                                                                             Boolean?
+  tieneHijos                                                                                 Boolean?
+  FechaRegistro                                                                              DateTime?                          @default(now()) @db.Timestamp(0)
+  usuarioRegistro                                                                            String?                            @db.VarChar(250)
+  idModalidad                                                                                Int?
+  idGenero                                                                                   Int?
+  numeroInfonavit                                                                            String?                            @db.VarChar(30)
+  numeroHijos                                                                                Int?
+  imagenFirmaAutografa                                                                       String?                            @db.VarChar(500)
+  uploadLink                                                                                 String?                            @db.VarChar(500)
+  token                                                                                      String?                            @db.VarChar(500)
+  activo                                                                                     Boolean                            @default(true)
+  artemisUserId                                                                              String?                            @db.VarChar(50)
+  artemisSyncedAt                                                                            DateTime?                          @db.DateTime(0)
+  ArchivosSolicitudes                                                                        ArchivosSolicitudes[]
+  Contratos                                                                                  Contratos[]
+  CursoParticipantes                                                                         CursoParticipantes[]
+  CursoSesiones                                                                              CursoSesiones[]
+  DispositivosAsistencia                                                                     DispositivosAsistencia[]
+  CatPuestos                                                                                 CatPuestos?                        @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
+  Empleados                                                                                  Empleados?                         @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
+  other_Empleados                                                                            Empleados[]                        @relation("EmpleadosToEmpleados")
+  auth_user                                                                                  auth_user?                         @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
+  EmpleadosBiometricos                                                                       EmpleadosBiometricos?
+  Expedientes                                                                                Expedientes[]
+  HistorialSalarios                                                                          HistorialSalarios[]
+  JornadasEmpleado                                                                           JornadasEmpleado[]
+  KioscosAsistencia                                                                          KioscosAsistencia[]
+  MovimientosInternos_MovimientosInternos_idAprobadorToEmpleados                             MovimientosInternos[]              @relation("MovimientosInternos_idAprobadorToEmpleados")
+  MovimientosInternos                                                                        MovimientosInternos[]
+  MovimientosInternos_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados                 MovimientosInternos[]              @relation("MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados")
+  PasosAprobacionIncidencia                                                                  PasosAprobacionIncidencia[]
+  PasosAprobacionMovimientoInterno                                                           PasosAprobacionMovimientoInterno[]
+  RegistrosAsistencia_RegistrosAsistencia_idEmpleadoRegistraToEmpleados                      RegistrosAsistencia[]              @relation("RegistrosAsistencia_idEmpleadoRegistraToEmpleados")
+  RegistrosAsistencia                                                                        RegistrosAsistencia[]
+  RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados")
+  RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados  RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados")
+  RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados   RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados")
+  RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados       RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados")
+  RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados     RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados")
+  SolicitudesIncidencias_SolicitudesIncidencias_idAprobadorToEmpleados                       SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idAprobadorToEmpleados")
+  SolicitudesIncidencias_SolicitudesIncidencias_idEmpleadoToEmpleados                        SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idEmpleadoToEmpleados")
+  SolicitudesIncidencias_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados           SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados")
+  Vacantes                                                                                   Vacantes[]
+  Vacantes_Vacantes_idReclutadorAsignadoToEmpleados                                          Vacantes[]                         @relation("Vacantes_idReclutadorAsignadoToEmpleados")
 
   @@unique([idTenant, numeroEmpleado], map: "UK_Empleado_Tenant_Numero")
   @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
@@ -1992,48 +2001,58 @@ model JornadasEmpleado {
 }
 
 model RegistrosAsistencia {
-  idRegistro              BigInt                                   @id @default(autoincrement())
-  idTenant                Int
-  idEmpresa               Int
-  idEmpleado              Int
-  idUsuarioRegistro       String?                                  @db.VarChar(36)
-  ipOrigen                String?                                  @db.VarChar(45)
-  userAgent               String?                                  @db.VarChar(1000)
-  navegador               String?                                  @db.VarChar(100)
-  versionNavegador        String?                                  @db.VarChar(50)
-  sistemaOperativo        String?                                  @db.VarChar(100)
-  tipoDispositivo         String?                                  @db.VarChar(30)
-  idJornada               Int?
-  canal                   RegistrosAsistencia_canal
-  telefonoOrigen          String?                                  @db.VarChar(20)
-  telefonoDestino         String?                                  @db.VarChar(20)
-  tipo                    RegistrosAsistencia_tipo
-  fechaHoraRegistro       DateTime                                 @db.DateTime(0)
-  fechaHoraRecepcion      DateTime                                 @default(now()) @db.DateTime(0)
-  esOffline               Boolean                                  @default(false)
-  latitud                 Decimal?                                 @db.Decimal(10, 8)
-  longitud                Decimal?                                 @db.Decimal(11, 8)
-  resultadoGeocerca       RegistrosAsistencia_resultadoGeocerca    @default(NO_APLICA)
-  idSitioDetectado        Int?
-  idExternoArtemis        BigInt?                                  @unique(map: "UK_Idempotencia_Artemis")
-  idDispositivoArtemis    Int?
-  nombreDispositivo       String?                                  @db.VarChar(150)
-  urlFoto                 String?                                  @db.VarChar(500)
-  uuidCliente             String?                                  @unique(map: "UK_Idempotencia_Movil") @db.VarChar(64)
-  estatusProcesamiento    RegistrosAsistencia_estatusProcesamiento @default(PENDIENTE)
-  idDispositivo           Int?
-  idEvidencia             Int?
-  idGeocerca              Int?
-  precisionMetros         Decimal?                                 @db.Decimal(7, 2)
-  distanciaGeocercaMetros Decimal?                                 @db.Decimal(9, 2)
-  ubicacionSimulada       Boolean                                  @default(false)
-  desfaseRelojSegundos    Int?
-  motivoFueraGeocerca     String?                                  @db.VarChar(255)
-  versionApp              String?                                  @db.VarChar(20)
-  zonaHoraria             String?                                  @db.VarChar(50)
-  Empleados               Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Registros_Empleados")
-  JornadasEmpleado        JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: NoAction, map: "FK_Registros_Jornadas")
-  auth_user               auth_user?                               @relation(fields: [idUsuarioRegistro], references: [uuid], map: "FK_Registros_Usuario")
+  idRegistro                                                  BigInt                                   @id @default(autoincrement())
+  idTenant                                                    Int
+  idEmpresa                                                   Int
+  idEmpleado                                                  Int
+  idUsuarioRegistro                                           String?                                  @db.VarChar(36)
+  ipOrigen                                                    String?                                  @db.VarChar(45)
+  userAgent                                                   String?                                  @db.VarChar(1000)
+  navegador                                                   String?                                  @db.VarChar(100)
+  versionNavegador                                            String?                                  @db.VarChar(50)
+  sistemaOperativo                                            String?                                  @db.VarChar(100)
+  tipoDispositivo                                             String?                                  @db.VarChar(30)
+  idJornada                                                   Int?
+  idKiosco                                                    Int?
+  idEmpleadoRegistra                                          Int?
+  numeroEmpleadoCapturado                                     String?                                  @db.VarChar(20)
+  idRegistroOrigen                                            BigInt?
+  canal                                                       RegistrosAsistencia_canal
+  telefonoOrigen                                              String?                                  @db.VarChar(20)
+  telefonoDestino                                             String?                                  @db.VarChar(20)
+  tipo                                                        RegistrosAsistencia_tipo
+  fechaHoraRegistro                                           DateTime                                 @db.DateTime(0)
+  fechaHoraRecepcion                                          DateTime                                 @default(now()) @db.DateTime(0)
+  esOffline                                                   Boolean                                  @default(false)
+  latitud                                                     Decimal?                                 @db.Decimal(10, 8)
+  longitud                                                    Decimal?                                 @db.Decimal(11, 8)
+  resultadoGeocerca                                           RegistrosAsistencia_resultadoGeocerca    @default(NO_APLICA)
+  idSitioDetectado                                            Int?
+  idExternoArtemis                                            BigInt?                                  @unique(map: "UK_Idempotencia_Artemis")
+  idDispositivoArtemis                                        Int?
+  nombreDispositivo                                           String?                                  @db.VarChar(150)
+  urlFoto                                                     String?                                  @db.VarChar(500)
+  uuidCliente                                                 String?                                  @unique(map: "UK_Idempotencia_Movil") @db.VarChar(64)
+  estatusProcesamiento                                        RegistrosAsistencia_estatusProcesamiento @default(PENDIENTE)
+  idDispositivo                                               Int?
+  idEvidencia                                                 Int?
+  idGeocerca                                                  Int?
+  precisionMetros                                             Decimal?                                 @db.Decimal(7, 2)
+  distanciaGeocercaMetros                                     Decimal?                                 @db.Decimal(9, 2)
+  ubicacionSimulada                                           Boolean                                  @default(false)
+  desfaseRelojSegundos                                        Int?
+  motivoFueraGeocerca                                         String?                                  @db.VarChar(255)
+  versionApp                                                  String?                                  @db.VarChar(20)
+  zonaHoraria                                                 String?                                  @db.VarChar(50)
+  Empleados_RegistrosAsistencia_idEmpleadoRegistraToEmpleados Empleados?                               @relation("RegistrosAsistencia_idEmpleadoRegistraToEmpleados", fields: [idEmpleadoRegistra], references: [idEmpleado], onUpdate: NoAction, map: "FK_Registros_EmpleadoRegistra")
+  Empleados                                                   Empleados                                @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_Registros_Empleados")
+  JornadasEmpleado                                            JornadasEmpleado?                        @relation(fields: [idJornada], references: [idJornada], onUpdate: NoAction, map: "FK_Registros_Jornadas")
+  KioscosAsistencia                                           KioscosAsistencia?                       @relation(fields: [idKiosco], references: [idKiosco], onUpdate: NoAction, map: "FK_Registros_Kiosco")
+  RegistrosAsistencia                                         RegistrosAsistencia?                     @relation("RegistrosAsistenciaToRegistrosAsistencia", fields: [idRegistroOrigen], references: [idRegistro], onUpdate: NoAction, map: "FK_Registros_Origen")
+  other_RegistrosAsistencia                                   RegistrosAsistencia[]                    @relation("RegistrosAsistenciaToRegistrosAsistencia")
+  auth_user                                                   auth_user?                               @relation(fields: [idUsuarioRegistro], references: [uuid], map: "FK_Registros_Usuario")
+  RegistrosKioscoPorIdentificar                               RegistrosKioscoPorIdentificar?
+  RevisionesRegistroAsistencia                                RevisionesRegistroAsistencia[]
 
   @@index([idJornada], map: "FK_Registros_Jornadas")
   @@index([idEmpleado, fechaHoraRegistro], map: "IDX_Registros_Empleado_Fecha")
@@ -2042,6 +2061,10 @@ model RegistrosAsistencia {
   @@index([idDispositivo], map: "IDX_Registros_Dispositivo")
   @@index([telefonoOrigen], map: "IDX_Registros_TelefonoOrigen")
   @@index([idUsuarioRegistro], map: "IDX_Registros_Usuario")
+  @@index([idRegistroOrigen], map: "FK_Registros_Origen")
+  @@index([idEmpleadoRegistra], map: "IDX_Registros_EmpleadoRegistra")
+  @@index([numeroEmpleadoCapturado], map: "IDX_Registros_Identificacion")
+  @@index([idKiosco, fechaHoraRegistro], map: "IDX_Registros_Kiosco_Fecha")
 }
 
 model ConfiguracionJornadaLegal {
@@ -2163,22 +2186,27 @@ model DispositivosAsistencia {
 }
 
 model AsistenciaEvidencias {
-  idEvidencia   Int                       @id @default(autoincrement())
-  idTenant      Int
-  idEmpresa     Int
-  idEmpleado    Int
-  tipo          AsistenciaEvidencias_tipo @default(SELFIE)
-  rutaArchivo   String?                   @db.VarChar(500)
-  mimeType      String?                   @db.VarChar(100)
-  tamanioBytes  Int?
-  hashSha256    String?                   @db.VarChar(64)
-  fechaCaptura  DateTime?                 @db.DateTime(0)
-  fechaRegistro DateTime                  @default(now()) @db.DateTime(0)
-  consumida     Boolean                   @default(false)
-  fechaPurga    DateTime?                 @db.Date
+  idEvidencia                   Int                             @id @default(autoincrement())
+  idTenant                      Int
+  idEmpresa                     Int
+  idEmpleado                    Int?
+  idKiosco                      Int?
+  rostroDetectado               Boolean                         @default(false)
+  tipo                          AsistenciaEvidencias_tipo       @default(SELFIE)
+  rutaArchivo                   String?                         @db.VarChar(500)
+  mimeType                      String?                         @db.VarChar(100)
+  tamanioBytes                  Int?
+  hashSha256                    String?                         @db.VarChar(64)
+  fechaCaptura                  DateTime?                       @db.DateTime(0)
+  fechaRegistro                 DateTime                        @default(now()) @db.DateTime(0)
+  consumida                     Boolean                         @default(false)
+  fechaPurga                    DateTime?                       @db.Date
+  KioscosAsistencia             KioscosAsistencia?              @relation(fields: [idKiosco], references: [idKiosco], onUpdate: NoAction, map: "FK_Evidencia_Kiosco")
+  RegistrosKioscoPorIdentificar RegistrosKioscoPorIdentificar[]
 
   @@index([idEmpleado, consumida], map: "IDX_Evidencia_Empleado")
   @@index([fechaPurga], map: "IDX_Evidencia_Purga")
+  @@index([idKiosco], map: "IDX_Evidencia_Kiosco")
 }
 
 model CatModuloFlujo {
@@ -2308,7 +2336,6 @@ model CursoLeccionProgresos {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model CursoLecciones {
-  materiales             Json?
   idLeccion              Int                         @id @default(autoincrement())
   idTenant               Int
   idCursoModulo          Int
@@ -2318,6 +2345,7 @@ model CursoLecciones {
   puntosClave            Json?
   slides                 Json?
   quiz                   Json?
+  materiales             Json?
   urlVideo               String?                     @db.VarChar(500)
   estatusVideo           CursoLecciones_estatusVideo @default(pendiente)
   idTrabajoVideo         String?                     @db.VarChar(100)
@@ -2606,6 +2634,130 @@ model DetalleBajasPersonal {
   MovimientosInternos MovimientosInternos @relation(fields: [idMovimiento], references: [idMovimiento], map: "fk_detalle_baja_movimiento")
 }
 
+model KioscoCodigosActivacion {
+  idCodigo          Int               @id @default(autoincrement())
+  idKiosco          Int
+  codigoHash        String            @unique(map: "UK_KioscoCodigo_Hash") @db.Char(64)
+  expiraEn          DateTime          @db.DateTime(0)
+  usadoEn           DateTime?         @db.DateTime(0)
+  invalidadoEn      DateTime?         @db.DateTime(0)
+  intentosFallidos  Int               @default(0)
+  fechaCreacion     DateTime          @default(now()) @db.DateTime(0)
+  KioscosAsistencia KioscosAsistencia @relation(fields: [idKiosco], references: [idKiosco], onDelete: Cascade, onUpdate: NoAction, map: "FK_KioscoCodigo_Kiosco")
+
+  @@index([expiraEn, usadoEn], map: "IDX_KioscoCodigo_Expiracion")
+  @@index([idKiosco], map: "IDX_KioscoCodigo_Kiosco")
+}
+
+model KioscoSites {
+  idKiosco          Int
+  idSite            Int
+  fechaAsignacion   DateTime          @default(now()) @db.DateTime(0)
+  KioscosAsistencia KioscosAsistencia @relation(fields: [idKiosco], references: [idKiosco], onDelete: Cascade, map: "FK_KioscoSites_Kiosco")
+  CatSites          CatSites          @relation(fields: [idSite], references: [idSite], map: "FK_KioscoSites_Site")
+
+  @@id([idKiosco, idSite])
+  @@index([idSite], map: "IDX_KioscoSites_Site")
+}
+
+model KioscosAsistencia {
+  idKiosco                      Int                             @id @default(autoincrement())
+  idTenant                      Int
+  idEmpresa                     Int
+  codigo                        String                          @db.VarChar(30)
+  modalidad                     KioscosAsistencia_modalidad
+  idEmpleadoResponsable         Int
+  estatus                       KioscosAsistencia_estatus       @default(PENDIENTE_ACTIVACION)
+  identificadorDispositivo      String?                         @unique(map: "UK_Kiosco_Dispositivo") @db.VarChar(150)
+  tokenJti                      String?                         @unique(map: "UK_Kiosco_TokenJti") @db.VarChar(100)
+  ultimoLatido                  DateTime?                       @db.DateTime(0)
+  politicas                     Json?
+  fechaCreacion                 DateTime                        @default(now()) @db.DateTime(0)
+  fechaActualizacion            DateTime                        @default(now()) @db.DateTime(0)
+  fechaActivacion               DateTime?                       @db.DateTime(0)
+  fechaBaja                     DateTime?                       @db.DateTime(0)
+  AsistenciaEvidencias          AsistenciaEvidencias[]
+  KioscoCodigosActivacion       KioscoCodigosActivacion[]
+  KioscoSites                   KioscoSites[]
+  Empleados                     Empleados                       @relation(fields: [idEmpleadoResponsable], references: [idEmpleado], map: "FK_Kiosco_Responsable")
+  RegistrosAsistencia           RegistrosAsistencia[]
+  RegistrosKioscoPorIdentificar RegistrosKioscoPorIdentificar[]
+  RevisionesRegistroAsistencia  RevisionesRegistroAsistencia[]
+
+  @@unique([idTenant, codigo], map: "UK_Kiosco_Tenant_Codigo")
+  @@index([idTenant, idEmpresa, estatus], map: "IDX_Kiosco_Estatus")
+  @@index([idEmpleadoResponsable], map: "IDX_Kiosco_Responsable")
+}
+
+model RegistrosKioscoPorIdentificar {
+  idPorIdentificar                                                       BigInt                                       @id @default(autoincrement())
+  idTenant                                                               Int
+  idEmpresa                                                              Int
+  idKiosco                                                               Int
+  idSite                                                                 Int?
+  idEmpleadoCandidato                                                    Int?
+  numeroCapturado                                                        String                                       @db.VarChar(20)
+  tipo                                                                   RegistrosKioscoPorIdentificar_tipo
+  tipoIncidencia                                                         RegistrosKioscoPorIdentificar_tipoIncidencia
+  fechaHoraRegistro                                                      DateTime                                     @db.DateTime(0)
+  latitud                                                                Decimal?                                     @db.Decimal(10, 8)
+  longitud                                                               Decimal?                                     @db.Decimal(11, 8)
+  idEvidencia                                                            Int?
+  uuidCliente                                                            String                                       @unique(map: "UK_Kiosco_Identificar_UUID") @db.VarChar(64)
+  estatus                                                                RegistrosKioscoPorIdentificar_estatus        @default(PENDIENTE)
+  idEmpleadoAsignado                                                     Int?
+  agregarEmpleadoSite                                                    Boolean                                      @default(false)
+  idRegistroGenerado                                                     BigInt?                                      @unique(map: "UK_Kiosco_Identificar_Registro")
+  motivo                                                                 String?                                      @db.VarChar(500)
+  idEmpleadoRevisor                                                      Int?
+  fechaResolucion                                                        DateTime?                                    @db.DateTime(0)
+  fechaCreacion                                                          DateTime                                     @default(now()) @db.DateTime(0)
+  Empleados_RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados Empleados?                                   @relation("RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados", fields: [idEmpleadoCandidato], references: [idEmpleado], onUpdate: NoAction, map: "FK_KioscoIdentificar_Candidato")
+  Empleados_RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados  Empleados?                                   @relation("RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados", fields: [idEmpleadoAsignado], references: [idEmpleado], onUpdate: NoAction, map: "FK_KioscoIdentificar_EmpleadoAsignado")
+  AsistenciaEvidencias                                                   AsistenciaEvidencias?                        @relation(fields: [idEvidencia], references: [idEvidencia], onUpdate: NoAction, map: "FK_KioscoIdentificar_Evidencia")
+  KioscosAsistencia                                                      KioscosAsistencia                            @relation(fields: [idKiosco], references: [idKiosco], onUpdate: NoAction, map: "FK_KioscoIdentificar_Kiosco")
+  RegistrosAsistencia                                                    RegistrosAsistencia?                         @relation(fields: [idRegistroGenerado], references: [idRegistro], onUpdate: NoAction, map: "FK_KioscoIdentificar_Registro")
+  Empleados_RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados   Empleados?                                   @relation("RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados", fields: [idEmpleadoRevisor], references: [idEmpleado], onUpdate: NoAction, map: "FK_KioscoIdentificar_Revisor")
+  CatSites                                                               CatSites?                                    @relation(fields: [idSite], references: [idSite], onDelete: Restrict, onUpdate: NoAction, map: "FK_KioscoIdentificar_Site")
+  RevisionesRegistroAsistencia                                           RevisionesRegistroAsistencia[]
+
+  @@index([idEmpleadoAsignado], map: "FK_KioscoIdentificar_EmpleadoAsignado")
+  @@index([idEvidencia], map: "FK_KioscoIdentificar_Evidencia")
+  @@index([idEmpleadoRevisor], map: "FK_KioscoIdentificar_Revisor")
+  @@index([idEmpleadoCandidato], map: "IDX_Kiosco_Identificar_Empleado")
+  @@index([idKiosco, estatus, fechaHoraRegistro], map: "IDX_Kiosco_Identificar_Estatus")
+  @@index([numeroCapturado], map: "IDX_Kiosco_Identificar_Numero")
+  @@index([idSite, estatus], map: "IDX_Kiosco_Identificar_Site")
+}
+
+model RevisionesRegistroAsistencia {
+  idRevision                                                          BigInt                              @id @default(autoincrement())
+  idTenant                                                            Int
+  idEmpresa                                                           Int
+  idRegistro                                                          BigInt?
+  idPorIdentificar                                                    BigInt?
+  idKiosco                                                            Int
+  accion                                                              RevisionesRegistroAsistencia_accion
+  banderas                                                            Json?
+  datosAnteriores                                                     Json?
+  datosNuevos                                                         Json?
+  idEmpleadoNuevo                                                     Int?
+  motivo                                                              String?                             @db.VarChar(500)
+  idEmpleadoRevisor                                                   Int?
+  fechaRevision                                                       DateTime                            @default(now()) @db.DateTime(0)
+  Empleados_RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados   Empleados?                          @relation("RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados", fields: [idEmpleadoNuevo], references: [idEmpleado], onUpdate: NoAction, map: "FK_Revision_EmpleadoNuevo")
+  RegistrosKioscoPorIdentificar                                       RegistrosKioscoPorIdentificar?      @relation(fields: [idPorIdentificar], references: [idPorIdentificar], onUpdate: NoAction, map: "FK_Revision_Identificar")
+  KioscosAsistencia                                                   KioscosAsistencia                   @relation(fields: [idKiosco], references: [idKiosco], onUpdate: NoAction, map: "FK_Revision_Kiosco")
+  RegistrosAsistencia                                                 RegistrosAsistencia?                @relation(fields: [idRegistro], references: [idRegistro], onUpdate: NoAction, map: "FK_Revision_Registro")
+  Empleados_RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados Empleados?                          @relation("RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados", fields: [idEmpleadoRevisor], references: [idEmpleado], onUpdate: NoAction, map: "FK_Revision_Revisor")
+
+  @@index([idEmpleadoNuevo], map: "FK_Revision_EmpleadoNuevo")
+  @@index([idPorIdentificar], map: "IDX_Revision_Incidencia")
+  @@index([idKiosco, fechaRevision], map: "IDX_Revision_Kiosco")
+  @@index([idRegistro], map: "IDX_Revision_Registro")
+  @@index([idEmpleadoRevisor], map: "IDX_Revision_Revisor")
+}
+
 enum Entrevistas_interview_type {
   PERSONA
   IA
@@ -2691,13 +2843,6 @@ enum JornadasEmpleado_estatusJornada {
   DESCANSO
 }
 
-enum RegistrosAsistencia_estatusProcesamiento {
-  PENDIENTE
-  PROCESADO
-  DUPLICADO
-  RECHAZADO
-}
-
 enum CatDispositivos_tipo {
   BIOMETRICO
   IVR
@@ -2711,13 +2856,6 @@ enum RegistrosAsistencia_resultadoGeocerca {
   NO_APLICA
   SIN_UBICACION
   PRECISION_INSUFICIENTE
-}
-
-enum CatSites_TipoAsistencia {
-  IVR
-  BIOMETRICO
-  APP_MOVIL
-  NFC
 }
 
 enum DispositivosAsistencia_estatus {
@@ -2853,12 +2991,54 @@ enum PasosAprobacionMovimientoInterno_estatus {
   RECHAZADA
 }
 
+enum KioscosAsistencia_modalidad {
+  FIJO
+  CUADRILLA
+}
+
+enum KioscosAsistencia_estatus {
+  PENDIENTE_ACTIVACION
+  ACTIVO
+  BLOQUEADO
+  BAJA
+}
+
+enum RevisionesRegistroAsistencia_accion {
+  VALIDAR
+  RECHAZAR
+  REASIGNAR
+  AUTORIZAR_UBICACION
+  CORREGIR
+}
+
+enum RegistrosKioscoPorIdentificar_tipo {
+  ENTRADA
+  SALIDA
+  INICIO_COMIDA
+  FIN_COMIDA
+}
+
+enum RegistrosKioscoPorIdentificar_tipoIncidencia {
+  EMPLEADO_NO_ASIGNADO
+  EMPLEADO_NO_ENCONTRADO
+  EMPLEADO_INACTIVO
+  OTRA
+}
+
 enum RelEmpleadosSites_MetodoAsistencia {
   IVR
   BIOMETRICO
   APP_MOVIL
   NFC
+  KIOSCO
   CUALQUIERA
+}
+
+enum RegistrosKioscoPorIdentificar_estatus {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+  CORREGIDA
 }
 
 enum RegistrosAsistencia_canal {
@@ -2868,4 +3048,21 @@ enum RegistrosAsistencia_canal {
   NFC
   WEB_MANUAL
   CLOCK_WEB
+  KIOSCO
+}
+
+enum CatSites_TipoAsistencia {
+  IVR
+  BIOMETRICO
+  APP_MOVIL
+  NFC
+  KIOSCO
+}
+
+enum RegistrosAsistencia_estatusProcesamiento {
+  PENDIENTE
+  PROCESADO
+  DUPLICADO
+  RECHAZADO
+  ANULADO
 }

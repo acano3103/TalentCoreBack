@@ -7,7 +7,7 @@ export interface LogbookItemDto {
     };
     fechaHoraRegistro: Date;
     tipo: 'ENTRADA' | 'SALIDA' | 'INICIO_COMIDA' | 'FIN_COMIDA';
-    canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL' | 'CLOCK_WEB';
+    canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL' | 'CLOCK_WEB' | 'KIOSCO';
     ubicacionDispositivo: string | null;
     geocerca: {
         resultado:
@@ -29,7 +29,7 @@ export interface LogbookItemDto {
         fechaHoraRecepcion: Date;
         label: string; // ej. "En línea", "Offline", "Artemis"
     };
-    estatusProcesamiento: 'PENDIENTE' | 'PROCESADO' | 'DUPLICADO' | 'RECHAZADO';
+    estatusProcesamiento: 'PENDIENTE' | 'PROCESADO' | 'DUPLICADO' | 'RECHAZADO' | 'ANULADO';
 }
 
 export interface PaginatedLogbookResponseDto {
