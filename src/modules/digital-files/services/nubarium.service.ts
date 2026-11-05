@@ -67,6 +67,11 @@ private tieneServicioNubarium(campo: string): boolean {
     domicilio: 'https://ocr.nubarium.com/ocr/v2/comprobante_domicilio',
     __default__: '',
 };
+    // Regla de negocio: solo se rechaza con evidencia clara. Si Nubarium no pudo leer o validar, el documento pasa.
+    private readonly TOLERANCIA_CURP_OCR = 2;          // letras distintas que se toman como error de lectura
+    private readonly RECHAZAR_CALLE_DISTINTA = false;  // calle distinta en el comprobante: solo aviso
+    private readonly RECHAZO_CLARO_REGEX = /falso|falsificad|alterad|ap[oó]crif|fraud|manipulad|rfc\s.*(no\s+existe|no\s+(es\s+)?v[aá]lid|inv[aá]lid|no\s+registrad|cancelad)|no\s+(existe|est[aá]\s+registrad)/i;
+
     constructor(private readonly configService: ConfigService) { }
 
     /**
@@ -375,16 +380,25 @@ const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https
                 }
 
                 if (!resultado.validado) {
-                    resultado.motivo_rechazo = data?.message || data?.mensaje || data?.error || data?.details || 'Documento no válido según Nubarium';
+                    const mensaje = data?.message || data?.mensaje || data?.error || data?.details || 'Documento no válido según Nubarium';
+                    if (this.esRechazoClaro(mensaje)) {
+                        resultado.motivo_rechazo = mensaje;
+                    } else {
+                        this.aceptarSinValidar(resultado, mensaje);
+                        resultado.vigencia = this.calcularVigencia(campoNormalizado, {}, diasVigenciaDefault ?? null);
+                    }
                 }
 
                
                 // ── Paso Extra: Si es INE/IFE, comparamos el CURP extraído contra el CURP real del empleado ──
-                if (resultado.validado && this.esCampoIne(campoNormalizado) && curpEmpleado) {
+                if (resultado.validado && !resultado.advertencia && this.esCampoIne(campoNormalizado) && curpEmpleado) {
                     const curpExtraido = (data?.curp || '').trim().toUpperCase();
                     const curpReal = curpEmpleado.trim().toUpperCase();
 
-                    if (curpExtraido && curpReal && curpExtraido !== curpReal) {
+                    const diferencias = this.contarDiferencias(curpExtraido, curpReal);
+                    if (curpExtraido && curpReal && diferencias > 0 && diferencias <= this.TOLERANCIA_CURP_OCR) {
+                        this.aceptarSinValidar(resultado, `Posible error de lectura de la CURP en la INE (${diferencias} ${diferencias === 1 ? 'letra distinta' : 'letras distintas'}).`);
+                    } else if (curpExtraido && curpReal && curpExtraido !== curpReal) {
                         resultado.validado = false;
                         resultado.motivo_rechazo = `La INE no pertenece al empleado. CURP en la INE: ${curpExtraido}, CURP registrado: ${curpReal}`;
                         this.logger.warn(`CURP no coincide para '${nombreArchivo}' — OCR: ${curpExtraido} vs Empleado: ${curpReal}`);
@@ -392,26 +406,31 @@ const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https
                 }
 
                 // ── Paso Extra: Si es comprobante de domicilio, comparamos la calle extraída contra la del formulario ──
-                if (resultado.validado && this.esCampoComprobante(campoNormalizado) && calleEmpleado) {
+                if (resultado.validado && !resultado.advertencia && this.esCampoComprobante(campoNormalizado) && calleEmpleado) {
                     const calleExtraida = (data?.calle || '').trim().toUpperCase();
                     const calleReal = calleEmpleado.trim().toUpperCase();
 
                     if (calleExtraida && calleReal && !calleExtraida.includes(calleReal) && !calleReal.includes(calleExtraida)) {
-                        resultado.validado = false;
-                        resultado.motivo_rechazo = `El comprobante de domicilio no coincide. Calle en el documento: ${calleExtraida}, calle registrada: ${calleReal}`;
+                        const motivoCalle = `El comprobante de domicilio no coincide. Calle en el documento: ${calleExtraida}, calle registrada: ${calleReal}`;
+                        if (this.RECHAZAR_CALLE_DISTINTA) {
+                            resultado.validado = false;
+                            resultado.motivo_rechazo = motivoCalle;
+                        } else {
+                            this.aceptarSinValidar(resultado, motivoCalle);
+                        }
                         this.logger.warn(`Domicilio no coincide para '${nombreArchivo}' — Documento: ${calleExtraida} vs Empleado: ${calleReal}`);
                     }
                 }
 
 
                 // ── Calcular vigencia (fechaEmision/fechaVencimiento) si el documento sigue siendo válido ──
-                if (resultado.validado) {
+                if (resultado.validado && !resultado.vigencia) {
                     resultado.vigencia = this.calcularVigencia(campoNormalizado, data, diasVigenciaDefault ?? null);
                 }
 
 
                 // ── Paso Extra: Si es INE/IFE y pasó el OCR (y el CURP coincide), validar Lista Nominal ──
-                if (resultado.validado && this.esCampoIne(campoNormalizado)) {
+                if (resultado.validado && !resultado.advertencia && this.esCampoIne(campoNormalizado)) {
                     const payloadNominal = this.construirPayloadValidaIne(data);
 
                     if (payloadNominal) {
@@ -633,7 +652,9 @@ const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https
             resultado.respuesta_json = csfResult.respuesta_json;
             resultado.validado = csfResult.success;
             if (!csfResult.success) {
-                resultado.motivo_rechazo = csfResult.error || 'No se pudo validar la Constancia de Situación Fiscal.';
+                const mensaje = csfResult.error || 'No se pudo validar la Constancia de Situación Fiscal.';
+                if (this.esRechazoClaro(mensaje)) resultado.motivo_rechazo = mensaje;
+                else this.aceptarSinValidar(resultado, mensaje);
             }
         } catch (error: any) {
             this.setInfraestructuraError(resultado, 503, `[INFRA] Error de conexión con Nubarium CSF/CIF: ${error.message}`);
@@ -751,6 +772,24 @@ const urlCompleta = endpoint.startsWith('http://') || endpoint.startsWith('https
   
 
 
+
+    // Nubarium no pudo leer o validar: el documento pasa y queda marcado en la bitácora
+    private aceptarSinValidar(res: NubariumStandardResult, mensaje: string) {
+        res.validado = true;
+        res.advertencia = `Aceptado sin validar: ${mensaje}`;
+        res.motivo_rechazo = res.advertencia;
+    }
+
+    private esRechazoClaro(mensaje: string | null | undefined): boolean {
+        return !!mensaje && this.RECHAZO_CLARO_REGEX.test(mensaje);
+    }
+
+    private contarDiferencias(a: string, b: string): number {
+        if (!a || !b || a.length !== b.length) return Number.MAX_SAFE_INTEGER;
+        let n = 0;
+        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
+        return n;
+    }
 
     private setInfraestructuraError(res: NubariumStandardResult, status: number, msg: string) {
         res.error_infraestructura = true;
