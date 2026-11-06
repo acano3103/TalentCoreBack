@@ -14,6 +14,7 @@ import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashb
 import { UsersModule } from './modules/users/users.module';
 import { INCIDENTS_SUBMODULES, IncidentsModule } from './modules/incidents/incidents.module';
 import { EmployeesModule } from './modules/employees/employees.module';
+import { NfcModule } from './modules/integrations/providers/attendance/artemis/nfc/nfc.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -80,7 +81,7 @@ async function bootstrap() {
     .build();
 
   const mobileDocument = SwaggerModule.createDocument(app, mobileConfig, {
-    include: [MobileModule, ...MOBILE_SUBMODULES, EmployeesModule, AttendanceModule, WorkShiftsModule, LogbookModule, AttendanceDashboardModule, UsersModule, IncidentsModule, ...INCIDENTS_SUBMODULES],
+    include: [MobileModule, ...MOBILE_SUBMODULES, EmployeesModule, AttendanceModule, WorkShiftsModule, LogbookModule, AttendanceDashboardModule, UsersModule, IncidentsModule, ...INCIDENTS_SUBMODULES, NfcModule],
   });
 
   // 3. Montar Scalar para la App Móvil

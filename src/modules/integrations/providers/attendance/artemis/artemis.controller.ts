@@ -4,6 +4,7 @@ import { ArtemisService } from './artemis.service';
 import { ArtemisClockInDto } from './dto/artemis-clock-in.dto';
 import { ArtemisApiKeyGuard } from './guards/artemis-api-key.guard';
 import { ArtemisDeviceItemDto } from './dto/artemis-device.dto';
+import { TenantRequestDto } from './dto/tenant-request.dto';
 
 @ApiTags('Artemis Attendance')
 @ApiSecurity('x-api-key')
@@ -36,5 +37,17 @@ export class ArtemisController {
     ) {
         const listaDispositivos = Array.isArray(body) ? body : [body];
         return this.artemisService.syncDevices(listaDispositivos);
+    }
+
+    // Endpoint para obtener el catalogo de todos los servicios que pertenecen a un tenanta especifico
+    @Post('locations')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Get tenant locations', description: 'Retrieves all locations associated with the specified tenant.' })
+    @ApiBody({ type: TenantRequestDto })
+    @ApiResponse({ status: 200, description: 'Locations retrieved successfully.' })
+    @ApiResponse({ status: 400, description: 'Invalid request data.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid API key.' })
+    getLocations(@Body() body: TenantRequestDto) {
+        return this.artemisService.getLocations(body);
     }
 }

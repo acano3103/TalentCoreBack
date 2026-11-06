@@ -11,6 +11,7 @@ import { DIAS_MAP, VENTANA_DUPLICADO_SEGUNDOS } from './constans/constans';
 import { ArtemisClockInDto } from './dto/artemis-clock-in.dto';
 import { ArtemisDeviceItemDto, TipoDispositivoEnum } from './dto/artemis-device.dto';
 import { resolverTenantUnico } from '../utils/resolver-tenant-unico.util';
+import { TenantRequestDto } from './dto/tenant-request.dto';
 
 @Injectable()
 export class ArtemisService {
@@ -527,5 +528,48 @@ export class ArtemisService {
             message: `Dispositivos sincronizados exitosamente. Total: ${resultados.length}`,
             totalSincronizados: resultados.length,
         };
+    }
+
+    async getLocations(dto: TenantRequestDto) {
+        const { tenantId, attendanceMethod } = dto;
+
+        if (!tenantId || tenantId <= 0) {
+            throw new BadRequestException('A valid tenant ID is required.');
+        }
+
+        const locations = await this.prisma.catSites.findMany({
+            where: {
+                idTenant: tenantId,
+                ...(attendanceMethod && attendanceMethod !== 'ALL'
+                    ? { TipoAsistencia: attendanceMethod }
+                    : {}),
+            },
+            select: {
+                idSite: true,
+                Descripcion: true,
+                Calle: true,
+                NoExterior: true,
+                NoInterior: true,
+                Colonia: true,
+                MunicipioDelegacion: true,
+                Estado: true,
+                CodigoPostal: true,
+                Pais: true,
+                Latitud: true,
+                Longitud: true,
+                TipoAsistencia: true,
+                zonaHoraria: true,
+                FechaRegistro: true
+            },
+            orderBy: {
+                Descripcion: 'asc',
+            },
+        });
+
+        this.logger.log(
+            `Retrieved ${locations.length} locations for tenant ${tenantId} using attendance method: ${attendanceMethod ?? 'ALL'}.`,
+        );
+
+        return locations;
     }
 }
