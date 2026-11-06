@@ -191,7 +191,7 @@ export class ArtemisService {
                 },
             });
 
-            if (!dispositivo) {
+            if (!dispositivo?.idSite) {
                 idSite = null;
             } else {
                 idSite = dispositivo.idSite;
@@ -247,6 +247,26 @@ export class ArtemisService {
 
                     idSite = didCatalogo.idSite;
                 }
+            }
+        }
+
+        // Case 3: Como ultimo recurso tomamos la ubicación principal del empleado
+        if (!idSite) {
+            const empleado = await this.prisma.empleados.findUnique({
+                where: {
+                    idEmpleado,
+                },
+                select: {
+                    idSite: true,
+                },
+            });
+
+            if (empleado?.idSite) {
+                idSite = empleado.idSite;
+
+                this.logger.warn(
+                    `No location was found from the device or phone number for employee #${numeroEmpleado}. Using the employee's primary location: ${idSite}.`,
+                );
             }
         }
 
