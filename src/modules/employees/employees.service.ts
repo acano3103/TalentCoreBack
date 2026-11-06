@@ -423,6 +423,8 @@ export class EmployeesService {
     search: string,
     limit: number,
     withoutManager: boolean = false,
+    idSite?: string,
+    idUnidadOperativa?: string,
   ) {
     const skip = (page - 1) * limit;
 
@@ -440,6 +442,16 @@ export class EmployeesService {
     // Condición opcional para empleados sin jefe inmediato asignado
     const withoutManagerCondition = withoutManager
       ? Prisma.sql`AND (ep.idJefeInmediato IS NULL OR ep.idJefeInmediato = 0)`
+      : Prisma.empty;
+
+    // Optional location filter
+    const siteCondition = idSite?.trim()
+      ? Prisma.sql`AND ep.idSite = ${Number(idSite)}`
+      : Prisma.empty;
+
+    // Optional operational unit filter
+    const operationalUnitCondition = idUnidadOperativa?.trim()
+      ? Prisma.sql`AND s.idUnidadOperativa = ${Number(idUnidadOperativa)}`
       : Prisma.empty;
 
     // 1. Obtener registros paginados
@@ -474,6 +486,8 @@ export class EmployeesService {
         -- AND ex.idEstatus = 4
         ${searchCondition}
         ${withoutManagerCondition}
+        ${siteCondition}
+        ${operationalUnitCondition}
       ORDER BY ep.nombre ASC
       LIMIT ${limit} OFFSET ${skip};
     `;
@@ -492,13 +506,16 @@ export class EmployeesService {
         ) AS unassignedSync
       FROM Empleados ep
       LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+      LEFT JOIN CatSites s ON s.idSite = ep.idSite
       INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
       WHERE ep.idEmpresa = ${companyId}
         AND ep.idTenant = ${activeUser.idTenant}
         AND ep.activo = 1
         -- AND ex.idEstatus = 4
         ${searchCondition}
-        ${withoutManagerCondition};
+        ${withoutManagerCondition}
+        ${siteCondition}
+        ${operationalUnitCondition}
     `;
 
     // Ejecución paralela

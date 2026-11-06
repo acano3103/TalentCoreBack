@@ -39,9 +39,11 @@ export class EmployeesController {
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
     @Query('without_manager', new DefaultValuePipe(false), ParseBoolPipe) withoutManager?: boolean,
+    @Query('idSite') idSite?: string,
+    @Query('idUnidadOperativa') idUnidadOperativa?: string,
   ) {
     const querySearch = search || '';
-    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager);
+    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager, idSite, idUnidadOperativa);
   }
 
   // Endpoint que obtiene a todos los subordinados de un empleado
