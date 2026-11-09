@@ -16,6 +16,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { MediaPathService } from 'src/common/services/media-path.service';
 import { TenantsService } from '../super-admin/tenants/tenants.service';
+import { EmployeesService } from '../employees/employees.service';
 
 
 @Injectable()
@@ -27,6 +28,7 @@ export class PostulationsService {
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly tenantsService: TenantsService,
+    private readonly employeeService: EmployeesService
   ) { }
 
   private readonly logger = new Logger(PostulationsService.name);
@@ -395,6 +397,8 @@ export class PostulationsService {
           this.notifications.notify.bind(this.notifications)
         );
       }
+
+      await this.employeeService.syncAllPendingToArtemis(user, companyId)
 
       await this.prisma.$transaction(async (tx) => {
         // Actualizamos el status en la db

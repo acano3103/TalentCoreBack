@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { MediaPathModule } from 'src/common/services/media-path.module';
 import { TenantsModule } from '../super-admin/tenants/tenants.module';
+import { EmployeesModule } from '../employees/employees.module';
 
 @Module({
     imports: [HttpModule,
@@ -19,7 +20,8 @@ import { TenantsModule } from '../super-admin/tenants/tenants.module';
             inject: [ConfigService],
         }),
         MediaPathModule,
-        TenantsModule
+        TenantsModule,
+        EmployeesModule,
     ],
     controllers: [PostulationsController],
     providers: [PostulationsService]

@@ -16,6 +16,7 @@ import { generateEmployeeAndLink } from '../postulations/services/credentials.se
 import JSZip = require('jszip');
 import { MediaPathService } from 'src/common/services/media-path.service';
 import * as ExcelJS from 'exceljs';
+import { EmployeesService } from '../employees/employees.service';
 
 @Injectable()
 export class DigitalFilesService {
@@ -28,7 +29,8 @@ export class DigitalFilesService {
     private readonly nubariumService: NubariumService,
     private readonly configService: ConfigService,
     private readonly notifications: NotificationDispatcher,
-    private readonly mediaPathService: MediaPathService
+    private readonly mediaPathService: MediaPathService,
+    private readonly employeeService: EmployeesService
   ) {
     this.mediaRoot = this.configService.get<string>('MEDIA_ROOT_PATH')!;
   }
@@ -1522,6 +1524,8 @@ export class DigitalFilesService {
       this.prisma,
       this.notifications.notify.bind(this.notifications),
     );
+
+    await this.employeeService.syncAllPendingToArtemis(activeUser, companyId)
 
     return {
       success: true,

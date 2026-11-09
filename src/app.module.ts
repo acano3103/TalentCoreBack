@@ -49,6 +49,7 @@ import { PersonnelConfigModule } from './modules/config/personnel-config/personn
 import { IncidentsModule } from './modules/incidents/incidents.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { TimeClockModule } from './modules/time-clock/time-clock.module';
+import { KiosksModule } from './modules/kiosks/kiosks.module';
 
 // Determina dinámicamente la ruta correcta de public
 const publicDistPath = join(process.cwd(), 'dist', 'public');
@@ -123,7 +124,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     PersonnelConfigModule,
     IncidentsModule,
     ApprovalsModule,
-    TimeClockModule
+    TimeClockModule,
+    KiosksModule
   ],
   controllers: [],
   providers: [GeofencesService],

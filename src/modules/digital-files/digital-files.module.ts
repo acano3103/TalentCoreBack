@@ -8,7 +8,8 @@ import { RequiredDocumentsController } from './required-documents/required-docum
 import { RequiredDocumentsService } from './required-documents/required-documents.service';
 import { VencimientosDashboardService } from './vencimientos-dashboard.service';
 import { VencimientosDashboardController } from './vencimientos-dashboard.controller';
-import { MediaPathModule } from 'src/common/services/media-path.module';  
+import { MediaPathModule } from 'src/common/services/media-path.module';
+import { EmployeesModule } from '../employees/employees.module';
 @Module({
   imports: [
     JwtModule.registerAsync({
@@ -18,7 +19,8 @@ import { MediaPathModule } from 'src/common/services/media-path.module';
       }),
       inject: [ConfigService],
     }),
-    MediaPathModule,   
+    MediaPathModule,
+    EmployeesModule
   ],
   controllers: [VencimientosDashboardController, DigitalFilesController, RequiredDocumentsController],
   providers: [DigitalFilesService, NubariumService, RequiredDocumentsService, VencimientosDashboardService],
