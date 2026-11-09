@@ -84,6 +84,29 @@ export class TrainingParticipantsService {
         return this.excelExportService.generate({ sheetName: 'Participantes', columns, rows });
     }
 
+    // Historial de la persona: su inscripción actual y todos sus cursos
+    async history(user: ActiveUserDto, companyId: number, idParticipante: number) {
+        const ahora = new Date();
+        const cursos = (await this.dashboardService.historialDeParticipante(user, companyId, idParticipante))
+            .map((p) => this.aFila(p, ahora))
+            .sort((a, b) => b.inicioSesion.localeCompare(a.inicioSesion) || b.idParticipante - a.idParticipante);
+        const actual = cursos.find((c) => c.idParticipante === idParticipante)!;
+        const terminados = cursos.filter((c) => c.estatus === 'aprobado' || c.estatus === 'reprobado');
+        const calificaciones = cursos.map((c) => c.calificacion).filter((c): c is number => c !== null);
+        return {
+            empleado: { idEmpleado: actual.idEmpleado, nombre: actual.empleado, numeroEmpleado: actual.numeroEmpleado, area: actual.area },
+            actual,
+            cursos,
+            resumen: {
+                inscritos: cursos.length,
+                aprobados: cursos.filter((c) => c.estatus === 'aprobado').length,
+                pendientes: cursos.length - terminados.length,
+                horas: Math.round((cursos.reduce((a, c) => a + c.segundos, 0) / 3600) * 10) / 10,
+                calificacionPromedio: calificaciones.length ? Math.round((calificaciones.reduce((a, c) => a + c, 0) / calificaciones.length) * 10) / 10 : null,
+            },
+        };
+    }
+
     private async filtrar(user: ActiveUserDto, companyId: number, q: TrainingParticipantsFiltersDto) {
         const { participaciones } = await this.dashboardService.cargarParticipaciones(user, companyId, q);
         const ahora = new Date();

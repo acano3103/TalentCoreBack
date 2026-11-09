@@ -56,6 +56,19 @@ export class TrainingDashboardController {
     return this.trainingParticipantsService.list(user, companyId, query);
   }
 
+  // Historial de la persona de esa inscripción: datos, resumen y todos sus cursos
+  @Get('participants/:idParticipante/history')
+  @ApiOperation({ summary: 'Training history of the participant (all courses of the employee)' })
+  @ApiResponse({ status: 200, description: 'History obtained successfully' })
+  @ApiResponse({ status: 404, description: 'Enrollment not found' })
+  getParticipantHistory(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idParticipante', ParseIntPipe) idParticipante: number,
+  ) {
+    return this.trainingParticipantsService.history(user, companyId, idParticipante);
+  }
+
   // Exporta a Excel todos los participantes que cumplan los filtros (sin paginar)
   @Get('participants/export')
   @ApiOperation({ summary: 'Export training participants to Excel' })
