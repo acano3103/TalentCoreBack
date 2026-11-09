@@ -163,14 +163,19 @@ export class PatronalRecordsService {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
+
         const idTenant = user.idTenant;
+
+        // Validar que la empresa exista y pertenezca al tenant.
         const companyExists = await this.prisma.catEmpresas.findUnique({
             where: { idEmpresa },
         });
-        if (!companyExists) throw new NotFoundException('La empresa especificada no existe.');
-        if (companyExists.idTenant !== idTenant) {
+
+        if (!companyExists || companyExists.idTenant !== idTenant) {
             throw new NotFoundException('La empresa especificada no existe.');
         }
+
+        // Normalizar el registro patronal.
         const registroPatronalUnico = dto.registroPatronal.toUpperCase().trim();
         const recordExists = await this.prisma.catRegistrosPatronales.findFirst({
             where: { RegistroPatronal: registroPatronalUnico, idEmpresa: idEmpresa, idTenant: user.idTenant }
@@ -180,7 +185,7 @@ export class PatronalRecordsService {
         }
 
         try {
-            const nuevoRegistro = await this.prisma.catRegistrosPatronales.create({
+            await this.prisma.catRegistrosPatronales.create({
                 data: {
                     idEmpresa,
                     idTenant,
