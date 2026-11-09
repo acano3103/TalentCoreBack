@@ -13,6 +13,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateKioskDto } from './dto/create-kiosk.dto';
 import { Prisma } from 'generated/prisma/client';
+import { QueryKiosksDto } from './dto/query-kiosks.dto';
 
 @Injectable()
 export class KiosksService {
@@ -24,6 +25,240 @@ export class KiosksService {
     constructor(
         private readonly prisma: PrismaService,
     ) { }
+
+    // Obtiene todos los kioscos filtrados y paginados 
+    async findAll(
+        user: ActiveUserDto,
+        companyId: number,
+        query: QueryKiosksDto,
+    ) {
+
+        if (!user.idTenant) {
+            throw new UnauthorizedException('El usuario no tiene un tenant asignado.');
+        }
+
+        if (!companyId || companyId <= 0) {
+            throw new BadRequestException('La empresa proporcionada no es válida.');
+        }
+
+        const page = Math.max(1, query.page ?? 1);
+        const limit = Math.min(100, Math.max(1, query.limit ?? 10));
+        const search = query.search?.trim();
+
+        const where: Prisma.KioscosAsistenciaWhereInput = {
+            idTenant: user.idTenant,
+            idEmpresa: companyId,
+        };
+
+        // Filtro por estatus.
+        if (query.status) {
+            where.estatus = query.status as any;
+        }
+
+        // Filtro por modalidad.
+        if (query.modalidad) {
+            where.modalidad = query.modalidad as any;
+        }
+
+        // Filtro por ubicación.
+        // Un kiosco fijo puede tener varias ubicaciones.
+        if (query.idSite) {
+            where.KioscoSites = {
+                some: {
+                    idSite: query.idSite,
+                },
+            };
+        }
+
+        // Búsqueda por código del kiosco y responsable.
+        if (search) {
+            where.OR = [
+                {
+                    codigo: {
+                        contains: search,
+                    },
+                },
+                {
+                    Empleados: {
+                        is: {
+                            nombre: {
+                                contains: search,
+                            },
+                        },
+                    },
+                },
+                {
+                    Empleados: {
+                        is: {
+                            primerApellido: {
+                                contains: search,
+                            },
+                        },
+                    },
+                },
+                {
+                    Empleados: {
+                        is: {
+                            segundoApellido: {
+                                contains: search,
+                            },
+                        },
+                    },
+                },
+                {
+                    Empleados: {
+                        is: {
+                            numeroEmpleado: {
+                                contains: search,
+                            },
+                        },
+                    },
+                },
+            ];
+        }
+
+        const [total, kiosks] = await this.prisma.$transaction([
+            this.prisma.kioscosAsistencia.count({
+                where,
+            }),
+
+            this.prisma.kioscosAsistencia.findMany({
+                where,
+
+                select: {
+                    idKiosco: true,
+                    idTenant: true,
+                    idEmpresa: true,
+                    nombre: true,
+                    codigo: true,
+                    modalidad: true,
+                    estatus: true,
+                    idEmpleadoResponsable: true,
+                    identificadorDispositivo: true,
+                    ultimoLatido: true,
+                    // Responsable del kiosco.
+                    Empleados: {
+                        select: {
+                            idEmpleado: true,
+                            numeroEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                            activo: true,
+                            CatPuestos: {
+                                select: {
+                                    idPuesto: true,
+                                    DescripcionPuesto: true,
+                                },
+                            },
+                        },
+                    },
+                    // Ubicaciones asociadas.
+                    KioscoSites: {
+                        select: {
+                            idSite: true,
+                            CatSites: {
+                                select: {
+                                    idSite: true,
+                                    Descripcion: true,
+                                    EsPrincipal: true,
+                                    Activo: true,
+                                    Calle: true,
+                                    Colonia: true,
+                                    MunicipioDelegacion: true,
+                                    Estado: true,
+                                    CodigoPostal: true,
+                                },
+                            },
+                        },
+                    },
+                },
+
+                orderBy: [
+                    {
+                        idKiosco: 'desc',
+                    },
+                ],
+
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+        ]);
+
+        // Adaptar la información para el frontend.
+        const requests = kiosks.map((kiosk) => {
+
+            const responsable = kiosk.Empleados;
+
+            const nombreCompleto = [
+                responsable?.nombre,
+                responsable?.primerApellido,
+                responsable?.segundoApellido,
+            ]
+                .filter(Boolean)
+                .join(' ');
+
+            const sites = kiosk.KioscoSites.map((relation) => ({
+                idSite: relation.CatSites.idSite,
+                descripcion: relation.CatSites.Descripcion,
+                esPrincipal: relation.CatSites.EsPrincipal,
+                activo: relation.CatSites.Activo,
+
+                direccion: [
+                    relation.CatSites.Calle,
+                    relation.CatSites.Colonia,
+                    relation.CatSites.MunicipioDelegacion,
+                    relation.CatSites.Estado,
+                    relation.CatSites.CodigoPostal,
+                ]
+                    .filter(Boolean)
+                    .join(', '),
+            }));
+
+            return {
+                idKiosco: kiosk.idKiosco,
+                nombre: kiosk.nombre,
+                codigo: kiosk.codigo,
+                modalidad: kiosk.modalidad,
+                estatus: kiosk.estatus,
+
+                idEmpleadoResponsable: kiosk.idEmpleadoResponsable,
+
+                responsable: responsable
+                    ? {
+                        idEmpleado: responsable.idEmpleado,
+                        numeroEmpleado: responsable.numeroEmpleado,
+                        nombreCompleto: nombreCompleto || 'Sin nombre',
+                        activo: responsable.activo,
+                        puesto: responsable.CatPuestos?.DescripcionPuesto ?? null,
+                    }
+                    : null,
+
+                // Datos de la tablet vinculada.
+                dispositivo: {
+                    vinculado: !!kiosk.identificadorDispositivo,
+                    identificador: kiosk.identificadorDispositivo,
+                    ultimoUso: kiosk.ultimoLatido,
+                },
+
+                // En cuadrilla será un arreglo vacío.
+                ubicaciones: sites,
+                totalUbicaciones: sites.length,
+            };
+        });
+
+        return {
+            kiosks: requests,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+                hasNextPage: page * limit < total,
+                hasPreviousPage: page > 1,
+            },
+        };
+    }
 
     // Crear un nuevo kiosco.
     async createKiosk(
@@ -108,9 +343,19 @@ export class KiosksService {
                         data: {
                             idTenant: user.idTenant,
                             idEmpresa: companyId,
+                            // Identificación
+                            nombre: dto.nombre.trim(),
                             codigo: kioskCode,
+                            // Configuración
                             modalidad: dto.modalidad,
                             idEmpleadoResponsable: dto.idEmpleadoResponsable,
+                            politicas: {
+                                requiereFoto: dto.politicas.requiereFoto,
+                                deteccionRostro: dto.politicas.deteccionRostro,
+                                permitirOffline: dto.politicas.permitirOffline,
+                                aceptarNoIdentificados: dto.politicas.aceptarNoIdentificados,
+                            } satisfies Prisma.InputJsonObject,
+                            // Estado inicial
                             estatus: 'PENDIENTE_ACTIVACION',
                             identificadorDispositivo: null,
                             tokenJti: null,
@@ -118,10 +363,12 @@ export class KiosksService {
                         },
                         select: {
                             idKiosco: true,
+                            nombre: true,
                             codigo: true,
                             modalidad: true,
                             idEmpleadoResponsable: true,
                             estatus: true,
+                            politicas: true,
                         },
                     });
 
@@ -151,9 +398,11 @@ export class KiosksService {
                         message: 'Kiosco creado correctamente.',
                         kiosk: {
                             idKiosco: kiosk.idKiosco,
+                            nombre: kiosk.nombre,
                             codigo: kiosk.codigo,
                             modalidad: kiosk.modalidad,
                             estatus: kiosk.estatus,
+                            politicas: kiosk.politicas,
                             responsable: {
                                 idEmpleado: responsable.idEmpleado,
                                 numeroEmpleado: responsable.numeroEmpleado,
@@ -163,7 +412,7 @@ export class KiosksService {
                                     responsable.segundoApellido,
                                 ].filter(Boolean).join(' '),
                             },
-                            idSites: sites.map((site) => site.idSite,),
+                            idSites: sites.map((site) => site.idSite),
                             activacion: {
                                 codigo: activationCode,
                                 expiraEn: expiresAt,
@@ -209,10 +458,22 @@ export class KiosksService {
     private validateKioskConfiguration(
         dto: CreateKioskDto,
     ): void {
+        if (!dto.nombre?.trim() || dto.nombre.trim().length < 3) {
+            throw new BadRequestException('El nombre del kiosco debe tener al menos 3 caracteres.');
+        }
+
+        if (!dto.politicas) {
+            throw new BadRequestException('Debes proporcionar las políticas de configuración del kiosco.');
+        }
+
+        if (dto.politicas.deteccionRostro && !dto.politicas.requiereFoto) {
+            throw new BadRequestException('La detección de rostro requiere que la captura de fotografía esté habilitada.');
+        }
 
         if (!['FIJO', 'CUADRILLA'].includes(dto.modalidad)) {
             throw new BadRequestException('La modalidad debe ser FIJO o CUADRILLA.');
         }
+
         if (!Number.isInteger(dto.idEmpleadoResponsable) || dto.idEmpleadoResponsable <= 0) {
             throw new BadRequestException('Debes seleccionar un empleado responsable válido.');
         }

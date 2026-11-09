@@ -1,10 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { KiosksService } from './kiosks.service';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateKioskDto } from './dto/create-kiosk.dto';
+import { QueryKiosksDto } from './dto/query-kiosks.dto';
 
 @ApiTags('Kiosks')
 @ApiBearerAuth()
@@ -12,6 +13,21 @@ import { CreateKioskDto } from './dto/create-kiosk.dto';
 @Controller('companies/:companyId/kiosks')
 export class KiosksController {
   constructor(private readonly kiosksService: KiosksService) { }
+
+  // Obtener kioscos paginados.
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Obtener kioscos de asistencia', description: `Obtiene los kioscos de una empresa con paginación, búsqueda por responsable o código y filtros por estatus, modalidad y ubicación.` })
+  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
+  @ApiResponse({ status: 200, description: 'Kioscos obtenidos correctamente.' })
+  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
+  findAll(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query() query: QueryKiosksDto,
+  ) {
+    return this.kiosksService.findAll(activeUser, companyId, query);
+  }
 
   // Crea un nuevo kiosco de asistencia
   @Post()

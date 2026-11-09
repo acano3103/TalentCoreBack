@@ -1,23 +1,57 @@
 import {
     IsArray,
-    IsEnum,
+    IsBoolean,
+    IsIn,
     IsInt,
     IsNotEmpty,
+    IsString,
+    Length,
     ArrayMinSize,
     ValidateIf,
-} from "class-validator";
+    ValidateNested,
+    IsDefined,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class KioskPoliciesDto {
+    @IsDefined()
+    @IsBoolean()
+    requiereFoto: boolean;
+
+    @IsDefined()
+    @IsBoolean()
+    deteccionRostro: boolean;
+
+    @IsDefined()
+    @IsBoolean()
+    permitirOffline: boolean;
+
+    @IsDefined()
+    @IsBoolean()
+    aceptarNoIdentificados: boolean;
+}
 
 export class CreateKioskDto {
-    @IsEnum(["FIJO", "CUADRILLA"])
-    modalidad: "FIJO" | "CUADRILLA";
+    @IsString()
+    @IsNotEmpty()
+    @Length(3, 100)
+    nombre: string;
+
+    @IsIn(['FIJO', 'CUADRILLA'])
+    modalidad: 'FIJO' | 'CUADRILLA';
 
     @IsInt()
     @IsNotEmpty()
     idEmpleadoResponsable: number;
 
-    @ValidateIf((o) => o.modalidad === "FIJO")
+    @ValidateIf((o) => o.modalidad === 'FIJO')
     @IsArray()
     @ArrayMinSize(1)
     @IsInt({ each: true })
     idSites: number[];
+
+    @IsDefined()
+    @ValidateNested()
+    @Type(() => KioskPoliciesDto)
+    politicas: KioskPoliciesDto;
 }
