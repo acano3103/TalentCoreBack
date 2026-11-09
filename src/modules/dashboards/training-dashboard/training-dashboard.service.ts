@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from 'generated/prisma/client';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -169,6 +169,23 @@ export class TrainingDashboardService {
         return { desde, hasta, participaciones };
     }
 
+    // Todas las inscripciones del empleado de esa participación (sin filtro de periodo)
+    async historialDeParticipante(user: ActiveUserDto, companyId: number, idParticipante: number) {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+        const [dueno] = await this.prisma.$queryRaw<{ idEmpleado: number }[]>`
+            SELECT p.idEmpleado
+            FROM CursoParticipantes p
+            INNER JOIN CursoSesiones s ON s.idSesion = p.idSesion
+            INNER JOIN Empleados e ON e.idEmpleado = p.idEmpleado
+            WHERE p.idParticipante = ${idParticipante} AND s.idEmpresa = ${companyId} AND e.idTenant = ${user.idTenant}
+            LIMIT 1
+        `;
+        if (!dueno) throw new NotFoundException('No se encontró la inscripción.');
+        return this.obtenerParticipaciones(companyId, user.idTenant, '', '', null, null, null, Number(dueno.idEmpleado));
+    }
+
     // Estatus de una inscripción para el reporte (mismas reglas que los indicadores)
     estatusDe(p: Participacion, ahora: Date): EstatusParticipante {
         if (p.aprobado) return 'aprobado';
@@ -229,6 +246,7 @@ export class TrainingDashboardService {
         idCurso: number | null,
         idArea: number | null,
         modalidad: ModalidadCurso | null,
+        idEmpleado: number | null = null,
     ): Promise<Participacion[]> {
         const filas = await this.prisma.$queryRaw<ParticipacionRaw[]>`
             SELECT
@@ -267,7 +285,7 @@ export class TrainingDashboardService {
             WHERE s.idEmpresa = ${companyId}
                 AND e.idTenant = ${idTenant}
                 AND s.estatus <> 'cancelado'
-                AND s.fechaInicioPeriodo BETWEEN ${`${desde} 00:00:00`} AND ${`${hasta} 23:59:59`}
+                ${idEmpleado ? Prisma.sql`AND p.idEmpleado = ${idEmpleado}` : Prisma.sql`AND s.fechaInicioPeriodo BETWEEN ${`${desde} 00:00:00`} AND ${`${hasta} 23:59:59`}`}
                 ${idCurso ? Prisma.sql`AND s.idCurso = ${idCurso}` : Prisma.empty}
                 ${idArea ? Prisma.sql`AND pu.idArea = ${idArea}` : Prisma.empty}
                 ${modalidad ? Prisma.sql`AND s.modalidad = ${modalidad}` : Prisma.empty}
