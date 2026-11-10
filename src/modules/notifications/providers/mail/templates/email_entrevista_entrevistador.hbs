@@ -1,0 +1,103 @@
+<div style="background-color:#f4f6f9;padding:40px 15px;font-family:'Segoe UI',Arial,sans-serif;color:#333;">
+    <table width="100%" cellpadding="0" cellspacing="0"
+        style="max-width:600px;margin:auto;background-color:#ffffff;border-radius:18px;overflow:hidden; box-shadow:0 12px 32px rgba(0,0,0,0.06);">
+
+        <!-- Logo -->
+        <tr>
+            <td style="background-color:#ffffff;text-align:center;padding:40px 30px 20px;">
+                <img src="{{ logoUrl }}" alt="DataVoice Talent Core" style="max-width:200px;display:block;margin:auto;">
+            </td>
+        </tr>
+
+        <!-- Contenido -->
+        <tr>
+            <td style="padding:40px 25px 50px; background-color:#ffffff;">
+
+                <p style="font-size:18px; margin-bottom:8px;">
+                    Hola <strong style="color:#005b81;">{{nombre}}</strong> 💼
+                </p>
+
+                <p style="font-size:16px; line-height:1.6; margin-bottom:25px;">
+                    Se ha agendado una nueva sesión de evaluación en la que participas como entrevistador. A
+                    continuación, te compartimos los detalles correspondientes:
+                </p>
+
+                <div style="background-color:#f8fbfd; border-left:5px solid #005b81; border-radius:12px; padding:25px;">
+
+                    <h3 style="color:#005b81; text-align:center; margin-top:0;">📋 Detalles de la sesión</h3>
+
+                    <p><strong>👤 Candidato:</strong> {{postulant}}</p>
+                    <p><strong>🎯 Evaluación:</strong> {{entrevistasNombre}}</p>
+                    <p><strong>│📆 Fecha:</strong> {{dia}}</p>
+                    <p><strong>⏰ Hora:</strong> {{hour}}</p>
+
+                    <!-- 💻 ONLINE -->
+                    {{#if liga}}
+                    <p style="margin-bottom:0;">
+                        <strong>💻 Enlace de acceso:</strong><br>
+                        <a href="{{liga}}" style="color:#005b81; font-weight:bold;">
+                            Unirse a la sesión virtual
+                        </a>
+                    </p>
+                    {{else}}
+
+                    <!-- 📍 PRESENCIAL -->
+                    {{#if lugar}}
+                    <p style="margin-bottom:0;"><strong>📍 Lugar:</strong> {{lugar}}</p>
+
+                    {{#if map_img}}
+                    <div style="margin-top:15px;text-align:center;">
+                        <a href="{{map_link}}">
+                            <img src="{{map_img}}" style="width:100%;max-width:550px;border-radius:12px;">
+                        </a>
+                        <p style="margin-bottom:0;">
+                            <a href="{{map_link}}" style="color:#00a8e8;">
+                                🗺️ Ver dirección exacta
+                            </a>
+                        </p>
+                    </div>
+                    {{/if}}
+
+                    {{else}}
+                    <p style="margin-bottom:0;"><strong>📌 Ubicación:</strong> Por confirmar por reclutamiento</p>
+                    {{/if}}
+
+                    {{/if}}
+
+                    <!-- Comentarios / Instrucciones -->
+                    {{#if comentarios}}
+                    <div
+                        style="margin-top:20px;padding:15px;border:1px solid #e2e8f0;border-radius:8px;background-color:#ffffff;">
+                        <strong style="color:#005b81;">Instrucciones / Notas adicionales:</strong>
+                        <p style="margin-top:6px;margin-bottom:0;font-size:14px;line-height:1.5;">{{comentarios}}</p>
+                    </div>
+                    {{/if}}
+
+                </div>
+
+                <p style="font-size:14px; color:#666; line-height:1.5; margin-top:25px; text-align:center;">
+                    Por favor, asegúrate de contar con tus accesos a la plataforma para registrar las calificaciones y
+                    comentarios de tus criterios de evaluación al finalizar.
+                </p>
+
+                <div style="margin-top:30px;text-align:center;">
+                    <p style="color:#005b81;font-weight:bold;margin-bottom:0;">Sistema de Gestión de Talento DataVoice
+                    </p>
+                    <p style="font-size:12px;color:#999;margin-top:4px;">Talent Core Platform</p>
+                </div>
+
+            </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+            <td style="background-color:#005578;text-align:center;padding:20px;">
+                <p style="margin:0;font-size:13px;color:#ffffff;">
+                    © 2026 <strong>TalentCore</strong> — Gestión Interna Corporativa.<br>
+                    <span style="opacity:0.8;">Talent Core Engine</span>
+                </p>
+            </td>
+        </tr>
+
+    </table>
+</div>

@@ -18,6 +18,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const exceptionResponse = isHttpException ? exception.getResponse() : null;
     let message = 'Internal server error';
     let details = null;
+    let code: string | undefined;
+    let detail: unknown;
+
+    if (esLimiteMulter(exception)) {
+      const errorResponse = {
+        success: false,
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        timestamp: new Date().toISOString(),
+        path: request.url,
+        code: 'ARCHIVO_DEMASIADO_GRANDE',
+        message: 'La foto no puede pesar más de 3 MB. Toma otra más ligera e intenta de nuevo.',
+        detail: { maxBytes: 3 * 1024 * 1024 },
+      };
+      response.status(HttpStatus.PAYLOAD_TOO_LARGE).json(errorResponse);
+      return;
+    }
 
     if (isHttpException && exceptionResponse) {
       if (typeof exceptionResponse === 'string') {
@@ -25,6 +41,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       } else if (typeof exceptionResponse === 'object') {
         message = (exceptionResponse as any).message || message;
         details = (exceptionResponse as any).error || details;
+        if (typeof (exceptionResponse as any).code === 'string') {
+          code = (exceptionResponse as any).code;
+        }
+        if ((exceptionResponse as any).detail !== undefined) {
+          detail = (exceptionResponse as any).detail;
+        }
       }
     } else if (exception instanceof Error) {
       message = exception.message;
@@ -34,7 +56,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       this.logger.error(`[${request.method}] ${request.url} - ${message}`, exception instanceof Error ? exception.stack : '');
     }
 
-    const errorResponse = {
+    const errorResponse: Record<string, unknown> = {
       success: false,
       statusCode,
       timestamp: new Date().toISOString(),
@@ -42,7 +64,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message,
       details: details !== message ? details : undefined,
     };
+    if (code) errorResponse.code = code;
+    if (detail !== undefined) errorResponse.detail = detail;
 
     response.status(statusCode).json(errorResponse);
   }
+}
+
+function esLimiteMulter(exception: unknown): boolean {
+  return (
+    typeof exception === 'object' &&
+    exception !== null &&
+    'code' in exception &&
+    (exception as { code?: string }).code === 'LIMIT_FILE_SIZE'
+  );
 }

@@ -1,0 +1,38 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { MailerService } from '@nestjs-modules/mailer';
+import { NotificationOptions } from '../../interfaces/message.interface';
+
+@Injectable()
+export class MailProvider {
+    private readonly logger = new Logger(MailProvider.name);
+    constructor(private readonly mailerService: MailerService) { }
+
+    async send(payload: NotificationOptions, template: string) {
+        try {
+            if (!template) {
+                throw new Error(`No template definido para notificación`);
+            }
+
+            const baseUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+            const logoUrl = `${baseUrl}/public/logo-talent-core.svg`;
+
+            await this.mailerService.sendMail({
+                to: payload.to,
+                subject: payload.subject || 'Notificación TalentCore',
+                template: `./${template}`,
+                context: {
+                    ...payload.context,
+                    logoUrl,
+                },
+                attachments: payload.attachments?.map(file => ({
+                    filename: file.filename,
+                    content: file.content
+                })) || []
+            });
+            this.logger.log(`Mail enviado a: ${payload.to}`);
+        } catch (error) {
+            this.logger.error(`Falla en Mail: ${error.message}`);
+            throw error;
+        }
+    }
+}

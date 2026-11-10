@@ -1,0 +1,72 @@
+<div style="background-color:#f4f6f9;padding:40px 15px;font-family:'Segoe UI',Arial,sans-serif;color:#333;">
+    <table width="100%" cellpadding="0" cellspacing="0"
+        style="max-width:600px;margin:auto;background-color:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,0.06);">
+
+        <!-- Logo -->
+        <tr>
+            <td style="background-color:#ffffff;text-align:center;padding:40px 30px 20px;">
+                <img src="{{ logoUrl }}" alt="Talent Core" style="max-width:200px;display:block;margin:auto;">
+            </td>
+        </tr>
+
+        <!-- Contenido -->
+        <tr>
+            <td style="padding:40px 25px 50px; background-color:#ffffff;">
+
+                <p style="font-size:18px; margin-bottom:8px;">
+                    Hola <strong style="color:#005b81;">{{nombre}}</strong> 👋
+                </p>
+
+                <p style="font-size:16px; line-height:1.6; margin-bottom:25px;">
+                    ¡Nos complace darte la bienvenida a <strong>{{empresa}}</strong>! Tu contrato laboral ya se
+                    encuentra generado y listo para firma.
+                </p>
+
+                <div style="background-color:#f8fbfd; border-left:5px solid #00a8e8; border-radius:12px; padding:25px;">
+
+                    <h3 style="color:#005b81; text-align:center; margin-top:0;">📝 Firma de Contrato</h3>
+
+                    <p style="font-size:15px; line-height:1.5;">
+                        Por favor, revisa y firma digitalmente tu contrato en el siguiente enlace para continuar con tu
+                        proceso de incorporación:
+                    </p>
+
+                    <!-- Botón de Acción / CTA -->
+                    <div style="text-align:center; margin:30px 0 15px;">
+                        <a href="{{linkFirma}}"
+                            style="background-color:#00a8e8; color:#ffffff; text-decoration:none; padding:14px 28px; border-radius:8px; font-weight:bold; display:inline-block; font-size:16px; box-shadow:0 4px 12px rgba(0,168,232,0.3);">
+                            ✍️ Firmar Contrato Aquí
+                        </a>
+                    </div>
+
+                    <!-- Nota/Comentario adicional (Opcional) -->
+                    {{#if comentarios}}
+                    <div
+                        style="margin-top:20px;padding:15px;border:1px solid #e2e8f0;border-radius:8px;background-color:#ffffff;">
+                        <strong style="color:#005b81;">Nota importante:</strong>
+                        <p style="margin:5px 0 0; font-size:14px;">{{comentarios}}</p>
+                    </div>
+                    {{/if}}
+
+                </div>
+
+                <div style="margin-top:30px;text-align:center;">
+                    <p style="margin-bottom:5px;">Si tienes alguna duda durante el proceso, contáctanos.</p>
+                    <p style="color:#005b81;font-weight:bold;margin:0;">Equipo de Talento Humano {{empresa}}</p>
+                </div>
+
+            </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+            <td style="background-color:#005578;text-align:center;padding:20px;">
+                <p style="margin:0;font-size:13px;color:#ffffff;">
+                    © 2026 <strong>TalentCore</strong> — Todos los derechos reservados.<br>
+                    <span style="opacity:0.8;">Talent Core</span>
+                </p>
+            </td>
+        </tr>
+
+    </table>
+</div>

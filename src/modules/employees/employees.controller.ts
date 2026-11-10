@@ -1,0 +1,185 @@
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe, Put, ParseBoolPipe } from '@nestjs/common';
+import { EmployeesService } from './employees.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
+import { SaveSalaryDto } from './dto/save-salary.dto';
+import { GetActiveUser } from '../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
+import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
+import { UpdateImmediateBossDto } from './dto/update-immediate-boss.dto';
+import { UpdateEmployeeGeneralDataDto } from './dto/update-employee-general-data.dto';
+
+@ApiTags('Employees')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('companies/:companyId/employees')
+export class EmployeesController {
+  constructor(private readonly employeesService: EmployeesService) { }
+
+  // Endpoint que obtiene a todos los empleados de la empresa
+  @Get()
+  @ApiOperation({ summary: 'Get all employees enriched', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  findAll(@Param('companyId', ParseIntPipe) companyId: number) {
+    return this.employeesService.findAll(companyId);
+  }
+
+  // Endpoint que obtiene a todos los empleados que ya tienen su expediente completo
+  @Get('/hired')
+  @ApiOperation({ summary: 'Get all employees with complete expediente', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  findAllWithCompleteFile(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('search') search?: string,
+    @Query('without_manager', new DefaultValuePipe(false), ParseBoolPipe) withoutManager?: boolean,
+    @Query('idSite') idSite?: string,
+    @Query('idUnidadOperativa') idUnidadOperativa?: string,
+  ) {
+    const querySearch = search || '';
+    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager, idSite, idUnidadOperativa);
+  }
+
+  // Endpoint que obtiene a todos los subordinados de un empleado
+  @Get('subordinates')
+  @ApiOperation({ summary: 'Get all subordinates', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Subordinates retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  async getSubordinates(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.employeesService.findSubordinates(activeUser, companyId);
+  }
+
+  // Endpint para obtener un empleado por su id
+  @Get('/:employeeId')
+  @ApiOperation({ summary: 'Get employee by id', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employee retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  findOne(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Param('companyId', ParseIntPipe) companyId: number
+  ) {
+    return this.employeesService.findOne(companyId, employeeId);
+  }
+
+  // Endpoint que obtiene las sedes para asistencia
+  @Get('/attendance/locations')
+  @ApiOperation({ summary: 'Get all locations for attendance', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Locations retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  getLocationsForAttendance(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.employeesService.getLocationsForAttendance(companyId, activeUser);
+  }
+
+  // Endpoint para obtener los candidatos a jefe inmediato según el puesto
+  @Get('positions/:positionId/bosses/options')
+  @ApiOperation({ summary: 'Get available immediate boss candidates for a position', description: 'Returns active employees currently holding the supervisor position defined for this job position' })
+  @ApiResponse({ status: 200, description: 'Boss options retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Position not found' })
+  async getImmediateBossOptions(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('positionId', ParseIntPipe) positionId: number,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.employeesService.getImmediateBossOptions(companyId, positionId, activeUser);
+  }
+
+  // Endpoint que sincroniza los empleados pendientes de la empresa con artemis
+  @Post('sync/artemis')
+  @ApiOperation({ summary: 'Sync all pending employees to Artemis', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employees synced successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  syncAllToArtemis(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.employeesService.syncAllPendingToArtemis(activeUser, companyId);
+  }
+
+  // Endpoint que registra el salario del empleado por primera vez
+  @Post('/:employeeId/salary')
+  @ApiOperation({ summary: 'Save employee salary for the first time', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employee salary saved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  saveSalary(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() salaryData: SaveSalaryDto,
+    @GetActiveUser() activeUser: ActiveUserDto
+  ) {
+    return this.employeesService.saveSalary(activeUser, companyId, employeeId, salaryData);
+  }
+
+  // Endpoint para actualizar la información general de un empleado
+  @Patch('/:employeeId')
+  @ApiOperation({ summary: 'Update employee general data.', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employee general information updated successfully' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  updateEmployee(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() employeeData: UpdateEmployeeGeneralDataDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return this.employeesService.updateEmployee(activeUser, companyId, employeeId, employeeData);
+  }
+
+  // Endpoint para actualizar el horario laboral y modalidad del empleado
+  @Patch('/:employeeId/schedule')
+  @ApiOperation({ summary: 'Update employee work schedule and modality', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Employee schedule updated successfully' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  updateSchedule(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() scheduleData: UpdateEmployeeScheduleDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return this.employeesService.updateSchedule(activeUser, companyId, employeeId, scheduleData);
+  }
+
+  // Endpoint para asignar o actualizar el jefe inmediato de un empleado
+  @Patch(':employeeId/immediate-boss')
+  @ApiOperation({ summary: 'Update employee immediate boss', description: 'Updates the immediate boss (idJefeInmediato) of a specific employee', })
+  @ApiResponse({ status: 200, description: 'Immediate boss updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid boss or business logic validation failed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Employee or boss not found' })
+  async updateEmployeeImmediateBoss(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() dto: UpdateImmediateBossDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.employeesService.updateEmployeeImmediateBoss(companyId, employeeId, dto.immediateBossId, activeUser);
+  }
+
+  // Endpoint para actualizar las sedes autorizadas y excepciones de DIDs del empleado
+  @Put(':employeeId/attendance-config')
+  @ApiOperation({ summary: 'Actualizar sedes autorizadas y excepciones de DIDs del empleado', description: 'Sincroniza las sedes donde el empleado puede pasar lista y los números telefónicos habilitados para IVR' })
+  @ApiResponse({ status: 200, description: 'Configuración de asistencia actualizada exitosamente' })
+  @ApiResponse({ status: 400, description: 'Bad Request: Datos de entrada inválidos' })
+  @ApiResponse({ status: 404, description: 'Empleado o empresa no encontrados' })
+  async updateAttendanceConfig(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() dto: UpdateAttendanceConfigDto,
+  ) {
+    return this.employeesService.updateAttendanceConfig(activeUser, companyId, employeeId, dto);
+  }
+}

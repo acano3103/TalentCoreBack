@@ -3,8 +3,18 @@ import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { apiReference } from '@scalar/nestjs-api-reference';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { MOBILE_SUBMODULES, MobileModule } from './modules/mobile/mobile.module';
+import { AttendanceModule } from './modules/integrations/providers/attendance/attendance.module';
+import { WorkShiftsModule } from './modules/work-shifts/work-shifts.module';
+import { LogbookModule } from './modules/logbook/logbook.module';
+import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashboard/attendance-dashboard.module';
+import { UsersModule } from './modules/users/users.module';
+import { INCIDENTS_SUBMODULES, IncidentsModule } from './modules/incidents/incidents.module';
+import { EmployeesModule } from './modules/employees/employees.module';
+import { NfcModule } from './modules/integrations/providers/attendance/artemis/nfc/nfc.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -16,7 +26,10 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-    })
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
   );
 
   app.enableCors();
@@ -26,6 +39,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
 
+  // 1. Swagger tradicional (General / Web)
   const config = new DocumentBuilder()
     .setTitle('Talent Core API')
     .setDescription('API documentation for the second version of the Talent Core backend in Nest JS')
@@ -35,8 +49,53 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
+  // 2. Documento OpenAPI exclusivo para la App Móvil
+  const mobileConfig = new DocumentBuilder()
+    .setTitle('Talent Core - API Reference')
+    .setDescription('Documentación interactiva de la plataforma')
+    .setVersion('2.0')
+    .addBearerAuth()
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'x-api-key',
+        in: 'header',
+        description: 'Token privado para la integración del conmutador telefónico IVR',
+      },
+      'x-api-key',
+    )
+    .addExtension('x-tagGroups', [
+      {
+        name: 'Mobile App',
+        tags: ['Mobile Auth', 'Mobile Dashboard', 'Mobile Attendance', 'Mobile Devices', 'Mobile Incidents'],
+      },
+      {
+        name: 'Web App',
+        tags: ['Users', 'Employees', 'Attendance Dashboard', 'Work Shifts', 'Logbook', 'Incidents', 'Vacations', 'Permissions'],
+      },
+      {
+        name: 'Integrations',
+        tags: ['IVR Attendance', 'Artemis Attendance'],
+      },
+    ])
+    .build();
+
+  const mobileDocument = SwaggerModule.createDocument(app, mobileConfig, {
+    include: [MobileModule, ...MOBILE_SUBMODULES, EmployeesModule, AttendanceModule, WorkShiftsModule, LogbookModule, AttendanceDashboardModule, UsersModule, IncidentsModule, ...INCIDENTS_SUBMODULES, NfcModule],
+  });
+
+  // 3. Montar Scalar para la App Móvil
+  app.use(
+    '/api/mobile-docs',
+    apiReference({
+      content: mobileDocument,
+      theme: 'purple',
+    }),
+  );
+
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}`);
   logger.log(`Swagger documentation is available at: http://localhost:${port}/api/docs`);
+  logger.log(`Scalar Mobile documentation is available at: http://localhost:${port}/api/mobile-docs`);
 }
 bootstrap();

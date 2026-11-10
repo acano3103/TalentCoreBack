@@ -1,0 +1,3 @@
+ALTER TABLE DocumentosGenerados ADD COLUMN tokenFirma VARCHAR(100) NULL UNIQUE;
+ALTER TABLE DocumentosGenerados ADD COLUMN firmado BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE DocumentosGenerados ADD COLUMN datosFirma JSON NULL;

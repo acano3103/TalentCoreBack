@@ -1,0 +1,97 @@
+<div style="background-color:#f4f6f9;padding:40px 15px;font-family:'Segoe UI',Arial,sans-serif;color:#333;">
+    <table width="100%" cellpadding="0" cellspacing="0"
+        style="max-width:600px;margin:auto;background-color:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,0.06);">
+
+        <!-- Logo -->
+        <tr>
+            <td style="background-color:#ffffff;text-align:center;padding:40px 30px 20px;">
+                <img src="{{ logoUrl }}" alt="DataVoice Talent Core" style="max-width:200px;display:block;margin:auto;">
+            </td>
+        </tr>
+
+        <!-- Contenido -->
+        <tr>
+            <td style="padding:40px 25px 50px; background-color:#ffffff;">
+
+                <p style="font-size:18px; margin-bottom:8px;">
+                    Hola <strong style="color:#005b81;">{{nombre}}</strong> 👋
+                </p>
+
+                <p style="font-size:16px; line-height:1.6; margin-bottom:25px;">
+                    Te informamos que tu sesión para la entrevista <strong>"{{entrevistasNombre}}"</strong> en
+                    <strong>DataVoice</strong> ha sido reprogramada. A continuación, te compartimos los nuevos detalles
+                    actualizados de tu agenda:
+                </p>
+
+                <div style="background-color:#fbfaf7; border-left:5px solid #ffb000; border-radius:12px; padding:25px;">
+
+                    <h3 style="color:#005b81; text-align:center;">Nueva programación de tu entrevista</h3>
+
+                    <p><strong>│📆 Nueva Fecha:</strong> {{dia}}</p>
+                    <p><strong>│⏰ Nueva Hora:</strong> {{hora}}</p>
+
+                    <!-- 💻 ONLINE -->
+                    {{#if liga}}
+                    <p style="margin-top:15px;">
+                        <strong>💻 Reunión Virtual:</strong><br>
+                        <a href="{{liga}}" style="color:#005b81; font-weight:bold;">
+                            Unirse a la entrevista en línea
+                        </a>
+                    </p>
+                    {{else}}
+
+                    <!-- 📍 PRESENCIAL -->
+                    {{#if lugar}}
+                    <p style="margin-top:15px;"><strong>📍 Lugar de la cita:</strong> {{lugar}}</p>
+
+                    {{#if map_img}}
+                    <div style="margin-top:15px;text-align:center;">
+                        <a href="{{map_link}}">
+                            <img src="{{map_img}}" style="width:100%;max-width:550px;border-radius:12px;">
+                        </a>
+                        <p style="margin-top:8px;">
+                            <a href="{{map_link}}" style="color:#005b81; font-weight:bold; text-decoration:none;">
+                                🗺️ Ver ubicación en Google Maps
+                            </a>
+                        </p>
+                    </div>
+                    {{/if}}
+
+                    {{else}}
+                    <p style="margin-top:15px;"><strong>📌 Ubicación:</strong> Por definir</p>
+                    {{/if}}
+
+                    {{/if}}
+
+                    <!-- Comentarios -->
+                    {{#if comentarios}}
+                    <div
+                        style="margin-top:20px;padding:15px;border:1px solid #e2e8f0;border-radius:8px;background-color:#ffffff;">
+                        <strong style="color:#005b81;">Nota aclaratoria o comentarios:</strong>
+                        <p style="margin-top:6px; font-size:14px; line-height:1.5; color:#555;">{{comentarios}}</p>
+                    </div>
+                    {{/if}}
+
+                </div>
+
+                <div style="margin-top:35px;text-align:center; font-size:15px; color:#555;">
+                    <p>Agradecemos tu flexibilidad y puntualidad en este proceso de selección.</p>
+                    <p style="margin-top:15px;color:#005b81;font-weight:bold;">Equipo de Reclutamiento DataVoice</p>
+                </div>
+
+            </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+            <td style="background-color:#005578;text-align:center;padding:20px;">
+                <p style="margin:0;font-size:13px;color:#ffffff;">
+                    © 2026 <strong>TalentCore</strong> — Todos los derechos reservados.<br>
+                    <span style="opacity:0.8; font-size:11px;">Este es un correo automático generado por el portal de
+                        reclutamiento.</span>
+                </p>
+            </td>
+        </tr>
+
+    </table>
+</div>

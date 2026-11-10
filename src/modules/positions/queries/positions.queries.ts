@@ -1,0 +1,325 @@
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from 'generated/prisma/client';
+
+export class PositionQueries {
+  static async findAll(prisma: PrismaService, idTenant: number, companyId: number, search: string, page: number, limit: number, aprobada: number) {
+    const skip = (page - 1) * limit;
+    const searchQuery = search ? `%${search}%` : '%';
+
+    const [data, [{ total }]] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT 
+          p.idPuesto,
+          p.NombrePuesto,
+          p.DescripcionPuesto,
+          a.Descripcion AS Area,
+          tp.Descripcion AS TipoPuesto,
+          tc.Descripcion AS TipoContratacion,
+          m.Descripcion AS Modalidad,
+          e.Descripcion AS Escolaridad,
+          p.DisponibilidadViajar,
+          ns.NombreNivel AS NivelSalario,
+          ns.SalarioMinimo,
+          ns.SalarioMaximo,
+          p.Activo,
+          p.aprobada as Aprovada,
+          p.pendiente as Pendiente
+        FROM CatPuestos p
+        LEFT JOIN CatAreas a ON a.idArea = p.idArea
+        LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+        LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
+        LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
+        LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
+        LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+        WHERE a.idEmpresa = ${companyId}
+          AND p.idTenant = ${idTenant}
+          AND p.aprobada = ${aprobada}
+          AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
+        ORDER BY p.idPuesto DESC
+        LIMIT ${limit} OFFSET ${skip};
+      ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+        SELECT COUNT(*) AS total
+        FROM CatPuestos p
+        LEFT JOIN CatAreas a ON a.idArea = p.idArea
+        WHERE a.idEmpresa = ${companyId}
+          AND p.idTenant = ${idTenant}
+          AND p.aprobada = ${aprobada}
+          AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery});
+      ` as Promise<[{ total: bigint | number }]>
+    ]);
+
+    return {
+      positions: data,
+      total: Number(total || 0)
+    };
+  }
+
+  /**
+   * Misma consulta que findAll pero SIN paginación, para exportar a Excel.
+   * Mantiene los mismos JOIN y condiciones (empresa por área, tenant, aprobada y búsqueda)
+   * y agrega filtros opcionales de estatus y rango de fechas de registro.
+   */
+  static async findAllForExport(
+    prisma: PrismaService,
+    idTenant: number,
+    companyId: number,
+    search: string,
+    aprobada: number,
+        filters: { activo?: string; fechaDesde?: string; fechaHasta?: string; pendiente?: string } = {},
+  ) {
+    const searchQuery = search ? `%${search}%` : '%';
+    const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
+
+    const activoFilter =
+      filters.activo === 'true' ? Prisma.sql`AND p.Activo = 1`
+        : filters.activo === 'false' ? Prisma.sql`AND p.Activo = 0`
+          : Prisma.empty;
+
+    const desdeFilter = esFecha(filters.fechaDesde)
+      ? Prisma.sql`AND p.FechaRegistro >= ${`${filters.fechaDesde} 00:00:00`}`
+      : Prisma.empty;
+
+    const hastaFilter = esFecha(filters.fechaHasta)
+      ? Prisma.sql`AND p.FechaRegistro <= ${`${filters.fechaHasta} 23:59:59`}`
+      : Prisma.empty;
+
+    const pendienteFilter =
+      filters.pendiente === 'true' ? Prisma.sql`AND p.pendiente = 1`
+        : filters.pendiente === 'false' ? Prisma.sql`AND p.pendiente = 0`
+          : Prisma.empty;
+
+    return prisma.$queryRaw<any[]>`
+      SELECT 
+        p.idPuesto,
+        p.NombrePuesto,
+        p.DescripcionPuesto,
+        a.Descripcion AS Area,
+        tp.Descripcion AS TipoPuesto,
+        tc.Descripcion AS TipoContratacion,
+        m.Descripcion AS Modalidad,
+        e.Descripcion AS Escolaridad,
+        p.DisponibilidadViajar,
+        ns.NombreNivel AS NivelSalario,
+        ns.SalarioMinimo,
+        ns.SalarioMaximo,
+        p.Activo,
+        p.FechaRegistro
+      FROM CatPuestos p
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+      LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
+      LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
+      LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
+      LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+      WHERE a.idEmpresa = ${companyId}
+        AND p.idTenant = ${idTenant}
+        AND p.aprobada = ${aprobada}
+        AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
+        ${activoFilter}
+        ${desdeFilter}
+        ${hastaFilter}
+        ${pendienteFilter}
+      ORDER BY p.idPuesto DESC;
+    `;
+  }
+
+
+  static async findValidationDetails(prisma: PrismaService, positionId: number) {
+    const [idiomas, documentos, cursos, funciones, competencias, habilidades, horarios, [maestro]] = await Promise.all([
+      prisma.$queryRaw`
+      SELECT i.idRelIdioma, i.idIdioma, c.Descripcion AS nombreIdioma, i.Nivel
+      FROM IdiomasPuesto i
+      INNER JOIN CatIdiomas c ON c.idIdioma = i.idIdioma
+      WHERE i.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT d.idDocPuesto, d.idDocumento, c.Descripcion AS nombreDocumento, d.esObligatorio
+      FROM DocumentosPuesto d
+      INNER JOIN CatDocumentos c ON c.IdDocumento = d.idDocumento
+      WHERE d.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT r.idRelPuestoCurso, r.idCurso, c.Descripcion AS nombreCurso, r.idTipoCurso, t.Descripcion AS nombreTipoCurso
+      FROM RelPuestoCurso r
+      INNER JOIN CatCursos c ON c.idCursos = r.idCurso
+      INNER JOIN CatTipoCurso t ON t.idTipoCurso = r.idTipoCurso
+      WHERE r.idPuesto = ${positionId} AND r.activo = 1;
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT f.idFuncionPuesto, f.Funcion 
+      FROM FuncionesPuesto f 
+      WHERE f.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT c.idCompetenciaPuesto, c.Competencia 
+      FROM CompetenciasPuesto c 
+      WHERE c.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT h.idHabilidadPuesto, h.Habilidad, h.Nivel, h.Tipo 
+      FROM HabilidadesPuesto h 
+      WHERE h.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT ho.idHorario, ho.DiaSemana, ho.HoraEntrada, ho.HoraSalida 
+      FROM HorariosPuesto ho 
+      WHERE ho.idPuesto = ${positionId};
+    ` as Promise<any[]>,
+
+      prisma.$queryRaw`
+      SELECT 
+        p.idPuesto,
+        p.NombrePuesto,
+        p.DescripcionPuesto,
+        p.aprobada AS Aprobada,
+        p.pendiente AS Pendiente,
+        p.DisponibilidadViajar,
+        p.idJefeInmediato,
+        a.Descripcion AS nombreArea,
+        tp.Descripcion AS nombreTipoPuesto,
+        tc.Descripcion AS nombreTipoContratacion,
+        m.Descripcion AS nombreModalidad,
+        e.Descripcion AS nombreEscolaridad,
+        ns.NombreNivel AS nombreNivelSalario,
+        ns.SalarioMinimo,               -- 🚀 Agregado al SELECT
+        ns.SalarioMaximo,               -- 🚀 Agregado al SELECT
+        j.NombrePuesto AS nombreJefeInmediato
+      FROM CatPuestos p
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+      LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
+      LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
+      LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
+      LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+      LEFT JOIN CatPuestos j ON j.idPuesto = p.idJefeInmediato
+      WHERE p.idPuesto = ${positionId};
+    ` as Promise<any[]>
+    ]);
+
+    return { maestro: maestro || null, idiomas, documentos, cursos, funciones, competencias, habilidades, horarios };
+  }
+
+  static async getPositionInfo(prisma: PrismaService, positionId: number, idTenant: number, idEmpresa: number) {
+    const result = await prisma.$queryRaw<any[]>`
+            SELECT 
+                p.NombrePuesto AS positionName, 
+                u.email,
+                u.phone,
+                u.uuid AS userUuid, 
+                CONCAT(u.first_name, ' ', u.last_name) AS name
+            FROM CatPuestos p
+            JOIN auth_user u ON u.uuid = p.idUsuarioRegistro COLLATE utf8mb4_unicode_ci
+            WHERE p.idEmpresa = ${idEmpresa}
+            AND p.idTenant = ${idTenant}
+            AND p.idPuesto = ${positionId}
+            LIMIT 1
+        `;
+    return result[0] ?? null;
+  }
+
+  static async approvePosition(prisma: PrismaService, positionId: number, comment: string) {
+    await prisma.$executeRaw`
+            UPDATE CatPuestos
+            SET aprobada = 1,
+                Activo = 1,
+                pendiente = 0,
+                comentarios = ${comment}
+            WHERE idPuesto = ${positionId}
+        `;
+  }
+
+  static async rejectPosition(prisma: PrismaService, positionId: number, comment: string) {
+    await prisma.$executeRaw`
+            UPDATE CatPuestos
+            SET aprobada = 0,
+                pendiente = 0,
+                comentarios = ${comment}
+            WHERE idPuesto = ${positionId}
+        `;
+  }
+
+  static async getPostulantsSummary(prisma: PrismaService, idPuesto: number) {
+    return await prisma.$queryRaw`
+      SELECT 
+        p.idPostulacion,
+        p.nombre,
+        p.primerApellido,
+        p.segundoApellido,
+        pp.estado_proceso,
+        pp.score_global,
+        pp.indices,
+        pp.detalle_por_categoria,
+        p.correo,
+        p.telefono,
+        p.rutaCV,
+        p.fechaRegistro,
+        c.NombrePuesto,
+        v.SalarioMinimo,
+        v.SalarioMaximo,
+        v.numeroVacantes AS Vacantes,
+        m.Descripcion AS Modalidad
+      FROM Postulaciones p
+      INNER JOIN Vacantes v ON p.idVacante = v.idVacante
+      INNER JOIN CatPuestos c ON v.idPuesto = c.idPuesto
+      LEFT JOIN CatModalidad m ON c.idModalidad = m.idModalidad
+      LEFT JOIN PerfilPostulante pp ON p.idPostulacion = pp.idPostulacion
+      WHERE v.idPuesto = ${idPuesto}
+      AND pp.score_global IS NOT NULL
+      ORDER BY pp.score_global DESC;
+    `;
+  }
+
+  static async getActivePositions(prisma: PrismaService, companyId: number) {
+    return await prisma.$queryRaw`
+      SELECT 
+        p.idPuesto,
+        p.NombrePuesto,
+        p.DescripcionPuesto,
+        a.Descripcion AS Area,
+        tp.Descripcion AS TipoPuesto,
+        tc.Descripcion AS TipoContratacion,
+        m.Descripcion AS Modalidad,
+        e.Descripcion AS Escolaridad,
+        s.Descripcion AS Site,
+        
+        COALESCE(counts.total_cvs, 0) AS TotalCVs,
+        COALESCE(counts.total_aprobados, 0) AS TotalAprobados,
+        COALESCE(counts.total_rechazados, 0) AS TotalRechazados
+      FROM CatPuestos p
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatSites s ON s.idSite = p.idSite
+      LEFT JOIN CatEmpresas ce ON ce.idEmpresa = COALESCE(s.idEmpresa, a.idEmpresa, p.idEmpresa)
+      LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+      LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
+      LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
+      LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
+
+      -- Subquery óptimo para agrupar postulaciones por puesto
+      LEFT JOIN (
+        SELECT 
+          v.idPuesto,
+          COUNT(post.idPostulacion) AS total_cvs,
+          -- Contamos como aprobados los que tengan score mayor o igual a 8
+          SUM(CASE WHEN perf.score_global >= 8 THEN 1 ELSE 0 END) AS total_aprobados,
+          -- Contamos como rechazados los que tengan score menor a 8 o estén explícitamente descartados
+          SUM(CASE WHEN perf.score_global < 8 OR perf.score_global IS NULL THEN 1 ELSE 0 END) AS total_rechazados
+        FROM Postulaciones post
+        INNER JOIN Vacantes v ON post.idVacante = v.idVacante
+        LEFT JOIN PerfilPostulante perf ON post.idPostulacion = perf.idPostulacion
+        GROUP BY v.idPuesto
+      ) counts ON counts.idPuesto = p.idPuesto
+
+      WHERE COALESCE(a.idEmpresa, p.idEmpresa) = ${companyId}
+        AND p.Activo = 1
+        AND p.aprobada = 1;
+    `;
+  }
+}

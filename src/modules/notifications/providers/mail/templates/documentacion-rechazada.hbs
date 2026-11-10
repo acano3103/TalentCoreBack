@@ -1,0 +1,70 @@
+<div style="background-color: #f3f4f7; padding: 40px 15px; font-family: 'Segoe UI', Arial, sans-serif; color: #F8FAFC;">
+  <table width="100%" cellpadding="0" cellspacing="0"
+    style="max-width: 600px; margin: auto; background-color: #111827; border-radius: 18px; overflow: hidden; border: 1px solid #1E293B;">
+
+    <tr>
+      <td style="background-color: #0B1120; text-align: center; padding: 36px 30px 24px; border-bottom: 1px solid #1E293B;">
+        <img src="{{ logoUrl }}" alt="DataVoice Talent Core" style="max-width: 200px; display: block; margin: auto;">
+      </td>
+    </tr>
+
+    <tr>
+      <td style="padding: 30px 30px 10px;">
+        <h2 style="margin: 0 0 15px; color: #F87171; font-size: 22px; font-weight: 600; text-align: center;">
+          📄 Documentación Rechazada o Pendiente
+        </h2>
+        <p style="font-size: 15px; color: #CBD5E1; text-align: center; margin-bottom: 5px;">
+          Estimado(a) <strong style="color: #22B8D8;">{{nombre_completo}}</strong>,
+        </p>
+        <p style="font-size: 15px; color: #94A3B8; line-height: 1.7; margin: 10px 0 0;">
+          Gracias por tu interés en formar parte de <strong style="color:#F8FAFC;">TalentCore</strong>. Durante la revisión de tu expediente detectamos que algunos documentos fueron
+          <strong style="color: #F87171;">rechazados</strong> o
+          <strong style="color: #FBBF24;">no entregados</strong>.
+        </p>
+        <p style="font-size: 15px; color: #94A3B8; margin-top: 10px;">
+          A continuación se enlistan los documentos que necesitas corregir o subir nuevamente:
+        </p>
+      </td>
+    </tr>
+
+    <tr>
+      <td style="padding: 10px 30px 30px;">
+        <ul style="background-color: #0B1120; border: 1px solid #1E293B; border-radius: 12px; padding: 20px; list-style: none; margin: 0; font-size: 14px; color: #E2E8F0;">
+          {{#each documentos}}
+          <li style="padding: 8px 0;">📎 {{this}}</li>
+          {{/each}}
+        </ul>
+      </td>
+    </tr>
+
+    <tr>
+      <td style="text-align: center; padding: 10px 30px 20px;">
+        <a href="{{liga}}" target="_blank"
+          style="display: inline-block; background-color: #22B8D8; color: #0B1120; font-weight: 700; padding: 12px 28px; font-size: 15px; border-radius: 10px; text-decoration: none; box-shadow: 0 4px 16px rgba(34,184,216,0.35);">
+          🔐 Ingresar al Portal
+        </a>
+      </td>
+    </tr>
+
+    <tr>
+      <td style="padding: 0 30px 40px;">
+        <p style="font-size: 14px; color: #94A3B8; line-height: 1.6; margin-top: 20px;">
+          Si ya enviaste los documentos y fueron rechazados, asegúrate de que cumplan con los requisitos establecidos en el proceso.
+        </p>
+        <p style="font-size: 14px; color: #64748B; margin-bottom: 0;">
+          Para cualquier duda, por favor contacta al área de Recursos Humanos.
+        </p>
+      </td>
+    </tr>
+
+    <tr>
+      <td style="background-color: #0B1120; text-align: center; padding: 20px; border-top: 1px solid #1E293B;">
+        <p style="margin: 0; font-size: 12px; color: #64748B;">
+          © 2026 <strong style="color:#94A3B8;">TalentCore</strong> — Todos los derechos reservados.<br>
+          <span style="opacity: 0.7;">Expedientes Digitales · RH</span>
+        </p>
+      </td>
+    </tr>
+
+  </table>
+</div>

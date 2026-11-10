@@ -1,0 +1,196 @@
+import { BadRequestException } from "@nestjs/common";
+import { PrismaClient } from "generated/prisma/client";
+import * as fs from "fs-extra";
+import * as path from "path";
+import { createEmployee } from "../queries/postulations.queries";
+import { JwtService } from "@nestjs/jwt";
+
+interface DocumentoPuestoRow {
+    Documento: string;
+    esObligatorio: number;
+    IdDocumento: number;
+}
+
+export async function generateEmployeeAndLink(
+    data: {
+        jwtService: JwtService,
+        frontUrl: string,
+        nombre: string,
+        apellido1: string,
+        apellido2: string,
+        curp: string,
+        correo: string,
+        telefono: string,
+        numeroEmpleado: string | null,
+        fechaIngreso: string,
+        idPuesto: number,
+        idUsuario: string,
+        idCampania: number | null,
+        idEmpresa: number,
+        idTenant: number,
+        idJefeInmediato: number | null,
+        idSite: number,
+        idModalidad: number,
+        schedules?: { dia: string; horaEntrada: string; horaSalida: string; modalidad: string }[],
+        additionalDocuments?: number[]
+    },
+    files: Express.Multer.File[] = [],
+    prisma: PrismaClient,
+    notify: (payload: any) => Promise<void>
+) {
+
+    // Verificamos que el empleado no exista ya en db
+    const exists = await prisma.empleados.findFirst({ where: { curp: data.curp } });
+    if (exists) throw new BadRequestException(`El CURP ${data.curp} ya esta dado de alta con un empleado`);
+
+    // Creamos al empleado en db y generamos su link para subir sus documentos e información
+    const result = await createEmployee(data, prisma);
+    const { idEmpleado, uploadLink } = result;
+
+    // ── Guardar el horario del empleado (copiado del puesto, o editado por RH) ──
+    if (data.schedules && data.schedules.length > 0) {
+        for (const horario of data.schedules) {
+            await prisma.$executeRaw`
+                INSERT INTO HorariosEmpleado (idEmpleado, DiaSemana, HoraEntrada, HoraSalida, Modalidad)
+                VALUES (
+                    ${idEmpleado},
+                    ${horario.dia},
+                    ${horario.horaEntrada + ':00'},
+                    ${horario.horaSalida + ':00'},
+                    ${horario.modalidad}
+                );
+            `;
+        }
+    }
+
+    // ── Guardar documentos adicionales marcados por RH para este empleado ──
+    if (data.additionalDocuments && data.additionalDocuments.length > 0) {
+        for (const idDocumento of data.additionalDocuments) {
+            await prisma.$executeRaw`
+                INSERT INTO DocumentosAdicionalesEmpleado (idEmpleado, idDocumento, usuarioRegistro, fechaRegistro)
+                VALUES (${idEmpleado}, ${idDocumento}, ${data.idUsuario}, NOW());
+            `;
+        }
+    }
+
+    // Obtenemos los documentos que se requieren para el puesto
+    const documentosRaw = await prisma.$queryRaw<DocumentoPuestoRow[]>`
+        SELECT 
+            CD.Descripcion AS Documento,
+            DP.esObligatorio,
+            CD.IdDocumento 
+        FROM DocumentosPuesto DP
+        INNER JOIN CatDocumentos CD ON CD.IdDocumento = DP.idDocumento
+        WHERE DP.idPuesto = ${data.idPuesto}
+          AND CD.Activo = 1;
+    `;
+
+    const documentos = documentosRaw.map(row => ({
+        nombre: row.Documento,
+        obligatorio: Number(row.esObligatorio) === 1
+    }));
+
+    // Si RH marcó documentos adicionales, los consultamos y los agregamos a la lista del correo
+    if (data.additionalDocuments && data.additionalDocuments.length > 0) {
+        const idsAdicionales = data.additionalDocuments;
+
+        const docsAdicionalesRaw = await prisma.catDocumentos.findMany({
+            where: {
+                IdDocumento: { in: idsAdicionales },
+                Activo: true,
+            },
+            select: {
+                Descripcion: true,
+                IdDocumento: true,
+            },
+        });
+
+        // Evitamos duplicados en caso de que alguno ya estuviera en los del puesto
+        const documentosExistentesSet = new Set(documentos.map(d => d.nombre.toLowerCase().trim()));
+
+        for (const docExtra of docsAdicionalesRaw) {
+            if (!docExtra.Descripcion) continue;
+
+            const descripcionNormalizada = docExtra.Descripcion.toLowerCase().trim();
+
+            if (!documentosExistentesSet.has(descripcionNormalizada)) {
+                documentos.push({
+                    nombre: docExtra.Descripcion,
+                    obligatorio: true,
+                });
+                documentosExistentesSet.add(descripcionNormalizada);
+            }
+        }
+    }
+
+    const docsEmpresaAdjuntos: string[] = [];
+
+    // Guardamos los documentos del empleado en el servidor
+    if (files?.length) {
+        const tenant = await prisma.catTenants.findUnique({
+            where: { idTenant: data.idTenant },
+            select: { slug: true },
+        });
+        if (!tenant) throw new BadRequestException('No se encontró el tenant del empleado.');
+
+        const baseMediaFolder = process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media');
+
+        // Resolvemos y garantizamos la ruta física en la carpeta configurada por entorno
+        const absoluteFolder = path.join(
+            baseMediaFolder,
+            tenant.slug,
+            'empresa_docs',
+            String(idEmpleado)
+        );
+
+        await fs.ensureDir(absoluteFolder);
+
+        // Guardamos los documentos físicamente y registramos en base de datos
+        for (const file of files) {
+            const fileName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+            const absoluteFilePath = path.join(absoluteFolder, fileName);
+
+            // Validación de seguridad (Path Traversal)
+            if (!absoluteFilePath.startsWith(baseMediaFolder)) {
+                throw new BadRequestException('Intento de Path Injection detectado.');
+            }
+
+            await fs.writeFile(absoluteFilePath, file.buffer);
+
+            const relativePath = `/media/${tenant.slug}/empresa_docs/${idEmpleado}/${fileName}`;
+
+            await prisma.$executeRaw`
+                INSERT INTO DocumentosEmpresa (
+                    idEmpleado, nombre, rutaOriginal, usuarioRegistro
+                ) VALUES (
+                    ${idEmpleado}, ${fileName}, ${relativePath}, ${data.idUsuario}
+                );
+            `;
+
+            docsEmpresaAdjuntos.push(fileName);
+        }
+    }
+
+    // Enviamos la notificación al nuevo empleado para que suba su documentación
+    await notify({
+        userUuid: String(idEmpleado),
+        notificationTypeCode: 'LINK_CREATED',
+        to: data.correo || '',
+        phone: data.telefono || undefined,
+        subject: '📎 Documentación requerida para tu postulación',
+
+        context: {
+            nombre: `${data.nombre} ${data.apellido1 || ''} ${data.apellido2 || ''}`,
+            documentos,
+            link: uploadLink,
+            docs_empresa: docsEmpresaAdjuntos
+        },
+
+        attachments: files?.map(file => ({
+            filename: file.originalname,
+            content: file.buffer
+        })) || []
+    });
+
+    return result;
+}
