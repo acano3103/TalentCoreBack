@@ -6,8 +6,8 @@ import { ConfigService } from '@nestjs/config';
 import { NubariumService } from './services/nubarium.service';
 import { RequiredDocumentsController } from './required-documents/required-documents.controller';
 import { RequiredDocumentsService } from './required-documents/required-documents.service';
-import { VencimientosDashboardService } from './vencimientos-dashboard.service';
-import { VencimientosDashboardController } from './vencimientos-dashboard.controller';
+import { VencimientosDashboardService } from './due-dates-dashboard/vencimientos-dashboard.service';
+import { VencimientosDashboardController } from './due-dates-dashboard/vencimientos-dashboard.controller';
 import { MediaPathModule } from 'src/common/services/media-path.module';
 import { EmployeesModule } from '../employees/employees.module';
 @Module({

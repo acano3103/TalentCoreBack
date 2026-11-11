@@ -716,27 +716,59 @@ export class EmployeesService {
   }
 
   // Endpoint para obtener las sedes con asistencia configurada
-  async getLocationsForAttendance(companyId: number, user: ActiveUserDto) {
-    return this.prisma.catSites.findMany({
+  async getLocationsForAttendance(
+    companyId: number,
+    user: ActiveUserDto,
+    employeeId: number,
+  ) {
+    // 1. Obtener la sede asignada al empleado
+    const employee = await this.prisma.empleados.findFirst({
+      where: {
+        idEmpleado: employeeId,
+        idEmpresa: companyId,
+        idTenant: user.idTenant,
+        activo: true,
+      },
+      select: {
+        idSite: true,
+      },
+    });
+
+    // 2. Obtener el catálogo de sedes con asistencia configurada
+    const locations = await this.prisma.catSites.findMany({
       where: {
         idEmpresa: companyId,
         idTenant: user.idTenant,
         Activo: true,
-        TipoAsistencia: { not: null }, // Solo sedes con asistencia configurada
+        TipoAsistencia: { not: null },
       },
       select: {
         idSite: true,
         Descripcion: true,
         TipoAsistencia: true,
-        EsPrincipal: true,
         CatSitesDids: {
           where: { Activo: true },
-          select: { idSiteDid: true, Did: true, Descripcion: true },
+          select: {
+            idSiteDid: true,
+            Did: true,
+            Descripcion: true,
+          },
         },
       },
-      orderBy: { Descripcion: 'asc' },
+      orderBy: {
+        Descripcion: 'asc',
+      },
     });
+
+    // 3. Ajustar EsPrincipal según la sede asignada al empleado
+    return locations.map((site) => ({
+      ...site,
+      EsPrincipal:
+        employee?.idSite != null &&
+        site.idSite === employee.idSite,
+    }));
   }
+
 
   // Actualización de configuración de sedes y excepciones de DIDs
   async updateAttendanceConfig(

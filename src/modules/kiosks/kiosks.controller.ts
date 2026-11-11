@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { KiosksService } from './kiosks.service';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -48,4 +48,79 @@ export class KiosksController {
   ) {
     return this.kiosksService.createKiosk(activeUser, companyId, dto);
   }
+
+  // Regenerar código de activación.
+  @Post(':idKiosco/regenerate-activation')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Regenerar código de activación', description: 'Genera un nuevo código de activación e invalida los códigos anteriores que no hayan sido utilizados.' })
+  @ApiParam({ name: 'companyId', type: Number })
+  @ApiParam({ name: 'idKiosco', type: Number })
+  @ApiResponse({ status: 200, description: 'Código de activación regenerado correctamente.' })
+  @ApiResponse({ status: 404, description: 'Kiosco no encontrado.' })
+  @ApiResponse({ status: 409, description: 'No se puede regenerar el código de un kiosco bloqueado o dado de baja.' })
+  regenerateActivation(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
+  ) {
+    return this.kiosksService.regenerateActivationCode(activeUser, companyId, idKiosco);
+  }
+
+  // Bloquear kiosco.
+  @Patch(':idKiosco/block')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bloquear un kiosco', description: 'Bloquea el kiosco para impedir que continúe registrando asistencias.' })
+  @ApiParam({ name: 'companyId', type: Number })
+  @ApiParam({ name: 'idKiosco', type: Number })
+  @ApiResponse({ status: 200, description: 'Kiosco bloqueado correctamente.' })
+  @ApiResponse({ status: 404, description: 'Kiosco no encontrado.' })
+  @ApiResponse({ status: 409, description: 'El kiosco ya está bloqueado o dado de baja.' })
+  block(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
+  ) {
+    return this.kiosksService.blockKiosk(activeUser, companyId, idKiosco);
+  }
+
+  // Dar de baja kiosco.
+  @Patch(':idKiosco/deactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Dar de baja un kiosco', description: 'Da de baja definitivamente el kiosco, invalida códigos pendientes y desvincula el dispositivo.' })
+  @ApiParam({ name: 'companyId', type: Number })
+  @ApiParam({ name: 'idKiosco', type: Number })
+  @ApiResponse({ status: 200, description: 'Kiosco dado de baja correctamente.' })
+  @ApiResponse({ status: 404, description: 'Kiosco no encontrado.' })
+  deactivate(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
+  ) {
+    return this.kiosksService.deactivateKiosk(activeUser, companyId, idKiosco);
+  }
+
+  // Desbloquear kiosco.
+  @Patch(':idKiosco/unblock')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Desbloquear un kiosco', description: 'Restaura el estatus que tenía el kiosco antes de bloquearlo.' })
+  unblock(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
+  ) {
+    return this.kiosksService.unblockKiosk(activeUser, companyId, idKiosco);
+  }
+
+  // Reactivar kiosco dado de baja.
+  @Patch(':idKiosco/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reactivar un kiosco dado de baja', description: 'Reactiva el kiosco, genera un nuevo código de activación y requiere vincular nuevamente el dispositivo.' })
+  reactivate(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
+  ) {
+    return this.kiosksService.reactivateKiosk(activeUser, companyId, idKiosco);
+  }
+
 }

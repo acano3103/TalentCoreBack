@@ -36,14 +36,7 @@ export class InterviewsController {
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
         @Query('search') search?: string
     ) {
-        return this.interviewsService.findAll(
-            activeUser,
-            companyId,
-            vacancyId ? Number(vacancyId) : undefined,
-            page ?? 1,
-            search || '',
-            limit ?? 10
-        );
+        return this.interviewsService.findAll(activeUser, companyId, vacancyId ? Number(vacancyId) : undefined, page ?? 1, search || '', limit ?? 10);
     }
 
     // Endpoint para obtener el catalogo de vacantes activas para el formulario de creación de entrevista

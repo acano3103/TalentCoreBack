@@ -78,8 +78,9 @@ export class EmployeesController {
   getLocationsForAttendance(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('employeeId', ParseIntPipe) employeeId: number,
   ) {
-    return this.employeesService.getLocationsForAttendance(companyId, activeUser);
+    return this.employeesService.getLocationsForAttendance(companyId, activeUser, employeeId);
   }
 
   // Endpoint para obtener los candidatos a jefe inmediato según el puesto
