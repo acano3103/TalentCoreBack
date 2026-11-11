@@ -1158,7 +1158,13 @@ export class PositionsService {
         const countMod = catalogs.modalities.length;
         const countEsc = catalogs.educationLevels.length;
         const countCont = catalogs.hiringTypes.length;
+
         const docsDisponibles = catalogs.documents
+            .map((d: any) => (d.NombreDocumento || d.Descripcion)?.trim())
+            .filter(Boolean);
+        // Documentos obligatorios por defecto para todos los puestos
+        const docsRequeridosBase = catalogs.documents
+            .filter((d: any) => d.EsRequeridoBase === true && d.Activo === true)
             .map((d: any) => (d.NombreDocumento || d.Descripcion)?.trim())
             .filter(Boolean);
 
@@ -1267,7 +1273,7 @@ export class PositionsService {
             competencias: 'Liderazgo | Negociación',
             duras: 'Gestión Financiera:Avanzado',
             blandas: 'Comunicación Asertiva:Avanzado',
-            documentos: docsDisponibles.slice(0, 2).join(' | '),
+            documentos: docsRequeridosBase.join(' | '),
             horario: 'LUN,MAR,MIE,JUE,VIE:09:00-18:00',
         });
         sampleDirector.font = { italic: true, color: { argb: 'FF64748B' } };
@@ -1289,7 +1295,7 @@ export class PositionsService {
             competencias: 'Trabajo en equipo | Enfoque a resultados',
             duras: 'Metodologías Ágiles:Intermedio',
             blandas: 'Empatía:Avanzado',
-            documentos: docsDisponibles.slice(0, 2).join(' | '),
+            documentos: docsRequeridosBase.join(' | '),
             horario: 'LUN,MIE,VIE:08:00-17:00 | MAR,JUE:09:00-18:00 | SAB:09:00-14:00',
         });
         sampleGerente.font = { italic: true, color: { argb: 'FF64748B' } };
@@ -1438,6 +1444,26 @@ export class PositionsService {
             }
         });
 
+        // Documentos obligatorios por defecto de la empresa
+        const requiredDocuments = catalogs.documents
+            .filter((d: any) => d.EsRequeridoBase === true && d.Activo === true)
+            .map((d: any) => {
+                const docName =
+                    d.NombreDocumento ||
+                    d.Nombre ||
+                    d.Descripcion ||
+                    d.TipoDocumento ||
+                    d.Titulo;
+
+                const docId = d.idDocumento ?? d.IdDocumento ?? d.id;
+
+                return {
+                    idDocumento: Number(docId),
+                    nombre: docName,
+                };
+            })
+            .filter((d: any) => d.idDocumento && d.nombre);
+
         // ─────────────────────────────────────────────────────────────
         // PASO 1: PROCESAR HOJA DE NIVELES SALARIALES
         // ─────────────────────────────────────────────────────────────
@@ -1571,10 +1597,18 @@ export class PositionsService {
             const duras = parseSkills(row.getCell(14).text);
             const blandas = parseSkills(row.getCell(15).text);
 
-            // Documentos obligatorios: soporta separador '|' o salto de línea
+            // Documentos del Excel + documentos obligatorios de la empresa
             const rawDocs = row.getCell(16).text?.trim();
-            const documentosSeleccionados: { idDocumento: number; Obligatorio: number }[] = [];
 
+            const documentosSeleccionados: {
+                idDocumento: number;
+                Obligatorio: number;
+            }[] = [];
+
+            // Usamos Set para evitar documentos duplicados
+            const documentosAgregados = new Set<number>();
+
+            // 1. Procesar documentos capturados en el Excel
             if (rawDocs) {
                 const nombresDocs = rawDocs
                     .split(/[|\n]/)
@@ -1583,12 +1617,28 @@ export class PositionsService {
 
                 for (const docNombre of nombresDocs) {
                     const idDoc = docMap.get(normalize(docNombre));
-                    if (idDoc) {
+
+                    if (idDoc && !documentosAgregados.has(idDoc)) {
                         documentosSeleccionados.push({
                             idDocumento: idDoc,
-                            Obligatorio: 1, // Entero 1 estricto para que evalúe a true en create(): doc.Obligatorio === 1
+                            Obligatorio: 1,
                         });
+
+                        documentosAgregados.add(idDoc);
                     }
+                }
+            }
+
+            // 2. Agregar automáticamente los documentos obligatorios
+            // que hayan sido eliminados del Excel
+            for (const doc of requiredDocuments) {
+                if (!documentosAgregados.has(doc.idDocumento)) {
+                    documentosSeleccionados.push({
+                        idDocumento: doc.idDocumento,
+                        Obligatorio: 1,
+                    });
+
+                    documentosAgregados.add(doc.idDocumento);
                 }
             }
 
