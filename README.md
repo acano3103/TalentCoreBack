@@ -31,6 +31,14 @@
 
 Con `true` (booleano o el texto `true`), un dispositivo nuevo queda `APROBADO` al registrarse y uno que ya estaba `PENDIENTE` del mismo empleado pasa a `APROBADO` la siguiente vez que la app abre. No revierte dispositivos `BLOQUEADO` ni `BAJA`. Al arrancar el API con la bandera activa se escribe una advertencia en el log. Con `false` o sin la variable, el registro sigue dejando el dispositivo en `PENDIENTE`.
 
+## Variables de entorno (kiosco de asistencia)
+
+`KIOSK_JWT_SECRET` (**obligatoria**). Secreto HS256 del token del equipo. Es distinto de `JWT_SECRET`: un token de kiosco no abre la web ni la app del colaborador, y al revés tampoco. Si falta, el API no arranca.
+
+`KIOSK_MIN_APP_VERSION` (default `0.1.0`). Versión mínima de la app de la tablet. `GET /api/v2/kiosk/bootstrap` y el latido la devuelven como `versionMinimaApp`. El listado web de kioscos usa el mismo valor para marcar equipos desactualizados.
+
+La activación, el padrón y el latido no agregan columnas. La telemetría del equipo (`plataforma`, `modelo`, `versionApp`, `pendientesReportados`) ya está en `prisma/migrations/20261111153000_add_telemetria_kioscos_asistencia/` y se aplica a mano, igual que el resto de cambios de kiosco de esta rama. No usar `prisma db pull`.
+
 ## Project setup
 
 ```bash

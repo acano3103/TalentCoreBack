@@ -8,13 +8,14 @@ import {
     UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import { Prisma } from 'generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { localDateString, localTimeToInstant } from '../attendance/utils/timezone.util';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { AttendanceTrackingConfigService } from '../config/attendance-config/attendance-config.service';
 import { DEFAULT_ATTENDANCE_CONFIG } from '../config/attendance-config/interfaces/attendance-config.interface';
+import { hashActivationCode } from './kiosk-activation-code.util';
 import { CreateKioskDto } from './dto/create-kiosk.dto';
 import { QueryKiosksDto } from './dto/query-kiosks.dto';
 import { UpdateKioskDto } from './dto/update-kiosk.dto';
@@ -314,7 +315,7 @@ export class KiosksService {
                     // 4. Generar código seguro de activación.
                     const activationCode = this.generateActivationCode();
                     // 5. Generar hash SHA-256.
-                    const activationCodeHash = this.hashActivationCode(activationCode);
+                    const activationCodeHash = hashActivationCode(activationCode);
                     // 6. Calcular expiración del código.
                     const expiresAt = this.expiracionCodigo();
 
@@ -572,7 +573,7 @@ export class KiosksService {
             await tx.kioscoCodigosActivacion.create({
                 data: {
                     idKiosco: kiosk.idKiosco,
-                    codigoHash: this.hashActivationCode(codigo),
+                    codigoHash: hashActivationCode(codigo),
                     expiraEn,
                     usadoEn: null,
                     intentosFallidos: 0,
@@ -875,7 +876,7 @@ export class KiosksService {
     private versionMinimaApp(): string {
         const version = this.configService.get<string>('KIOSK_MIN_APP_VERSION');
         const normalizada = typeof version === 'string' ? version.trim() : '';
-        return normalizada || '1.0.0';
+        return normalizada || '0.1.0';
     }
 
     private conexion(ultimoLatido: Date | null, minutos: number): ConexionKiosco {
@@ -1134,10 +1135,4 @@ export class KiosksService {
             .toUpperCase();
     }
 
-    // Convertir código de activación a SHA-256.
-    private hashActivationCode(code: string): string {
-        return createHash('sha256')
-            .update(code)
-            .digest('hex');
-    }
 }
