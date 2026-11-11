@@ -1142,7 +1142,6 @@ model Empleados {
   ArchivosSolicitudes                                                                        ArchivosSolicitudes[]
   Contratos                                                                                  Contratos[]
   CursoParticipantes                                                                         CursoParticipantes[]
-  RolePlayAsignaciones                                                                       RolePlayAsignaciones[]
   CursoSesiones                                                                              CursoSesiones[]
   DispositivosAsistencia                                                                     DispositivosAsistencia[]
   CatPuestos                                                                                 CatPuestos?                        @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
@@ -1916,7 +1915,6 @@ model RolePlays {
   EvaluationCriteria   EvaluationCriteria[]
   RolePlayAsignaciones RolePlayAsignaciones[]
   RolePlayLlamadas     RolePlayLlamadas[]
-  RolePlayAsignaciones RolePlayAsignaciones[]
 
   @@index([idEmpresa], map: "idx_roleplays_idEmpresa")
   @@index([idTenant], map: "idx_roleplays_idTenant")
@@ -1934,8 +1932,8 @@ model RolePlayAsignaciones {
   idUsuarioAsigno    Int
   FechaRegistro      DateTime? @default(now()) @db.DateTime(0)
   FechaActualizacion DateTime? @db.DateTime(0)
+  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_Empleado")
   RolePlays          RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_RolePlay")
-  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "FK_RolePlayAsignaciones_Empleado")
 
   @@unique([idRolePlay, idEmpleado], map: "UK_RolePlayAsignaciones_RolePlay_Empleado")
   @@index([idEmpleado], map: "idx_roleasig_idEmpleado")
@@ -2783,26 +2781,6 @@ model RevisionesRegistroAsistencia {
   @@index([idKiosco, fechaRevision], map: "IDX_Revision_Kiosco")
   @@index([idRegistro], map: "IDX_Revision_Registro")
   @@index([idEmpleadoRevisor], map: "IDX_Revision_Revisor")
-}
-
-model RolePlayAsignaciones {
-  idAsignacion       Int       @id @default(autoincrement())
-  idRolePlay         Int
-  idEmpleado         Int
-  idTenant           Int
-  idEmpresa          Int
-  FechaLimite        DateTime? @db.DateTime(0)
-  IntentosMaximos    Int?
-  Activo             Boolean   @default(true)
-  idUsuarioAsigno    Int
-  FechaRegistro      DateTime? @default(now()) @db.DateTime(0)
-  FechaActualizacion DateTime? @db.DateTime(0)
-  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_Empleado")
-  RolePlays          RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_RolePlay")
-
-  @@unique([idRolePlay, idEmpleado], map: "UK_RolePlayAsignaciones_RolePlay_Empleado")
-  @@index([idEmpleado], map: "idx_roleasig_idEmpleado")
-  @@index([idTenant], map: "idx_roleasig_idTenant")
 }
 
 enum Entrevistas_interview_type {
