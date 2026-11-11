@@ -30,6 +30,19 @@ export interface AttendanceModuleConfig {
          *  Ahí el usuario sí ve qué marcó. */
         ventanaMismoTipoSegundos: number;
     };
+    kiosco: {
+        /** Otro canal, mismo empleado y tipo, dentro de esta ventana: se acepta
+         *  con la bandera DOBLE_CANAL. No sustituye el antirebote del mismo canal. */
+        ventanaDobleCanalSegundos: number;
+        /** |desfaseRelojSegundos| por encima de este umbral enciende DESFASE_RELOJ. */
+        umbralDesfaseRelojSegundos: number;
+        /** Horas entre el registro y la recepción, con esOffline, para OFFLINE. */
+        horasOfflineParaBandera: number;
+        /** 0–100. Solo se sortea si la checada no trae otra bandera. */
+        porcentajeMuestreo: number;
+        /** Sin latido dentro de esta ventana, el kiosco pasa a SIN_CONEXION. */
+        minutosSinLatidoParaOffline: number;
+    };
 }
 
 export const DEFAULT_ATTENDANCE_CONFIG: AttendanceModuleConfig = {
@@ -57,5 +70,12 @@ export const DEFAULT_ATTENDANCE_CONFIG: AttendanceModuleConfig = {
     antirebote: {
         ventanaProveedorSegundos: 120,
         ventanaMismoTipoSegundos: 60,
+    },
+    kiosco: {
+        ventanaDobleCanalSegundos: 300,
+        umbralDesfaseRelojSegundos: 300,
+        horasOfflineParaBandera: 24,
+        porcentajeMuestreo: 0,
+        minutosSinLatidoParaOffline: 15,
     },
 };

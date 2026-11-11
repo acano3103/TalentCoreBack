@@ -17,6 +17,7 @@ export const envValidationSchema = Joi.object({
     // Apagar cuando exista la pantalla de aprobación de RH.
     MOBILE_DEVICES_AUTO_APPROVE: Joi.boolean().default(false),
     MOBILE_MIN_APP_VERSION: Joi.string().default('1.0.0'),
+    KIOSK_MIN_APP_VERSION: Joi.string().default('1.0.0'),
     ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
     MAIL_HOST: Joi.string().required(),
     MAIL_PORT: Joi.number().required(),
