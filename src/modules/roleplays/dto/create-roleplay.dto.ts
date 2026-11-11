@@ -4,6 +4,7 @@ import {
   IsArray,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -56,6 +57,14 @@ export class CreateRoleplayDto {
   @Min(5)
   @Max(60)
   DuracionMinutos?: number;
+
+  @ApiPropertyOptional({ example: 70, minimum: 0, maximum: 100, description: 'Porcentaje mínimo para aprobar' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  CalificacionMinima?: number | null;
 
   @ApiProperty({ type: [CreateCriterionDto] })
   @IsArray()

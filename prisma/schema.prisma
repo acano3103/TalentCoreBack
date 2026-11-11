@@ -1142,6 +1142,7 @@ model Empleados {
   ArchivosSolicitudes                                                                        ArchivosSolicitudes[]
   Contratos                                                                                  Contratos[]
   CursoParticipantes                                                                         CursoParticipantes[]
+  RolePlayAsignaciones                                                                       RolePlayAsignaciones[]
   CursoSesiones                                                                              CursoSesiones[]
   DispositivosAsistencia                                                                     DispositivosAsistencia[]
   CatPuestos                                                                                 CatPuestos?                        @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
@@ -1896,25 +1897,47 @@ model RolePlayLlamadas {
 }
 
 model RolePlays {
-  idRolePlay           Int                  @id @default(autoincrement())
+  idRolePlay           Int                    @id @default(autoincrement())
   idTenant             Int
   idEmpresa            Int
-  Titulo               String               @db.VarChar(250)
-  Descripcion          String?              @db.Text
-  Contexto             String               @db.Text
-  Objetivo             String               @db.Text
-  AiScript             String               @db.Text
-  ObjetivosAprendizaje String?              @db.Text
-  DuracionMinutos      Int                  @default(15)
-  Activo               Boolean              @default(true)
+  Titulo               String                 @db.VarChar(250)
+  Descripcion          String?                @db.Text
+  Contexto             String                 @db.Text
+  Objetivo             String                 @db.Text
+  AiScript             String                 @db.Text
+  ObjetivosAprendizaje String?                @db.Text
+  DuracionMinutos      Int                    @default(15)
+  CalificacionMinima   Decimal?               @db.Decimal(5, 2)
+  Activo               Boolean                @default(true)
   idUsuarioCreador     Int
-  FechaRegistro        DateTime?            @default(now()) @db.DateTime(0)
-  FechaActualizacion   DateTime?            @db.DateTime(0)
+  FechaRegistro        DateTime?              @default(now()) @db.DateTime(0)
+  FechaActualizacion   DateTime?              @db.DateTime(0)
   EvaluationCriteria   EvaluationCriteria[]
   RolePlayLlamadas     RolePlayLlamadas[]
+  RolePlayAsignaciones RolePlayAsignaciones[]
 
   @@index([idEmpresa], map: "idx_roleplays_idEmpresa")
   @@index([idTenant], map: "idx_roleplays_idTenant")
+}
+
+model RolePlayAsignaciones {
+  idAsignacion       Int       @id @default(autoincrement())
+  idRolePlay         Int
+  idEmpleado         Int
+  idTenant           Int
+  idEmpresa          Int
+  FechaLimite        DateTime? @db.DateTime(0)
+  IntentosMaximos    Int?
+  Activo             Boolean   @default(true)
+  idUsuarioAsigno    Int
+  FechaRegistro      DateTime? @default(now()) @db.DateTime(0)
+  FechaActualizacion DateTime? @db.DateTime(0)
+  RolePlays          RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_RolePlay")
+  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "FK_RolePlayAsignaciones_Empleado")
+
+  @@unique([idRolePlay, idEmpleado], map: "UK_RolePlayAsignaciones_RolePlay_Empleado")
+  @@index([idEmpleado], map: "idx_roleasig_idEmpleado")
+  @@index([idTenant], map: "idx_roleasig_idTenant")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

@@ -1,15 +1,22 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   Min,
 } from 'class-validator';
 
 export class CreateCriterionDto {
+  @ApiPropertyOptional({ example: 1, description: 'Solo al editar: id del criterio existente' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  idCriterio?: number;
+
   @ApiProperty({ example: 'Empatía' })
   @IsString()
   @IsNotEmpty()
