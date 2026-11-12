@@ -2714,6 +2714,9 @@ model RegistrosKioscoPorIdentificar {
   longitud                                                               Decimal?                                     @db.Decimal(11, 8)
   idEvidencia                                                            Int?
   uuidCliente                                                            String                                       @unique(map: "UK_Kiosco_Identificar_UUID") @db.VarChar(64)
+  metodoIdentificacion                                                   String?                                      @db.VarChar(30)
+  esOffline                                                              Boolean                                      @default(false)
+  desfaseRelojSegundos                                                   Int?
   estatus                                                                RegistrosKioscoPorIdentificar_estatus        @default(PENDIENTE)
   idEmpleadoAsignado                                                     Int?
   agregarEmpleadoSite                                                    Boolean                                      @default(false)

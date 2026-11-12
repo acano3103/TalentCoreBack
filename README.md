@@ -39,6 +39,8 @@ Con `true` (booleano o el texto `true`), un dispositivo nuevo queda `APROBADO` a
 
 La activación, el padrón y el latido no agregan columnas. La telemetría del equipo (`plataforma`, `modelo`, `versionApp`, `pendientesReportados`) ya está en `prisma/migrations/20261111153000_add_telemetria_kioscos_asistencia/` y se aplica a mano, igual que el resto de cambios de kiosco de esta rama. No usar `prisma db pull`.
 
+La checada del kiosco guarda en la incidencia `metodoIdentificacion`, `esOffline` y `desfaseRelojSegundos`. Esas columnas no estaban en el esquema (KB1 las daba por hechas). El SQL está en `prisma/migrations/20261111180000_add_checada_registros_kiosco_por_identificar/` y también se aplica a mano.
+
 ## Project setup
 
 ```bash

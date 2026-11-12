@@ -295,7 +295,10 @@ describe('KioskDeviceService', () => {
 });
 
 describe('KioskDeviceController', () => {
-    it('protege el arranque, el padrón, la búsqueda y el latido con el token del kiosco', () => {
+    it('protege el arranque, el padrón, la búsqueda, el latido y las checadas con el token del kiosco', () => {
         expect(Reflect.getMetadata(GUARDS_METADATA, KioskDeviceController)).toContain(KioskJwtAuthGuard);
+        expect(KioskDeviceController.prototype.evidence).toEqual(expect.any(Function));
+        expect(KioskDeviceController.prototype.check).toEqual(expect.any(Function));
+        expect(KioskDeviceController.prototype.sync).toEqual(expect.any(Function));
     });
 });

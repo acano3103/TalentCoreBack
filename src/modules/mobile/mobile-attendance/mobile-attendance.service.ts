@@ -33,6 +33,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { MobileCheckDto } from './dto/mobile-check.dto';
 import { SyncAttendanceDto } from './dto/sync-attendance.dto';
+import { MIME_SELFIE, TAMANIO_MAX_SELFIE } from './selfie.constants';
 
 const DIAS_HISTORIAL_DEFAULT = 30;
 const DIAS_HISTORIAL_MAXIMO = 90;
@@ -56,9 +57,6 @@ const MENSAJES_CONFIRMACION: Record<TipoChecada, string> = {
     INICIO_COMIDA: 'Salida a comida registrada correctamente.',
     FIN_COMIDA: 'Regreso de comida registrado correctamente.',
 };
-
-const MIME_SELFIE = ['image/jpeg', 'image/png'];
-const TAMANIO_MAX_SELFIE = 3 * 1024 * 1024;
 
 const ORDEN_SEMANA = [
     'Lunes',
