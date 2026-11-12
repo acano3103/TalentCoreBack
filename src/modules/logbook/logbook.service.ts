@@ -8,12 +8,23 @@ import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-expor
 // Zona horaria del negocio (CDMX, sin horario de verano desde 2022)
 const TZ_NEGOCIO = 'America/Mexico_City';
 const OFFSET_NEGOCIO = '-06:00';
+const CANALES = new Set([
+    'APP_MOVIL',
+    'IVR',
+    'BIOMETRICO',
+    'NFC',
+    'WEB_MANUAL',
+    'CLOCK_WEB',
+    'KIOSCO',
+]);
 const CANAL_LABELS: Record<string, string> = {
     BIOMETRICO: 'Biométrico',
     NFC: 'NFC',
     IVR: 'IVR',
     APP_MOVIL: 'App móvil',
     WEB_MANUAL: 'Web manual',
+    CLOCK_WEB: 'Reloj web',
+    KIOSCO: 'Kiosco',
 };
 
 @Injectable()
@@ -35,6 +46,8 @@ export class LogbookService {
         search?: string,
         idSite?: string,
         idUnidadOperativa?: string,
+        canal?: string,
+        incluirAnulados = false,
     ): Promise<Prisma.RegistrosAsistenciaWhereInput> {
         // Filtro por ubicación / unidad operativa (idSite gana si vienen ambos)
         let siteFilter: number[] | undefined;
@@ -70,10 +83,17 @@ export class LogbookService {
             ];
         }
 
+        const canalNormalizado = canal?.trim().toUpperCase();
+        if (canalNormalizado && !CANALES.has(canalNormalizado)) {
+            throw new BadRequestException('El canal indicado no es válido.');
+        }
+
         return {
             idEmpresa: companyId,
             ...(user.idTenant && { idTenant: user.idTenant }),
             Empleados: { is: empleadoWhere },
+            ...(canalNormalizado ? { canal: canalNormalizado as Prisma.RegistrosAsistenciaWhereInput['canal'] } : {}),
+            ...(!incluirAnulados ? { estatusProcesamiento: { not: 'ANULADO' as const } } : {}),
         };
     }
 
@@ -86,10 +106,20 @@ export class LogbookService {
         search?: string,
         idSite?: string,
         idUnidadOperativa?: string,
+        canal?: string,
+        incluirAnulados = false,
     ): Promise<PaginatedLogbookResponseDto> {
         const skip = (page - 1) * limit;
 
-        const where = await this.buildWhere(user, companyId, search, idSite, idUnidadOperativa);
+        const where = await this.buildWhere(
+            user,
+            companyId,
+            search,
+            idSite,
+            idUnidadOperativa,
+            canal,
+            incluirAnulados,
+        );
 
         if (startDate) {
             const parsedDate = new Date(startDate);
@@ -118,6 +148,13 @@ export class LogbookService {
                                 nombre: true,
                                 primerApellido: true,
                                 segundoApellido: true,
+                            },
+                        },
+                        KioscosAsistencia: {
+                            select: {
+                                idKiosco: true,
+                                codigo: true,
+                                nombre: true,
                             },
                         },
                     },
@@ -196,6 +233,15 @@ export class LogbookService {
                         label: this.resolveSyncLabel(reg),
                     },
                     estatusProcesamiento: reg.estatusProcesamiento,
+                    kiosco: reg.KioscosAsistencia
+                        ? {
+                            idKiosco: reg.KioscosAsistencia.idKiosco,
+                            codigo: reg.KioscosAsistencia.codigo,
+                            nombre: reg.KioscosAsistencia.nombre,
+                        }
+                        : null,
+                    requiereRevision: reg.requiereRevision,
+                    banderasRevision: banderasDe(reg.banderasRevision),
                 };
             });
 
@@ -225,13 +271,29 @@ export class LogbookService {
     async exportLogbook(
         user: ActiveUserDto,
         companyId: number,
-        filters: { search?: string; idSite?: string; idUnidadOperativa?: string; fechaDesde?: string; fechaHasta?: string },
+        filters: {
+            search?: string;
+            idSite?: string;
+            idUnidadOperativa?: string;
+            fechaDesde?: string;
+            fechaHasta?: string;
+            canal?: string;
+            incluirAnulados?: boolean;
+        },
     ): Promise<Buffer> {
         if (!user.idTenant) {
             throw new BadRequestException('El usuario no tiene un tenant asignado');
         }
 
-        const where = await this.buildWhere(user, companyId, filters.search, filters.idSite, filters.idUnidadOperativa);
+        const where = await this.buildWhere(
+            user,
+            companyId,
+            filters.search,
+            filters.idSite,
+            filters.idUnidadOperativa,
+            filters.canal,
+            filters.incluirAnulados === true,
+        );
 
         const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
         if (esFecha(filters.fechaDesde) || esFecha(filters.fechaHasta)) {
@@ -252,6 +314,9 @@ export class LogbookService {
                         primerApellido: true,
                         segundoApellido: true,
                     },
+                },
+                KioscosAsistencia: {
+                    select: { codigo: true, nombre: true },
                 },
             },
         });
@@ -278,6 +343,9 @@ export class LogbookService {
             { header: 'Evidencia', key: 'evidencia', width: 12, value: (r) => (r.urlFoto ? 'Sí' : 'No') },
             { header: 'Sync', key: 'sync', width: 12, value: (r) => this.resolveSyncLabel(r) },
             { header: 'Estatus', key: 'estatus', width: 16, value: (r) => this.humanize(r.estatusProcesamiento) },
+            { header: 'Kiosco', key: 'kiosco', width: 24, value: (r) => r.KioscosAsistencia?.nombre ?? '' },
+            { header: 'Requiere revisión', key: 'revision', width: 18, value: (r) => (r.requiereRevision ? 'Sí' : 'No') },
+            { header: 'Banderas', key: 'banderas', width: 24, value: (r) => banderasDe(r.banderasRevision)?.join(', ') ?? '' },
         ];
 
         return this.excelExportService.generate({
@@ -312,4 +380,11 @@ export class LogbookService {
         const text = value.replace(/_/g, ' ').toLowerCase();
         return text.charAt(0).toUpperCase() + text.slice(1);
     }
+}
+
+function banderasDe(valor: unknown): string[] | null {
+    if (valor == null) return null;
+    if (!Array.isArray(valor)) return null;
+    const banderas = valor.filter((item): item is string => typeof item === 'string');
+    return banderas.length > 0 ? banderas : null;
 }

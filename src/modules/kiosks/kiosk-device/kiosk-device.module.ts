@@ -8,5 +8,6 @@ import { KioskDeviceService } from './kiosk-device.service';
     imports: [AttendanceEngineModule, AttendanceTrackingConfigModule],
     controllers: [KioskDeviceController],
     providers: [KioskDeviceService],
+    exports: [KioskDeviceService],
 })
 export class KioskDeviceModule {}

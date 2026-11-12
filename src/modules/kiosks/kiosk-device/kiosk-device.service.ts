@@ -163,6 +163,14 @@ export class KioskDeviceService {
         };
     }
 
+    /**
+     * La aprobación de una incidencia puede meter al empleado en el padrón.
+     * Sin esto, el equipo seguiría viendo la versión en caché hasta un minuto.
+     */
+    invalidarPadron(idKiosco: number): void {
+        this.cachePadron.delete(idKiosco);
+    }
+
     async lookup(kiosco: SesionKiosco, numero: string) {
         const resolucion = await this.resolverEmpleado(kiosco, numero);
         if (!resolucion.ok) {

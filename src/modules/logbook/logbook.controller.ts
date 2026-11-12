@@ -30,6 +30,8 @@ export class LogbookController {
     @Query('idUnidadOperativa') idUnidadOperativa?: string,
     @Query('fechaDesde') fechaDesde?: string,
     @Query('fechaHasta') fechaHasta?: string,
+    @Query('canal') canal?: string,
+    @Query('incluirAnulados') incluirAnulados?: string,
   ) {
     const buffer = await this.logbookService.exportLogbook(user, companyId, {
       search,
@@ -37,6 +39,8 @@ export class LogbookController {
       idUnidadOperativa,
       fechaDesde,
       fechaHasta,
+      canal,
+      incluirAnulados: incluirAnulados === 'true' || incluirAnulados === '1',
     });
     this.excelExportService.send(res, buffer, 'Bitacora_Registros');
   }
@@ -56,7 +60,20 @@ export class LogbookController {
     @Query('search') search?: string,
     @Query('idSite') idSite?: string,
     @Query('idUnidadOperativa') idUnidadOperativa?: string,
+    @Query('canal') canal?: string,
+    @Query('incluirAnulados') incluirAnulados?: string,
   ) {
-    return this.logbookService.findAll(user, companyId, page, limit, startDate, search, idSite, idUnidadOperativa);
+    return this.logbookService.findAll(
+      user,
+      companyId,
+      page,
+      limit,
+      startDate,
+      search,
+      idSite,
+      idUnidadOperativa,
+      canal,
+      incluirAnulados === 'true' || incluirAnulados === '1',
+    );
   }
 }

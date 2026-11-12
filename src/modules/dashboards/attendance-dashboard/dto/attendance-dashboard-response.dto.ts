@@ -27,4 +27,11 @@ export interface AttendanceDashboardResponseDto {
         dispositivo: string | null;
         fechaHora: string;
     }[];
+    saludCanales: {
+        kioscos: {
+            total: number;
+            enLinea: number;
+            sinConexion: number;
+        };
+    };
 }

@@ -183,6 +183,18 @@ describe('KioskDeviceService', () => {
         expect(prisma.empleados.findMany).toHaveBeenCalledTimes(consultas);
     });
 
+    it('olvida el padrón en caché cuando la revisión asigna un site', async () => {
+        padrónDeDosSites();
+
+        const primero = await service.roster(kiosco);
+        const consultas = prisma.empleados.findMany.mock.calls.length;
+        service.invalidarPadron(kiosco.idKiosco);
+        const segundo = await service.roster(kiosco, primero.version);
+
+        expect(segundo).toEqual({ version: primero.version, sinCambios: true });
+        expect(prisma.empleados.findMany.mock.calls.length).toBeGreaterThan(consultas);
+    });
+
     describe('lookup', () => {
         it('no encuentra el número en el tenant', async () => {
             prisma.empleados.findFirst.mockResolvedValue(null);
