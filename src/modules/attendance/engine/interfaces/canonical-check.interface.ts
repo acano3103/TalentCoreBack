@@ -1,10 +1,25 @@
 import { AccionSiguiente, ModoInferencia, TipoChecada } from '../state-machine';
 
+/** Banderas de revisión del kiosco. Solo se escriben en ese canal. */
+export type BanderaRevisionKiosco =
+  | 'SIN_ROSTRO'
+  | 'DESFASE_RELOJ'
+  | 'OFFLINE'
+  | 'DOBLE_CANAL'
+  | 'MUESTREO';
+
 export interface CanonicalCheck {
   idTenant: number;
   idEmpresa: number;
   idEmpleado: number;
-  canal: 'APP_MOVIL' | 'IVR' | 'BIOMETRICO' | 'NFC' | 'WEB_MANUAL' | 'CLOCK_WEB';
+  canal:
+    | 'APP_MOVIL'
+    | 'IVR'
+    | 'BIOMETRICO'
+    | 'NFC'
+    | 'WEB_MANUAL'
+    | 'CLOCK_WEB'
+    | 'KIOSCO';
   /** null = que el motor lo infiera (Artemis, IVR). Explícito = se valida (móvil) */
   tipo: TipoChecada | null;
   /** Obligatorio. Ver la nota de modos en state-machine.ts */
@@ -43,6 +58,14 @@ export interface CanonicalCheck {
   urlFoto?: string | null;
   telefonoOrigen?: string | null;
   telefonoDestino?: string | null;
+  /** Datos del kiosco. idSitioKiosco se guarda en idSitioDetectado. */
+  idKiosco?: number | null;
+  idEmpleadoRegistra?: number | null;
+  numeroEmpleadoCapturado?: string | null;
+  metodoIdentificacion?: string | null;
+  rostroDetectado?: boolean | null;
+  deteccionRostroActiva?: boolean | null;
+  idSitioKiosco?: number | null;
   // Auditoría del registro web
   idUsuarioRegistro?: string | null;
   ipOrigen?: string | null;
