@@ -142,118 +142,132 @@ describe('KiosksService', () => {
     });
 
     describe('regenerateActivationCode', () => {
-        it('invalida el código vigente y guarda solo el hash del nuevo', async () => {
-            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({
-                estatus: 'PENDIENTE_ACTIVACION',
-            }));
-            tx.kioscoCodigosActivacion.updateMany.mockImplementation(async (args) => {
-                expect(args.where).toEqual(expect.objectContaining({
-                    idKiosco: 5,
-                    usadoEn: null,
-                    invalidadoEn: null,
-                }));
-                expect(args.where.expiraEn).toEqual({ gt: expect.any(Date) });
-                expect(args.data.invalidadoEn).toEqual(expect.any(Date));
-                return { count: 1 };
-            });
+        it('invalida los códigos sin usar y guarda solo el hash del nuevo', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus: 'PENDIENTE_ACTIVACION' }));
 
             const result = await service.regenerateActivationCode(user, 9, 5);
 
-            expect(result.codigo).toMatch(/^[0-9A-F]{32}$/);
-            expect(result.vigenciaHoras).toBe(24);
-            expect(result.expiraEn.getTime()).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000);
-
+            expect(tx.kioscoCodigosActivacion.updateMany).toHaveBeenCalledWith({
+                where: { idKiosco: 5, usadoEn: null },
+                data: { usadoEn: expect.any(Date) },
+            });
+            expect(result.activacion.codigo).toMatch(/^[0-9A-F]{32}$/);
+            expect(result.activacion.vigenciaHoras).toBe(24);
             const guardado = tx.kioscoCodigosActivacion.create.mock.calls[0][0].data;
-            expect(guardado.codigoHash).toBe(createHash('sha256').update(result.codigo).digest('hex'));
-            expect(guardado.codigoHash).not.toBe(result.codigo);
-            expect(guardado.usadoEn).toBeNull();
-            expect(guardado.intentosFallidos).toBe(0);
+            expect(guardado.codigoHash).toBe(createHash('sha256').update(result.activacion.codigo).digest('hex'));
+            expect(guardado.codigoHash).not.toBe(result.activacion.codigo);
             expect(tx.historicoMovimientos.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
-                    accion: 'REGENERAR_CODIGO',
+                    accion: 'REGENERACION_CODIGO_ACTIVACION',
                     tablaOrigen: 'KioscosAsistencia',
                     idRegistro: '5',
-                    idEmpresa: 9,
-                    idUsuario: 7,
                 }),
             });
         });
 
-        it('responde 409 si el kiosco está activo', async () => {
-            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus: 'ACTIVO' }));
+        it.each(['ACTIVO', 'BLOQUEADO', 'BAJA'])('responde 409 si el kiosco está %s', async (estatus) => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus }));
 
             await expect(service.regenerateActivationCode(user, 9, 5)).rejects.toBeInstanceOf(ConflictException);
-            expect(tx.kioscoCodigosActivacion.updateMany).not.toHaveBeenCalled();
             expect(tx.kioscoCodigosActivacion.create).not.toHaveBeenCalled();
         });
     });
 
     describe('blockKiosk', () => {
-        it('deja el kiosco bloqueado y limpia tokenJti', async () => {
-            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({
-                estatus: 'ACTIVO',
-                tokenJti: 'jti-activo',
-            }));
+        it('bloquea, guarda el estatus anterior y conserva el token del equipo', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus: 'ACTIVO', tokenJti: 'jti-activo' }));
 
             const result = await service.blockKiosk(user, 9, 5);
 
-            expect(tx.kioscosAsistencia.update).toHaveBeenCalledWith(expect.objectContaining({
-                where: { idKiosco: 5 },
-                data: expect.objectContaining({
-                    estatus: 'BLOQUEADO',
-                    tokenJti: null,
-                }),
-            }));
+            const data = tx.kioscosAsistencia.update.mock.calls[0][0].data;
+            expect(data).toEqual(expect.objectContaining({ estatus: 'BLOQUEADO', estatusAntesBloqueo: 'ACTIVO' }));
+            // El equipo conserva su token: el guard responde KIOSCO_BLOQUEADO y vuelve solo al desbloquear.
+            expect(data).not.toHaveProperty('tokenJti');
             expect(result.kiosk.estatus).toBe('BLOQUEADO');
             expect(tx.historicoMovimientos.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({ accion: 'BLOQUEAR', tablaOrigen: 'KioscosAsistencia' }),
+                data: expect.objectContaining({ accion: 'BLOQUEO', tablaOrigen: 'KioscosAsistencia' }),
             });
         });
-    });
 
-    describe('retireKiosk', () => {
-        it('da de baja el kiosco y limpia tokenJti', async () => {
-            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({
-                estatus: 'ACTIVO',
-                tokenJti: 'jti-activo',
-            }));
+        it('responde 409 si ya está bloqueado', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus: 'BLOQUEADO' }));
 
-            const result = await service.retireKiosk(user, 9, 5);
-
-            expect(tx.kioscosAsistencia.update).toHaveBeenCalledWith(expect.objectContaining({
-                data: expect.objectContaining({
-                    estatus: 'BAJA',
-                    tokenJti: null,
-                    fechaBaja: expect.any(Date),
-                }),
-            }));
-            expect(result.kiosk.estatus).toBe('BAJA');
-            expect(tx.historicoMovimientos.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({ accion: 'BAJA', tablaOrigen: 'KioscosAsistencia' }),
-            });
+            await expect(service.blockKiosk(user, 9, 5)).rejects.toBeInstanceOf(ConflictException);
         });
     });
 
     describe('unblockKiosk', () => {
-        it('regresa a pendiente de activación y limpia el identificador del equipo', async () => {
+        it('regresa a ACTIVO si estaba activo antes del bloqueo', async () => {
             tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({
                 estatus: 'BLOQUEADO',
-                identificadorDispositivo: 'tablet-1',
+                estatusAntesBloqueo: 'ACTIVO',
             }));
 
             const result = await service.unblockKiosk(user, 9, 5);
 
-            expect(tx.kioscosAsistencia.update).toHaveBeenCalledWith(expect.objectContaining({
-                data: expect.objectContaining({
-                    estatus: 'PENDIENTE_ACTIVACION',
-                    identificadorDispositivo: null,
-                }),
-            }));
-            expect(result.kiosk.dispositivo.identificador).toBeNull();
-            expect(result.kiosk.dispositivo.vinculado).toBe(false);
-            expect(tx.historicoMovimientos.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({ accion: 'DESBLOQUEAR' }),
+            expect(tx.kioscosAsistencia.update.mock.calls[0][0].data).toEqual({
+                estatus: 'ACTIVO',
+                estatusAntesBloqueo: null,
             });
+            expect(result.kiosk.estatus).toBe('ACTIVO');
+        });
+
+        it('regresa a pendiente de activación si no había estatus anterior', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({
+                estatus: 'BLOQUEADO',
+                estatusAntesBloqueo: null,
+            }));
+
+            const result = await service.unblockKiosk(user, 9, 5);
+
+            expect(result.kiosk.estatus).toBe('PENDIENTE_ACTIVACION');
+        });
+
+        it('responde 409 si el kiosco no está bloqueado', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus: 'ACTIVO' }));
+
+            await expect(service.unblockKiosk(user, 9, 5)).rejects.toBeInstanceOf(ConflictException);
+        });
+    });
+
+    describe('deactivateKiosk', () => {
+        it('da de baja, desvincula el equipo y anula el token', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({
+                estatus: 'ACTIVO',
+                tokenJti: 'jti-activo',
+                identificadorDispositivo: 'tablet-1',
+            }));
+
+            const result = await service.deactivateKiosk(user, 9, 5);
+
+            expect(tx.kioscosAsistencia.update.mock.calls[0][0].data).toEqual(expect.objectContaining({
+                estatus: 'BAJA',
+                identificadorDispositivo: null,
+                tokenJti: null,
+            }));
+            expect(tx.kioscoCodigosActivacion.updateMany).toHaveBeenCalledWith({
+                where: { idKiosco: 5, usadoEn: null },
+                data: { usadoEn: expect.any(Date) },
+            });
+            expect(result.kiosk.estatus).toBe('BAJA');
+        });
+    });
+
+    describe('reactivateKiosk', () => {
+        it('regresa a pendiente de activación con un código nuevo', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus: 'BAJA' }));
+
+            const result = await service.reactivateKiosk(user, 9, 5);
+
+            expect(result.kiosk.estatus).toBe('PENDIENTE_ACTIVACION');
+            expect(result.activacion?.codigo).toMatch(/^[0-9A-F]{32}$/);
+            expect(tx.kioscoCodigosActivacion.create).toHaveBeenCalledTimes(1);
+        });
+
+        it('responde 409 si el kiosco no está dado de baja', async () => {
+            tx.kioscosAsistencia.findFirst.mockResolvedValue(detalle({ estatus: 'ACTIVO' }));
+
+            await expect(service.reactivateKiosk(user, 9, 5)).rejects.toBeInstanceOf(ConflictException);
         });
     });
 

@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Injectable,
     Logger,
     NotFoundException,
@@ -80,6 +81,7 @@ export class RoleplaysService {
                         AiScript: dto.AiScript,
                         ObjetivosAprendizaje: dto.ObjetivosAprendizaje || null,
                         DuracionMinutos: dto.DuracionMinutos ?? 15,
+                        CalificacionMinima: dto.CalificacionMinima ?? null,
                         idUsuarioCreador: user.id,
                         FechaRegistro: new Date(),
                         Activo: true,
@@ -132,16 +134,25 @@ export class RoleplaysService {
             throw new NotFoundException(`Role play con id ${roleplayId} no encontrado.`);
         }
 
+        const { Criterios, ...rolePlayData } = dto;
+        const planCriterios = Criterios !== undefined ? await this.planCriterios(roleplayId, Criterios) : null;
+
         try {
             await this.prisma.$transaction(async (tx) => {
-                const { Criterios, ...rolePlayData } = dto;
-
-                if (Criterios !== undefined) {
-                    await tx.evaluationCriteria.deleteMany({ where: { idRolePlay: roleplayId } });
-                    if (Criterios.length > 0) {
-                        await tx.evaluationCriteria.createMany({
-                            data: this.mapCriterios(Criterios, roleplayId, idTenant),
+                if (planCriterios && Criterios) {
+                    if (planCriterios.eliminar.length) {
+                        await tx.evaluationCriteria.deleteMany({ where: { idCriterio: { in: planCriterios.eliminar } } });
+                    }
+                    for (const [i, c] of Criterios.entries()) {
+                        if (!c.idCriterio) continue;
+                        await tx.evaluationCriteria.update({
+                            where: { idCriterio: c.idCriterio },
+                            data: { Nombre: c.Nombre, Descripcion: c.Descripcion, PuntosMaximos: c.PuntosMaximos, Orden: i, Tipo: c.Tipo },
                         });
+                    }
+                    const nuevos = Criterios.map((c, i) => ({ ...c, Orden: i })).filter((c) => !c.idCriterio);
+                    if (nuevos.length) {
+                        await tx.evaluationCriteria.createMany({ data: this.mapCriterios(nuevos, roleplayId, idTenant) });
                     }
                 }
 
@@ -218,6 +229,35 @@ export class RoleplaysService {
             this.logger.error(`Error al cambiar el estatus del role play ${roleplayId}: ${error.message}`, error.stack);
             throw new InternalServerErrorException('Error al actualizar el estatus del role play.');
         }
+    }
+
+    // Los criterios ya evaluados se editan, pero no se pueden borrar
+    private async planCriterios(roleplayId: number, criterios: CreateCriterionDto[]) {
+        const actuales = await this.prisma.evaluationCriteria.findMany({
+            where: { idRolePlay: roleplayId },
+            select: { idCriterio: true, Nombre: true },
+        });
+        const idsActuales = new Set(actuales.map((c) => c.idCriterio));
+        const idsRecibidos = criterios.map((c) => c.idCriterio).filter((id): id is number => !!id);
+
+        if (idsRecibidos.some((id) => !idsActuales.has(id))) {
+            throw new BadRequestException('Uno de los criterios no pertenece a este role play.');
+        }
+
+        const eliminar = actuales.filter((c) => !idsRecibidos.includes(c.idCriterio));
+        if (eliminar.length) {
+            const evaluados = await this.prisma.rolePlayEvaluacionCriterios.findMany({
+                where: { idCriterio: { in: eliminar.map((c) => c.idCriterio) } },
+                select: { idCriterio: true },
+                distinct: ['idCriterio'],
+            });
+            if (evaluados.length) {
+                const nombres = eliminar.filter((c) => evaluados.some((e) => e.idCriterio === c.idCriterio)).map((c) => `"${c.Nombre}"`);
+                throw new BadRequestException(`No se puede eliminar ${nombres.join(', ')} porque ya tiene evaluaciones registradas.`);
+            }
+        }
+
+        return { eliminar: eliminar.map((c) => c.idCriterio) };
     }
 
     private mapCriterios(criterios: CreateCriterionDto[], idRolePlay: number, idTenant: number) {

@@ -71,7 +71,7 @@ describe('KioskJwtStrategy', () => {
         }));
     });
 
-    it('responde 403 si el kiosco está bloqueado', async () => {
+    it('responde 403 KIOSCO_BLOQUEADO si el kiosco está bloqueado y el token es del equipo', async () => {
         prisma.kioscosAsistencia.findUnique.mockResolvedValue({
             idKiosco: 5,
             idTenant: 3,
@@ -88,9 +88,44 @@ describe('KioskJwtStrategy', () => {
         expect(error).toBeInstanceOf(ForbiddenException);
         expect(error.getStatus()).toBe(403);
         expect(error.getResponse()).toEqual({
-            code: 'KIOSCO_NO_ACTIVO',
-            message: 'Este equipo fue desactivado. Pide a RH un código nuevo.',
+            code: 'KIOSCO_BLOQUEADO',
+            message: 'Este equipo está bloqueado por RH. Volverá a funcionar cuando lo desbloqueen.',
         });
+    });
+
+    it('responde KIOSCO_NO_ACTIVO si está bloqueado pero el token ya no es del equipo', async () => {
+        prisma.kioscosAsistencia.findUnique.mockResolvedValue({
+            idKiosco: 5,
+            idTenant: 3,
+            idEmpresa: 9,
+            codigo: 'KSK-A82F91C4',
+            nombre: 'Recepción',
+            modalidad: 'FIJO',
+            estatus: 'BLOQUEADO',
+            tokenJti: null,
+        });
+
+        const error = await strategy.validate(payload).catch((e) => e);
+
+        expect(error.getStatus()).toBe(403);
+        expect(error.getResponse()).toEqual(expect.objectContaining({ code: 'KIOSCO_NO_ACTIVO' }));
+    });
+
+    it('responde KIOSCO_NO_ACTIVO si el kiosco está dado de baja', async () => {
+        prisma.kioscosAsistencia.findUnique.mockResolvedValue({
+            idKiosco: 5,
+            idTenant: 3,
+            idEmpresa: 9,
+            codigo: 'KSK-A82F91C4',
+            nombre: 'Recepción',
+            modalidad: 'FIJO',
+            estatus: 'BAJA',
+            tokenJti: null,
+        });
+
+        const error = await strategy.validate(payload).catch((e) => e);
+
+        expect(error.getResponse()).toEqual(expect.objectContaining({ code: 'KIOSCO_NO_ACTIVO' }));
     });
 
     it('responde 403 si el jti ya no es el del equipo', async () => {

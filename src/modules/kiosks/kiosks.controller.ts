@@ -125,93 +125,78 @@ export class KiosksController {
     return this.kiosksService.updateKiosk(activeUser, companyId, id, dto);
   }
 
-  @Post(':id/activation-code')
+  // Regenerar código de activación.
+  @Post(':idKiosco/regenerate-activation')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Regenerar el código de activación',
-    description: 'Invalida los códigos vigentes y entrega uno nuevo, una sola vez. Solo si el kiosco está pendiente de activación o bloqueado.',
-  })
-  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
-  @ApiParam({ name: 'id', description: 'Identificador del kiosco', type: Number })
-  @ApiResponse({
-    status: 200,
-    description: 'Código regenerado. Se muestra una sola vez.',
-    schema: {
-      example: {
-        codigo: '7A92F4B18C23D5E6A1B09C4D8F2E6A10',
-        expiraEn: '2026-11-12T20:00:00.000Z',
-        vigenciaHoras: 24,
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
-  @ApiResponse({ status: 404, description: 'Kiosco no encontrado en la empresa.' })
-  @ApiResponse({ status: 409, description: 'El kiosco está activo o dado de baja.' })
-  regenerateActivationCode(
+  @ApiOperation({ summary: 'Regenerar código de activación', description: 'Genera un nuevo código de activación e invalida los códigos anteriores que no hayan sido utilizados.' })
+  @ApiParam({ name: 'companyId', type: Number })
+  @ApiParam({ name: 'idKiosco', type: Number })
+  @ApiResponse({ status: 200, description: 'Código de activación regenerado correctamente.' })
+  @ApiResponse({ status: 404, description: 'Kiosco no encontrado.' })
+  @ApiResponse({ status: 409, description: 'No se puede regenerar el código de un kiosco bloqueado o dado de baja.' })
+  regenerateActivation(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
   ) {
-    return this.kiosksService.regenerateActivationCode(activeUser, companyId, id);
+    return this.kiosksService.regenerateActivationCode(activeUser, companyId, idKiosco);
   }
 
-  @Patch(':id/block')
+  // Bloquear kiosco.
+  @Patch(':idKiosco/block')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Bloquear un kiosco',
-    description: 'Pasa el kiosco a BLOQUEADO y anula su token.',
-  })
-  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
-  @ApiParam({ name: 'id', description: 'Identificador del kiosco', type: Number })
+  @ApiOperation({ summary: 'Bloquear un kiosco', description: 'Bloquea el kiosco para impedir que continúe registrando asistencias.' })
+  @ApiParam({ name: 'companyId', type: Number })
+  @ApiParam({ name: 'idKiosco', type: Number })
   @ApiResponse({ status: 200, description: 'Kiosco bloqueado correctamente.' })
-  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
-  @ApiResponse({ status: 404, description: 'Kiosco no encontrado en la empresa.' })
-  @ApiResponse({ status: 409, description: 'El kiosco está dado de baja.' })
+  @ApiResponse({ status: 404, description: 'Kiosco no encontrado.' })
+  @ApiResponse({ status: 409, description: 'El kiosco ya está bloqueado o dado de baja.' })
   block(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
   ) {
-    return this.kiosksService.blockKiosk(activeUser, companyId, id);
+    return this.kiosksService.blockKiosk(activeUser, companyId, idKiosco);
   }
 
-  @Patch(':id/unblock')
+  // Dar de baja kiosco.
+  @Patch(':idKiosco/deactivate')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Desbloquear un kiosco',
-    description: 'Regresa el kiosco a pendiente de activación y desvincula el equipo. Hay que activarlo de nuevo.',
-  })
-  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
-  @ApiParam({ name: 'id', description: 'Identificador del kiosco', type: Number })
-  @ApiResponse({ status: 200, description: 'Kiosco desbloqueado. Requiere una activación nueva.' })
-  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
-  @ApiResponse({ status: 404, description: 'Kiosco no encontrado en la empresa.' })
-  @ApiResponse({ status: 409, description: 'El kiosco no está bloqueado.' })
+  @ApiOperation({ summary: 'Dar de baja un kiosco', description: 'Da de baja definitivamente el kiosco, invalida códigos pendientes y desvincula el dispositivo.' })
+  @ApiParam({ name: 'companyId', type: Number })
+  @ApiParam({ name: 'idKiosco', type: Number })
+  @ApiResponse({ status: 200, description: 'Kiosco dado de baja correctamente.' })
+  @ApiResponse({ status: 404, description: 'Kiosco no encontrado.' })
+  deactivate(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
+  ) {
+    return this.kiosksService.deactivateKiosk(activeUser, companyId, idKiosco);
+  }
+
+  // Desbloquear kiosco.
+  @Patch(':idKiosco/unblock')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Desbloquear un kiosco', description: 'Restaura el estatus que tenía el kiosco antes de bloquearlo.' })
   unblock(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
   ) {
-    return this.kiosksService.unblockKiosk(activeUser, companyId, id);
+    return this.kiosksService.unblockKiosk(activeUser, companyId, idKiosco);
   }
 
-  @Patch(':id/retire')
+  // Reactivar kiosco dado de baja.
+  @Patch(':idKiosco/reactivate')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Dar de baja un kiosco',
-    description: 'Marca el kiosco como BAJA, registra la fecha y anula su token. La baja es irreversible.',
-  })
-  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
-  @ApiParam({ name: 'id', description: 'Identificador del kiosco', type: Number })
-  @ApiResponse({ status: 200, description: 'Kiosco dado de baja correctamente.' })
-  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
-  @ApiResponse({ status: 404, description: 'Kiosco no encontrado en la empresa.' })
-  @ApiResponse({ status: 409, description: 'El kiosco ya está dado de baja.' })
-  retire(
+  @ApiOperation({ summary: 'Reactivar un kiosco dado de baja', description: 'Reactiva el kiosco, genera un nuevo código de activación y requiere vincular nuevamente el dispositivo.' })
+  reactivate(
     @GetActiveUser() activeUser: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('idKiosco', ParseIntPipe) idKiosco: number,
   ) {
-    return this.kiosksService.retireKiosk(activeUser, companyId, id);
+    return this.kiosksService.reactivateKiosk(activeUser, companyId, idKiosco);
   }
+
 }

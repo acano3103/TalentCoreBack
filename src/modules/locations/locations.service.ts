@@ -10,9 +10,10 @@ import { CreateLocationDto } from './dto/create-location.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import * as ExcelJS from 'exceljs';
-import { Prisma } from 'generated/prisma/client';
+import { CatSites_TipoAsistencia, Prisma } from 'generated/prisma/client';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 import { getCanalLabel } from 'src/constants/attendance.constants';
+import { GoogleGeocodingResponse } from './interfaces/locations.interface';
 
 
 @Injectable()
@@ -20,11 +21,11 @@ export class LocationsService {
     private readonly logger = new Logger(LocationsService.name);
 
     constructor(private prismaService: PrismaService, private excelExportService: ExcelExportService) { }
-    
-        /**
-     * Where común de ubicaciones (empresa, tenant, unidad operativa y búsqueda).
-     * Lo usan la tabla paginada y la exportación, para que ambas filtren igual.
-     */
+
+    /**
+ * Where común de ubicaciones (empresa, tenant, unidad operativa y búsqueda).
+ * Lo usan la tabla paginada y la exportación, para que ambas filtren igual.
+ */
     private buildLocationsWhere(
         companyId: number,
         user: ActiveUserDto,
@@ -62,6 +63,7 @@ export class LocationsService {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
+
         const pageNumber = Math.max(1, Number(page) || 1);
         const limitNumber = Math.max(1, Number(limit) || 10);
         const skip = (pageNumber - 1) * limitNumber;
@@ -107,7 +109,7 @@ export class LocationsService {
     }
 
 
-        // Exporta a Excel TODAS las ubicaciones que cumplan los filtros (sin paginar)
+    // Exporta a Excel TODAS las ubicaciones que cumplan los filtros (sin paginar)
     async exportLocations(
         companyId: number,
         user: ActiveUserDto,
@@ -620,6 +622,9 @@ export class LocationsService {
             }),
         ]);
 
+        const tiposAsistencia = Object.values(CatSites_TipoAsistencia);
+        const listaTiposAsistencia = tiposAsistencia.join(',');
+
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'Talent Core';
         workbook.created = new Date();
@@ -724,7 +729,7 @@ export class LocationsService {
             { header: '¿Es Sede Principal? (SI / NO) *', key: 'esPrincipal', width: 28 },
             { header: 'Registro Patronal Asignado *', key: 'registroPatronal', width: 32 },
             { header: 'Unidad Operativa (Opcional)', key: 'unidadOperativa', width: 32 },
-            { header: 'Método Asistencia (IVR / BIOMETRICO / APP_MOVIL)', key: 'tipoAsistencia', width: 44 },
+            { header: 'Método Asistencia', key: 'tipoAsistencia', width: 44 },
             { header: 'Código Postal *', key: 'codigoPostal', width: 16 },
             { header: 'Estado *', key: 'estado', width: 22 },
             { header: 'Municipio / Delegación *', key: 'municipio', width: 26 },
@@ -805,7 +810,10 @@ export class LocationsService {
             sheetSites.getCell(`F${row}`).dataValidation = {
                 type: 'list',
                 allowBlank: true,
-                formulae: ['"IVR,BIOMETRICO,APP_MOVIL"'],
+                formulae: [`"${listaTiposAsistencia}"`],
+                showErrorMessage: true,
+                errorTitle: 'Tipo de Asistencia inválido',
+                error: 'Selecciona un Tipo de Asistencia válido de la lista.',
             };
 
             // Columna O: Zona Fronteriza
@@ -1024,8 +1032,25 @@ export class LocationsService {
             const idUnidadOperativa = rawUO ? uoMap.get(rawUO) || null : null;
 
             // Validar Tipo Asistencia
-            if (!['IVR', 'BIOMETRICO', 'APP_MOVIL'].includes(tipoAsistencia)) {
+            if (![CatSites_TipoAsistencia].includes(tipoAsistencia)) {
                 tipoAsistencia = null;
+            }
+
+            let coordenadas: any = null;
+
+            try {
+                coordenadas = await this.geocodeAddress(
+                    calle,
+                    noExt,
+                    noInt,
+                    colonia,
+                    codigoPostal,
+                    municipio,
+                    estado,
+                    pais || 'México',
+                );
+            } catch (error: any) {
+                errors.push({ row: rowNumber, error: `[Geolocalización]: ${error.message}` });
             }
 
             try {
@@ -1034,7 +1059,7 @@ export class LocationsService {
                         data: {
                             idEmpresa: companyId,
                             idTenant,
-                            idTipoUbicacion, // 👈 Asigna el tipo seleccionado dinámicamente
+                            idTipoUbicacion,
                             idUnidadOperativa,
                             Descripcion: descripcion,
                             EsPrincipal: esPrincipal,
@@ -1046,8 +1071,8 @@ export class LocationsService {
                             NoExterior: noExt,
                             NoInterior: noInt,
                             Pais: pais,
-                            Latitud: null,
-                            Longitud: null,
+                            Latitud: coordenadas?.latitud ?? null,
+                            Longitud: coordenadas?.longitud ?? null,
                             idRegistroPatronal,
                             ZonaFronteriza: zonaFronteriza,
                             TipoAsistencia: tipoAsistencia,
@@ -1166,5 +1191,250 @@ export class LocationsService {
             nombre,
             horariosList,
         }));
+    }
+
+    // -----------------------------------------------------------------------------
+    // HELPERS 
+    // -----------------------------------------------------------------------------
+
+
+    /**
+     * Regulariza las coordenadas de ubicaciones existentes.
+     *
+     * Busca CatSites que tengan latitud o longitud faltante,
+     * pero que cuenten con domicilio suficiente para geolocalizarse.
+     *
+     * Solo modifica registros de la empresa y tenant indicados.
+     */
+    async geocodeMissingCoordinates(
+        companyId: number,
+        user: ActiveUserDto,
+    ) {
+        if (!user.idTenant) {
+            throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
+        }
+
+        const idTenant = Number(user.idTenant);
+
+        const resultado = {
+            success: true,
+            message: '',
+            totalEncontradas: 0,
+            procesadas: 0,
+            actualizadas: 0,
+            sinResultados: 0,
+            errores: [] as Array<{
+                idSite: number;
+                descripcion: string;
+                error: string;
+            }>,
+        };
+
+        // Pausa breve entre solicitudes para no saturar Google.
+        const esperar = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+        let ultimoId = 0;
+
+        try {
+            while (true) {
+                // Procesamos en bloques para no cargar todos los registros
+                // en memoria al mismo tiempo.
+                const sites = await this.prismaService.catSites.findMany({
+                    where: {
+                        idEmpresa: companyId,
+                        idTenant,
+                        idSite: { gt: ultimoId },
+
+                        // Incluye registros con ambas coordenadas faltantes
+                        // y también aquellos que solo tengan una.
+                        OR: [
+                            { Latitud: null },
+                            { Longitud: null },
+                        ],
+
+                        // Debe existir información básica del domicilio.
+                        Calle: { not: '' },
+                        MunicipioDelegacion: { not: '' },
+                        Estado: { not: '' },
+                    },
+                    select: {
+                        idSite: true,
+                        Descripcion: true,
+                        Calle: true,
+                        NoExterior: true,
+                        NoInterior: true,
+                        Colonia: true,
+                        CodigoPostal: true,
+                        MunicipioDelegacion: true,
+                        Estado: true,
+                        Pais: true,
+                    },
+                    orderBy: {
+                        idSite: 'asc',
+                    },
+                    take: 50,
+                });
+
+                if (sites.length === 0) {
+                    break;
+                }
+
+                resultado.totalEncontradas += sites.length;
+
+                for (const site of sites) {
+                    ultimoId = site.idSite;
+                    resultado.procesadas++;
+
+                    try {
+                        const coordenadas = await this.geocodeAddress(
+                            site.Calle,
+                            site.NoExterior,
+                            site.NoInterior,
+                            site.Colonia,
+                            site.CodigoPostal,
+                            site.MunicipioDelegacion,
+                            site.Estado,
+                            site.Pais || 'México',
+                        );
+
+                        if (!coordenadas) {
+                            resultado.sinResultados++;
+                            this.logger.warn(`No se encontraron coordenadas para Site #${site.idSite}: ${site.Descripcion}`);
+                            continue;
+                        }
+
+                        // Actualizamos únicamente si todavía falta alguna
+                        // coordenada. Esto evita sobrescribir cambios recientes.
+                        const actualizacion =
+                            await this.prismaService.catSites.updateMany({
+                                where: {
+                                    idSite: site.idSite,
+                                    idEmpresa: companyId,
+                                    idTenant,
+                                    OR: [
+                                        { Latitud: null },
+                                        { Longitud: null },
+                                    ],
+                                },
+                                data: {
+                                    Latitud: coordenadas.latitud,
+                                    Longitud: coordenadas.longitud,
+                                },
+                            });
+
+                        if (actualizacion.count > 0) {
+                            resultado.actualizadas++;
+
+                            this.logger.log(`Coordenadas actualizadas para Site #${site.idSite}: ${coordenadas.latitud}, ${coordenadas.longitud}`);
+                        }
+
+                        // Pausa entre llamadas a Google Geocoding.
+                        await esperar(150);
+                    } catch (error: any) {
+                        resultado.errores.push({
+                            idSite: site.idSite,
+                            descripcion: site.Descripcion || "",
+                            error: error.message || 'Error al geolocalizar.',
+                        });
+
+                        this.logger.error(`Error geolocalizando Site #${site.idSite}: ${error.message}`);
+                    }
+                }
+            }
+
+            resultado.message =
+                `Regularización terminada. ` +
+                `${resultado.actualizadas} ubicaciones actualizadas, ` +
+                `${resultado.sinResultados} sin resultados y ` +
+                `${resultado.errores.length} con errores.`;
+
+            return resultado;
+
+        } catch (error: any) {
+            this.logger.error(
+                `Error durante la regularización de coordenadas: ${error.message}`,
+                error.stack,
+            );
+
+            throw new InternalServerErrorException(
+                'Ocurrió un error al regularizar las coordenadas de las ubicaciones.',
+            );
+        }
+    }
+
+    private async geocodeAddress(
+        calle: string | null,
+        numeroExterior: string | null,
+        numeroInterior: string | null,
+        colonia: string | null,
+        codigoPostal: string | null,
+        municipio: string | null,
+        estado: string | null,
+        pais: string | null = 'México',
+    ): Promise<{ latitud: number; longitud: number } | null> {
+
+        // Validar que tengamos información suficiente.
+        if (!calle?.trim() || !municipio?.trim() || !estado?.trim()) {
+            return null;
+        }
+
+        const address = [
+            calle.trim(),
+            numeroExterior?.trim() ? `No. ${numeroExterior.trim()}` : '',
+            numeroInterior?.trim() ? `Interior ${numeroInterior.trim()}` : '',
+            colonia?.trim(),
+            codigoPostal?.trim(),
+            municipio.trim(),
+            estado.trim(),
+            pais?.trim() || 'México',
+        ]
+            .filter(Boolean)
+            .join(', ');
+
+        const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+        if (!apiKey) {
+            throw new Error('No está configurada GOOGLE_MAPS_API_KEY.');
+        }
+
+        const params = new URLSearchParams({
+            address,
+            key: apiKey,
+            region: 'mx',
+            language: 'es',
+            components: 'country:MX',
+        });
+
+        const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
+            {
+                signal: AbortSignal.timeout(10000),
+            },
+        );
+
+        if (!response.ok) {
+            throw new Error(`Error HTTP de Google Geocoding: ${response.status}`);
+        }
+
+        const data = await response.json() as GoogleGeocodingResponse;
+
+        if (data.status === 'ZERO_RESULTS') {
+            return null;
+        }
+
+        if (data.status !== 'OK' || !data.results.length) {
+            throw new Error(
+                `Google Geocoding: ${data.status} - ${data.error_message || 'Error desconocido'}`,
+            );
+        }
+
+        const bestResult =
+            data.results.find(result => result.types.includes('street_address')) ||
+            data.results.find(result => result.types.includes('premise')) ||
+            data.results[0];
+
+        return {
+            latitud: bestResult.geometry.location.lat,
+            longitud: bestResult.geometry.location.lng,
+        };
     }
 }

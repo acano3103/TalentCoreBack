@@ -1165,6 +1165,7 @@ model Empleados {
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados   RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados")
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados       RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados")
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados     RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados")
+  RolePlayAsignaciones                                                                       RolePlayAsignaciones[]
   SolicitudesIncidencias_SolicitudesIncidencias_idAprobadorToEmpleados                       SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idAprobadorToEmpleados")
   SolicitudesIncidencias_SolicitudesIncidencias_idEmpleadoToEmpleados                        SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idEmpleadoToEmpleados")
   SolicitudesIncidencias_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados           SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados")
@@ -1690,7 +1691,7 @@ model HorariosEmpleado {
   DiaSemana   String?   @db.VarChar(10)
   HoraEntrada DateTime? @db.Time(0)
   HoraSalida  DateTime? @db.Time(0)
-  Modalidad   String?   @db.VarChar(100)
+  Modalidad   String    @default("PRESENCIAL") @db.VarChar(100)
 
   @@index([idEmpleado], map: "idx_idEmpleado")
 }
@@ -1896,25 +1897,47 @@ model RolePlayLlamadas {
 }
 
 model RolePlays {
-  idRolePlay           Int                  @id @default(autoincrement())
+  idRolePlay           Int                    @id @default(autoincrement())
   idTenant             Int
   idEmpresa            Int
-  Titulo               String               @db.VarChar(250)
-  Descripcion          String?              @db.Text
-  Contexto             String               @db.Text
-  Objetivo             String               @db.Text
-  AiScript             String               @db.Text
-  ObjetivosAprendizaje String?              @db.Text
-  DuracionMinutos      Int                  @default(15)
-  Activo               Boolean              @default(true)
+  Titulo               String                 @db.VarChar(250)
+  Descripcion          String?                @db.Text
+  Contexto             String                 @db.Text
+  Objetivo             String                 @db.Text
+  AiScript             String                 @db.Text
+  ObjetivosAprendizaje String?                @db.Text
+  DuracionMinutos      Int                    @default(15)
+  CalificacionMinima   Decimal?               @db.Decimal(5, 2)
+  Activo               Boolean                @default(true)
   idUsuarioCreador     Int
-  FechaRegistro        DateTime?            @default(now()) @db.DateTime(0)
-  FechaActualizacion   DateTime?            @db.DateTime(0)
+  FechaRegistro        DateTime?              @default(now()) @db.DateTime(0)
+  FechaActualizacion   DateTime?              @db.DateTime(0)
   EvaluationCriteria   EvaluationCriteria[]
+  RolePlayAsignaciones RolePlayAsignaciones[]
   RolePlayLlamadas     RolePlayLlamadas[]
 
   @@index([idEmpresa], map: "idx_roleplays_idEmpresa")
   @@index([idTenant], map: "idx_roleplays_idTenant")
+}
+
+model RolePlayAsignaciones {
+  idAsignacion       Int       @id @default(autoincrement())
+  idRolePlay         Int
+  idEmpleado         Int
+  idTenant           Int
+  idEmpresa          Int
+  FechaLimite        DateTime? @db.DateTime(0)
+  IntentosMaximos    Int?
+  Activo             Boolean   @default(true)
+  idUsuarioAsigno    Int
+  FechaRegistro      DateTime? @default(now()) @db.DateTime(0)
+  FechaActualizacion DateTime? @db.DateTime(0)
+  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_Empleado")
+  RolePlays          RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_RolePlay")
+
+  @@unique([idRolePlay, idEmpleado], map: "UK_RolePlayAsignaciones_RolePlay_Empleado")
+  @@index([idEmpleado], map: "idx_roleasig_idEmpleado")
+  @@index([idTenant], map: "idx_roleasig_idTenant")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -2674,6 +2697,7 @@ model KioscosAsistencia {
   modalidad                     KioscosAsistencia_modalidad
   idEmpleadoResponsable         Int
   estatus                       KioscosAsistencia_estatus       @default(PENDIENTE_ACTIVACION)
+  estatusAntesBloqueo           String?                         @db.VarChar(30)
   identificadorDispositivo      String?                         @unique(map: "UK_Kiosco_Dispositivo") @db.VarChar(150)
   tokenJti                      String?                         @unique(map: "UK_Kiosco_TokenJti") @db.VarChar(100)
   ultimoLatido                  DateTime?                       @db.DateTime(0)

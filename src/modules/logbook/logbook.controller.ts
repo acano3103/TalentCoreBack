@@ -17,34 +17,6 @@ export class LogbookController {
     private readonly excelExportService: ExcelExportService,
   ) { }
 
-  // Exporta a Excel todos los registros que cumplan los filtros (sin paginar)
-  @Get('export')
-  @ApiOperation({ summary: 'Export logbook to Excel', description: 'Exports all logbook records matching the filters (no pagination)' })
-  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
-  async exportLogbook(
-    @GetActiveUser() user: ActiveUserDto,
-    @Param('companyId', ParseIntPipe) companyId: number,
-    @Res() res: Response,
-    @Query('search') search?: string,
-    @Query('idSite') idSite?: string,
-    @Query('idUnidadOperativa') idUnidadOperativa?: string,
-    @Query('fechaDesde') fechaDesde?: string,
-    @Query('fechaHasta') fechaHasta?: string,
-    @Query('canal') canal?: string,
-    @Query('incluirAnulados') incluirAnulados?: string,
-  ) {
-    const buffer = await this.logbookService.exportLogbook(user, companyId, {
-      search,
-      idSite,
-      idUnidadOperativa,
-      fechaDesde,
-      fechaHasta,
-      canal,
-      incluirAnulados: incluirAnulados === 'true' || incluirAnulados === '1',
-    });
-    this.excelExportService.send(res, buffer, 'Bitacora_Registros');
-  }
-
   // This endpoint returns all paginated logbooks for a company
   @Get()
   @ApiOperation({ summary: 'Get all logbooks', description: 'Returns the list of system logbooks for a company.' })
@@ -75,5 +47,47 @@ export class LogbookController {
       canal,
       incluirAnulados === 'true' || incluirAnulados === '1',
     );
+  }
+
+  // Exporta a Excel todos los registros que cumplan los filtros (sin paginar)
+  @Get('export')
+  @ApiOperation({ summary: 'Export logbook to Excel', description: 'Exports all logbook records matching the filters (no pagination)' })
+  @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+  async exportLogbook(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Res() res: Response,
+    @Query('search') search?: string,
+    @Query('idSite') idSite?: string,
+    @Query('idUnidadOperativa') idUnidadOperativa?: string,
+    @Query('fechaDesde') fechaDesde?: string,
+    @Query('fechaHasta') fechaHasta?: string,
+    @Query('canal') canal?: string,
+    @Query('incluirAnulados') incluirAnulados?: string,
+  ) {
+    const buffer = await this.logbookService.exportLogbook(user, companyId, {
+      search,
+      idSite,
+      idUnidadOperativa,
+      fechaDesde,
+      fechaHasta,
+      canal,
+      incluirAnulados: incluirAnulados === 'true' || incluirAnulados === '1',
+    });
+    this.excelExportService.send(res, buffer, 'Bitacora_Registros');
+  }
+
+  // This endpoint returns logbook detail
+  @Get(':logbookId')
+  @ApiOperation({ summary: 'Get all logbooks', description: 'Returns the list of system logbooks for a company.' })
+  @ApiResponse({ status: 200, description: 'List of logbooks successfully retrieved.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  findOne(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('logbookId', ParseIntPipe) logbookId: number,
+  ) {
+    return this.logbookService.findOne(user, companyId, logbookId);
   }
 }

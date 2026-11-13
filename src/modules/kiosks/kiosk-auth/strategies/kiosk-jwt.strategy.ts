@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { MENSAJE_KIOSCO_NO_ACTIVO } from '../../kiosk-http';
+import { MENSAJE_KIOSCO_BLOQUEADO, MENSAJE_KIOSCO_NO_ACTIVO } from '../../kiosk-http';
 import { SesionKiosco } from '../kiosco-actual';
 
 interface KioskJwtPayload {
@@ -54,12 +54,22 @@ export class KioskJwtStrategy extends PassportStrategy(Strategy, 'kiosk-jwt') {
             },
         });
 
-        const vigente =
+        const esSuToken =
             kiosk != null &&
-            kiosk.estatus === 'ACTIVO' &&
             kiosk.tokenJti === payload.jti &&
             kiosk.idTenant === payload.idTenant &&
             kiosk.idEmpresa === payload.idEmpresa;
+
+        // Bloqueo temporal: el token sigue siendo del equipo. La app lo conserva,
+        // muestra el aviso y reanuda sola cuando RH desbloquea (vuelve a ACTIVO).
+        if (esSuToken && kiosk.estatus === 'BLOQUEADO') {
+            throw new ForbiddenException({
+                code: 'KIOSCO_BLOQUEADO',
+                message: MENSAJE_KIOSCO_BLOQUEADO,
+            });
+        }
+
+        const vigente = esSuToken && kiosk.estatus === 'ACTIVO';
 
         if (!vigente || !kiosk) {
             throw new ForbiddenException({

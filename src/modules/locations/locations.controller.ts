@@ -15,7 +15,7 @@ import { ExcelExportService } from 'src/common/services/excel-export.service';
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/locations')
 export class LocationsController {
-   constructor(
+    constructor(
         private readonly locationsService: LocationsService,
         private readonly excelExportService: ExcelExportService,
     ) { }
@@ -39,7 +39,7 @@ export class LocationsController {
         return this.locationsService.findAll(companyId, page, querySearch, limit, user, unitId);
     }
 
-        // Exporta a Excel todas las ubicaciones que cumplan los filtros (sin paginar)
+    // Exporta a Excel todas las ubicaciones que cumplan los filtros (sin paginar)
     @Get('export')
     @ApiOperation({ summary: 'Export locations to Excel', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
@@ -63,9 +63,6 @@ export class LocationsController {
         });
         this.excelExportService.send(res, buffer, 'Ubicaciones');
     }
-
-
-
 
     // Obtiene una ubicación por ID
     @Get(':locationId')

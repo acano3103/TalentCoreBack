@@ -539,190 +539,463 @@ export class KiosksService {
         };
     }
 
+    // Genera un código nuevo e invalida TODOS los códigos anteriores del kiosco, independientemente de si ya expiraron o siguen vigentes.
     async regenerateActivationCode(
         user: ActiveUserDto,
         companyId: number,
         idKiosco: number,
     ) {
-        const idTenant = this.tenantDe(user);
-        this.assertEmpresa(companyId);
+        // Validaciones generales.
+        if (!user.idTenant) {
+            throw new UnauthorizedException('El usuario no tiene un tenant asignado.',);
+        }
 
-        return this.enTransaccion(async (tx) => {
-            const kiosk = await this.obtenerKiosco(tx, idTenant, companyId, idKiosco);
+        if (!Number.isInteger(companyId) || companyId <= 0 || !Number.isInteger(idKiosco) || idKiosco <= 0) {
+            throw new BadRequestException('Los identificadores proporcionados no son válidos.');
+        }
 
-            if (kiosk.estatus !== 'PENDIENTE_ACTIVACION' && kiosk.estatus !== 'BLOQUEADO') {
-                throw new ConflictException(
-                    'Solo se puede regenerar el código de un kiosco pendiente de activación o bloqueado.',
-                );
-            }
+        try {
+            return await this.prisma.$transaction(
+                async (tx) => {
+                    // Buscar el kiosco y validar pertenencia.
+                    const kiosk = await tx.kioscosAsistencia.findFirst({
+                        where: {
+                            idKiosco,
+                            idTenant: user.idTenant,
+                            idEmpresa: companyId,
+                        },
+                        select: {
+                            idKiosco: true,
+                            nombre: true,
+                            codigo: true,
+                            modalidad: true,
+                            estatus: true,
+                            identificadorDispositivo: true,
+                        },
+                    });
 
-            const ahora = new Date();
-            const codigo = this.generateActivationCode();
-            const expiraEn = this.expiracionCodigo(ahora);
+                    if (!kiosk) {
+                        throw new NotFoundException('El kiosco no existe o no pertenece a la empresa actual.');
+                    }
 
-            await tx.kioscoCodigosActivacion.updateMany({
-                where: {
-                    idKiosco: kiosk.idKiosco,
-                    usadoEn: null,
-                    invalidadoEn: null,
-                    expiraEn: { gt: ahora },
+                    // No permitir regenerar códigos en kioscos bloqueados o dados de baja.
+                    if (kiosk.estatus === 'BLOQUEADO' || kiosk.estatus === 'BAJA') {
+                        throw new ConflictException('No se puede regenerar el código de activación de un kiosco bloqueado o dado de baja.',);
+                    }
+
+                    // No permitir generar códigos para kioscos ya activados. Primero debe desvincularse el dispositivo mediante el procedimiento correspondiente, si se requiere una nueva activación.
+                    if (kiosk.estatus === 'ACTIVO') {
+                        throw new ConflictException('El kiosco ya se encuentra activo. Para generar un nuevo código de activación primero debe realizarse el proceso de desvinculación del dispositivo.');
+                    }
+
+                    const now = new Date();
+
+                    // INVALIDAR TODOS los códigos anteriores. No importa si todavía estaban vigentes o ya expiraron.
+                    const invalidatedCodes =
+                        await tx.kioscoCodigosActivacion.updateMany({
+                            where: {
+                                idKiosco: kiosk.idKiosco,
+                                usadoEn: null,
+                            },
+                            data: { usadoEn: now },
+                        });
+
+                    // Generar código completamente nuevo.
+                    const activationCode = this.generateActivationCode();
+                    // Generar hash SHA-256.
+                    const activationCodeHash = hashActivationCode(activationCode);
+                    // Calcular nueva vigencia.
+                    const expiresAt = new Date(now);
+
+                    expiresAt.setHours(expiresAt.getHours() + this.ACTIVATION_CODE_EXPIRATION_HOURS);
+
+                    // Registrar el nuevo código.
+                    await tx.kioscoCodigosActivacion.create({
+                        data: {
+                            idKiosco: kiosk.idKiosco,
+                            codigoHash: activationCodeHash,
+                            expiraEn: expiresAt,
+                            usadoEn: null,
+                            intentosFallidos: 0,
+                        },
+                    });
+
+                    // Registrar trazabilidad.
+                    await tx.historicoMovimientos.create({
+                        data: {
+                            idUsuario: user.id,
+                            idEmpresa: companyId,
+                            accion: 'REGENERACION_CODIGO_ACTIVACION',
+                            tablaOrigen: 'KioscosAsistencia',
+                            idRegistro: String(kiosk.idKiosco),
+                            descripcion:
+                                `Se regeneró el código de activación del kiosco ` +
+                                `"${kiosk.nombre}" (${kiosk.codigo}) por ` +
+                                `${user.first_name} ${user.last_name}. ` +
+                                `Se invalidaron ${invalidatedCodes.count} códigos anteriores. ` +
+                                `El nuevo código tiene vigencia de ` +
+                                `${this.ACTIVATION_CODE_EXPIRATION_HOURS} horas, ` +
+                                `hasta ${expiresAt.toISOString()}.`,
+                            fechaCreacion: now,
+                        },
+                    });
+
+                    // Devolver código original únicamente una vez.
+                    return {
+                        message: 'Código de activación regenerado correctamente.',
+                        kiosk: {
+                            idKiosco: kiosk.idKiosco,
+                            nombre: kiosk.nombre,
+                            codigo: kiosk.codigo,
+                            modalidad: kiosk.modalidad,
+                            estatus: kiosk.estatus,
+                        },
+                        activacion: {
+                            codigo: activationCode,
+                            expiraEn: expiresAt,
+                            vigenciaHoras: this.ACTIVATION_CODE_EXPIRATION_HOURS,
+                            codigosAnterioresInvalidados: invalidatedCodes.count,
+                        },
+                    };
                 },
-                data: { invalidadoEn: ahora },
-            });
-
-            await tx.kioscoCodigosActivacion.create({
-                data: {
-                    idKiosco: kiosk.idKiosco,
-                    codigoHash: hashActivationCode(codigo),
-                    expiraEn,
-                    usadoEn: null,
-                    intentosFallidos: 0,
+                {
+                    maxWait: 5000,
+                    timeout: 15000,
                 },
-            });
+            );
 
-            await tx.kioscosAsistencia.update({
-                where: { idKiosco: kiosk.idKiosco },
-                data: { fechaActualizacion: ahora },
-            });
+        } catch (error) {
+            if (
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException ||
+                error instanceof UnauthorizedException ||
+                error instanceof ConflictException
+            ) throw error;
 
-            await this.registrarHistorico(user, companyId, {
-                accion: 'REGENERAR_CODIGO',
-                idRegistro: String(kiosk.idKiosco),
-                descripcion: `Se regeneró el código de activación del kiosco ${kiosk.codigo} por ${this.nombreUsuario(user)}`,
-                detalles: { vigenciaHoras: this.ACTIVATION_CODE_EXPIRATION_HOURS },
-            }, tx);
-
-            return {
-                codigo,
-                expiraEn,
-                vigenciaHoras: this.ACTIVATION_CODE_EXPIRATION_HOURS,
-            };
-        }, 'Ocurrió un error al regenerar el código de activación.');
+            this.logger.error('Error al regenerar código de activación:', error instanceof Error ? error.stack : String(error));
+            throw new InternalServerErrorException('Ocurrió un error al regenerar el código de activación.');
+        }
     }
 
-    async blockKiosk(user: ActiveUserDto, companyId: number, idKiosco: number) {
-        const idTenant = this.tenantDe(user);
-        this.assertEmpresa(companyId);
-
-        const actualizado = await this.enTransaccion(async (tx) => {
-            const kiosk = await this.obtenerKiosco(tx, idTenant, companyId, idKiosco);
-
-            if (kiosk.estatus === 'BAJA') {
-                throw new ConflictException('Un kiosco dado de baja no se puede bloquear.');
-            }
-
-            const actualizado = await tx.kioscosAsistencia.update({
-                where: { idKiosco: kiosk.idKiosco },
-                data: {
-                    estatus: 'BLOQUEADO',
-                    tokenJti: null,
-                    fechaActualizacion: new Date(),
-                },
-                select: KIOSK_DETAIL_SELECT,
-            });
-
-            await this.registrarHistorico(user, companyId, {
-                accion: 'BLOQUEAR',
-                idRegistro: String(kiosk.idKiosco),
-                descripcion: `Kiosco ${kiosk.codigo} bloqueado por ${this.nombreUsuario(user)}`,
-                detalles: {
-                    estatusAnterior: kiosk.estatus,
-                    estatusNuevo: 'BLOQUEADO',
-                },
-            }, tx);
-
-            return actualizado;
-        }, 'Ocurrió un error al bloquear el kiosco.');
-
-        return {
-            message: 'Kiosco bloqueado correctamente.',
-            kiosk: this.mapDetail(actualizado, await this.minutosSinLatido(idTenant, companyId)),
-        };
+    // BLOQUEAR KIOSCO
+    async blockKiosk(
+        user: ActiveUserDto,
+        companyId: number,
+        idKiosco: number,
+    ) {
+        return this.changeKioskStatus(
+            user,
+            companyId,
+            idKiosco,
+            'BLOQUEADO',
+            'BLOQUEO',
+        );
     }
 
-    async unblockKiosk(user: ActiveUserDto, companyId: number, idKiosco: number) {
-        const idTenant = this.tenantDe(user);
-        this.assertEmpresa(companyId);
-
-        const actualizado = await this.enTransaccion(async (tx) => {
-            const kiosk = await this.obtenerKiosco(tx, idTenant, companyId, idKiosco);
-
-            if (kiosk.estatus !== 'BLOQUEADO') {
-                throw new ConflictException('Solo se puede reactivar un kiosco bloqueado.');
-            }
-
-            const actualizado = await tx.kioscosAsistencia.update({
-                where: { idKiosco: kiosk.idKiosco },
-                data: {
-                    estatus: 'PENDIENTE_ACTIVACION',
-                    identificadorDispositivo: null,
-                    tokenJti: null,
-                    fechaActualizacion: new Date(),
-                },
-                select: KIOSK_DETAIL_SELECT,
-            });
-
-            await this.registrarHistorico(user, companyId, {
-                accion: 'DESBLOQUEAR',
-                idRegistro: String(kiosk.idKiosco),
-                descripcion: `Kiosco ${kiosk.codigo} desbloqueado por ${this.nombreUsuario(user)}. Debe activarse de nuevo.`,
-                detalles: {
-                    estatusAnterior: kiosk.estatus,
-                    estatusNuevo: 'PENDIENTE_ACTIVACION',
-                    identificadorDispositivoAnterior: kiosk.identificadorDispositivo,
-                },
-            }, tx);
-
-            return actualizado;
-        }, 'Ocurrió un error al desbloquear el kiosco.');
-
-        return {
-            message: 'Kiosco desbloqueado correctamente. Hay que activarlo de nuevo en el equipo.',
-            kiosk: this.mapDetail(actualizado, await this.minutosSinLatido(idTenant, companyId)),
-        };
+    // DESBLOQUEAR KIOSCO
+    async unblockKiosk(
+        user: ActiveUserDto,
+        companyId: number,
+        idKiosco: number,
+    ) {
+        return this.changeKioskStatus(
+            user,
+            companyId,
+            idKiosco,
+            'DESBLOQUEAR',
+            'DESBLOQUEO',
+        );
     }
 
-    async retireKiosk(user: ActiveUserDto, companyId: number, idKiosco: number) {
-        const idTenant = this.tenantDe(user);
-        this.assertEmpresa(companyId);
+    // DAR DE BAJA KIOSCO
+    async deactivateKiosk(
+        user: ActiveUserDto,
+        companyId: number,
+        idKiosco: number,
+    ) {
+        return this.changeKioskStatus(
+            user,
+            companyId,
+            idKiosco,
+            'BAJA',
+            'BAJA',
+        );
+    }
 
-        const actualizado = await this.enTransaccion(async (tx) => {
-            const kiosk = await this.obtenerKiosco(tx, idTenant, companyId, idKiosco);
+    // REACTIVAR KIOSCO
+    async reactivateKiosk(
+        user: ActiveUserDto,
+        companyId: number,
+        idKiosco: number,
+    ) {
+        return this.changeKioskStatus(
+            user,
+            companyId,
+            idKiosco,
+            'REACTIVAR',
+            'REACTIVACION',
+        );
+    }
 
-            if (kiosk.estatus === 'BAJA') {
-                throw new ConflictException('El kiosco ya está dado de baja.');
+    // --------------------------------------------------------------------------
+    // Helpers
+    // --------------------------------------------------------------------------
+
+    /**
+     * MÉTODO CENTRALIZADO PARA CAMBIOS DE ESTATUS.
+     *
+     * Todas las acciones quedan registradas en el histórico.
+     */
+    private async changeKioskStatus(
+        user: ActiveUserDto,
+        companyId: number,
+        idKiosco: number,
+        action: 'BLOQUEADO' | 'DESBLOQUEAR' | 'BAJA' | 'REACTIVAR',
+        historicalAction: string,
+    ) {
+        if (!user.idTenant) {
+            throw new UnauthorizedException('El usuario no tiene un tenant asignado.');
+        }
+
+        if (!Number.isInteger(companyId) || companyId <= 0 || !Number.isInteger(idKiosco) || idKiosco <= 0) {
+            throw new BadRequestException('Los identificadores proporcionados no son válidos.');
+        }
+
+        try {
+            return await this.prisma.$transaction(
+                async (tx) => {
+
+                    // 1. Buscar kiosco.
+                    const kiosk = await tx.kioscosAsistencia.findFirst({
+                        where: {
+                            idKiosco,
+                            idTenant: user.idTenant,
+                            idEmpresa: companyId,
+                        },
+                        select: {
+                            idKiosco: true,
+                            nombre: true,
+                            codigo: true,
+                            estatus: true,
+                            estatusAntesBloqueo: true,
+                        },
+                    });
+
+                    if (!kiosk) {
+                        throw new NotFoundException('El kiosco no existe o no pertenece a la empresa actual.',);
+                    }
+
+                    const currentStatus = kiosk.estatus;
+                    let newStatus: string;
+                    let extraDescription = '';
+
+                    const now = new Date();
+                    let activationResponse: {
+                        codigo: string;
+                        expiraEn: Date;
+                        vigenciaHoras: number;
+                        codigosAnterioresInvalidados: number;
+                    } | undefined;
+
+                    // 2. DETERMINAR TRANSICIÓN
+                    if (action === 'BLOQUEADO') {
+
+                        if (currentStatus === 'BLOQUEADO' || currentStatus === 'BAJA') {
+                            throw new ConflictException('El kiosco ya está bloqueado o dado de baja.');
+                        }
+
+                        // Guardamos el estatus anterior.
+                        await tx.kioscosAsistencia.update({
+                            where: { idKiosco },
+                            data: {
+                                estatus: 'BLOQUEADO' as any,
+                                estatusAntesBloqueo: String(currentStatus),
+                            },
+                        });
+
+                        newStatus = 'BLOQUEADO';
+                        extraDescription = `Estatus anterior: ${currentStatus}.`;
+                    }
+
+                    else if (action === 'DESBLOQUEAR') {
+
+                        if (currentStatus !== 'BLOQUEADO') {
+                            throw new ConflictException('Solamente se pueden desbloquear kioscos bloqueados.',);
+                        }
+
+                        // Recuperar el estatus anterior. Si no existe, regresamos a pendiente de activación.
+                        const previousStatus = kiosk.estatusAntesBloqueo === 'ACTIVO' ? 'ACTIVO' : 'PENDIENTE_ACTIVACION';
+
+                        await tx.kioscosAsistencia.update({
+                            where: { idKiosco },
+                            data: {
+                                estatus: previousStatus as any,
+                                estatusAntesBloqueo: null,
+                            },
+                        });
+
+                        newStatus = previousStatus;
+                        extraDescription = `El kiosco recuperó su estatus anterior: ${previousStatus}.`;
+                    }
+
+                    else if (action === 'BAJA') {
+
+                        if (currentStatus === 'BAJA') {
+                            throw new ConflictException('El kiosco ya se encuentra dado de baja.',);
+                        }
+
+                        // Invalidar códigos pendientes.
+                        const invalidated = await tx.kioscoCodigosActivacion.updateMany({
+                            where: {
+                                idKiosco,
+                                usadoEn: null,
+                            },
+                            data: { usadoEn: now },
+                        });
+
+                        // Dar de baja y desvincular dispositivo.
+                        await tx.kioscosAsistencia.update({
+                            where: { idKiosco },
+                            data: {
+                                estatus: 'BAJA' as any,
+                                estatusAntesBloqueo: null,
+                                identificadorDispositivo: null,
+                                tokenJti: null,
+                                ultimoLatido: null,
+                            },
+                        });
+
+                        newStatus = 'BAJA';
+                        extraDescription = `Se desvinculó el dispositivo y se invalidaron ` + `${invalidated.count} códigos de activación pendientes.`;
+                    }
+
+                    else {
+
+                        // REACTIVAR
+                        if (currentStatus !== 'BAJA') {
+                            throw new ConflictException('Solamente se pueden reactivar kioscos que se encuentren dados de baja.',);
+                        }
+
+                        // Invalidar cualquier código pendiente anterior.
+                        const invalidated =
+                            await tx.kioscoCodigosActivacion.updateMany({
+                                where: {
+                                    idKiosco,
+                                    usadoEn: null,
+                                },
+                                data: { usadoEn: now },
+                            });
+
+                        // Generar nuevo código de activación.
+                        const activationCode = this.generateActivationCode();
+                        const activationCodeHash = hashActivationCode(activationCode);
+                        const expiresAt = new Date(now);
+                        expiresAt.setHours(expiresAt.getHours() + this.ACTIVATION_CODE_EXPIRATION_HOURS);
+
+                        // Crear código nuevo.
+                        await tx.kioscoCodigosActivacion.create({
+                            data: {
+                                idKiosco,
+                                codigoHash: activationCodeHash,
+                                expiraEn: expiresAt,
+                                usadoEn: null,
+                                intentosFallidos: 0,
+                            },
+                        });
+
+                        // Reactivar en espera de nueva vinculación.
+                        await tx.kioscosAsistencia.update({
+                            where: { idKiosco },
+                            data: {
+                                estatus: 'PENDIENTE_ACTIVACION' as any,
+                                estatusAntesBloqueo: null,
+                                identificadorDispositivo: null,
+                                tokenJti: null,
+                                ultimoLatido: null,
+                            },
+                        });
+
+                        newStatus = 'PENDIENTE_ACTIVACION';
+                        extraDescription =
+                            `Se reactivó el kiosco, se invalidaron ${invalidated.count} códigos anteriores ` +
+                            `y se generó un nuevo código de activación con vencimiento ${expiresAt.toISOString()}.`;
+
+                        // El código solo se devuelve en esta respuesta.
+                        activationResponse = {
+                            codigo: activationCode,
+                            expiraEn: expiresAt,
+                            vigenciaHoras: this.ACTIVATION_CODE_EXPIRATION_HOURS,
+                            codigosAnterioresInvalidados: invalidated.count,
+                        };
+                    }
+
+                    // 3. REGISTRAR HISTÓRICO
+                    await tx.historicoMovimientos.create({
+                        data: {
+                            idUsuario: user.id,
+                            idEmpresa: companyId,
+                            accion: historicalAction,
+                            tablaOrigen: 'KioscosAsistencia',
+                            idRegistro: String(kiosk.idKiosco),
+                            descripcion:
+                                `El usuario ${user.first_name} ${user.last_name} ` +
+                                `realizó la acción ${historicalAction} sobre el kiosco ` +
+                                `"${kiosk.nombre}" (${kiosk.codigo}). ` +
+                                `Estatus anterior: ${currentStatus}. ` +
+                                `Nuevo estatus: ${newStatus}. ` +
+                                extraDescription,
+                            fechaCreacion: now,
+                        },
+                    });
+
+                    // 4. RESPUESTA
+                    return {
+                        message: this.getKioskActionMessage(action),
+                        kiosk: {
+                            idKiosco: kiosk.idKiosco,
+                            nombre: kiosk.nombre,
+                            codigo: kiosk.codigo,
+                            estatusAnterior: currentStatus,
+                            estatus: newStatus,
+                        },
+                        ...(action === 'REACTIVAR' ? { activacion: activationResponse } : {}),
+                    };
+                },
+                {
+                    maxWait: 5000,
+                    timeout: 15000,
+                },
+            );
+
+        } catch (error) {
+            if (
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException ||
+                error instanceof UnauthorizedException ||
+                error instanceof ConflictException
+            ) {
+                throw error;
             }
 
-            const fechaBaja = new Date();
-            const actualizado = await tx.kioscosAsistencia.update({
-                where: { idKiosco: kiosk.idKiosco },
-                data: {
-                    estatus: 'BAJA',
-                    fechaBaja,
-                    tokenJti: null,
-                    fechaActualizacion: fechaBaja,
-                },
-                select: KIOSK_DETAIL_SELECT,
-            });
+            this.logger.error('Error al cambiar el estatus del kiosco:', error instanceof Error ? error.stack : String(error));
+            throw new InternalServerErrorException('Ocurrió un error al actualizar el estado del kiosco.');
+        }
+    }
 
-            await this.registrarHistorico(user, companyId, {
-                accion: 'BAJA',
-                idRegistro: String(kiosk.idKiosco),
-                descripcion: `Kiosco ${kiosk.codigo} dado de baja por ${this.nombreUsuario(user)}`,
-                detalles: {
-                    estatusAnterior: kiosk.estatus,
-                    estatusNuevo: 'BAJA',
-                    fechaBaja: fechaBaja.toISOString(),
-                },
-            }, tx);
-
-            return actualizado;
-        }, 'Ocurrió un error al dar de baja el kiosco.');
-
-        return {
-            message: 'Kiosco dado de baja correctamente.',
-            kiosk: this.mapDetail(actualizado, await this.minutosSinLatido(idTenant, companyId)),
+    /**
+     * Mensajes de respuesta.
+     */
+    private getKioskActionMessage(
+        action: 'BLOQUEADO' | 'DESBLOQUEAR' | 'BAJA' | 'REACTIVAR',
+    ): string {
+        const messages = {
+            BLOQUEADO: 'Kiosco bloqueado correctamente.',
+            DESBLOQUEAR: 'Kiosco desbloqueado correctamente.',
+            BAJA: 'Kiosco dado de baja correctamente.',
+            REACTIVAR: 'Kiosco reactivado correctamente. Debe vincularse nuevamente.',
         };
+
+        return messages[action];
     }
 
     // --------------------------------------------------------------------------
