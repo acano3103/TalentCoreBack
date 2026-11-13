@@ -6,6 +6,7 @@ import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateKioskDto } from './dto/create-kiosk.dto';
 import { QueryKiosksDto } from './dto/query-kiosks.dto';
+import { UpdateKioskDto } from './dto/update-kiosk.dto';
 
 @ApiTags('Kiosks')
 @ApiBearerAuth()
@@ -17,7 +18,10 @@ export class KiosksController {
   // Obtener kioscos paginados.
   @Get()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Obtener kioscos de asistencia', description: `Obtiene los kioscos de una empresa con paginación, búsqueda por responsable o código y filtros por estatus, modalidad y ubicación.` })
+  @ApiOperation({
+    summary: 'Obtener kioscos de asistencia',
+    description: 'Obtiene los kioscos de una empresa con paginación, búsqueda por responsable o código y filtros por estatus, modalidad, ubicación y alertas. Cada elemento incluye conexion, versionApp y pendientesReportados.',
+  })
   @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
   @ApiResponse({ status: 200, description: 'Kioscos obtenidos correctamente.' })
   @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
@@ -29,10 +33,59 @@ export class KiosksController {
     return this.kiosksService.findAll(activeUser, companyId, query);
   }
 
+  @Get('summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Resumen de kioscos',
+    description: 'Totales de la empresa: kioscos, conexión, activación pendiente, checadas de hoy y registros por revisar.',
+  })
+  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'Resumen obtenido correctamente.',
+    schema: {
+      example: {
+        total: 4,
+        activos: 2,
+        enLinea: 1,
+        sinConexion: 1,
+        pendientesActivacion: 1,
+        checadasHoy: 12,
+        porRevisar: 3,
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
+  summary(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+  ) {
+    return this.kiosksService.getSummary(activeUser, companyId);
+  }
+
+  @Get(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Detalle de un kiosco',
+    description: 'Devuelve el mismo elemento del listado más políticas, activación, equipo y conexión.',
+  })
+  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
+  @ApiParam({ name: 'id', description: 'Identificador del kiosco', type: Number })
+  @ApiResponse({ status: 200, description: 'Kiosco obtenido correctamente.' })
+  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
+  @ApiResponse({ status: 404, description: 'Kiosco no encontrado en la empresa.' })
+  findOne(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.kiosksService.findOne(activeUser, companyId, id);
+  }
+
   // Crea un nuevo kiosco de asistencia
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Crear un kiosco de asistencia', description: `Crea un kiosco de asistencia en modalidad FIJO o CUADRILLA.` })
+  @ApiOperation({ summary: 'Crear un kiosco de asistencia', description: 'Crea un kiosco de asistencia en modalidad FIJO o CUADRILLA.' })
   @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number, example: 3 })
   @ApiBody({ type: CreateKioskDto })
   @ApiResponse({ status: 201, description: 'Kiosco creado correctamente.' })
@@ -47,6 +100,29 @@ export class KiosksController {
     @Body() dto: CreateKioskDto,
   ) {
     return this.kiosksService.createKiosk(activeUser, companyId, dto);
+  }
+
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Actualizar un kiosco',
+    description: 'Cambia nombre, responsable, ubicaciones de un kiosco fijo y políticas. La modalidad no se puede cambiar.',
+  })
+  @ApiParam({ name: 'companyId', description: 'Identificador de la empresa', type: Number })
+  @ApiParam({ name: 'id', description: 'Identificador del kiosco', type: Number })
+  @ApiBody({ type: UpdateKioskDto })
+  @ApiResponse({ status: 200, description: 'Kiosco actualizado correctamente.' })
+  @ApiResponse({ status: 400, description: 'Configuración inválida o cambio de modalidad.' })
+  @ApiResponse({ status: 401, description: 'Usuario no autenticado o sin tenant.' })
+  @ApiResponse({ status: 404, description: 'Kiosco o responsable no encontrado.' })
+  @ApiResponse({ status: 409, description: 'El kiosco está dado de baja.' })
+  update(
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateKioskDto,
+  ) {
+    return this.kiosksService.updateKiosk(activeUser, companyId, id, dto);
   }
 
   // Regenerar código de activación.

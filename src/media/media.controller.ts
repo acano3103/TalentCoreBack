@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Res, UseGuards, StreamableFile } from '@nestjs/common';
 import { MediaService } from './media.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { GetActiveUser } from 'src/modules/auth/decorators/active-user.decorator';
+import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -18,12 +20,14 @@ export class MediaController {
     })
     @ApiResponse({ status: 200, description: 'File obtained successfully.' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 404, description: 'Archivo no encontrado o fuera del tenant.' })
     async getPrivateFile(
+        @GetActiveUser() user: ActiveUserDto,
         @Param() params: any,
         @Res({ passthrough: true }) res: Response,
     ): Promise<StreamableFile> {
         let fileRelativePath = params.datasource;
         if (Array.isArray(fileRelativePath)) fileRelativePath = fileRelativePath.join('/');
-        return this.mediaService.getPrivateFileGeneric(fileRelativePath, res);
+        return this.mediaService.getPrivateFileGeneric(fileRelativePath, res, user);
     }
 }

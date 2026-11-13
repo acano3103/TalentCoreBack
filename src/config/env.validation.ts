@@ -17,6 +17,9 @@ export const envValidationSchema = Joi.object({
     // Apagar cuando exista la pantalla de aprobación de RH.
     MOBILE_DEVICES_AUTO_APPROVE: Joi.boolean().default(false),
     MOBILE_MIN_APP_VERSION: Joi.string().default('1.0.0'),
+    // Token del equipo de kiosco. No reutilizar JWT_SECRET.
+    KIOSK_JWT_SECRET: Joi.string().required(),
+    KIOSK_MIN_APP_VERSION: Joi.string().default('0.1.0'),
     ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
     MAIL_HOST: Joi.string().required(),
     MAIL_PORT: Joi.number().required(),
@@ -32,6 +35,8 @@ export const envValidationSchema = Joi.object({
     OPENAI_API_KEY: Joi.string().required(),
     MEDIA_PATH_PREFIX: Joi.string().default('media'),
     MEDIA_ROOT_PATH: Joi.string().required(),
+    // Prefijo con el que el front abre archivos privados (el proxy agrega la cookie).
+    MEDIA_PUBLIC_URL_BASE: Joi.string().optional().default('/api/proxy-v2'),
     NUBARIUM_BASE_URL: Joi.string().required(),
     NUBARIUM_USERNAME: Joi.string().required(),
     NUBARIUM_PASSWORD: Joi.string().required(),

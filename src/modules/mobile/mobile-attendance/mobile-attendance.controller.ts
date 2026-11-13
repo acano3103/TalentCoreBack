@@ -28,9 +28,7 @@ import { MobileCheckDto } from './dto/mobile-check.dto';
 import { SyncAttendanceDto } from './dto/sync-attendance.dto';
 import { UploadEvidenceDto } from './dto/upload-evidence.dto';
 import { MobileAttendanceService, MobileAttendanceUser } from './mobile-attendance.service';
-
-const TAMANIO_MAX_SELFIE = 3 * 1024 * 1024;
-const MIME_SELFIE = ['image/jpeg', 'image/png'];
+import { MIME_SELFIE, TAMANIO_MAX_SELFIE } from './selfie.constants';
 
 @ApiTags('Mobile Attendance')
 @Controller('mobile/attendance')

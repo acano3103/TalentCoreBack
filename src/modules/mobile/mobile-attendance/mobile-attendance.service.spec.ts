@@ -5,6 +5,7 @@ jest.mock('src/prisma/prisma.service', () => ({
 import { BadRequestException, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { ConfigService } from '@nestjs/config';
+import { MediaPathService } from 'src/common/services/media-path.service';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import { DEFAULT_ATTENDANCE_CONFIG } from 'src/modules/config/attendance-config/interfaces/attendance-config.interface';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
@@ -34,6 +35,7 @@ describe('MobileAttendanceService', () => {
     let service: MobileAttendanceService;
     let engine: AttendanceEngineService;
     let configService: { get: jest.Mock };
+    let mediaPath: { saveFile: jest.Mock; deleteFile: jest.Mock };
     let prisma: {
         empleados: { findUnique: jest.Mock; findFirst: jest.Mock };
         relEmpleadosSites: { findFirst: jest.Mock; findMany: jest.Mock };
@@ -43,6 +45,7 @@ describe('MobileAttendanceService', () => {
         jornadasEmpleado: { findFirst: jest.Mock; findMany: jest.Mock };
         dispositivosAsistencia: { findFirst: jest.Mock };
         configuracionJornadaLegal: { findFirst: jest.Mock };
+        asistenciaEvidencias: { create: jest.Mock };
     };
 
     beforeEach(() => {
@@ -100,6 +103,9 @@ describe('MobileAttendanceService', () => {
             configuracionJornadaLegal: {
                 findFirst: jest.fn(async () => null),
             },
+            asistenciaEvidencias: {
+                create: jest.fn(async () => ({ idEvidencia: 15 })),
+            },
         };
 
         const attendanceConfig = {
@@ -112,10 +118,17 @@ describe('MobileAttendanceService', () => {
             attendanceConfig as unknown as AttendanceTrackingConfigService,
         );
         configService = { get: jest.fn(() => undefined) };
+        mediaPath = {
+            saveFile: jest.fn(async () => ({
+                rutaRelativa: '/media/acme/attendance/9/2026/09/selfie.jpg',
+            })),
+            deleteFile: jest.fn(async () => undefined),
+        };
         service = new MobileAttendanceService(
             prisma as unknown as PrismaService,
             engine,
             configService as unknown as ConfigService,
+            mediaPath as unknown as MediaPathService,
         );
     });
 
@@ -585,6 +598,91 @@ describe('MobileAttendanceService', () => {
             await expect(service.history(userMovil, '2026-02-31', '2026-03-01')).rejects.toBeInstanceOf(
                 BadRequestException,
             );
+        });
+    });
+
+    describe('uploadEvidence', () => {
+        function selfie(parcial: Partial<Express.Multer.File> = {}): Express.Multer.File {
+            return {
+                buffer: Buffer.from('foto'),
+                mimetype: 'image/jpeg',
+                size: 4,
+                originalname: 'captura.png',
+                ...parcial,
+            } as Express.Multer.File;
+        }
+
+        it('guarda la selfie del empleado con la ruta del tenant', async () => {
+            const file = selfie();
+            const result = await service.uploadEvidence(userMovil, file);
+
+            expect(mediaPath.saveFile).toHaveBeenCalledWith(file, {
+                idTenant: 3,
+                subfolder: 'attendance/9/2026/09',
+                fileName: expect.stringMatching(/^[0-9a-f-]{36}\.jpg$/i),
+            });
+            expect(prisma.asistenciaEvidencias.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    idTenant: 3,
+                    idEmpresa: 9,
+                    idEmpleado: 42,
+                    tipo: 'SELFIE',
+                    rutaArchivo: '/media/acme/attendance/9/2026/09/selfie.jpg',
+                    mimeType: 'image/jpeg',
+                    tamanioBytes: 4,
+                    consumida: false,
+                }),
+            });
+            expect(result.idEvidencia).toBe(15);
+        });
+
+        it('usa extensión png cuando el MIME ya validado es image/png', async () => {
+            const file = selfie({ mimetype: 'image/png' });
+
+            await service.uploadEvidence(userMovil, file);
+
+            expect(mediaPath.saveFile).toHaveBeenCalledWith(
+                file,
+                expect.objectContaining({
+                    subfolder: 'attendance/9/2026/09',
+                    fileName: expect.stringMatching(/\.png$/),
+                }),
+            );
+        });
+
+        it('rechaza un buffer vacío', async () => {
+            const error = await service
+                .uploadEvidence(userMovil, selfie({ buffer: Buffer.alloc(0), size: 0 }))
+                .catch((fallo) => fallo);
+
+            expect(error).toBeInstanceOf(BadRequestException);
+            expect(error.getStatus()).toBe(400);
+            expect(error.getResponse()).toEqual(
+                expect.objectContaining({
+                    code: 'ARCHIVO_INVALIDO',
+                    message: 'La foto llegó vacía. Tómala de nuevo.',
+                }),
+            );
+            expect(mediaPath.saveFile).not.toHaveBeenCalled();
+        });
+
+        it('borra el archivo y relanza el error si falla el alta en base de datos', async () => {
+            const fallo = new Error('no se pudo insertar');
+            mediaPath.saveFile.mockResolvedValue({
+                rutaRelativa: '/media/acme/attendance/9/2026/09/a.jpg',
+            });
+            prisma.asistenciaEvidencias.create.mockRejectedValue(fallo);
+
+            await expect(service.uploadEvidence(userMovil, selfie())).rejects.toBe(fallo);
+            expect(mediaPath.deleteFile).toHaveBeenCalledWith('acme/attendance/9/2026/09/a.jpg');
+        });
+
+        it('relanza el error original aunque falle el borrado del archivo', async () => {
+            const fallo = new Error('no se pudo insertar');
+            prisma.asistenciaEvidencias.create.mockRejectedValue(fallo);
+            mediaPath.deleteFile.mockRejectedValue(new Error('disco lleno'));
+
+            await expect(service.uploadEvidence(userMovil, selfie())).rejects.toBe(fallo);
         });
     });
 });

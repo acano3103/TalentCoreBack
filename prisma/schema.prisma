@@ -2039,6 +2039,11 @@ model RegistrosAsistencia {
   idKiosco                                                    Int?
   idEmpleadoRegistra                                          Int?
   numeroEmpleadoCapturado                                     String?                                  @db.VarChar(20)
+  metodoIdentificacion                                        String?                                  @db.VarChar(30)
+  rostroDetectado                                             Boolean?
+  deteccionRostroActiva                                       Boolean?
+  requiereRevision                                            Boolean                                  @default(false)
+  banderasRevision                                            Json?
   idRegistroOrigen                                            BigInt?
   canal                                                       RegistrosAsistencia_canal
   telefonoOrigen                                              String?                                  @db.VarChar(20)
@@ -2696,6 +2701,10 @@ model KioscosAsistencia {
   identificadorDispositivo      String?                         @unique(map: "UK_Kiosco_Dispositivo") @db.VarChar(150)
   tokenJti                      String?                         @unique(map: "UK_Kiosco_TokenJti") @db.VarChar(100)
   ultimoLatido                  DateTime?                       @db.DateTime(0)
+  plataforma                    String?                         @db.VarChar(20)
+  modelo                        String?                         @db.VarChar(120)
+  versionApp                    String?                         @db.VarChar(20)
+  pendientesReportados          Int                             @default(0)
   politicas                     Json
   fechaCreacion                 DateTime                        @default(now()) @db.DateTime(0)
   fechaActualizacion            DateTime                        @default(now()) @db.DateTime(0)
@@ -2729,6 +2738,9 @@ model RegistrosKioscoPorIdentificar {
   longitud                                                               Decimal?                                     @db.Decimal(11, 8)
   idEvidencia                                                            Int?
   uuidCliente                                                            String                                       @unique(map: "UK_Kiosco_Identificar_UUID") @db.VarChar(64)
+  metodoIdentificacion                                                   String?                                      @db.VarChar(30)
+  esOffline                                                              Boolean                                      @default(false)
+  desfaseRelojSegundos                                                   Int?
   estatus                                                                RegistrosKioscoPorIdentificar_estatus        @default(PENDIENTE)
   idEmpleadoAsignado                                                     Int?
   agregarEmpleadoSite                                                    Boolean                                      @default(false)
