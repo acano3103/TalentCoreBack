@@ -35,6 +35,8 @@ export const envValidationSchema = Joi.object({
     OPENAI_API_KEY: Joi.string().required(),
     MEDIA_PATH_PREFIX: Joi.string().default('media'),
     MEDIA_ROOT_PATH: Joi.string().required(),
+    // Prefijo con el que el front abre archivos privados (el proxy agrega la cookie).
+    MEDIA_PUBLIC_URL_BASE: Joi.string().optional().default('/api/proxy-v2'),
     NUBARIUM_BASE_URL: Joi.string().required(),
     NUBARIUM_USERNAME: Joi.string().required(),
     NUBARIUM_PASSWORD: Joi.string().required(),

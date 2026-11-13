@@ -5,6 +5,7 @@ jest.mock('src/prisma/prisma.service', () => ({
 import { Logger } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { ConfigService } from '@nestjs/config';
+import { MediaPathService } from 'src/common/services/media-path.service';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import { DEFAULT_ATTENDANCE_CONFIG } from 'src/modules/config/attendance-config/interfaces/attendance-config.interface';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
@@ -87,6 +88,7 @@ describe('KioskDeviceService', () => {
             attendance as unknown as AttendanceTrackingConfigService,
             engine as unknown as AttendanceEngineService,
             config as unknown as ConfigService,
+            { saveFile: jest.fn(), deleteFile: jest.fn() } as unknown as MediaPathService,
         );
         warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     });

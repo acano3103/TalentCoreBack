@@ -5,9 +5,10 @@ import { ConfigService } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
 import { validateSync, ValidationError } from 'class-validator';
 import { Prisma } from 'generated/prisma/client';
-import { saveFileLocal } from 'src/common/utils/file-storage.util';
+import { MediaPathService } from 'src/common/services/media-path.service';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import { ResultadoCheck } from 'src/modules/attendance/engine/interfaces/canonical-check.interface';
+import { TipoChecada } from 'src/modules/attendance/engine/state-machine';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
 import { MIME_SELFIE, TAMANIO_MAX_SELFIE } from 'src/modules/mobile/mobile-attendance/selfie.constants';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -21,6 +22,7 @@ import {
     ResultadoSyncKiosco,
     SyncKioskDto,
 } from './dto/kiosk-device.dto';
+import { BotonKiosco, botonSugeridoKiosco, mensajeRechazoKiosco, tipoRealKiosco } from './tipo-kiosco';
 
 const CACHE_PADRON_MS = 60_000;
 const TX_KIOSCO = { maxWait: 5000, timeout: 15000 } as const;
@@ -36,6 +38,7 @@ const MENSAJES_CHECADA = {
     ENTRADA: 'Entrada registrada',
     SALIDA: 'Salida registrada',
 } as const;
+const MENSAJE_REGRESO_COMIDA = 'Regreso de comida registrado';
 
 type CodigoResolucion = 'EMPLEADO_NO_ENCONTRADO' | 'EMPLEADO_INACTIVO' | 'EMPLEADO_NO_ASIGNADO';
 
@@ -91,6 +94,7 @@ export class KioskDeviceService {
         private readonly attendanceConfig: AttendanceTrackingConfigService,
         private readonly engine: AttendanceEngineService,
         private readonly configService: ConfigService,
+        private readonly mediaPathService: MediaPathService,
     ) {}
 
     async bootstrap(kiosco: SesionKiosco) {
@@ -192,7 +196,7 @@ export class KioskDeviceService {
             numeroEmpleado: empleado.numeroEmpleado,
             nombreCorto: nombreCorto(empleado.nombre, empleado.primerApellido),
             iniciales: inicialesDe(empleado.nombre, empleado.primerApellido),
-            tipoSugerido: accion.sugerido,
+            tipoSugerido: botonSugeridoKiosco(accion.ultimoTipo),
             turnoHoy: {
                 fecha: ctx.fechaLocal,
                 diaSemana: ctx.diaSemana,
@@ -225,34 +229,69 @@ export class KioskDeviceService {
                 'La foto no puede pesar más de 3 MB. Toma otra más ligera e intenta de nuevo.',
             );
         }
+        if (file.buffer.length === 0) {
+            throw errorKiosco(
+                HttpStatus.BAD_REQUEST,
+                'ARCHIVO_INVALIDO',
+                'La foto llegó vacía. Tómala de nuevo.',
+            );
+        }
 
         const ahora = new Date();
         const anio = String(ahora.getUTCFullYear());
         const mes = String(ahora.getUTCMonth() + 1).padStart(2, '0');
-        const folder = `attendance/kiosk/${kiosco.idEmpresa}/${anio}/${mes}`;
-        const rutaArchivo = await saveFileLocal(file, folder, `${randomUUID()}.jpg`);
+        const guardado = await this.mediaPathService.saveFile(file, {
+            idTenant: kiosco.idTenant,
+            subfolder: `attendance/kiosk/${kiosco.idEmpresa}/${anio}/${mes}`,
+            fileName: `${randomUUID()}${extensionSelfie(file.mimetype)}`,
+        });
         const hashSha256 = createHash('sha256').update(file.buffer).digest('hex');
 
-        const evidencia = await this.prisma.asistenciaEvidencias.create({
-            data: {
-                idTenant: kiosco.idTenant,
-                idEmpresa: kiosco.idEmpresa,
-                idEmpleado: null,
-                idKiosco: kiosco.idKiosco,
-                rostroDetectado,
-                tipo: 'SELFIE',
-                rutaArchivo,
-                mimeType: file.mimetype,
-                tamanioBytes: file.size,
-                hashSha256,
-                fechaCaptura: ahora,
-                consumida: false,
-                fechaPurga: addDays(ahora, 365),
-            },
-            select: { idEvidencia: true },
-        });
+        try {
+            const evidencia = await this.prisma.asistenciaEvidencias.create({
+                data: {
+                    idTenant: kiosco.idTenant,
+                    idEmpresa: kiosco.idEmpresa,
+                    idEmpleado: null,
+                    idKiosco: kiosco.idKiosco,
+                    rostroDetectado,
+                    tipo: 'SELFIE',
+                    rutaArchivo: guardado.rutaRelativa,
+                    mimeType: file.mimetype,
+                    tamanioBytes: file.size,
+                    hashSha256,
+                    fechaCaptura: ahora,
+                    consumida: false,
+                    fechaPurga: addDays(ahora, 365),
+                },
+                select: { idEvidencia: true },
+            });
 
-        return { idEvidencia: evidencia.idEvidencia };
+            return { idEvidencia: evidencia.idEvidencia };
+        } catch (error) {
+            await this.borrarEvidenciaRecienEscrita(guardado.rutaRelativa);
+            throw error;
+        }
+    }
+
+    /**
+     * `saveFile()` regresa `/media/<slug>/...` y `deleteFile()` rechaza esa forma
+     * porque la considera absoluta. Se le pasa la ruta bajo la raíz de medios.
+     */
+    private rutaParaBorrar(rutaRelativa: string): string {
+        const normalizada = rutaRelativa.replace(/\\/g, '/');
+        if (normalizada.startsWith('/media/')) {
+            return normalizada.slice('/media/'.length);
+        }
+        return normalizada.replace(/^\/+/, '');
+    }
+
+    private async borrarEvidenciaRecienEscrita(rutaRelativa: string): Promise<void> {
+        try {
+            await this.mediaPathService.deleteFile(this.rutaParaBorrar(rutaRelativa));
+        } catch {
+            // La limpieza no debe ocultar el error original de la base de datos.
+        }
     }
 
     check(kiosco: SesionKiosco, dto: ChecadaKioscoDto) {
@@ -632,15 +671,28 @@ export class KioskDeviceService {
         evidencia: EvidenciaKiosco | null,
     ): Promise<ResultadoChecadaKiosco> {
         const idSitioKiosco = await this.sitePrincipal(kiosco.idKiosco);
+        const boton = dto.tipo;
+        const fechaHoraRegistro = new Date(dto.fechaHoraRegistro);
+        let ultimoTipo: TipoChecada | null = null;
+        let resultado: ResultadoCheck;
         try {
-            const resultado = await this.engine.registerCheck({
+            // La checada offline se traduce con la jornada de su propia fecha, no con la hora del servidor.
+            const ctx = await this.engine.resolveContext(empleado.idEmpleado, fechaHoraRegistro, 'KIOSCO');
+            const accion = await this.engine.resolveNextType(
+                empleado.idEmpleado,
+                ctx.fechaJornada,
+                ctx.config,
+                'SECUENCIA_COMPLETA',
+            );
+            ultimoTipo = accion.ultimoTipo;
+            resultado = await this.engine.registerCheck({
                 idTenant: kiosco.idTenant,
                 idEmpresa: kiosco.idEmpresa,
                 idEmpleado: empleado.idEmpleado,
                 canal: 'KIOSCO',
-                tipo: dto.tipo,
+                tipo: tipoRealKiosco(boton, ultimoTipo),
                 modoInferencia: 'EXPLICITO',
-                fechaHoraRegistro: new Date(dto.fechaHoraRegistro),
+                fechaHoraRegistro,
                 uuidCliente: dto.uuidCliente,
                 idKiosco: kiosco.idKiosco,
                 idSitioKiosco,
@@ -653,25 +705,28 @@ export class KioskDeviceService {
                 desfaseRelojSegundos: dto.desfaseRelojSegundos ?? null,
                 idEvidencia: evidencia?.idEvidencia ?? null,
             });
-            return this.mapearResultadoMotor(resultado, empleado);
         } catch (error) {
             if (esP2002(error)) {
                 const ya = await this.resultadoSiYaExiste(dto.uuidCliente);
                 if (ya) return ya;
             }
-            traducirErrorMotor(error);
+            traducirErrorMotor(error, boton, ultimoTipo);
         }
+        return this.mapearResultadoMotor(resultado, empleado, boton, ultimoTipo);
     }
 
     private mapearResultadoMotor(
         resultado: ResultadoCheck,
         empleado: EmpleadoResuelto,
+        boton: BotonKiosco,
+        ultimoTipo: TipoChecada | null,
     ): ResultadoChecadaKiosco {
         if (resultado.rechazado) {
+            const codigo = resultado.codigoRechazo ?? 'TRANSICION_INVALIDA';
             throw errorKiosco(
                 HttpStatus.CONFLICT,
-                resultado.codigoRechazo ?? 'TRANSICION_INVALIDA',
-                resultado.motivoRechazo?.trim() || MENSAJE_NO_REGISTRADA,
+                codigo,
+                mensajeRechazoKiosco(boton, ultimoTipo, codigo, resultado.motivoRechazo) || MENSAJE_NO_REGISTRADA,
             );
         }
 
@@ -686,7 +741,7 @@ export class KioskDeviceService {
             tipo,
             requiereRevision: resultado.requiereRevision,
             advertencias: resultado.advertencias,
-            mensaje: MENSAJES_CHECADA[tipo],
+            mensaje: resultado.tipo === 'FIN_COMIDA' ? MENSAJE_REGRESO_COMIDA : MENSAJES_CHECADA[tipo],
         };
     }
 
@@ -816,6 +871,10 @@ export class KioskDeviceService {
     }
 }
 
+function extensionSelfie(mime: string): string {
+    return mime === 'image/png' ? '.png' : '.jpg';
+}
+
 function nombreCorto(nombre: string | null, apellido: string | null): string {
     return [nombre?.trim(), apellido?.trim()].filter(Boolean).join(' ');
 }
@@ -878,7 +937,7 @@ function cuerpoDe(error: HttpException): { code: string | null; message: string 
     return { code: typeof body.code === 'string' ? body.code : null, message };
 }
 
-function traducirErrorMotor(error: unknown): never {
+function traducirErrorMotor(error: unknown, boton: BotonKiosco, ultimoTipo: TipoChecada | null): never {
     if (!(error instanceof HttpException)) {
         throw error;
     }
@@ -889,7 +948,12 @@ function traducirErrorMotor(error: unknown): never {
     const detail = typeof payload === 'object' && payload !== null && 'detail' in payload
         ? (payload as { detail?: unknown }).detail
         : undefined;
-    throw errorKiosco(status, code, body.message, detail);
+    throw errorKiosco(
+        status,
+        code,
+        mensajeRechazoKiosco(boton, ultimoTipo, code, body.message) || body.message,
+        detail,
+    );
 }
 
 function esP2002(error: unknown): error is Prisma.PrismaClientKnownRequestError {

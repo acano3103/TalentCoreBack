@@ -2,13 +2,9 @@ jest.mock('src/prisma/prisma.service', () => ({
     PrismaService: class PrismaService {},
 }));
 
-jest.mock('src/common/utils/file-storage.util', () => ({
-    saveFileLocal: jest.fn(async () => 'media/attendance/kiosk/9/2026/11/foto.jpg'),
-}));
-
 import { UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { saveFileLocal } from 'src/common/utils/file-storage.util';
+import { MediaPathService } from 'src/common/services/media-path.service';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import { ResultadoCheck } from 'src/modules/attendance/engine/interfaces/canonical-check.interface';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
@@ -93,6 +89,7 @@ describe('Checadas del kiosco', () => {
         $transaction: jest.Mock;
     };
     let engine: { registerCheck: jest.Mock; resolveContext: jest.Mock; resolveNextType: jest.Mock };
+    let mediaPath: { saveFile: jest.Mock; deleteFile: jest.Mock };
 
     beforeEach(() => {
         prisma = {
@@ -119,7 +116,7 @@ describe('Checadas del kiosco', () => {
             trabajo(prisma),
         );
         engine = {
-            registerCheck: jest.fn(async (input: { tipo: 'ENTRADA' | 'SALIDA'; rostroDetectado?: boolean | null; deteccionRostroActiva?: boolean | null }) =>
+            registerCheck: jest.fn(async (input: { tipo: 'ENTRADA' | 'SALIDA' | 'FIN_COMIDA'; rostroDetectado?: boolean | null; deteccionRostroActiva?: boolean | null }) =>
                 resultadoMotor({
                     tipo: input.tipo,
                     requiereRevision: input.deteccionRostroActiva === true && input.rostroDetectado === false,
@@ -129,15 +126,29 @@ describe('Checadas del kiosco', () => {
                             : [],
                 }),
             ),
-            resolveContext: jest.fn(),
-            resolveNextType: jest.fn(),
+            resolveContext: jest.fn(async () => ({
+                fechaJornada: new Date('2026-11-11T00:00:00.000Z'),
+                config: { comida: { obligatorioChecarComida: true } },
+            })),
+            resolveNextType: jest.fn(async () => ({
+                sugerido: 'ENTRADA',
+                permitidos: ['ENTRADA'],
+                ultimoTipo: null,
+            })),
         };
 
+        mediaPath = {
+            saveFile: jest.fn(async () => ({
+                rutaRelativa: '/media/acme/attendance/kiosk/9/2026/11/foto.jpg',
+            })),
+            deleteFile: jest.fn(async () => undefined),
+        };
         service = new KioskDeviceService(
             prisma as unknown as PrismaService,
             {} as AttendanceTrackingConfigService,
             engine as unknown as AttendanceEngineService,
             { get: jest.fn() } as unknown as ConfigService,
+            mediaPath as unknown as MediaPathService,
         );
     });
 
@@ -171,11 +182,11 @@ describe('Checadas del kiosco', () => {
 
         const result = await service.subirEvidencia(kiosco, file, true);
 
-        expect(saveFileLocal).toHaveBeenCalledWith(
-            file,
-            expect.stringMatching(/^attendance\/kiosk\/9\/\d{4}\/\d{2}$/),
-            expect.stringMatching(/\.jpg$/),
-        );
+        expect(mediaPath.saveFile).toHaveBeenCalledWith(file, {
+            idTenant: 3,
+            subfolder: expect.stringMatching(/^attendance\/kiosk\/9\/\d{4}\/\d{2}$/),
+            fileName: expect.stringMatching(/^[0-9a-f-]{36}\.jpg$/i),
+        });
         expect(prisma.asistenciaEvidencias.create).toHaveBeenCalledWith({
             data: expect.objectContaining({
                 idTenant: 3,
@@ -184,12 +195,71 @@ describe('Checadas del kiosco', () => {
                 idKiosco: 5,
                 rostroDetectado: true,
                 tipo: 'SELFIE',
+                rutaArchivo: '/media/acme/attendance/kiosk/9/2026/11/foto.jpg',
                 mimeType: 'image/jpeg',
                 consumida: false,
             }),
             select: { idEvidencia: true },
         });
         expect(result).toEqual({ idEvidencia: 15 });
+    });
+
+    it('usa extensión png cuando el MIME ya validado es image/png', async () => {
+        const file = {
+            buffer: Buffer.from('foto'),
+            mimetype: 'image/png',
+            size: 4,
+            originalname: 'equipo.jpg',
+        } as Express.Multer.File;
+
+        await service.subirEvidencia(kiosco, file, true);
+
+        expect(mediaPath.saveFile).toHaveBeenCalledWith(
+            file,
+            expect.objectContaining({
+                idTenant: 3,
+                subfolder: expect.stringMatching(/^attendance\/kiosk\/9\/\d{4}\/\d{2}$/),
+                fileName: expect.stringMatching(/\.png$/),
+            }),
+        );
+    });
+
+    it('rechaza un buffer vacío', async () => {
+        const file = {
+            buffer: Buffer.alloc(0),
+            mimetype: 'image/jpeg',
+            size: 0,
+        } as Express.Multer.File;
+
+        const error = await service.subirEvidencia(kiosco, file, true).catch((fallo) => fallo);
+
+        expect(error.getStatus()).toBe(400);
+        expect(error.getResponse()).toEqual(
+            expect.objectContaining({
+                code: 'ARCHIVO_INVALIDO',
+                message: 'La foto llegó vacía. Tómala de nuevo.',
+            }),
+        );
+        expect(mediaPath.saveFile).not.toHaveBeenCalled();
+    });
+
+    it('borra el archivo sin el prefijo /media/ y relanza el error de la base de datos', async () => {
+        const file = {
+            buffer: Buffer.from('foto'),
+            mimetype: 'image/jpeg',
+            size: 4,
+        } as Express.Multer.File;
+        const fallo = new Error('no se pudo insertar');
+        mediaPath.saveFile.mockResolvedValue({
+            rutaRelativa: '/media/acme/attendance/kiosk/9/2026/11/a.jpg',
+        });
+        prisma.asistenciaEvidencias.create.mockRejectedValue(fallo);
+        mediaPath.deleteFile.mockRejectedValue(new Error('disco lleno'));
+
+        await expect(service.subirEvidencia(kiosco, file, true)).rejects.toBe(fallo);
+        expect(mediaPath.deleteFile).toHaveBeenCalledWith(
+            'acme/attendance/kiosk/9/2026/11/a.jpg',
+        );
     });
 
     it('registra la entrada con foto', async () => {
@@ -467,6 +537,93 @@ describe('Checadas del kiosco', () => {
         expect(error.getResponse().code).toBe('TRANSICION_INVALIDA');
         expect(JSON.stringify(error.getResponse())).not.toMatch(/ya estaba registrada/i);
         expect(engine.registerCheck).not.toHaveBeenCalled();
+    });
+
+    it('con la comida abierta, Entrada registra el regreso y la respuesta sigue diciendo Entrada', async () => {
+        empleadoEnPadron();
+        evidenciaValida();
+        engine.resolveNextType.mockResolvedValue({
+            sugerido: 'FIN_COMIDA',
+            permitidos: ['FIN_COMIDA'],
+            ultimoTipo: 'INICIO_COMIDA',
+        });
+
+        const result = await service.check(kiosco, checada({ tipo: 'ENTRADA' }));
+
+        expect(engine.registerCheck).toHaveBeenCalledWith(expect.objectContaining({
+            tipo: 'FIN_COMIDA',
+            modoInferencia: 'EXPLICITO',
+        }));
+        expect(result.tipo).toBe('ENTRADA');
+        expect(result.mensaje).toBe('Regreso de comida registrado');
+        expect(JSON.stringify(result)).not.toMatch(/FIN_COMIDA/);
+    });
+
+    it('con la comida abierta, Salida se rechaza sin nombres técnicos', async () => {
+        empleadoEnPadron();
+        evidenciaValida();
+        engine.resolveNextType.mockResolvedValue({
+            sugerido: 'FIN_COMIDA',
+            permitidos: ['FIN_COMIDA'],
+            ultimoTipo: 'INICIO_COMIDA',
+        });
+        engine.registerCheck.mockRejectedValue(new UnprocessableEntityException({
+            message: 'No puedes registrar SALIDA ahora. Las acciones permitidas son: FIN_COMIDA.',
+            code: 'TRANSICION_INVALIDA',
+            detail: { estadoActual: 'INICIO_COMIDA', permitidos: ['FIN_COMIDA'] },
+        }));
+
+        const error = await service.check(kiosco, checada({ tipo: 'SALIDA' })).catch((causa) => causa);
+
+        expect(engine.registerCheck).toHaveBeenCalledWith(expect.objectContaining({
+            tipo: 'SALIDA',
+            modoInferencia: 'EXPLICITO',
+        }));
+        expect(error.getStatus()).toBe(409);
+        expect(error.getResponse()).toEqual(expect.objectContaining({
+            code: 'TRANSICION_INVALIDA',
+            message: 'Tienes abierta tu salida a comida. Primero marca Entrada para registrar tu regreso y después marca Salida.',
+        }));
+        expect(error.getResponse().message).not.toMatch(/FIN_COMIDA|INICIO_COMIDA/);
+    });
+
+    it('después de la entrada, con comida obligatoria, sugiere Salida', async () => {
+        empleadoEnPadron();
+        engine.resolveNextType.mockResolvedValue({
+            sugerido: 'INICIO_COMIDA',
+            permitidos: ['INICIO_COMIDA', 'SALIDA'],
+            ultimoTipo: 'ENTRADA',
+        });
+
+        const result = await service.lookup(kiosco, '100');
+
+        expect(engine.resolveNextType).toHaveBeenCalledWith(
+            8,
+            expect.any(Date),
+            expect.anything(),
+            'SECUENCIA_COMPLETA',
+        );
+        expect(result.tipoSugerido).toBe('SALIDA');
+    });
+
+    it('traduce una checada offline con la jornada de su fecha de registro', async () => {
+        empleadoEnPadron();
+        evidenciaValida();
+        const fechaJornada = new Date('2026-11-10T00:00:00.000Z');
+        const config = { comida: { obligatorioChecarComida: true } };
+        engine.resolveContext.mockResolvedValue({ fechaJornada, config });
+
+        await service.check(kiosco, checada({
+            esOffline: true,
+            fechaHoraRegistro: '2026-11-10T15:04:00.000Z',
+        }));
+
+        expect(engine.resolveContext).toHaveBeenCalledWith(
+            8,
+            new Date('2026-11-10T15:04:00.000Z'),
+            'KIOSCO',
+        );
+        expect(engine.resolveNextType).toHaveBeenCalledWith(8, fechaJornada, config, 'SECUENCIA_COMPLETA');
     });
 
     it('traduce la transición inválida del motor a 409', async () => {

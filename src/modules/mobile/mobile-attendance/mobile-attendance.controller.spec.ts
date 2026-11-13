@@ -10,6 +10,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import * as request from 'supertest';
 import { HttpExceptionFilter } from 'src/common/filters/http-exception.filter';
+import { MediaPathService } from 'src/common/services/media-path.service';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import { DEFAULT_ATTENDANCE_CONFIG } from 'src/modules/config/attendance-config/interfaces/attendance-config.interface';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
@@ -316,6 +317,10 @@ describe('MobileAttendanceController (check)', () => {
                     useValue: { getConfiguracionAsistencia: jest.fn(async () => config) },
                 },
                 { provide: ConfigService, useValue: { get: jest.fn() } },
+                {
+                    provide: MediaPathService,
+                    useValue: { saveFile: jest.fn(), deleteFile: jest.fn() },
+                },
             ],
         })
             .overrideGuard(MobileJwtAuthGuard)
@@ -519,6 +524,10 @@ describe('MobileAttendanceController (sync)', () => {
                     useValue: { getConfiguracionAsistencia: jest.fn(async () => config) },
                 },
                 { provide: ConfigService, useValue: { get: jest.fn() } },
+                {
+                    provide: MediaPathService,
+                    useValue: { saveFile: jest.fn(), deleteFile: jest.fn() },
+                },
             ],
         })
             .overrideGuard(MobileJwtAuthGuard)

@@ -3,10 +3,13 @@ import { Prisma } from 'generated/prisma/client';
 import { RegistrosAsistencia_estatusProcesamiento } from 'generated/prisma/enums';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import { ResultadoCheck } from 'src/modules/attendance/engine/interfaces/canonical-check.interface';
+import { TipoChecada } from 'src/modules/attendance/engine/state-machine';
+import { urlEvidencia } from 'src/modules/attendance/utils/evidencia-url.util';
 import { localTimeToInstant } from 'src/modules/attendance/utils/timezone.util';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { KioskDeviceService } from '../kiosk-device/kiosk-device.service';
+import { BotonKiosco, mensajeRechazoKiosco, tipoRealKiosco } from '../kiosk-device/tipo-kiosco';
 import { errorKiosco } from '../kiosk-http';
 import {
     ApproveIncidenciaDto,
@@ -60,6 +63,7 @@ export interface ItemRevisionKiosco {
     banderas: string[] | null;
     tipoIncidencia: string | null;
     rutaEvidencia: string | null;
+    urlEvidencia: string | null;
 }
 
 @Injectable()
@@ -455,14 +459,28 @@ export class KioskReviewsService {
         }
 
         const evidencia = await this.liberarEvidencia(incidencia.idEvidencia, incidencia.idKiosco, companyId);
+        const boton = botonDeIncidencia(incidencia.tipo);
+        let ultimoTipo: TipoChecada | null = null;
         let resultado: ResultadoCheck;
         try {
+            const ctx = await this.engine.resolveContext(
+                empleado.idEmpleado,
+                incidencia.fechaHoraRegistro,
+                'KIOSCO',
+            );
+            const accion = await this.engine.resolveNextType(
+                empleado.idEmpleado,
+                ctx.fechaJornada,
+                ctx.config,
+                'SECUENCIA_COMPLETA',
+            );
+            ultimoTipo = accion.ultimoTipo;
             resultado = await this.engine.registerCheck({
                 idTenant,
                 idEmpresa: companyId,
                 idEmpleado: empleado.idEmpleado,
                 canal: 'KIOSCO',
-                tipo: incidencia.tipo,
+                tipo: tipoRealKiosco(boton, ultimoTipo),
                 modoInferencia: 'EXPLICITO',
                 fechaHoraRegistro: incidencia.fechaHoraRegistro,
                 uuidCliente: incidencia.uuidCliente,
@@ -481,15 +499,17 @@ export class KioskReviewsService {
             });
         } catch (error) {
             await this.restaurarEvidencia(evidencia);
-            this.traducirMotor(error);
+            this.traducirMotor(error, boton, ultimoTipo);
         }
 
         if (resultado.rechazado) {
             await this.restaurarEvidencia(evidencia);
+            const codigo = resultado.codigoRechazo ?? 'TRANSICION_INVALIDA';
             throw errorKiosco(
                 HttpStatus.CONFLICT,
-                resultado.codigoRechazo ?? 'TRANSICION_INVALIDA',
-                resultado.motivoRechazo?.trim() || 'No se pudo crear el registro.',
+                codigo,
+                mensajeRechazoKiosco(boton, ultimoTipo, codigo, resultado.motivoRechazo)
+                    || 'No se pudo crear el registro.',
             );
         }
 
@@ -595,25 +615,29 @@ export class KioskReviewsService {
         const zonas = await this.zonasDe(filas.map((fila) => fila.idSitioDetectado));
         const rutas = await this.rutasDe(filas.map((fila) => fila.idEvidencia));
 
-        const items: ItemRevisionKiosco[] = filas.map((fila) => ({
-            fuente: 'registros',
-            id: fila.idRegistro.toString(),
-            empleado: empleadoDe(fila.Empleados),
-            numeroCapturado: fila.numeroEmpleadoCapturado,
-            candidato: null,
-            tipo: fila.tipo,
-            fechaHoraRegistro: fechaHoraEnZona(
-                fila.fechaHoraRegistro,
-                zonas.get(fila.idSitioDetectado ?? 0) ?? ZONA_NEGOCIO,
-            ),
-            kiosco: {
-                codigo: fila.KioscosAsistencia?.codigo ?? '',
-                nombre: fila.KioscosAsistencia?.nombre ?? '',
-            },
-            banderas: banderasDe(fila.banderasRevision),
-            tipoIncidencia: null,
-            rutaEvidencia: fila.idEvidencia != null ? rutas.get(fila.idEvidencia) ?? null : null,
-        }));
+        const items: ItemRevisionKiosco[] = filas.map((fila) => {
+            const rutaEvidencia = fila.idEvidencia != null ? rutas.get(fila.idEvidencia) ?? null : null;
+            return {
+                fuente: 'registros',
+                id: fila.idRegistro.toString(),
+                empleado: empleadoDe(fila.Empleados),
+                numeroCapturado: fila.numeroEmpleadoCapturado,
+                candidato: null,
+                tipo: fila.tipo,
+                fechaHoraRegistro: fechaHoraEnZona(
+                    fila.fechaHoraRegistro,
+                    zonas.get(fila.idSitioDetectado ?? 0) ?? ZONA_NEGOCIO,
+                ),
+                kiosco: {
+                    codigo: fila.KioscosAsistencia?.codigo ?? '',
+                    nombre: fila.KioscosAsistencia?.nombre ?? '',
+                },
+                banderas: banderasDe(fila.banderasRevision),
+                tipoIncidencia: null,
+                rutaEvidencia,
+                urlEvidencia: urlEvidencia(rutaEvidencia),
+            };
+        });
 
         return { items, pagination: paginar(page, limit, total) };
     }
@@ -654,6 +678,7 @@ export class KioskReviewsService {
             const candidato = empleadoDe(
                 fila.Empleados_RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados,
             );
+            const rutaEvidencia = fila.AsistenciaEvidencias?.rutaArchivo ?? null;
             return {
                 fuente: 'incidencias',
                 id: fila.idPorIdentificar.toString(),
@@ -671,7 +696,8 @@ export class KioskReviewsService {
                 },
                 banderas: null,
                 tipoIncidencia: fila.tipoIncidencia,
-                rutaEvidencia: fila.AsistenciaEvidencias?.rutaArchivo ?? null,
+                rutaEvidencia,
+                urlEvidencia: urlEvidencia(rutaEvidencia),
             };
         });
 
@@ -1036,7 +1062,11 @@ export class KioskReviewsService {
         }
     }
 
-    private traducirMotor(error: unknown): never {
+    private traducirMotor(
+        error: unknown,
+        boton?: BotonKiosco,
+        ultimoTipo?: TipoChecada | null,
+    ): never {
         if (!(error instanceof HttpException)) throw error;
         const cuerpo = cuerpoDe(error);
         const status = error.getStatus() === HttpStatus.UNPROCESSABLE_ENTITY
@@ -1044,8 +1074,15 @@ export class KioskReviewsService {
             : error.getStatus();
         const code = cuerpo.code
             ?? (status === HttpStatus.CONFLICT ? 'TRANSICION_INVALIDA' : `HTTP_${error.getStatus()}`);
-        throw errorKiosco(status, code, cuerpo.message, cuerpo.detail);
+        const message = boton
+            ? mensajeRechazoKiosco(boton, ultimoTipo ?? null, code, cuerpo.message) || cuerpo.message
+            : cuerpo.message;
+        throw errorKiosco(status, code, message, cuerpo.detail);
     }
+}
+
+function botonDeIncidencia(tipo: string): BotonKiosco {
+    return tipo === 'SALIDA' ? 'SALIDA' : 'ENTRADA';
 }
 
 function paginar(page: number, limit: number, total: number) {

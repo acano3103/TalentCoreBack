@@ -28,9 +28,9 @@ export class MediaService {
         }
 
         const normalizado = fileRelativePath.replace(/\\/g, '/');
-        const kiosco = /^(?:media\/)?attendance\/kiosk\/(\d+)\//.exec(normalizado);
-        if (kiosco) {
-            await this.exigirEmpresaDelTenant(Number(kiosco[1]), user);
+        const asistencia = /^(?:media\/)?([^/]+)\/attendance\/(?:kiosk\/)?(\d+)\//.exec(normalizado);
+        if (asistencia) {
+            await this.exigirEvidenciaAsistencia(asistencia[1], Number(asistencia[2]), user);
         }
 
         const safePath = resolve(join(this.ALLOWED_ROOT, fileRelativePath));
@@ -39,9 +39,10 @@ export class MediaService {
             throw new ForbiddenException('Acceso denegado.');
         }
 
-        if (kiosco) {
+        if (asistencia) {
             const relativo = relative(this.ALLOWED_ROOT, safePath).replace(/\\/g, '/');
-            const esperado = `attendance/kiosk/${kiosco[1]}/`;
+            const segmentoKiosco = normalizado.includes('/attendance/kiosk/') ? 'kiosk/' : '';
+            const esperado = `${asistencia[1]}/attendance/${segmentoKiosco}${asistencia[2]}/`;
             if (!relativo.startsWith(esperado)) {
                 throw new NotFoundException('El recurso solicitado no fue encontrado.');
             }
@@ -79,6 +80,26 @@ export class MediaService {
             '.gif': 'image/gif',
         };
         return mimeTypes[ext] || 'application/octet-stream';
+    }
+
+    private async exigirEvidenciaAsistencia(
+        slug: string,
+        idEmpresa: number,
+        user?: ActiveUserDto,
+    ): Promise<void> {
+        if (!user?.idTenant || !slug || !Number.isInteger(idEmpresa)) {
+            throw new NotFoundException('El recurso solicitado no fue encontrado.');
+        }
+
+        const tenant = await this.prisma.catTenants.findUnique({
+            where: { idTenant: user.idTenant },
+            select: { slug: true },
+        });
+        if (tenant?.slug !== slug) {
+            throw new NotFoundException('El recurso solicitado no fue encontrado.');
+        }
+
+        await this.exigirEmpresaDelTenant(idEmpresa, user);
     }
 
     private async exigirEmpresaDelTenant(idEmpresa: number, user?: ActiveUserDto): Promise<void> {

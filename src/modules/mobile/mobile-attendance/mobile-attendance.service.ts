@@ -11,7 +11,7 @@ import {
     UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { saveFileLocal } from 'src/common/utils/file-storage.util';
+import { MediaPathService } from 'src/common/services/media-path.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import {
@@ -79,6 +79,7 @@ export class MobileAttendanceService {
         private readonly prisma: PrismaService,
         private readonly engine: AttendanceEngineService,
         private readonly configService: ConfigService,
+        private readonly mediaPathService: MediaPathService,
     ) {}
 
     serverTime() {
@@ -197,38 +198,74 @@ export class MobileAttendanceService {
                 detail: { maxBytes: TAMANIO_MAX_SELFIE },
             });
         }
+        if (file.buffer.length === 0) {
+            throw new BadRequestException({
+                code: 'ARCHIVO_INVALIDO',
+                message: 'La foto llegó vacía. Tómala de nuevo.',
+                detail: {},
+            });
+        }
 
         const ahora = new Date();
         const anio = String(ahora.getUTCFullYear());
         const mes = String(ahora.getUTCMonth() + 1).padStart(2, '0');
-        const folder = `attendance/${idEmpresa}/${anio}/${mes}`;
-        const fileName = `${randomUUID()}.jpg`;
-        const rutaArchivo = await saveFileLocal(file, folder, fileName);
+        const guardado = await this.mediaPathService.saveFile(file, {
+            idTenant,
+            subfolder: `attendance/${idEmpresa}/${anio}/${mes}`,
+            fileName: `${randomUUID()}${extensionSelfie(file.mimetype)}`,
+        });
         const hashSha256 = createHash('sha256').update(file.buffer).digest('hex');
         const fechaPurga = addDays(ahora, 365);
 
-        const evidencia = await this.prisma.asistenciaEvidencias.create({
-            data: {
-                idTenant,
-                idEmpresa,
-                idEmpleado,
-                tipo: 'SELFIE',
-                rutaArchivo,
-                mimeType: file.mimetype,
-                tamanioBytes: file.size,
-                hashSha256,
-                fechaCaptura: ahora,
-                consumida: false,
-                fechaPurga,
-            },
-        });
+        try {
+            const evidencia = await this.prisma.asistenciaEvidencias.create({
+                data: {
+                    idTenant,
+                    idEmpresa,
+                    idEmpleado,
+                    tipo: 'SELFIE',
+                    rutaArchivo: guardado.rutaRelativa,
+                    mimeType: file.mimetype,
+                    tamanioBytes: file.size,
+                    hashSha256,
+                    fechaCaptura: ahora,
+                    consumida: false,
+                    fechaPurga,
+                },
+            });
 
-        return {
-            idEvidencia: evidencia.idEvidencia,
-            hashSha256,
-            tamanioBytes: file.size,
-            expiraEn: fechaPurga.toISOString(),
-        };
+            return {
+                idEvidencia: evidencia.idEvidencia,
+                hashSha256,
+                tamanioBytes: file.size,
+                expiraEn: fechaPurga.toISOString(),
+            };
+        } catch (error) {
+            await this.borrarEvidenciaRecienEscrita(guardado.rutaRelativa);
+            throw error;
+        }
+    }
+
+    /**
+     * `MediaPathService.saveFile()` devuelve `/media/<slug>/...`, pero `deleteFile()`
+     * trata toda ruta que empieza con `/` como absoluta y la rechaza. Hay que
+     * pasarle la ruta relativa a la raíz de medios. El servicio compartido no se
+     * cambia aquí.
+     */
+    private rutaParaBorrar(rutaRelativa: string): string {
+        const normalizada = rutaRelativa.replace(/\\/g, '/');
+        if (normalizada.startsWith('/media/')) {
+            return normalizada.slice('/media/'.length);
+        }
+        return normalizada.replace(/^\/+/, '');
+    }
+
+    private async borrarEvidenciaRecienEscrita(rutaRelativa: string): Promise<void> {
+        try {
+            await this.mediaPathService.deleteFile(this.rutaParaBorrar(rutaRelativa));
+        } catch {
+            // La limpieza no debe ocultar el error original de la base de datos.
+        }
     }
 
     async check(user: MobileAttendanceUser, dto: MobileCheckDto) {
@@ -802,6 +839,10 @@ function mapearErrorSync(uuidCliente: string, error: unknown): SyncItemResultado
         // 4xx = rechazo de negocio (no reintentar). 5xx = transitorio.
         reintentable: normalizado.status >= 500,
     };
+}
+
+function extensionSelfie(mime: string): string {
+    return mime === 'image/png' ? '.png' : '.jpg';
 }
 
 function validarFecha(value: string): string {

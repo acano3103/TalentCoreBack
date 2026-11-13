@@ -4,6 +4,7 @@ jest.mock('src/prisma/prisma.service', () => ({
 
 import { ConfigService } from '@nestjs/config';
 import { HttpException } from '@nestjs/common';
+import { MediaPathService } from 'src/common/services/media-path.service';
 import { AttendanceEngineService } from 'src/modules/attendance/engine/attendance-engine.service';
 import { DEFAULT_ATTENDANCE_CONFIG } from 'src/modules/config/attendance-config/interfaces/attendance-config.interface';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
@@ -378,7 +379,10 @@ describe('KioskReviewsService', () => {
     let device: KioskDeviceService;
     let engine: AttendanceEngineService;
 
+    const baseMedios = process.env.MEDIA_PUBLIC_URL_BASE;
+
     beforeEach(() => {
+        delete process.env.MEDIA_PUBLIC_URL_BASE;
         memoria = crearMemoria();
         memoria.sites.push(
             { idSite: 10, idTenant: 3, idEmpresa: 9, zonaHoraria: 'America/Mexico_City', Descripcion: 'Planta' },
@@ -413,12 +417,18 @@ describe('KioskReviewsService', () => {
             config as unknown as AttendanceTrackingConfigService,
             engine,
             { get: jest.fn(() => undefined) } as unknown as ConfigService,
+            { saveFile: jest.fn(), deleteFile: jest.fn() } as unknown as MediaPathService,
         );
         service = new KioskReviewsService(
             memoria.prisma as unknown as PrismaService,
             engine,
             device,
         );
+    });
+
+    afterAll(() => {
+        if (baseMedios === undefined) delete process.env.MEDIA_PUBLIC_URL_BASE;
+        else process.env.MEDIA_PUBLIC_URL_BASE = baseMedios;
     });
 
     function sembrarRegistro(parcial: Record<string, unknown> = {}): any {
@@ -522,6 +532,7 @@ describe('KioskReviewsService', () => {
             tipoIncidencia: null,
             fechaHoraRegistro: '2026-11-11T08:10:00-06:00',
             rutaEvidencia: 'media/attendance/kiosk/9/2026/11/foto.jpg',
+            urlEvidencia: '/api/proxy-v2/media/attendance/kiosk/9/2026/11/foto.jpg',
             kiosco: { codigo: 'KSK-A82F91C4', nombre: 'Recepción' },
         }));
         expect(lista.items[0].empleado).toEqual(expect.objectContaining({
@@ -675,6 +686,45 @@ describe('KioskReviewsService', () => {
 
         expect(memoria.revisiones[0].idEmpleadoRevisor).toBe(7);
         expect(memoria.revisiones[0].datosNuevos).not.toEqual(expect.objectContaining({ usuario: 'user-uuid' }));
+    });
+
+    it('asigna la Entrada como regreso de comida cuando la comida está abierta', async () => {
+        const fecha = new Date(Date.UTC(2026, 10, 11));
+        memoria.jornadas.push({
+            idJornada: 50,
+            idEmpleado: 30,
+            idTenant: 3,
+            idEmpresa: 9,
+            fecha,
+            estatusJornada: 'ABIERTA',
+            revisada: false,
+            horaEntradaTeorica: null,
+            horaSalidaTeorica: null,
+        });
+        memoria.registros.push({
+            idRegistro: 900n,
+            ...baseEmpresa(),
+            idEmpleado: 30,
+            idKiosco: null,
+            canal: 'APP_MOVIL',
+            tipo: 'INICIO_COMIDA',
+            estatusProcesamiento: 'PROCESADO',
+            fechaHoraRegistro: enMexico(2026, 11, 11, 8, 0),
+            idJornada: 50,
+            requiereRevision: false,
+        });
+        const incidencia = sembrarIncidencia({
+            tipo: 'ENTRADA',
+            uuidCliente: 'comida-abierta',
+            idEvidencia: null,
+        });
+
+        const resultado = await service.approve(user, 9, incidencia.idPorIdentificar.toString(), {});
+
+        const registro = memoria.registros.find((fila) => fila.idRegistro.toString() === resultado.idRegistro);
+        expect(registro.tipo).toBe('FIN_COMIDA');
+        expect(registro.canal).toBe('KIOSCO');
+        expect(registro.idEmpleado).toBe(30);
     });
 
     it('aprueba sin agregar al site y conserva hora y evidencia', async () => {

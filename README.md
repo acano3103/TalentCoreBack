@@ -41,6 +41,21 @@ La activación, el padrón y el latido no agregan columnas. La telemetría del e
 
 La checada del kiosco guarda en la incidencia `metodoIdentificacion`, `esOffline` y `desfaseRelojSegundos`. Esas columnas no estaban en el esquema (KB1 las daba por hechas). El SQL está en `prisma/migrations/20261111180000_add_checada_registros_kiosco_por_identificar/` y también se aplica a mano.
 
+## Fotos de asistencia (app y kiosco)
+
+`MEDIA_PUBLIC_URL_BASE` (opcional, default `/api/proxy-v2`). Prefijo con el que el front abre un archivo privado: el proxy agrega el token de la cookie. La bitácora devuelve `evidencia.urlFoto` ya navegable (`{MEDIA_PUBLIC_URL_BASE}/media/...`). Las fotos de Artemis (`https://...`) se devuelven igual. La revisión de kiosco conserva `rutaEvidencia` y agrega `urlEvidencia` con el mismo criterio.
+
+Las selfies nuevas se guardan en `MEDIA_ROOT_PATH/<slug>/attendance/...`. Las tomadas antes quedaron en `<repo>/media/attendance/...` y la base apunta a esa ruta. Para moverlas, con el API detenido y después de que el API ya escriba en `MEDIA_ROOT_PATH`:
+
+```bash
+npm run migrar:evidencias -- --dry-run
+npm run migrar:evidencias
+```
+
+`--dry-run` solo lista. npm se reserva esa bandera, y el script la reconoce igual. Sin ella copia (no borra el original) y actualiza `AsistenciaEvidencias.rutaArchivo` y `RegistrosAsistencia.urlFoto` a `/media/<slug>/attendance/...`. `--borrar-origen` elimina el original después de copiar y verificar. Una segunda corrida no vuelve a mover esas filas. El reporte queda en `scripts/logs/`.
+
+Si `MEDIA_ROOT_PATH` trae comillas de más al inicio o al final, el script las ignora. Conviene quitarlas del `.env`: el resto del API usa el valor tal cual y, si no, no puede escribir.
+
 ## Project setup
 
 ```bash

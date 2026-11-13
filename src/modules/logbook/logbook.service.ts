@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginatedLogbookResponseDto, LogbookItemDto } from './dto/logbook-response.dto';
 import { Prisma } from 'generated/prisma/client';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
+import { urlEvidencia } from 'src/modules/attendance/utils/evidencia-url.util';
 
 // Zona horaria del negocio (CDMX, sin horario de verano desde 2022)
 const TZ_NEGOCIO = 'America/Mexico_City';
@@ -189,6 +190,8 @@ export class LogbookService {
                 );
             }
 
+            const fotos = await this.fotosDe(registros);
+
             // 3. Mapeo limpio para el frontend integrando la resolución
             const data: LogbookItemDto[] = registros.map((reg) => {
                 const emp = reg.Empleados;
@@ -232,10 +235,7 @@ export class LogbookService {
                         latitud: reg.latitud ? Number(reg.latitud) : null,
                         longitud: reg.longitud ? Number(reg.longitud) : null,
                     },
-                    evidencia: {
-                        tieneFoto: Boolean(reg.urlFoto),
-                        urlFoto: reg.urlFoto ?? null,
-                    },
+                    evidencia: this.evidenciaDe(reg, fotos),
                     sync: {
                         esOffline: Boolean(reg.esOffline),
                         fechaHoraRecepcion: reg.fechaHoraRecepcion,
@@ -331,6 +331,7 @@ export class LogbookService {
         });
 
         type RegistroExport = (typeof registros)[number];
+        const fotos = await this.fotosDe(registros);
 
         const formatFecha = (d: Date | null) =>
             d ? d.toLocaleDateString('es-MX', { timeZone: TZ_NEGOCIO, day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
@@ -349,7 +350,7 @@ export class LogbookService {
             { header: 'Canal', key: 'canal', width: 16, value: (r) => (r.canal ? CANAL_LABELS[r.canal] ?? this.humanize(r.canal) : '') },
             { header: 'Ubicación', key: 'ubicacion', width: 28, value: (r) => this.resolveUbicacion(r) },
             { header: 'Geocerca', key: 'geocerca', width: 16, value: (r) => this.humanize(r.resultadoGeocerca) },
-            { header: 'Evidencia', key: 'evidencia', width: 12, value: (r) => (r.urlFoto ? 'Sí' : 'No') },
+            { header: 'Evidencia', key: 'evidencia', width: 12, value: (r) => (this.evidenciaDe(r, fotos).tieneFoto ? 'Sí' : 'No') },
             { header: 'Sync', key: 'sync', width: 12, value: (r) => this.resolveSyncLabel(r) },
             { header: 'Estatus', key: 'estatus', width: 16, value: (r) => this.humanize(r.estatusProcesamiento) },
             { header: 'Kiosco', key: 'kiosco', width: 24, value: (r) => r.KioscosAsistencia?.nombre ?? '' },
@@ -595,10 +596,7 @@ export class LogbookService {
                             : null,
                 },
 
-                evidencia: {
-                    tieneFoto: Boolean(registro.urlFoto),
-                    urlFoto: registro.urlFoto ?? null,
-                },
+                evidencia: this.evidenciaDe(registro, await this.fotosDe([registro])),
 
                 sync: {
                     esOffline: Boolean(registro.esOffline),
@@ -628,6 +626,40 @@ export class LogbookService {
 
 
     // --- Helpers compartidos entre tabla y exportación ---
+
+    /**
+     * Una sola consulta por página: solo las filas sin urlFoto y con idEvidencia.
+     */
+    private async fotosDe(
+        registros: Array<{ urlFoto?: string | null; idEvidencia?: number | null }>,
+    ): Promise<Map<number, string | null>> {
+        const ids = [...new Set(
+            registros
+                .filter((reg) => !reg.urlFoto?.trim() && reg.idEvidencia != null)
+                .map((reg) => reg.idEvidencia as number),
+        )];
+        const mapa = new Map<number, string | null>();
+        if (ids.length === 0) return mapa;
+
+        const evidencias = await this.prisma.asistenciaEvidencias.findMany({
+            where: { idEvidencia: { in: ids } },
+            select: { idEvidencia: true, rutaArchivo: true },
+        });
+        for (const evidencia of evidencias) {
+            mapa.set(evidencia.idEvidencia, evidencia.rutaArchivo);
+        }
+        return mapa;
+    }
+
+    private evidenciaDe(
+        reg: { urlFoto?: string | null; idEvidencia?: number | null },
+        fotos: Map<number, string | null>,
+    ): { tieneFoto: boolean; urlFoto: string | null } {
+        const propia = reg.urlFoto?.trim() ? reg.urlFoto : null;
+        const cruda = propia ?? (reg.idEvidencia != null ? fotos.get(reg.idEvidencia) ?? null : null);
+        const publica = urlEvidencia(cruda);
+        return { tieneFoto: publica != null, urlFoto: publica };
+    }
 
     private resolveUbicacion(reg: { nombreDispositivo?: string | null; idSitioDetectado?: number | null }): string | null {
         return reg.nombreDispositivo ?? (reg.idSitioDetectado ? `Sitio #${reg.idSitioDetectado}` : null);
