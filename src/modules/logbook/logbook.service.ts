@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginatedLogbookResponseDto, LogbookItemDto } from './dto/logbook-response.dto';
@@ -160,13 +160,22 @@ export class LogbookService {
                     .join(' ');
 
                 // Prioridad: 
+                // 0) Coordenadas
                 // 1) Nombre del sitio si idSitioDetectado existe y se encuentra en CatSites
                 // 2) Fallback a 'Sitio #ID' si idSitioDetectado existe pero no se encontró en la BD
                 // 3) Nombre del dispositivo
                 // 4) null
-                const ubicacionDispositivo = reg.idSitioDetectado
-                    ? (sitesMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
-                    : (reg.nombreDispositivo ?? null);
+                const tieneCoordenadas =
+                    reg.latitud !== null &&
+                    reg.latitud !== undefined &&
+                    reg.longitud !== null &&
+                    reg.longitud !== undefined;
+
+                const ubicacionDispositivo = tieneCoordenadas
+                    ? `${reg.latitud}, ${reg.longitud}`
+                    : reg.idSitioDetectado
+                        ? (sitesMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
+                        : (reg.nombreDispositivo ?? null);
 
                 // si ubicacionDispositivo sigue null regresamos la latitud y longitud si aplica 
 
@@ -286,6 +295,269 @@ export class LogbookService {
             rows: registros,
         });
     }
+
+    async findOne(
+        user: ActiveUserDto,
+        companyId: number,
+        logbookId: number,
+    ) {
+        if (!user.idTenant) {
+            throw new BadRequestException(
+                'El usuario no tiene un tenant asignado.',
+            );
+        }
+
+        try {
+            // Aplicamos las mismas validaciones base que en findAll:
+            // empresa, tenant y empleado activo.
+            const where = await this.buildWhere(
+                user,
+                companyId,
+            );
+
+            // Buscar el registro específico de asistencia.
+            const registro = await this.prisma.registrosAsistencia.findFirst({
+                where: {
+                    ...where,
+                    idRegistro: logbookId,
+                },
+                include: {
+                    Empleados: {
+                        select: {
+                            idEmpleado: true,
+                            numeroEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                        },
+                    },
+                },
+            });
+
+            if (!registro) {
+                throw new NotFoundException(
+                    'El registro de asistencia no existe o no pertenece a esta empresa.',
+                );
+            }
+
+            const emp = registro.Empleados;
+
+            const nombreCompleto = [
+                emp?.nombre,
+                emp?.primerApellido,
+                emp?.segundoApellido,
+            ]
+                .filter(Boolean)
+                .join(' ');
+
+            // Verificamos si la asistencia tiene coordenadas propias.
+            const tieneCoordenadasPersonalizadas =
+                registro.latitud !== null &&
+                registro.latitud !== undefined &&
+                registro.longitud !== null &&
+                registro.longitud !== undefined;
+
+            let ubicacionDetalle: {
+                tipo: 'PERSONALIZADA' | 'SUCURSAL' | 'SIN_UBICACION';
+                mensaje: string;
+                latitud: number | null;
+                longitud: number | null;
+                idSite: number | null;
+                nombre: string | null;
+                direccion: string | null;
+            };
+
+            let ubicacionDispositivo: string | null = null;
+
+            // --------------------------------------------------
+            // CASO 1: LA ASISTENCIA TIENE COORDENADAS PROPIAS
+            // --------------------------------------------------
+            if (tieneCoordenadasPersonalizadas) {
+                const latitud = Number(registro.latitud);
+                const longitud = Number(registro.longitud);
+
+                ubicacionDetalle = {
+                    tipo: 'PERSONALIZADA',
+                    mensaje: 'Ubicación personalizada obtenida del dispositivo.',
+                    latitud,
+                    longitud,
+                    idSite: null,
+                    nombre: null,
+                    direccion: null,
+                };
+
+                ubicacionDispositivo = `${latitud}, ${longitud}`;
+            }
+
+            // --------------------------------------------------
+            // CASO 2: NO TIENE COORDENADAS, PERO TIENE UN SITE
+            // --------------------------------------------------
+            else if (registro.idSitioDetectado) {
+                const site = await this.prisma.catSites.findFirst({
+                    where: {
+                        idSite: registro.idSitioDetectado,
+                        idEmpresa: companyId,
+                        idTenant: user.idTenant,
+                    },
+                    select: {
+                        idSite: true,
+                        Descripcion: true,
+                        Calle: true,
+                        NoExterior: true,
+                        NoInterior: true,
+                        Colonia: true,
+                        MunicipioDelegacion: true,
+                        Estado: true,
+                        CodigoPostal: true,
+                        Pais: true,
+                        Latitud: true,
+                        Longitud: true,
+                    },
+                });
+
+                if (site) {
+                    const direccion = [
+                        site.Calle,
+                        site.NoExterior ? `No. ${site.NoExterior}` : null,
+                        site.NoInterior ? `Int. ${site.NoInterior}` : null,
+                        site.Colonia,
+                        site.CodigoPostal,
+                        site.MunicipioDelegacion,
+                        site.Estado,
+                        site.Pais,
+                    ]
+                        .filter(Boolean)
+                        .join(', ');
+
+                    const tieneCoordenadasSite =
+                        site.Latitud !== null &&
+                        site.Latitud !== undefined &&
+                        site.Longitud !== null &&
+                        site.Longitud !== undefined;
+
+                    ubicacionDetalle = {
+                        tipo: 'SUCURSAL',
+                        mensaje: tieneCoordenadasSite
+                            ? 'Se devuelve la ubicación geográfica de la sucursal donde se registró la asistencia.'
+                            : 'La asistencia está relacionada con una sucursal, pero esta no tiene coordenadas registradas.',
+                        latitud: tieneCoordenadasSite
+                            ? Number(site.Latitud)
+                            : null,
+                        longitud: tieneCoordenadasSite
+                            ? Number(site.Longitud)
+                            : null,
+                        idSite: site.idSite,
+                        nombre: site.Descripcion,
+                        direccion: direccion || null,
+                    };
+
+                    ubicacionDispositivo =
+                        site.Descripcion ?? `Sitio #${site.idSite}`;
+                } else {
+                    // El registro tiene un ID de sitio, pero no encontramos
+                    // ese sitio dentro de la empresa y tenant actuales.
+                    ubicacionDetalle = {
+                        tipo: 'SUCURSAL',
+                        mensaje: 'El registro está relacionado con una sucursal, pero no fue posible encontrar sus datos.',
+                        latitud: null,
+                        longitud: null,
+                        idSite: registro.idSitioDetectado,
+                        nombre: null,
+                        direccion: null,
+                    };
+
+                    ubicacionDispositivo =
+                        `Sitio #${registro.idSitioDetectado}`;
+                }
+            }
+
+            // --------------------------------------------------
+            // CASO 3: NO TIENE COORDENADAS NI SITE
+            // --------------------------------------------------
+            else {
+                ubicacionDetalle = {
+                    tipo: 'SIN_UBICACION',
+                    mensaje: 'No existe una ubicación geográfica personalizada ni una sucursal relacionada con este registro.',
+                    latitud: null,
+                    longitud: null,
+                    idSite: null,
+                    nombre: registro.nombreDispositivo ?? null,
+                    direccion: null,
+                };
+
+                ubicacionDispositivo =
+                    registro.nombreDispositivo ?? null;
+            }
+
+            // --------------------------------------------------
+            // RESPUESTA FINAL
+            // Conservamos la estructura del findAll y agregamos
+            // ubicacionDetalle para el modal de información.
+            // --------------------------------------------------
+            return {
+                idRegistro: registro.idRegistro.toString(),
+
+                empleado: {
+                    idEmpleado: emp?.idEmpleado ?? registro.idEmpleado,
+                    numeroEmpleado: emp?.numeroEmpleado ?? null,
+                    nombreCompleto,
+                },
+
+                fechaHoraRegistro: registro.fechaHoraRegistro,
+                tipo: registro.tipo,
+                canal: registro.canal,
+
+                ubicacionDispositivo,
+
+                // Información resuelta para mostrar el mapa y el mensaje.
+                ubicacionDetalle,
+
+                // Se conservan las coordenadas originales de la asistencia.
+                geocerca: {
+                    resultado: registro.resultadoGeocerca,
+                    latitud:
+                        registro.latitud !== null &&
+                            registro.latitud !== undefined
+                            ? Number(registro.latitud)
+                            : null,
+                    longitud:
+                        registro.longitud !== null &&
+                            registro.longitud !== undefined
+                            ? Number(registro.longitud)
+                            : null,
+                },
+
+                evidencia: {
+                    tieneFoto: Boolean(registro.urlFoto),
+                    urlFoto: registro.urlFoto ?? null,
+                },
+
+                sync: {
+                    esOffline: Boolean(registro.esOffline),
+                    fechaHoraRecepcion: registro.fechaHoraRecepcion,
+                    label: this.resolveSyncLabel(registro),
+                },
+
+                estatusProcesamiento: registro.estatusProcesamiento,
+            };
+
+        } catch (error) {
+            if (
+                error instanceof NotFoundException ||
+                error instanceof BadRequestException
+            ) {
+                throw error;
+            }
+
+            this.logger.error(
+                `Error al consultar el registro de bitácora ${logbookId} de la empresa ${companyId}`,
+                error,
+            );
+
+            throw error;
+        }
+    }
+
 
     // --- Helpers compartidos entre tabla y exportación ---
 

@@ -17,6 +17,25 @@ export class LogbookController {
     private readonly excelExportService: ExcelExportService,
   ) { }
 
+  // This endpoint returns all paginated logbooks for a company
+  @Get()
+  @ApiOperation({ summary: 'Get all logbooks', description: 'Returns the list of system logbooks for a company.' })
+  @ApiResponse({ status: 200, description: 'List of logbooks successfully retrieved.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  findAll(
+    @GetActiveUser() user: ActiveUserDto,
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('startDate') startDate?: string,
+    @Query('search') search?: string,
+    @Query('idSite') idSite?: string,
+    @Query('idUnidadOperativa') idUnidadOperativa?: string,
+  ) {
+    return this.logbookService.findAll(user, companyId, page, limit, startDate, search, idSite, idUnidadOperativa);
+  }
+
   // Exporta a Excel todos los registros que cumplan los filtros (sin paginar)
   @Get('export')
   @ApiOperation({ summary: 'Export logbook to Excel', description: 'Exports all logbook records matching the filters (no pagination)' })
@@ -41,22 +60,17 @@ export class LogbookController {
     this.excelExportService.send(res, buffer, 'Bitacora_Registros');
   }
 
-  // This endpoint returns all paginated logbooks for a company
-  @Get()
+  // This endpoint returns logbook detail
+  @Get(':logbookId')
   @ApiOperation({ summary: 'Get all logbooks', description: 'Returns the list of system logbooks for a company.' })
   @ApiResponse({ status: 200, description: 'List of logbooks successfully retrieved.' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  findAll(
+  findOne(
     @GetActiveUser() user: ActiveUserDto,
     @Param('companyId', ParseIntPipe) companyId: number,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('startDate') startDate?: string,
-    @Query('search') search?: string,
-    @Query('idSite') idSite?: string,
-    @Query('idUnidadOperativa') idUnidadOperativa?: string,
+    @Param('logbookId', ParseIntPipe) logbookId: number,
   ) {
-    return this.logbookService.findAll(user, companyId, page, limit, startDate, search, idSite, idUnidadOperativa);
+    return this.logbookService.findOne(user, companyId, logbookId);
   }
 }
