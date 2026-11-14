@@ -3039,6 +3039,7 @@ model ComAcuses {
   ComDestinatarios ComDestinatarios     @relation(fields: [idDestinatario], references: [idDestinatario], onDelete: Restrict, onUpdate: NoAction, map: "FK_ComAcuses_Destinatario")
   Empleados      Empleados              @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Restrict, onUpdate: NoAction, map: "FK_ComAcuses_Empleado")
 
+  @@unique([idDestinatario, idVersion], map: "UK_ComAcuses_Dest_Version")
   @@index([idComunicado], map: "FK_ComAcuses_Comunicado")
   @@index([idVersion], map: "FK_ComAcuses_Version")
   @@index([idDestinatario], map: "FK_ComAcuses_Destinatario")
