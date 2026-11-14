@@ -99,6 +99,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     CostCenterModule,
     EventsModule,
     HeadcountModule,
+    // Antes que Roles: GET /roles/comms-capabilities no debe caer en GET /roles/:id.
+    CommunicationsModule,
     RolesModule,
     VacanciesModule,
     ActivityLogsModule,
@@ -127,7 +129,6 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     ApprovalsModule,
     TimeClockModule,
     KiosksModule,
-    CommunicationsModule,
   ],
   controllers: [],
   providers: [GeofencesService],

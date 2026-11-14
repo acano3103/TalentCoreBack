@@ -5,14 +5,16 @@ import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { CompanyTenantGuard } from 'src/modules/auth/guards/company-tenant.guard';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
+import { CommsCapabilityGuard } from '../capabilities/comms-capability.guard';
+import { RequireCapability } from '../capabilities/require-capability.decorator';
 import { CreateStaffTypeDto } from './dto/create-staff-type.dto';
 import { UpdateStaffTypeDto } from './dto/update-staff-type.dto';
 import { StaffClassificationService } from './staff-classification.service';
 
 @ApiTags('Comunicación interna')
 @ApiBearerAuth()
-// TODO capability
-@UseGuards(JwtAuthGuard, CompanyTenantGuard)
+@UseGuards(JwtAuthGuard, CompanyTenantGuard, CommsCapabilityGuard)
+@RequireCapability('CFG_PERMISOS')
 @Controller('companies/:companyId/comms/staff-types')
 export class StaffClassificationController {
     constructor(private readonly service: StaffClassificationService) {}

@@ -1396,6 +1396,8 @@ model RelUsuarioRol {
   idUsuario Int
   idRol     Int
   activo    Boolean @default(true)
+
+  @@index([idUsuario, activo], map: "IDX_RelUsuarioRol_Usuario_Activo")
 }
 
 model CatEstatusSolicitudPuesto {
