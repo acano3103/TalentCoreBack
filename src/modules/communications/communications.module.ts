@@ -5,6 +5,7 @@ import { CapabilitiesModule } from './capabilities/capabilities.module';
 import { ChannelsModule } from './channels/channels.module';
 import { KioskCommsModule } from './kiosk-comms/kiosk-comms.module';
 import { MeModule } from './me/me.module';
+import { NotificationCenterModule } from './notification-center/notification-center.module';
 import { PublicLinksModule } from './public-links/public-links.module';
 import { StaffClassificationModule } from './staff-classification/staff-classification.module';
 
@@ -16,6 +17,7 @@ import { StaffClassificationModule } from './staff-classification/staff-classifi
         AudiencesModule,
         AnnouncementsModule,
         MeModule,
+        NotificationCenterModule,
         PublicLinksModule,
         KioskCommsModule,
     ],

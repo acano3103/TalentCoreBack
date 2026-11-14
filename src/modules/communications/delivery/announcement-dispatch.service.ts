@@ -699,6 +699,7 @@ export class AnnouncementDispatchService {
         plantilla: string,
         entrega: { id: string; status: string; proveedorMsgId?: string },
     ): Promise<void> {
+        if (entrega.status !== 'SENT' && entrega.status !== 'FAILED') return;
         const ahora = this.ahora();
         const precio = await this.precioActual(ctx.idTenant, ahora, ctx.prioridad);
         const fallido = entrega.status === 'FAILED';

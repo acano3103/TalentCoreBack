@@ -7,6 +7,8 @@ import { CanalComms, CommsPayload, EntregaComms, ResultadoDispatchComms } from "
 import { TEMPLATE_MAP } from './maps/template-map';
 import { WebsocketProvider } from "./providers/websocket/websocket.provider";
 import { PushProvider } from "./providers/push/push.provider";
+import { CampanaRealtimeService } from "./campana-realtime.service";
+import { categoriaDePreferencia, debeEnviarCanal } from "../communications/notification-center/preferencias-reglas";
 
 @Injectable()
 export class NotificationDispatcher {
@@ -18,6 +20,7 @@ export class NotificationDispatcher {
         private readonly whatsapp: WhatsappProvider,
         private readonly websocket: WebsocketProvider,
         private readonly push: PushProvider,
+        private readonly campana: CampanaRealtimeService,
     ) { }
 
     async notify(options: NotificationOptions) {
@@ -41,7 +44,8 @@ export class NotificationDispatcher {
         const prefs = await this.prisma.preferenciasNotificacionesUsuario.findMany({
             where: {
                 user_uuid: options.userUuid,
-                enabled: true
+                enabled: true,
+                categoria: null,
             },
             include: {
                 CatCanalesNotificaciones: true
@@ -123,11 +127,22 @@ export class NotificationDispatcher {
                 });
             }
         }));
+
+        await this.campana.publicar(options.userUuid, null, null, {
+            id: notification.id,
+            titulo: options.subject ?? 'Notificación',
+            mensaje: options.subject ?? '',
+            categoria: null,
+            prioridad: 'NORMAL',
+            deepLink: null,
+            creadoEn: notification.created_at ?? new Date(),
+            leida: false,
+        });
     }
 
     /**
-     * Camino de comunicación interna. No usa preferencias ni TEMPLATE_MAP:
-     * el comunicado ya trae los canales y la plantilla.
+     * Camino de comunicación interna. Respeta la matriz de preferencias en push, correo y WhatsApp.
+     * La campana in-app y las celdas bloqueadas se entregan igual.
      */
     async dispatchComms(
         destinatario: { userUuid: string },
@@ -180,6 +195,7 @@ export class NotificationDispatcher {
                 proveedorMsgId: resultado.proveedorMsgId,
             });
         }
+        await this.publicarCampana(destinatario.userUuid, payload, notification.id, notification.created_at ?? null);
         return { notificationId: notification.id, entregas };
     }
 
@@ -246,10 +262,43 @@ export class NotificationDispatcher {
         }
     }
 
+    private async canalPermitido(codigo: CanalComms['codigo'], payload: CommsPayload): Promise<boolean> {
+        const base = {
+            codigo,
+            categoria: payload.categoria,
+            notificationTypeCode: payload.notificationTypeCode,
+            origenTipo: payload.origenTipo,
+            prioridad: payload.prioridad,
+        };
+        if (debeEnviarCanal({ ...base, preferenciaActiva: false })) return true;
+        const categoria = categoriaDePreferencia(payload);
+        const channelId = await this.idCanal(codigo);
+        const pref = await this.prisma.preferenciasNotificacionesUsuario.findFirst({
+            where: { user_uuid: payload.userUuid, channel_id: channelId, categoria },
+        });
+        return debeEnviarCanal({ ...base, preferenciaActiva: pref?.enabled !== false });
+    }
+
+    private async publicarCampana(userUuid: string, payload: CommsPayload, id: string, creadoEn: Date | null) {
+        await this.campana.publicar(userUuid, payload.idEmpresa ?? null, payload.idTenant ?? null, {
+            id,
+            titulo: payload.titulo,
+            mensaje: payload.mensaje,
+            categoria: payload.categoria ?? null,
+            prioridad: payload.prioridad,
+            deepLink: payload.deepLink ?? null,
+            creadoEn: creadoEn ?? new Date(),
+            leida: false,
+        });
+    }
+
     private async enviarCanal(
         codigo: CanalComms['codigo'],
         payload: CommsPayload,
     ): Promise<{ status: string; error?: string; proveedorMsgId?: string; costo?: number }> {
+        if (!(await this.canalPermitido(codigo, payload))) {
+            return { status: 'OMITIDO', error: 'La persona apagó este canal.' };
+        }
         try {
             if (codigo === 'EMAIL') {
                 if (!payload.correo?.to) return { status: 'FAILED', error: 'La persona no tiene correo.' };

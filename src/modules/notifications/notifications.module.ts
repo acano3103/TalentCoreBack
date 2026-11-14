@@ -11,6 +11,7 @@ import { WebsocketProvider } from './providers/websocket/websocket.provider';
 import { WebsocketGateway } from './gateways/websockets.gateway';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
+import { CampanaRealtimeService } from './campana-realtime.service';
 import { PushProvider } from './providers/push/push.provider';
 import { PushReceiptsService } from './providers/push/push-receipts.service';
 
@@ -60,11 +61,13 @@ import { PushReceiptsService } from './providers/push/push-receipts.service';
         WebsocketGateway,
         PushProvider,
         PushReceiptsService,
+        CampanaRealtimeService,
         NotificationDispatcher
     ],
     exports: [
         NotificationDispatcher,
-        WebsocketGateway
+        WebsocketGateway,
+        CampanaRealtimeService,
     ],
 })
 export class NotificationsModule { }
