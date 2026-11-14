@@ -6,6 +6,7 @@ import { errorComms } from '../comms-http';
 import {
     CapacidadEfectiva,
     ComAlcanceCodigo,
+    ContextoAlcance,
     esAlcance,
     formaAlcanceInvalida,
     fusionarReglas,
@@ -95,6 +96,32 @@ export class CommsCapabilityService {
             );
         }
         return this.idsAlcanzables(encontrada, activeUser, companyId);
+    }
+
+    /**
+     * Parámetros del alcance, sin la lista de empleados.
+     * La audiencia arma el filtro en SQL para no traer la plantilla completa.
+     */
+    async contexto(capacidad: string, activeUser: ActiveUserDto, companyId: number): Promise<ContextoAlcance> {
+        this.assertEmpresa(companyId);
+        const efectivas = await this.getEffective(activeUser, companyId);
+        const encontrada = efectivas.find((item) => item.codigo === capacidad);
+        if (!encontrada) {
+            throw errorComms(HttpStatus.FORBIDDEN, 'SIN_CAPACIDAD', 'No tienes permiso para esta acción.');
+        }
+        const [idEmpleado, sitesUsuario] = await Promise.all([
+            this.empleadoActivo(activeUser, companyId),
+            this.sitesDelUsuario(activeUser.id),
+        ]);
+        return {
+            idTenant: activeUser.idTenant,
+            companyId,
+            idEmpleado,
+            alcance: encontrada.alcance,
+            referencias: encontrada.referencias,
+            sitesUsuario,
+            unidadPorSite: new Map(),
+        };
     }
 
     async catalogo(): Promise<CapacidadCatalogo[]> {
@@ -412,6 +439,14 @@ export class CommsCapabilityService {
             idTenant: activeUser.idTenant,
             activo: true,
         });
+    }
+
+    private async sitesDelUsuario(idUsuario: number): Promise<number[]> {
+        const filas = await this.prisma.relUsuarioSite.findMany({
+            where: { idUsuario, activo: true, idSite: { not: null } },
+            select: { idSite: true },
+        });
+        return ordenarIds(filas.flatMap((fila) => (fila.idSite == null ? [] : [fila.idSite])));
     }
 
     private async empleadoActivo(activeUser: ActiveUserDto, companyId: number): Promise<number | null> {
