@@ -1,5 +1,6 @@
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'generated/prisma/client';
+import { EtiquetaPuesto, adjuntarClasificacionEnFila } from '../position-classification';
 
 export class PositionQueries {
   static async findAll(prisma: PrismaService, idTenant: number, companyId: number, search: string, page: number, limit: number, aprobada: number) {
@@ -23,7 +24,10 @@ export class PositionQueries {
           ns.SalarioMaximo,
           p.Activo,
           p.aprobada as Aprovada,
-          p.pendiente as Pendiente
+          p.pendiente as Pendiente,
+          tper.idTipoPersonal AS idTipoPersonalClasificacion,
+          tper.Codigo AS codigoTipoPersonal,
+          tper.Nombre AS nombreTipoPersonal
         FROM CatPuestos p
         LEFT JOIN CatAreas a ON a.idArea = p.idArea
         LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
@@ -31,6 +35,7 @@ export class PositionQueries {
         LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
         LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
         LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+        LEFT JOIN CatTiposPersonal tper ON tper.idTipoPersonal = p.idTipoPersonal
         WHERE a.idEmpresa = ${companyId}
           AND p.idTenant = ${idTenant}
           AND p.aprobada = ${aprobada}
@@ -50,8 +55,10 @@ export class PositionQueries {
       ` as Promise<[{ total: bigint | number }]>
     ]);
 
+    const positions = await PositionQueries.conClasificacion(prisma, data);
+
     return {
-      positions: data,
+      positions,
       total: Number(total || 0)
     };
   }
@@ -189,9 +196,12 @@ export class PositionQueries {
         m.Descripcion AS nombreModalidad,
         e.Descripcion AS nombreEscolaridad,
         ns.NombreNivel AS nombreNivelSalario,
-        ns.SalarioMinimo,               -- 🚀 Agregado al SELECT
-        ns.SalarioMaximo,               -- 🚀 Agregado al SELECT
-        j.NombrePuesto AS nombreJefeInmediato
+        ns.SalarioMinimo,
+        ns.SalarioMaximo,
+        j.NombrePuesto AS nombreJefeInmediato,
+        tper.idTipoPersonal AS idTipoPersonalClasificacion,
+        tper.Codigo AS codigoTipoPersonal,
+        tper.Nombre AS nombreTipoPersonal
       FROM CatPuestos p
       LEFT JOIN CatAreas a ON a.idArea = p.idArea
       LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
@@ -200,11 +210,48 @@ export class PositionQueries {
       LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
       LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
       LEFT JOIN CatPuestos j ON j.idPuesto = p.idJefeInmediato
+      LEFT JOIN CatTiposPersonal tper ON tper.idTipoPersonal = p.idTipoPersonal
       WHERE p.idPuesto = ${positionId};
     ` as Promise<any[]>
     ]);
 
-    return { maestro: maestro || null, idiomas, documentos, cursos, funciones, competencias, habilidades, horarios };
+    const maestroClasificado = maestro
+      ? (await PositionQueries.conClasificacion(prisma, [maestro]))[0]
+      : null;
+
+    return { maestro: maestroClasificado, idiomas, documentos, cursos, funciones, competencias, habilidades, horarios };
+  }
+
+  private static async conClasificacion(prisma: PrismaService, rows: any[]) {
+    const mapa = await PositionQueries.etiquetasPorPuestos(
+      prisma,
+      rows.map((row) => Number(row.idPuesto)),
+    );
+    return rows.map((row) => adjuntarClasificacionEnFila(
+      row,
+      mapa.get(Number(row.idPuesto)) ?? [],
+    ));
+  }
+
+  private static async etiquetasPorPuestos(prisma: PrismaService, ids: number[]): Promise<Map<number, EtiquetaPuesto[]>> {
+    const mapa = new Map<number, EtiquetaPuesto[]>();
+    const unicos = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+    if (unicos.length === 0) return mapa;
+
+    const filas = await prisma.relPuestoEtiqueta.findMany({
+      where: { idPuesto: { in: unicos } },
+      select: {
+        idPuesto: true,
+        CatEtiquetasPuesto: { select: { idEtiqueta: true, Nombre: true } },
+      },
+    });
+
+    for (const fila of filas) {
+      const lista = mapa.get(fila.idPuesto) ?? [];
+      lista.push({ id: fila.CatEtiquetasPuesto.idEtiqueta, nombre: fila.CatEtiquetasPuesto.Nombre });
+      mapa.set(fila.idPuesto, lista);
+    }
+    return mapa;
   }
 
   static async getPositionInfo(prisma: PrismaService, positionId: number, idTenant: number, idEmpresa: number) {

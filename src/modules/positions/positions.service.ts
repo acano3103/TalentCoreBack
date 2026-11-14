@@ -20,6 +20,8 @@ import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import * as ExcelJS from 'exceljs';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
+import { asegurarTipoPersonal, reemplazarEtiquetas } from '../communications/staff-classification/clasificacion-puesto';
+import { presentarEtiquetas, presentarPuesto, presentarTipoPersonal } from './position-classification';
 
 @Injectable()
 export class PositionsService {
@@ -108,6 +110,12 @@ export class PositionsService {
     async findOne(activeUser: ActiveUserDto, companyId: number, positionId: number, specific: number) {
         const position = await this.prisma.catPuestos.findFirst({
             where: { idTenant: activeUser.idTenant, idEmpresa: companyId, idPuesto: positionId },
+            include: {
+                CatTiposPersonal: { select: { idTipoPersonal: true, Codigo: true, Nombre: true } },
+                RelPuestoEtiqueta: {
+                    select: { CatEtiquetasPuesto: { select: { idEtiqueta: true, Nombre: true } } },
+                },
+            },
         });
         if (!position) throw new NotFoundException('El puesto no se encontro o no existe.');
 
@@ -137,16 +145,46 @@ export class PositionsService {
                 where: { idPuesto: positionId },
             });
 
-            return { position, languages, schedules, documents, functions, competencies, skills, courses };
+            return {
+                position: presentarPuesto(position),
+                languages,
+                schedules,
+                documents,
+                functions,
+                competencies,
+                skills,
+                courses,
+            };
         }
     }
 
     async findByArea(activeUser: ActiveUserDto, companyId: number, areaId: number) {
         const positions = await this.prisma.catPuestos.findMany({
             where: { Activo: true, aprobada: true, idTenant: activeUser.idTenant, idEmpresa: companyId, idArea: areaId },
-            select: { idPuesto: true, NombrePuesto: true, DescripcionPuesto: true }
+            select: {
+                idPuesto: true,
+                NombrePuesto: true,
+                DescripcionPuesto: true,
+                CatTiposPersonal: { select: { idTipoPersonal: true, Codigo: true, Nombre: true } },
+                RelPuestoEtiqueta: {
+                    select: { CatEtiquetasPuesto: { select: { idEtiqueta: true, Nombre: true } } },
+                },
+            },
         });
-        return positions;
+        return positions.map((position) => ({
+            idPuesto: position.idPuesto,
+            NombrePuesto: position.NombrePuesto,
+            DescripcionPuesto: position.DescripcionPuesto,
+            tipoPersonal: presentarTipoPersonal(
+                position.CatTiposPersonal?.idTipoPersonal,
+                position.CatTiposPersonal?.Codigo,
+                position.CatTiposPersonal?.Nombre,
+            ),
+            etiquetas: presentarEtiquetas(position.RelPuestoEtiqueta.map((relacion) => ({
+                id: relacion.CatEtiquetasPuesto.idEtiqueta,
+                nombre: relacion.CatEtiquetasPuesto.Nombre,
+            }))),
+        }));
     }
 
     async getSchedule(activeUser: ActiveUserDto, companyId: number, positionId: number) {
@@ -235,6 +273,7 @@ export class PositionsService {
         return await this.prisma.$transaction(async (tx) => {
 
             const { generalInfo, languages } = dto;
+            await asegurarTipoPersonal(tx, activeUser.idTenant, dto.idTipoPersonal);
 
             // Creamos el puesto padre de forma secuencial (Obligatorio para obtener el ID)
             const nuevoPuesto = await tx.catPuestos.create({
@@ -242,6 +281,7 @@ export class PositionsService {
                     idTenant: activeUser.idTenant,
                     idEmpresa: companyId,
                     NombrePuesto: generalInfo.nombrePuesto.trim(),
+                    idTipoPersonal: dto.idTipoPersonal,
                     idTipoPuesto: Number(generalInfo.idTipoPuesto),
                     idArea: Number(generalInfo.idArea),
                     idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,
@@ -364,6 +404,8 @@ export class PositionsService {
                 );
             }
 
+            dbOperations.push(reemplazarEtiquetas(tx, newPositionId, activeUser.idTenant, dto.etiquetas));
+
             // === RELACIÓN: HISTÓRICO DE MOVIMIENTOS ===
             dbOperations.push(
                 tx.historicoMovimientos.create({
@@ -398,6 +440,7 @@ export class PositionsService {
 
             const puestoExistente = await tx.catPuestos.findFirst({ where: { idPuesto: positionId, idTenant: activeUser.idTenant, idEmpresa: companyId } });
             if (!puestoExistente) throw new NotFoundException('El puesto solicitado no existe en esta empresa');
+            await asegurarTipoPersonal(tx, activeUser.idTenant, data.idTipoPersonal);
 
             // =========================================================================
             // FASE 1: ACTUALIZACIÓN PADRE Y LIMPIEZA DE RELACIONES ANTERIORES EN PARALELO
@@ -407,6 +450,7 @@ export class PositionsService {
                     where: { idPuesto: positionId },
                     data: {
                         NombrePuesto: generalInfo.nombrePuesto.trim(),
+                        idTipoPersonal: data.idTipoPersonal,
                         idTipoPuesto: Number(generalInfo.idTipoPuesto),
                         idArea: Number(generalInfo.idArea),
                         idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,
@@ -533,6 +577,8 @@ export class PositionsService {
                     })
                 );
             }
+
+            insertOperations.push(reemplazarEtiquetas(tx, positionId, activeUser.idTenant, data.etiquetas));
 
             // Registrar el movimiento en el histórico
             insertOperations.push(
