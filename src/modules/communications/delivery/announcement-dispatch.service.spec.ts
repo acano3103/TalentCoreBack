@@ -415,4 +415,46 @@ describe('AnnouncementDispatchService', () => {
         const service = await servicio(prisma);
         await expect(service.enviar(usuario, 10, 9)).rejects.toBeInstanceOf(HttpException);
     });
+
+    it('reencola solo a pendientes, suma el recordatorio y omite a quien ya no tiene canal', async () => {
+        const prisma = prismaDe();
+        prisma.comComunicados.findFirst.mockResolvedValue(fila('ENVIADO', { Prioridad: 'NORMAL', CanalesForzados: null }));
+        prisma.comConfigEmpresa.findUnique.mockResolvedValue({ PoliticaWhatsApp: 'NUNCA', PlantillasWhatsApp: null });
+        prisma.comDestinatarios.findMany.mockResolvedValue([
+            { idDestinatario: 1, idEmpleado: 10 },
+            { idDestinatario: 2, idEmpleado: 11 },
+        ]);
+        canales.forEmployees.mockResolvedValue({
+            porEmpleado: [
+                { idEmpleado: 10, canales: ['APP', 'WEB'], sinCanal: false, nivelPerfil: 'DEFAULT' },
+                { idEmpleado: 11, canales: [], sinCanal: true, nivelPerfil: 'DEFAULT' },
+            ],
+            resumen: { APP: 1, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 1 },
+        });
+        const service = await servicio(prisma);
+        const resultado = await service.reencolarPendientes(9, [1, 2, 99]);
+        expect(prisma.comDestinatarios.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { idComunicado: 9, idDestinatario: { in: [1, 2, 99] }, Estado: 'PENDIENTE' },
+            }),
+        );
+        expect(prisma.comDestinatarios.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { idDestinatario: 1 },
+                data: expect.objectContaining({
+                    RecordatoriosEnviados: { increment: 1 },
+                    UltimoIntentoEn: null,
+                    Estado: 'PENDIENTE',
+                }),
+            }),
+        );
+        expect(prisma.comDestinatarios.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { idDestinatario: 2 },
+                data: expect.objectContaining({ Estado: 'SIN_CANAL', RecordatoriosEnviados: { increment: 1 } }),
+            }),
+        );
+        expect(colaEnvio.add).toHaveBeenCalledWith('lote', { idComunicado: 9, ids: [1] }, expect.objectContaining({ attempts: 3 }));
+        expect(resultado).toEqual({ reenviados: 1, sinCanal: 1 });
+    });
 });

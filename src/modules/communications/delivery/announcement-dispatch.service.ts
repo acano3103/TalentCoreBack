@@ -347,6 +347,72 @@ export class AnnouncementDispatchService {
         return entrega?.status === 'FAILED' ? 'sin_canal' : 'enviado';
     }
 
+    /**
+     * Vuelve a encolar solo filas PENDIENTE. Actualiza los canales con el perfil de ahora,
+     * suma RecordatoriosEnviados y deja que el lote respete silencio y tope.
+     */
+    async reencolarPendientes(idComunicado: number, ids: number[]): Promise<{ reenviados: number; sinCanal: number }> {
+        if (!ids.length) return { reenviados: 0, sinCanal: 0 };
+        const fila = await this.prisma.comComunicados.findFirst({
+            where: { idComunicado },
+            include: { ComTiposComunicado: { select: { Codigo: true } } },
+        });
+        if (!fila) throw errorComms(HttpStatus.NOT_FOUND, 'NO_ENCONTRADO', 'No encontramos ese comunicado.');
+        if (fila.Estado === 'CANCELADO' || fila.Estado === 'ARCHIVADO' || fila.Estado === 'EXPIRADO') {
+            throw errorComms(HttpStatus.CONFLICT, 'ESTADO_INVALIDO', 'Solo puedes reenviar un comunicado que ya se envió.');
+        }
+        const destinatarios = await this.prisma.comDestinatarios.findMany({
+            where: { idComunicado, idDestinatario: { in: ids }, Estado: 'PENDIENTE' },
+            select: { idDestinatario: true, idEmpleado: true },
+            orderBy: { idDestinatario: 'asc' },
+        });
+        if (!destinatarios.length) return { reenviados: 0, sinCanal: 0 };
+        const [efectivos, config] = await Promise.all([
+            this.canales.forEmployees(
+                destinatarios.map((dest) => dest.idEmpleado),
+                fila.idEmpresa,
+            ),
+            this.prisma.comConfigEmpresa.findUnique({ where: { idEmpresa: fila.idEmpresa } }),
+        ]);
+        const plantilla = resolverPlantillaWhatsApp(config?.PlantillasWhatsApp, fila.ComTiposComunicado.Codigo, fila.Prioridad);
+        const porEmpleado = new Map(efectivos.porEmpleado.map((item) => [item.idEmpleado, item.canales]));
+        const forzados = listaONull(fila.CanalesForzados);
+        const politica = config?.PoliticaWhatsApp ?? 'IMPORTANTE_CRITICA';
+        const aEnviar: number[] = [];
+        let sinCanal = 0;
+        for (const lote of partir(destinatarios, LOTE_CONGELAR)) {
+            await this.prisma.$transaction(async (tx) => {
+                for (const dest of lote) {
+                    let canales = canalesParaEnvio(porEmpleado.get(dest.idEmpleado) ?? [], forzados, fila.Prioridad, politica);
+                    if (!plantilla) canales = canales.filter((canal) => canal !== 'WHATSAPP');
+                    const tieneCanal = canales.length > 0;
+                    await tx.comDestinatarios.update({
+                        where: { idDestinatario: dest.idDestinatario },
+                        data: {
+                            CanalesEfectivos: canales as unknown as Prisma.InputJsonValue,
+                            RecordatoriosEnviados: { increment: 1 },
+                            UltimoIntentoEn: null,
+                            Estado: tieneCanal ? 'PENDIENTE' : 'SIN_CANAL',
+                        },
+                    });
+                    if (tieneCanal) aEnviar.push(dest.idDestinatario);
+                    else sinCanal += 1;
+                }
+            }, TRANSACCION);
+        }
+        const lotes = partir(aEnviar, LOTE_ENVIO);
+        const marca = this.ahora().getTime();
+        for (let indice = 0; indice < lotes.length; indice += 1) {
+            await this.encolar(this.colaEnvio, 'lote', { idComunicado, ids: lotes[indice] }, {
+                jobId: `reenvio-${idComunicado}-${marca}-${indice}`,
+                removeOnComplete: true,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 5000 },
+            });
+        }
+        return { reenviados: aEnviar.length, sinCanal };
+    }
+
     private async preparar(activeUser: ActiveUserDto, companyId: number, fila: FilaComunicado): Promise<PersonaCongelada[]> {
         const version = await this.prisma.comComunicadoVersiones.findUnique({
             where: { idComunicado_NumVersion: { idComunicado: fila.idComunicado, NumVersion: fila.VersionActual } },

@@ -3018,6 +3018,8 @@ model ComDestinatarios {
 
   @@unique([idComunicado, idEmpleado], map: "UK_ComDestinatarios_Com_Emp")
   @@index([idEmpleado, Estado], map: "IDX_ComDestinatarios_Emp_Estado")
+  @@index([idComunicado, Estado], map: "IDX_ComDestinatarios_Com_Estado")
+  @@index([idComunicado, idSite], map: "IDX_ComDestinatarios_Com_Site")
   @@index([idComunicado], map: "FK_ComDestinatarios_Comunicado")
   @@index([idEmpleado], map: "FK_ComDestinatarios_Empleado")
 }
