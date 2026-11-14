@@ -3081,14 +3081,16 @@ model PushTokens {
   Token       String    @unique(map: "UK_PushTokens_Token") @db.VarChar(255)
   Plataforma  String    @db.VarChar(20)
   Dispositivo String?   @db.VarChar(120)
-  Activo      Boolean   @default(true)
-  UltimoUso   DateTime? @db.DateTime(0)
-  FechaBaja   DateTime? @db.DateTime(0)
-  MotivoBaja  String?   @db.VarChar(60)
-  Empleados   Empleados? @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: SetNull, onUpdate: NoAction, map: "FK_PushTokens_Empleado")
+  Activo       Boolean   @default(true)
+  UltimoUso    DateTime? @db.DateTime(0)
+  FechaBaja    DateTime? @db.DateTime(0)
+  MotivoBaja   String?   @db.VarChar(60)
+  UltimoTicket String?   @db.VarChar(80)
+  Empleados    Empleados? @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: SetNull, onUpdate: NoAction, map: "FK_PushTokens_Empleado")
 
   @@index([user_uuid], map: "IDX_PushTokens_Usuario")
   @@index([idEmpleado], map: "FK_PushTokens_Empleado")
+  @@index([UltimoTicket], map: "IDX_PushTokens_UltimoTicket")
 }
 
 model ComPerfilesCanal {

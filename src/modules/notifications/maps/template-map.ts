@@ -14,7 +14,8 @@ export const TEMPLATE_MAP = {
         'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador',
         'DOCUMENT_REJECTED': 'documentacion-rechazada',
          'DOCUMENT_EXPIRING': 'documentos-por-vencer',
-        'CONTRACT_SIGN': 'link_firmar_contrato'
+        'CONTRACT_SIGN': 'link_firmar_contrato',
+        'COMUNICADO': 'comunicado',
     },
     WHATSAPP: {
         'CONTRACT_SIGN': '75d01c5d-7fe9-4709-b838-12bcab8ad68e',

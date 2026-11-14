@@ -10,6 +10,7 @@ import { errorComms } from '../comms-http';
 import { CommsCapabilityService } from '../capabilities/comms-capability.service';
 import { AudienceResolverService } from '../audiences/audience-resolver.service';
 import { EffectiveChannelService } from '../channels/effective-channel.service';
+import { AnnouncementDispatchService } from '../delivery/announcement-dispatch.service';
 import { AnnouncementsService } from './announcements.service';
 import { CommsStorageService } from './comms-storage.service';
 
@@ -99,6 +100,7 @@ describe('AnnouncementsService versiones', () => {
         empleados: { findMany: jest.fn() },
     };
     const capabilities = { contexto: jest.fn(), getEffective: jest.fn() };
+    const envio = { notificarActualizacion: jest.fn(), quitarProgramado: jest.fn() };
     let service: AnnouncementsService;
 
     beforeEach(async () => {
@@ -128,6 +130,7 @@ describe('AnnouncementsService versiones', () => {
                 { provide: AudienceResolverService, useValue: { resolve: jest.fn() } },
                 { provide: EffectiveChannelService, useValue: { forEmployees: jest.fn() } },
                 { provide: CommsStorageService, useValue: { signedUrl: jest.fn(() => '/firmado'), get: jest.fn(), put: jest.fn(), delete: jest.fn() } },
+                { provide: AnnouncementDispatchService, useValue: envio },
             ],
         }).compile();
         service = module.get(AnnouncementsService);
@@ -142,6 +145,7 @@ describe('AnnouncementsService versiones', () => {
         });
         expect(tx.comComunicadoVersiones.create).not.toHaveBeenCalled();
         expect(tx.comDestinatarios.updateMany).not.toHaveBeenCalled();
+        expect(envio.notificarActualizacion).not.toHaveBeenCalled();
     });
 
     it('la versión mayor incrementa la versión y regresa CONFIRMADO a PENDIENTE', async () => {
@@ -156,6 +160,7 @@ describe('AnnouncementsService versiones', () => {
             data: { Estado: 'PENDIENTE' },
         });
         expect(tx.comComunicadoAdjuntos.createMany).toHaveBeenCalled();
+        expect(envio.notificarActualizacion).toHaveBeenCalledWith(9);
     });
 
     it('sin acuse no regresa confirmaciones', async () => {

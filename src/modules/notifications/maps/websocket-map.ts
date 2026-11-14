@@ -75,6 +75,14 @@ export const SOCKET_NOTIFICATION_MAP: Record<string, NotificationTemplateConfig>
             return `📅 Nueva entrevista asignada: Tienes la evaluación "${ctx?.entrevistasNombre || 'Evaluación de Candidato'}" con el postulante ${ctx?.postulant || 'Candidato'} agendada para el día ${ctx?.dia || 'Pendiente'}.`;
         },
     },
+    COMUNICADO: {
+        severity: 'info',
+        buildMessage: (ctx, fallback) => ctx?.resumen || fallback || 'Tienes un comunicado nuevo.',
+    },
+    COMUNICADO_ACTUALIZADO: {
+        severity: 'warning',
+        buildMessage: () => 'Se actualizó el comunicado.',
+    },
     INTERVIEW_RESCHEDULED_INTERVIEWER: {
         severity: 'warning',
         buildMessage: (ctx) => {

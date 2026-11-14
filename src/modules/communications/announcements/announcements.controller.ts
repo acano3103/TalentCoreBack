@@ -30,6 +30,7 @@ import { CommsCapabilityGuard } from '../capabilities/comms-capability.guard';
 import { RequireCapability } from '../capabilities/require-capability.decorator';
 import { MAX_ADJUNTO_BYTES, MAX_PORTADA_BYTES } from './adjuntos';
 import { AnnouncementsService } from './announcements.service';
+import { ProgramarComunicadoDto } from '../delivery/dto/programar-comunicado.dto';
 import { ActualizarComunicadoDto, CrearComunicadoDto, NuevaVersionDto } from './dto/comunicado.dto';
 import { KpisQuery, ListarComunicadosQuery } from './dto/listar-comunicados.query';
 
@@ -250,6 +251,42 @@ export class AnnouncementsController {
         @Param('id', ParseIntPipe) id: number,
     ) {
         return this.service.cancelar(activeUser, companyId, id);
+    }
+
+    @Post('announcements/:id/send')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Enviar un comunicado',
+        description: 'Congela la audiencia y encola la entrega por canal. Repetir el envío no duplica destinatarios.',
+    })
+    @ApiResponse({ status: 200, description: 'Envío aceptado o ya realizado.' })
+    @ApiResponse({ status: 400, description: 'AUDIENCIA_VACIA o CONTENIDO_INVALIDO.' })
+    @ApiResponse({ status: 403, description: 'PRIORIDAD_NO_PERMITIDA o FUERA_DE_ALCANCE.' })
+    @ApiResponse({ status: 409, description: 'ESTADO_INVALIDO o PLANTILLA_WA_NO_CONFIGURADA.' })
+    enviar(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+    ) {
+        return this.service.enviar(activeUser, companyId, id);
+    }
+
+    @Post('announcements/:id/schedule')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Programar el envío',
+        description: 'Valida el comunicado y deja un trabajo para la fecha indicada. Cancelarlo quita ese trabajo.',
+    })
+    @ApiResponse({ status: 200, description: 'Quedó programado.' })
+    @ApiResponse({ status: 400, description: 'Fecha inválida, audiencia vacía o contenido incompleto.' })
+    @ApiResponse({ status: 409, description: 'ESTADO_INVALIDO o PLANTILLA_WA_NO_CONFIGURADA.' })
+    programar(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+        @Body() dto: ProgramarComunicadoDto,
+    ) {
+        return this.service.programar(activeUser, companyId, id, dto);
     }
 }
 

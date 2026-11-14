@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from 'generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -22,6 +22,8 @@ import {
     RevisionComunicado,
     vigenciaAviso,
 } from './contenido';
+import { AnnouncementDispatchService } from '../delivery/announcement-dispatch.service';
+import { ProgramarComunicadoDto } from '../delivery/dto/programar-comunicado.dto';
 import { ActualizarComunicadoDto, CrearComunicadoDto, NuevaVersionDto } from './dto/comunicado.dto';
 import { ListarComunicadosQuery } from './dto/listar-comunicados.query';
 
@@ -50,6 +52,7 @@ export class AnnouncementsService {
         private readonly resolver: AudienceResolverService,
         private readonly canales: EffectiveChannelService,
         private readonly storage: CommsStorageService,
+        @Optional() private readonly envio?: AnnouncementDispatchService,
     ) {}
 
     async tipos(activeUser: ActiveUserDto, companyId: number) {
@@ -397,6 +400,7 @@ export class AnnouncementsService {
                 data: bitacora(activeUser, companyId, 'ACTUALIZAR', id, `publicó la versión ${numero} del comunicado.`),
             });
         }, TRANSACCION);
+        if (!dto.correccionMenor) await this.envio?.notificarActualizacion(id);
         return this.detalle(activeUser, companyId, id);
     }
 
@@ -429,7 +433,26 @@ export class AnnouncementsService {
                 data: bitacora(activeUser, companyId, 'ACTUALIZAR', id, 'canceló el comunicado programado.'),
             });
         }, TRANSACCION);
+        await this.envio?.quitarProgramado(id);
         return this.detalle(activeUser, companyId, id);
+    }
+
+    async enviar(activeUser: ActiveUserDto, companyId: number, id: number) {
+        await this.autorizar(activeUser, companyId);
+        await this.buscar(activeUser, companyId, id);
+        if (!this.envio) {
+            throw errorComms(HttpStatus.INTERNAL_SERVER_ERROR, 'ENVIO_NO_DISPONIBLE', 'El envío de comunicados no está disponible.');
+        }
+        return this.envio.enviar(activeUser, companyId, id);
+    }
+
+    async programar(activeUser: ActiveUserDto, companyId: number, id: number, dto: ProgramarComunicadoDto) {
+        await this.autorizar(activeUser, companyId);
+        await this.buscar(activeUser, companyId, id);
+        if (!this.envio) {
+            throw errorComms(HttpStatus.INTERNAL_SERVER_ERROR, 'ENVIO_NO_DISPONIBLE', 'El envío de comunicados no está disponible.');
+        }
+        return this.envio.programar(activeUser, companyId, id, dto.programadoPara);
     }
 
     async duplicar(activeUser: ActiveUserDto, companyId: number, id: number) {
