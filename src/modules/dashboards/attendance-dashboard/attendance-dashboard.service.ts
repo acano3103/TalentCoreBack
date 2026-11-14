@@ -1,5 +1,6 @@
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
+import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AttendanceDashboardResponseDto } from './dto/attendance-dashboard-response.dto';
 import { Prisma } from 'generated/prisma/client';
@@ -8,7 +9,10 @@ import { Prisma } from 'generated/prisma/client';
 export class AttendanceDashboardService {
     private readonly logger = new Logger(AttendanceDashboardService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly attendanceConfig: AttendanceTrackingConfigService,
+    ) { }
 
     async getMetrics(
         user: ActiveUserDto,
@@ -61,6 +65,7 @@ export class AttendanceDashboardService {
                 conteoPorCanal,
                 conteoPorHora,
                 ultimosRegistros,
+                saludKioscos,
             ] = await Promise.all([
                 // 1. Métricas agregadas de Jornadas registradas del día
                 this.prisma.jornadasEmpleado.groupBy({
@@ -189,6 +194,7 @@ export class AttendanceDashboardService {
                         },
                     },
                 }),
+                this.saludKioscos(user.idTenant, companyId, siteFilter),
             ]);
 
             // --- Normalización de KPIs ---
@@ -228,6 +234,8 @@ export class AttendanceDashboardService {
                 BIOMETRICO: 'Biométrico Artemis',
                 NFC: 'NFC Artemis',
                 WEB_MANUAL: 'Portal Web RH',
+                CLOCK_WEB: 'Reloj web',
+                KIOSCO: 'Kiosco',
             };
 
             const distribucionCanales = conteoPorCanal.map((item) => ({
@@ -299,10 +307,53 @@ export class AttendanceDashboardService {
                 distribucionCanales,
                 actividadPorHora,
                 ultimosMovimientos,
+                saludCanales: {
+                    kioscos: saludKioscos,
+                },
             };
         } catch (error) {
             this.logger.error(`Error procesando métricas del dashboard de asistencia para empresa ${companyId}`, error);
             throw error;
         }
+    }
+
+    /**
+     * Misma regla que el resumen de kioscos: en línea si el último latido
+     * cae dentro de minutosSinLatidoParaOffline. Los dados de baja no cuentan
+     * como en línea ni como sin conexión.
+     */
+    private async saludKioscos(
+        idTenant: number,
+        companyId: number,
+        siteFilter?: number[],
+    ): Promise<{ total: number; enLinea: number; sinConexion: number }> {
+        const config = await this.attendanceConfig.getConfiguracionAsistencia(idTenant, companyId);
+        const minutos = config.kiosco.minutosSinLatidoParaOffline;
+        const umbral = new Date(Date.now() - minutos * 60_000);
+        const empresa = {
+            idTenant,
+            idEmpresa: companyId,
+            ...(siteFilter ? { KioscoSites: { some: { idSite: { in: siteFilter } } } } : {}),
+        };
+
+        const [total, enLinea, sinConexion] = await Promise.all([
+            this.prisma.kioscosAsistencia.count({ where: empresa }),
+            this.prisma.kioscosAsistencia.count({
+                where: {
+                    ...empresa,
+                    estatus: { not: 'BAJA' },
+                    ultimoLatido: { gte: umbral },
+                },
+            }),
+            this.prisma.kioscosAsistencia.count({
+                where: {
+                    ...empresa,
+                    estatus: { not: 'BAJA' },
+                    ultimoLatido: { lt: umbral },
+                },
+            }),
+        ]);
+
+        return { total, enLinea, sinConexion };
     }
 }

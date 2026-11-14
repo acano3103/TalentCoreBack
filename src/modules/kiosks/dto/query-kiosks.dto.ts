@@ -1,5 +1,6 @@
 
 import {
+    IsBoolean,
     IsEnum,
     IsInt,
     IsOptional,
@@ -85,4 +86,18 @@ export class QueryKiosksDto {
     @IsInt()
     @Min(1)
     idSite?: number;
+
+    @ApiPropertyOptional({
+        description: 'Solo kioscos sin conexión, con versión menor a la mínima o con checadas pendientes.',
+        example: true,
+    })
+    @IsOptional()
+    @Transform(({ value }) => {
+        if (value === '' || value == null) return undefined;
+        if (value === true || value === 'true' || value === '1') return true;
+        if (value === false || value === 'false' || value === '0') return false;
+        return value;
+    })
+    @IsBoolean()
+    soloAlertas?: boolean;
 }

@@ -92,6 +92,53 @@ export class AntirreboteDto {
     ventanaMismoTipoSegundos: number;
 }
 
+export class KioscoDto {
+    @ApiProperty({
+        example: 300,
+        description:
+            'Segundos en los que una checada de kiosco y otra de distinto canal, mismo empleado y tipo, se aceptan con DOBLE_CANAL',
+    })
+    @IsInt()
+    @Min(0)
+    ventanaDobleCanalSegundos: number;
+
+    @ApiProperty({
+        example: 300,
+        description: 'Segundos de desfase de reloj que encienden DESFASE_RELOJ',
+    })
+    @IsInt()
+    @Min(0)
+    umbralDesfaseRelojSegundos: number;
+
+    @ApiProperty({
+        example: 24,
+        description: 'Horas entre registro y recepción que encienden OFFLINE',
+    })
+    @IsInt()
+    @Min(0)
+    horasOfflineParaBandera: number;
+
+    @ApiProperty({
+        example: 0,
+        description: 'Porcentaje de checadas de kiosco sin otra bandera que van a muestreo',
+    })
+    @IsInt()
+    @Min(0)
+    @Max(100)
+    porcentajeMuestreo: number;
+
+    @ApiProperty({
+        example: 15,
+        required: false,
+        description: 'Minutos sin latido para marcar el kiosco sin conexión',
+    })
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(10080)
+    minutosSinLatidoParaOffline?: number;
+}
+
 export class UpdateAttendanceConfigDto {
     @ApiProperty({ type: ToleranciaDto })
     @IsNotEmptyObject()
@@ -128,4 +175,10 @@ export class UpdateAttendanceConfigDto {
     @ValidateNested()
     @Type(() => AntirreboteDto)
     antirebote?: AntirreboteDto;
+
+    @ApiProperty({ type: KioscoDto, required: false })
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => KioscoDto)
+    kiosco?: KioscoDto;
 }
