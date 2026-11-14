@@ -66,4 +66,8 @@ export const envValidationSchema = Joi.object({
     ATTENDANCE_ENGINE_ENABLED: Joi.string().valid('true', 'false').default('true'),
     ATTENDANCE_JOBS_ENABLED: Joi.string().valid('true', 'false').default('true'),
     GOOGLE_MAPS_API_KEY: Joi.string().required(),
+    // Comunicación interna. Defaults para no frenar el arranque antes de que el módulo envíe.
+    COMMS_MEDIA_BASE_PATH: Joi.string().default('comms-media'),
+    COMMS_PUBLIC_BASE_URL: Joi.string().allow('').default(''),
+    EXPO_ACCESS_TOKEN: Joi.string().optional().allow(''),
 });
