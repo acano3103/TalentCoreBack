@@ -1,12 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
-import { IntegrationsFactory } from '../integrations/providers/factory.service';
-import { ArtemisProvider } from '../integrations/providers/workforce-management/artemis/artemis.provider';
-import { ZkBioCreatePersonRequest } from '../integrations/providers/workforce-management/artemis/interfaces/artemis.interface';
-import { CreateBiometricPersonDto } from './dto/create-biometric-person.dto';
-import { UploadBiometricFingerprintsDto } from './dto/upload-biometric-fingerprints.dto';
-import { buildDepartmentBranch } from './utils/biometric-departments.util';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
+import { IntegrationsFactory } from '../../integrations/providers/factory.service';
+import { ArtemisProvider } from '../../integrations/providers/workforce-management/artemis/artemis.provider';
+import { ZkBioCreatePersonRequest } from '../../integrations/providers/workforce-management/artemis/interfaces/artemis.interface';
+import { CreateBiometricPersonDto } from '../dto/create-biometric-person.dto';
+import { UploadBiometricFingerprintsDto } from '../dto/upload-biometric-fingerprints.dto';
+import { buildDepartmentBranch } from '../utils/biometric-departments.util';
 
 // Código del catálogo CatIntegracionesProvedores para la integración de biométricos (ZkBio Integration API)
 export const BIOMETRIC_PROVIDER_CODE = 'ZKBIO';
