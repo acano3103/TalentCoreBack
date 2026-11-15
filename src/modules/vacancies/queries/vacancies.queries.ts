@@ -3,6 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 export class VacanciesQueries {
 
+
     static async getPaginatedActiveVacancies(
         prisma: PrismaService,
         idTenant: number,
@@ -11,6 +12,9 @@ export class VacanciesQueries {
         limit: number,
         search: string,
         recruiterEmployeeId: number | null,
+        siteId: number | null,
+        areaId: number | null,
+        status: string,
     ): Promise<any[]> {
         const searchFilter = search
             ? Prisma.sql`
@@ -21,57 +25,112 @@ export class VacanciesQueries {
         `
             : Prisma.empty;
 
-        // Filtro condicional por Reclutador Asignado
         const recruiterFilter = recruiterEmployeeId
             ? Prisma.sql`AND v.idReclutadorAsignado = ${recruiterEmployeeId}`
             : Prisma.empty;
 
+        const siteFilter = siteId !== null
+            ? Prisma.sql`AND v.idSite = ${siteId}`
+            : Prisma.empty;
+
+        const areaFilter = areaId !== null
+            ? Prisma.sql`AND p.idArea = ${areaId}`
+            : Prisma.empty;
+
+        let statusFilter: Prisma.Sql;
+
+        switch (status) {
+            case 'CERRADA':
+                statusFilter = Prisma.sql`AND v.idEstatusVacante = 7`;
+                break;
+
+            case 'CANCELADA':
+                statusFilter = Prisma.sql`AND v.idEstatusVacante = 8`;
+                break;
+
+            case 'TODAS':
+                statusFilter = Prisma.sql`AND v.idEstatusVacante IN (5, 7, 8)`;
+                break;
+
+            case 'ACTIVA':
+            default:
+                statusFilter = Prisma.sql`AND v.idEstatusVacante = 5`;
+                break;
+        }
+
         return prisma.$queryRaw<any[]>`
-            SELECT 
-                v.idVacante,
-                v.idEstatusVacante,
-                v.numeroVacantes,
-                v.SalarioMinimo,
-                v.SalarioMaximo,
-                p.idPuesto,
-                p.NombrePuesto,
-                p.DescripcionPuesto,
-                a.Descripcion AS Area,
-                tp.Descripcion AS TipoPuesto,
-                tc.Descripcion AS TipoContratacion,
-                s.Descripcion AS Site,
-                emp.idEmpleado AS idReclutadorAsignado,
-                CONCAT(emp.nombre, ' ', emp.primerApellido, ' ', emp.segundoApellido) AS reclutadorAsignado,
-                COALESCE(counts.total_cvs, 0) AS TotalCVs,
-                COALESCE(counts.total_aprobados, 0) AS TotalAprobados,
-                COALESCE(counts.total_rechazados, 0) AS TotalRechazados
-            FROM Vacantes v
-            INNER JOIN CatPuestos p ON p.idPuesto = v.idPuesto
-            LEFT JOIN Empleados emp ON emp.idEmpleado = v.idReclutadorAsignado
-            LEFT JOIN CatAreas a ON a.idArea = p.idArea
-            LEFT JOIN CatSites s ON s.idSite = v.idSite 
-            LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
-            LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
-            LEFT JOIN (
-                SELECT 
-                    post.idVacante,
-                    COUNT(post.idPostulacion) AS total_cvs,
-                    SUM(CASE WHEN perf.score_global >= 8 THEN 1 ELSE 0 END) AS total_aprobados,
-                    SUM(CASE WHEN perf.score_global IS NOT NULL AND perf.score_global < 8 THEN 1 ELSE 0 END) AS total_rechazados
-                FROM Postulaciones post
-                LEFT JOIN PerfilPostulante perf ON post.idPostulacion = perf.idPostulacion
-                GROUP BY post.idVacante
-            ) counts ON counts.idVacante = v.idVacante
-            WHERE v.idTenant = ${idTenant}
-            AND v.idEmpresa = ${companyId} 
-            AND v.idEstatusVacante = 5 
+        SELECT
+            v.idVacante,
+            v.idEstatusVacante,
+            v.numeroVacantes,
+            v.SalarioMinimo,
+            v.SalarioMaximo,
+            p.idPuesto,
+            p.NombrePuesto,
+            p.DescripcionPuesto,
+            a.Descripcion AS Area,
+            tp.Descripcion AS TipoPuesto,
+            tc.Descripcion AS TipoContratacion,
+            s.Descripcion AS Site,
+            emp.idEmpleado AS idReclutadorAsignado,
+            CONCAT(
+                emp.nombre,
+                ' ',
+                emp.primerApellido,
+                ' ',
+                emp.segundoApellido
+            ) AS reclutadorAsignado,
+            COALESCE(counts.total_cvs, 0) AS TotalCVs,
+            COALESCE(counts.total_aprobados, 0) AS TotalAprobados,
+            COALESCE(counts.total_rechazados, 0) AS TotalRechazados
+        FROM Vacantes v
+        INNER JOIN CatPuestos p
+            ON p.idPuesto = v.idPuesto
+        LEFT JOIN Empleados emp
+            ON emp.idEmpleado = v.idReclutadorAsignado
+        LEFT JOIN CatAreas a
+            ON a.idArea = p.idArea
+        LEFT JOIN CatSites s
+            ON s.idSite = v.idSite
+        LEFT JOIN CatTipoPuesto tp
+            ON tp.idTipoPuesto = p.idTipoPuesto
+        LEFT JOIN CatTipoContratacion tc
+            ON tc.idTipoContratacion = p.idTipoContratacion
+        LEFT JOIN (
+            SELECT
+                post.idVacante,
+                COUNT(post.idPostulacion) AS total_cvs,
+                SUM(
+                    CASE
+                        WHEN perf.score_global >= 8 THEN 1
+                        ELSE 0
+                    END
+                ) AS total_aprobados,
+                SUM(
+                    CASE
+                        WHEN perf.score_global IS NOT NULL
+                            AND perf.score_global < 8 THEN 1
+                        ELSE 0
+                    END
+                ) AS total_rechazados
+            FROM Postulaciones post
+            LEFT JOIN PerfilPostulante perf
+                ON post.idPostulacion = perf.idPostulacion
+            GROUP BY post.idVacante
+        ) counts
+            ON counts.idVacante = v.idVacante
+        WHERE v.idTenant = ${idTenant}
+            AND v.idEmpresa = ${companyId}
             AND p.Activo = 1
+            ${statusFilter}
             ${searchFilter}
             ${recruiterFilter}
-            ORDER BY v.fechaCreacion DESC
-            LIMIT ${limit}
-            OFFSET ${skip}
-        `;
+            ${siteFilter}
+            ${areaFilter}
+        ORDER BY v.fechaCreacion DESC
+        LIMIT ${limit}
+        OFFSET ${skip}
+    `;
     }
 
     static async countActiveVacancies(
@@ -80,6 +139,9 @@ export class VacanciesQueries {
         companyId: number,
         search: string,
         recruiterEmployeeId: number | null,
+        siteId: number | null,
+        areaId: number | null,
+        status: string,
     ): Promise<number> {
         const searchFilter = search
             ? Prisma.sql`
@@ -90,25 +152,57 @@ export class VacanciesQueries {
         `
             : Prisma.empty;
 
-        // Filtro condicional por Reclutador Asignado para el conteo de páginas
         const recruiterFilter = recruiterEmployeeId
             ? Prisma.sql`AND v.idReclutadorAsignado = ${recruiterEmployeeId}`
             : Prisma.empty;
 
+        const siteFilter = siteId !== null
+            ? Prisma.sql`AND v.idSite = ${siteId}`
+            : Prisma.empty;
+
+        const areaFilter = areaId !== null
+            ? Prisma.sql`AND p.idArea = ${areaId}`
+            : Prisma.empty;
+
+        let statusFilter: Prisma.Sql;
+
+        switch (status) {
+            case 'CERRADA':
+                statusFilter = Prisma.sql`AND v.idEstatusVacante = 7`;
+                break;
+
+            case 'CANCELADA':
+                statusFilter = Prisma.sql`AND v.idEstatusVacante = 8`;
+                break;
+
+            case 'TODAS':
+                statusFilter = Prisma.sql`AND v.idEstatusVacante IN (5, 7, 8)`;
+                break;
+
+            case 'ACTIVA':
+            default:
+                statusFilter = Prisma.sql`AND v.idEstatusVacante = 5`;
+                break;
+        }
+
         const result = await prisma.$queryRaw<{ total: bigint }[]>`
         SELECT COUNT(*) AS total
         FROM Vacantes v
-        INNER JOIN CatPuestos p ON p.idPuesto = v.idPuesto
+        INNER JOIN CatPuestos p
+            ON p.idPuesto = v.idPuesto
         WHERE v.idTenant = ${idTenant}
             AND v.idEmpresa = ${companyId}
-            AND v.idEstatusVacante = 5
             AND p.Activo = 1
+            ${statusFilter}
             ${searchFilter}
-            ${recruiterFilter}  -- <-- Inyección del filtro de reclutador en el conteo total
+            ${recruiterFilter}
+            ${siteFilter}
+            ${areaFilter}
     `;
 
-        return Number(result[0].total);
+        return Number(result[0]?.total ?? 0);
     }
+
 
     static async getVacancyPostulantsSummary(
         prisma: PrismaService,

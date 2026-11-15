@@ -27,8 +27,10 @@ export class WorkShiftsController {
     @Query('search') search?: string,
     @Query('idSite') idSite?: string,
     @Query('idUnidadOperativa') idUnidadOperativa?: string,
+    @Query('idSiteAsistencia') idSiteAsistencia?: string,
+    @Query('semaforo') semaforo?: string,
   ) {
-    return this.workShiftsService.findAll(user, companyId, page, limit, startDate, search, idSite, idUnidadOperativa);
+    return this.workShiftsService.findAll(user, companyId, page, limit, startDate, search, idSite, idUnidadOperativa, idSiteAsistencia, semaforo,);
   }
 
   // Regresa todos los turnos por dia para el empleado logueado

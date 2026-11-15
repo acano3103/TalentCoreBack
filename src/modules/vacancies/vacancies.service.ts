@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 import * as fs from 'fs';
 import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.util';
+import { VacancyStatus } from './interfaces/vacancies.interface';
 
 @Injectable()
 export class VacanciesService {
@@ -21,35 +22,56 @@ export class VacanciesService {
 
     private readonly logger = new Logger(VacanciesService.name);
 
-    // Obtener todas las vacantes activas por empresa
-    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number) {
+    // Obtener vacantes paginadas por empresa con filtros.
+    async findAll(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        page: number,
+        search: string,
+        limit: number,
+        siteId?: string,
+        areaId?: string,
+        status: string = 'ACTIVA',
+    ) {
         try {
             const skip = (page - 1) * limit;
+
             let recruiterEmployeeId: number | null = null;
 
-            // 1. Verificar si el usuario tiene el rol de reclutador
+            // 1. Verificar si el usuario tiene el rol de reclutador.
             const userRoles = await this.prisma.$queryRaw<{ idRol: number }[]>`
-                SELECT idRol FROM RelUsuarioRol 
-                WHERE idUsuario = ${activeUser.id} AND activo = 1;
+                SELECT idRol
+                FROM RelUsuarioRol
+                WHERE idUsuario = ${activeUser.id}
+                    AND activo = 1;
             `;
 
-            const isReclutador = userRoles.some(r => r.idRol === 4);
+            const isReclutador = userRoles.some((role) => Number(role.idRol) === 4);
 
-            // 2. Si es reclutador, obtenemos su idEmpleado cruzando con auth_user por su ID de usuario histórico
+            // 2. Si es reclutador, obtener su idEmpleado.
             if (isReclutador) {
-                const empleado = await this.prisma.$queryRaw<{ idEmpleado: number }[]>`
-                SELECT e.idEmpleado 
-                FROM Empleados e
-                INNER JOIN auth_user u ON e.idUsuario = u.uuid
-                WHERE u.id = ${activeUser.id} AND e.activo = 1
-                LIMIT 1;
-            `;
-                if (empleado.length > 0) {
-                    recruiterEmployeeId = empleado[0].idEmpleado;
-                }
+                const empleado = await this.prisma.$queryRaw<{ idEmpleado: number; }[]>`
+                    SELECT e.idEmpleado
+                    FROM Empleados e
+                    INNER JOIN auth_user u
+                        ON e.idUsuario = u.uuid
+                    WHERE u.id = ${activeUser.id}
+                        AND e.activo = 1
+                    LIMIT 1;
+                `;
+
+                if (empleado.length > 0) recruiterEmployeeId = Number(empleado[0].idEmpleado);
             }
 
-            // Ejecución en paralelo pasando el filtro opcional de reclutador
+            // 3. Validar los filtros numéricos.
+            const parsedSiteId = siteId && /^\d+$/.test(siteId) ? Number(siteId) : null;
+            const parsedAreaId = areaId && /^\d+$/.test(areaId) ? Number(areaId) : null;
+
+            // 4. Validar el estatus recibido.
+            const validStatuses: VacancyStatus[] = ['ACTIVA', 'CERRADA', 'CANCELADA', 'TODAS'];
+            const normalizedStatus = validStatuses.includes(status as VacancyStatus) ? status : 'ACTIVA';
+
+            // 5. Ejecutar consulta y conteo con exactamente los mismos filtros.
             const [rows, total] = await Promise.all([
                 VacanciesQueries.getPaginatedActiveVacancies(
                     this.prisma,
@@ -58,48 +80,52 @@ export class VacanciesService {
                     skip,
                     limit,
                     search,
-                    recruiterEmployeeId
+                    recruiterEmployeeId,
+                    parsedSiteId,
+                    parsedAreaId,
+                    normalizedStatus,
                 ),
                 VacanciesQueries.countActiveVacancies(
                     this.prisma,
                     activeUser.idTenant,
                     companyId,
                     search,
-                    recruiterEmployeeId
-                )
+                    recruiterEmployeeId,
+                    parsedSiteId,
+                    parsedAreaId,
+                    normalizedStatus,
+                ),
             ]);
 
-            // Mapeo y limpieza de datos para el cliente frontend
-            const vacantesActivas = rows.map((v) => {
-                return {
-                    idVacante: typeof v.idVacante === 'bigint' ? Number(v.idVacante) : v.idVacante,
-                    idPuesto: typeof v.idPuesto === 'bigint' ? Number(v.idPuesto) : v.idPuesto,
-                    NombrePuesto: v.NombrePuesto,
-                    DescripcionPuesto: v.DescripcionPuesto,
-                    NumeroVacantes: v.numeroVacantes ? Number(v.numeroVacantes) : 1,
-                    SalarioMinimo: v.SalarioMinimo ? String(v.SalarioMinimo) : null,
-                    SalarioMaximo: v.SalarioMaximo ? String(v.SalarioMaximo) : null,
-                    Area: v.Area,
-                    TipoPuesto: v.TipoPuesto,
-                    TipoContratacion: v.TipoContratacion,
-                    Site: v.Site,
-                    idReclutadorAsignado: v.idReclutadorAsignado ? Number(v.idReclutadorAsignado) : null,
-                    reclutadorAsignado: v.reclutadorAsignado || null,
-                    TotalCVs: v.TotalCVs ? Number(v.TotalCVs) : 0,
-                    TotalAprobados: v.TotalAprobados ? Number(v.TotalAprobados) : 0,
-                    TotalRechazados: v.TotalRechazados ? Number(v.TotalRechazados) : 0,
-                };
-            });
+            // 6. Mapear resultados para el frontend.
+            const vacantes = rows.map((v) => ({
+                idVacante: typeof v.idVacante === 'bigint' ? Number(v.idVacante) : v.idVacante,
+                idEstatusVacante: Number(v.idEstatusVacante),
+                idPuesto: typeof v.idPuesto === 'bigint' ? Number(v.idPuesto) : v.idPuesto,
+                NombrePuesto: v.NombrePuesto,
+                DescripcionPuesto: v.DescripcionPuesto,
+                NumeroVacantes: v.numeroVacantes ? Number(v.numeroVacantes) : 1,
+                SalarioMinimo: v.SalarioMinimo ? String(v.SalarioMinimo) : null,
+                SalarioMaximo: v.SalarioMaximo ? String(v.SalarioMaximo) : null,
+                Area: v.Area,
+                TipoPuesto: v.TipoPuesto,
+                TipoContratacion: v.TipoContratacion,
+                Site: v.Site,
+                idReclutadorAsignado: v.idReclutadorAsignado ? Number(v.idReclutadorAsignado) : null,
+                reclutadorAsignado: v.reclutadorAsignado || null,
+                TotalCVs: v.TotalCVs ? Number(v.TotalCVs) : 0,
+                TotalAprobados: v.TotalAprobados ? Number(v.TotalAprobados) : 0,
+                TotalRechazados: v.TotalRechazado ? Number(v.TotalRechazados) : 0,
+            }));
 
             return {
-                data: vacantesActivas,
+                data: vacantes,
                 total,
                 currentPage: page,
-                totalPages: Math.ceil(total / limit)
+                totalPages: Math.ceil(total / limit),
             };
-
         } catch (error) {
-            this.logger.error('Error al obtener vacantes activas paginadas:', error);
+            this.logger.error('Error al obtener vacantes paginadas:', error);
             throw new InternalServerErrorException('Error al procesar las vacantes');
         }
     }

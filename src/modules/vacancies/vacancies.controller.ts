@@ -29,10 +29,13 @@ export class VacanciesController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-        @Query('search') search?: string
+        @Query('search') search?: string,
+        @Query('siteId') siteId?: string,
+        @Query('areaId') areaId?: string,
+        @Query('status') status?: string,
     ) {
         const querySearch = search || '';
-        return this.vacanciesService.findAll(activeUser, companyId, page, querySearch, limit);
+        return this.vacanciesService.findAll(activeUser, companyId, page, querySearch, limit, siteId, areaId, status || 'ACTIVA',);
     }
 
     // Endpoint para obtener el resumen de postulaciones de una vacante específica
