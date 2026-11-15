@@ -1,6 +1,8 @@
 // src/modules/incidents/vacations/vacations.service.ts
 
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeesService } from 'src/modules/employees/employees.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -20,6 +22,7 @@ export class VacationsService {
     private readonly employeeService: EmployeesService,
     private readonly personnelConfig: PersonnelConfigService,
     private readonly approvalsService: ApprovalsService,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   /**
@@ -294,6 +297,26 @@ export class VacationsService {
       vacationTipoMovimiento.idTipoMovimiento,
       newRequest.idSolicitud,
     );
+
+    try {
+      const vigente = await this.prisma.solicitudesIncidencias.findUnique({
+        where: { idSolicitud: newRequest.idSolicitud },
+        select: { estatus: true },
+      });
+      if (vigente?.estatus && vigente.estatus !== 'PENDIENTE' && activeUser.idTenant) {
+        emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+          origen: 'VACACION',
+          idTenant: activeUser.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: dto.idEmpleado,
+          idSolicitud: newRequest.idSolicitud,
+          estatus: vigente.estatus,
+          solicitud: 'vacaciones',
+        });
+      }
+    } catch {
+      // La solicitud ya quedó registrada.
+    }
 
     return {
       message: 'Solicitud de vacaciones registrada con éxito.',

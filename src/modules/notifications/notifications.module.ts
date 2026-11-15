@@ -68,6 +68,7 @@ import { PushReceiptsService } from './providers/push/push-receipts.service';
         NotificationDispatcher,
         WebsocketGateway,
         CampanaRealtimeService,
+        WhatsappProvider,
     ],
 })
 export class NotificationsModule { }

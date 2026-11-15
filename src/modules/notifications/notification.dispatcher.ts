@@ -161,6 +161,7 @@ export class NotificationDispatcher {
                 DeepLink: payload.deepLink ?? null,
                 OrigenTipo: payload.origenTipo,
                 OrigenId: payload.origenId,
+                ClaveAgrupacion: payload.claveAgrupacion ?? null,
             },
         });
         const entregas: EntregaComms[] = [];

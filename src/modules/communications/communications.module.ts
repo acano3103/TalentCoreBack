@@ -7,6 +7,7 @@ import { KioskCommsModule } from './kiosk-comms/kiosk-comms.module';
 import { MeModule } from './me/me.module';
 import { NotificationCenterModule } from './notification-center/notification-center.module';
 import { PublicLinksModule } from './public-links/public-links.module';
+import { RemindersModule } from './reminders/reminders.module';
 import { StaffClassificationModule } from './staff-classification/staff-classification.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { StaffClassificationModule } from './staff-classification/staff-classifi
         NotificationCenterModule,
         PublicLinksModule,
         KioskCommsModule,
+        RemindersModule,
     ],
     exports: [CapabilitiesModule, StaffClassificationModule, ChannelsModule, AudiencesModule, AnnouncementsModule, MeModule],
 })

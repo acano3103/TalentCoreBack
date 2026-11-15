@@ -28,6 +28,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CoursesModule } from './modules/courses/courses.module';
 import { RoleplaysModule } from './modules/roleplays/roleplays.module';
 import { CareerPlanModule } from './modules/career-plan/career-plan.module';
@@ -64,6 +65,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
       validationSchema: envValidationSchema,
     }),
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot({ ignoreErrors: true }),
     ServeStaticModule.forRoot(
       {
         rootPath: staticPublicPath,

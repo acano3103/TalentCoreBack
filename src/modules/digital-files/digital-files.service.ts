@@ -1,4 +1,6 @@
-import { Injectable, ForbiddenException, NotFoundException, UnauthorizedException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, ForbiddenException, NotFoundException, UnauthorizedException, InternalServerErrorException, BadRequestException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_DOCUMENTO, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -30,7 +32,8 @@ export class DigitalFilesService {
     private readonly configService: ConfigService,
     private readonly notifications: NotificationDispatcher,
     private readonly mediaPathService: MediaPathService,
-    private readonly employeeService: EmployeesService
+    private readonly employeeService: EmployeesService,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) {
     this.mediaRoot = this.configService.get<string>('MEDIA_ROOT_PATH')!;
   }
@@ -1100,6 +1103,34 @@ export class DigitalFilesService {
       }
     }
 
+    try {
+      if (doc.idEmpleado && (nuevoEstatus === 1 || nuevoEstatus === 5)) {
+        const empleado = await this.prisma.empleados.findUnique({
+          where: { idEmpleado: doc.idEmpleado },
+          select: { idEmpresa: true, idTenant: true },
+        });
+        const catalogo = doc.IdDocumento
+          ? await this.prisma.catDocumentos.findUnique({
+            where: { IdDocumento: doc.IdDocumento },
+            select: { Descripcion: true },
+          })
+          : null;
+        if (empleado?.idEmpresa && empleado.idTenant) {
+          emitirHecho(this.eventos, COMMS_EVENTO_DOCUMENTO, {
+            tipo: nuevoEstatus === 5 ? 'RECHAZADO' : 'FALTANTE',
+            idTenant: empleado.idTenant,
+            idEmpresa: empleado.idEmpresa,
+            idEmpleado: doc.idEmpleado,
+            idDocumentoEmpleado,
+            documento: catalogo?.Descripcion?.trim() || 'documento',
+            fechaLimite: doc.fechaVencimiento ? doc.fechaVencimiento.toISOString().slice(0, 10) : null,
+          });
+        }
+      }
+    } catch {
+      // El cambio de estatus ya quedó guardado.
+    }
+
     return { success: true, message: 'Estatus del documento actualizado correctamente.' };
   }
 
@@ -1236,11 +1267,13 @@ export class DigitalFilesService {
     this.logger.log('Iniciando revisión diaria de documentos por vencer...');
 
     const documentosConVigencia = await this.prisma.$queryRaw<
-      { idEmpleado: number; fechaVencimiento: Date; diasAlertaPrevio: number }[]
+      { idEmpleado: number; idDocumentoEmpleado: number; fechaVencimiento: Date; diasAlertaPrevio: number; nombre: string | null; idEmpresa: number | null; idTenant: number | null }[]
     >`
-    SELECT DE.idEmpleado, DE.fechaVencimiento, CD.diasAlertaPrevio
+    SELECT DE.idEmpleado, DE.idDocumentoEmpleado, DE.fechaVencimiento, CD.diasAlertaPrevio,
+           CD.Descripcion AS nombre, E.idEmpresa AS idEmpresa, E.idTenant AS idTenant
     FROM DocumentosEmpleado DE
     INNER JOIN CatDocumentos CD ON CD.IdDocumento = DE.IdDocumento
+    LEFT JOIN Empleados E ON E.idEmpleado = DE.idEmpleado
     WHERE CD.requiereVencimiento = 1
       AND DE.fechaVencimiento IS NOT NULL
       AND DE.idEmpleado IS NOT NULL
@@ -1260,6 +1293,21 @@ export class DigitalFilesService {
           .map((doc) => doc.idEmpleado),
       ),
     ];
+
+    for (const doc of documentosConVigencia) {
+      const estatus = DigitalFilesQueries.calcularEstatusVigencia(doc.fechaVencimiento, doc.diasAlertaPrevio);
+      if (estatus !== 'por_vencer' && estatus !== 'vencido') continue;
+      if (!doc.idEmpresa || !doc.idTenant) continue;
+      emitirHecho(this.eventos, COMMS_EVENTO_DOCUMENTO, {
+        tipo: 'POR_VENCER',
+        idTenant: doc.idTenant,
+        idEmpresa: doc.idEmpresa,
+        idEmpleado: doc.idEmpleado,
+        idDocumentoEmpleado: doc.idDocumentoEmpleado,
+        documento: doc.nombre?.trim() || 'documento',
+        fechaLimite: new Date(doc.fechaVencimiento).toISOString().slice(0, 10),
+      });
+    }
 
     this.logger.log(`Se encontraron ${idsEmpleadoANotificar.length} empleado(s) con documentos por vencer/vencidos.`);
 

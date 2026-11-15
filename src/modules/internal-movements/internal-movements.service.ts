@@ -1,8 +1,12 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateInternalMovementDto } from './dto/create-internal-movement.dto';
@@ -22,6 +26,7 @@ export class InternalMovementsService {
     private prisma: PrismaService,
     private readonly mediaPathService: MediaPathService,
     private readonly approvalsService: ApprovalsService,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   async findAll(
@@ -402,6 +407,18 @@ export class InternalMovementsService {
         },
       });
 
+    if (solicitudActualizada?.estatus && solicitudActualizada.estatus !== 'PENDIENTE' && user.idTenant) {
+      emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+        origen: 'MOVIMIENTO_INTERNO',
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        idEmpleado: solicitudActualizada.idEmpleado,
+        idSolicitud: solicitudActualizada.idMovimiento,
+        estatus: solicitudActualizada.estatus,
+        solicitud: 'movimiento interno',
+      });
+    }
+
     return {
       message: resultadoAprobacion == 'Solicitud aprobada automaticamente por falta de flujo de aprobación.'
         ? 'Movimiento aprobado automáticamente y aplicado al empleado.'
@@ -658,6 +675,26 @@ export class InternalMovementsService {
     // Solo aplicar si el motor confirmó la aprobación automática.
     if (aprobadaAutomaticamente) {
       await this.aplicarMovimientoAEmpleado(movimiento.idMovimiento, activeUser);
+    }
+
+    try {
+      const vigente = await this.prisma.movimientosInternos.findUnique({
+        where: { idMovimiento: movimiento.idMovimiento },
+        select: { estatus: true, idEmpleado: true },
+      });
+      if (vigente?.estatus && vigente.estatus !== 'PENDIENTE' && activeUser.idTenant) {
+        emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+          origen: 'MOVIMIENTO_INTERNO',
+          idTenant: activeUser.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: vigente.idEmpleado,
+          idSolicitud: movimiento.idMovimiento,
+          estatus: vigente.estatus,
+          solicitud: 'baja de personal',
+        });
+      }
+    } catch {
+      // La solicitud ya quedó registrada.
     }
 
     return {

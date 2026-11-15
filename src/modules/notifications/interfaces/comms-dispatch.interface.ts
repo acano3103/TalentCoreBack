@@ -20,6 +20,7 @@ export interface CommsPayload {
     idTenant?: number | null;
     idEmpresa?: number | null;
     notificationTypeCode: string;
+    claveAgrupacion?: string | null;
     correo?: { to: string; context: Record<string, unknown> };
     whatsapp?: { phone: string; templateId: string; params: string[] };
     push?: { title: string; body: string; data?: Record<string, string> };
