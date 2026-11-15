@@ -26,6 +26,7 @@ import { AnnouncementDispatchService } from '../delivery/announcement-dispatch.s
 import { WhatsAppCapService } from '../whatsapp-usage/whatsapp-cap.service';
 import { ProgramarComunicadoDto } from '../delivery/dto/programar-comunicado.dto';
 import { ActualizarComunicadoDto, CrearComunicadoDto, NuevaVersionDto } from './dto/comunicado.dto';
+import { porcentaje } from './analitica';
 import { ListarComunicadosQuery } from './dto/listar-comunicados.query';
 
 const TRANSACCION = { maxWait: 15_000, timeout: 60_000 };
@@ -543,22 +544,37 @@ export class AnnouncementsService {
                 orderBy: { FechaRegistro: 'desc' },
                 skip: (page - 1) * pageSize,
                 take: pageSize,
-                include: { ComTiposComunicado: true },
+                include: {
+                    ComTiposComunicado: true,
+                    ComAudiencias: { select: { Nombre: true } },
+                },
             }),
         ]);
+        const ids = filas.map((fila) => fila.idComunicado);
         const versiones = filas.length
             ? await this.prisma.comComunicadoVersiones.findMany({
                   where: { OR: filas.map((fila) => ({ idComunicado: fila.idComunicado, NumVersion: fila.VersionActual })) },
                   select: { idComunicado: true, Titulo: true, Resumen: true },
               })
             : [];
+        const conteos = ids.length
+            ? await this.prisma.comDestinatarios.groupBy({
+                  by: ['idComunicado', 'Estado'],
+                  where: { idComunicado: { in: ids } },
+                  _count: { _all: true },
+              })
+            : [];
+        const autores = await this.nombresDeAutores(filas.map((fila) => fila.CreadoPor));
         const porId = new Map(versiones.map((fila) => [fila.idComunicado, fila]));
+        const metricas = metricasDe(conteos);
         return {
             total,
             page,
             pageSize,
             items: filas.map((fila) => {
                 const version = porId.get(fila.idComunicado);
+                const seguimiento = metricas.get(fila.idComunicado) ?? { leidos: 0, acuses: 0 };
+                const conDestinatarios = fila.TotalDestinatarios > 0;
                 return {
                     id: fila.idComunicado,
                     estado: fila.Estado,
@@ -572,6 +588,12 @@ export class AnnouncementsService {
                     versionActual: fila.VersionActual,
                     totalDestinatarios: fila.TotalDestinatarios,
                     creadoPor: fila.CreadoPor,
+                    autor: autores.get(fila.CreadoPor) ?? fila.CreadoPor,
+                    nombreAudiencia: fila.ComAudiencias?.Nombre ?? null,
+                    leidos: seguimiento.leidos,
+                    acuses: seguimiento.acuses,
+                    porcentajeLectura: conDestinatarios ? porcentaje(seguimiento.leidos, fila.TotalDestinatarios) : null,
+                    porcentajeAcuse: conDestinatarios ? porcentaje(seguimiento.acuses, fila.TotalDestinatarios) : null,
                     fechaRegistro: fila.FechaRegistro,
                     archivadoEn: fila.ArchivadoEn,
                 };
@@ -585,13 +607,18 @@ export class AnnouncementsService {
         const clave = mes ?? mesUtc(new Date());
         const { desde, hasta } = rangoMes(clave);
         const base = this.filtro(activeUser.idTenant, companyId, visibilidad, {});
-        const [grupos, enviadosEnElMes] = await Promise.all([
+        const [grupos, enviadosEnElMes, lectura] = await Promise.all([
             this.prisma.comComunicados.groupBy({
                 by: ['Estado'],
                 where: { ...base, FechaRegistro: { gte: desde, lt: hasta } },
                 _count: { _all: true },
             }),
             this.prisma.comComunicados.count({ where: { ...base, EnviadoEn: { gte: desde, lt: hasta } } }),
+            this.prisma.comDestinatarios.groupBy({
+                by: ['Estado'],
+                where: { ComComunicados: { ...base, EnviadoEn: { gte: desde, lt: hasta } } },
+                _count: { _all: true },
+            }),
         ]);
         const porEstado: Record<EstadoComunicado, number> = {
             BORRADOR: 0,
@@ -606,7 +633,48 @@ export class AnnouncementsService {
             if (esEstadoComunicado(grupo.Estado)) porEstado[grupo.Estado] = grupo._count._all;
         }
         const total = Object.values(porEstado).reduce((suma, n) => suma + n, 0);
-        return { mes: clave, porEstado, enviadosEnElMes, total };
+        const tomar = (estado: string) => lectura.find((fila) => fila.Estado === estado)?._count._all ?? 0;
+        const destinatarios = lectura.reduce((suma, fila) => suma + fila._count._all, 0);
+        const leidos = tomar('LEIDO') + tomar('CONFIRMADO');
+        return {
+            mes: clave,
+            porEstado,
+            enviadosEnElMes,
+            total,
+            tasaLectura: porcentaje(leidos, destinatarios),
+            acusesPendientes: tomar('PENDIENTE') + tomar('ENTREGADO'),
+            programados: porEstado.PROGRAMADO,
+            entregasFallidas: tomar('FALLIDO') + tomar('SIN_CANAL'),
+        };
+    }
+
+    async versiones(activeUser: ActiveUserDto, companyId: number, id: number) {
+        await this.autorizar(activeUser, companyId);
+        await this.buscar(activeUser, companyId, id);
+        const filas = await this.prisma.comComunicadoVersiones.findMany({
+            where: { idComunicado: id },
+            orderBy: { NumVersion: 'desc' },
+            include: { ComComunicadoAdjuntos: { orderBy: { idAdjunto: 'asc' } } },
+        });
+        const autores = await this.nombresDeAutores(filas.map((fila) => fila.CreadoPor));
+        return filas.map((version) => ({
+            id: version.idVersion,
+            numVersion: version.NumVersion,
+            titulo: version.Titulo,
+            resumen: version.Resumen,
+            cuerpoHtml: version.CuerpoHtml,
+            esCorreccionMenor: version.EsCorreccionMenor,
+            portadaUrl: version.PortadaRuta ? this.storage.signedUrl(version.PortadaRuta, TTL_ARCHIVO, mimeDeRuta(version.PortadaRuta)) : null,
+            adjuntos: version.ComComunicadoAdjuntos.map((adjunto) => ({
+                id: adjunto.idAdjunto,
+                nombre: adjunto.Nombre,
+                mime: adjunto.Mime,
+                tamanoBytes: adjunto.TamanoBytes,
+                url: this.storage.signedUrl(adjunto.Ruta, TTL_ARCHIVO, adjunto.Mime),
+            })),
+            creadoPor: autores.get(version.CreadoPor) ?? version.CreadoPor,
+            fechaRegistro: version.FechaRegistro,
+        }));
     }
 
     async detalle(activeUser: ActiveUserDto, companyId: number, id: number) {
@@ -629,6 +697,7 @@ export class AnnouncementsService {
             versionActual: fila.VersionActual,
             totalDestinatarios: fila.TotalDestinatarios,
             creadoPor: fila.CreadoPor,
+            autor: (await this.nombresDeAutores([fila.CreadoPor])).get(fila.CreadoPor) ?? fila.CreadoPor,
             fechaRegistro: fila.FechaRegistro,
             enviadoEn: fila.EnviadoEn,
             archivadoEn: fila.ArchivadoEn,
@@ -699,6 +768,7 @@ export class AnnouncementsService {
             ...(query.estado ? { Estado: query.estado } : {}),
             ...(query.idTipo ? { idTipo: query.idTipo } : {}),
             ...(query.prioridad ? { Prioridad: query.prioridad } : {}),
+            ...(query.site ? { ComDestinatarios: { some: { idSite: query.site } } } : {}),
             ...(termino
                 ? { ComComunicadoVersiones: { some: { OR: [{ Titulo: { contains: termino } }, { Resumen: { contains: termino } }] } } }
                 : {}),
@@ -810,6 +880,21 @@ export class AnnouncementsService {
         return this.storage.put(buffer, { tenant, empresa, carpeta: `${idComunicado}/${carpeta}`, nombre, mime: 'application/octet-stream' });
     }
 
+    private async nombresDeAutores(uuids: string[]): Promise<Map<string, string>> {
+        const unicos = [...new Set(uuids.filter(Boolean))];
+        if (!unicos.length) return new Map();
+        const filas = await this.prisma.auth_user.findMany({
+            where: { uuid: { in: unicos } },
+            select: { uuid: true, first_name: true, last_name: true, username: true },
+        });
+        return new Map(
+            filas.map((fila) => {
+                const nombre = `${fila.first_name} ${fila.last_name}`.trim();
+                return [fila.uuid, nombre || fila.username];
+            }),
+        );
+    }
+
     private async uuidsDe(ids: number[]): Promise<string[]> {
         if (!ids.length) return [];
         const uuids: string[] = [];
@@ -905,6 +990,17 @@ function bitacora(activeUser: ActiveUserDto, companyId: number, accion: string, 
         descripcion: `${activeUser.first_name} ${activeUser.last_name} ${verbo}`,
         fechaCreacion: new Date(),
     };
+}
+
+function metricasDe(filas: { idComunicado: number; Estado: string; _count: { _all: number } }[]): Map<number, { leidos: number; acuses: number }> {
+    const metricas = new Map<number, { leidos: number; acuses: number }>();
+    for (const fila of filas) {
+        const actual = metricas.get(fila.idComunicado) ?? { leidos: 0, acuses: 0 };
+        if (fila.Estado === 'LEIDO' || fila.Estado === 'CONFIRMADO') actual.leidos += fila._count._all;
+        if (fila.Estado === 'CONFIRMADO') actual.acuses += fila._count._all;
+        metricas.set(fila.idComunicado, actual);
+    }
+    return metricas;
 }
 
 function mesUtc(fecha: Date): string {

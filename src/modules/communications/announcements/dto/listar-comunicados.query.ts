@@ -22,6 +22,13 @@ export class ListarComunicadosQuery {
     @IsIn(PRIORIDADES, { message: 'La prioridad no es válida.' })
     prioridad?: (typeof PRIORIDADES)[number];
 
+    @ApiPropertyOptional({ description: 'Ubicación congelada de quien recibió el comunicado.' })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt({ message: 'La ubicación debe ser un identificador entero.' })
+    @Min(1, { message: 'La ubicación debe ser mayor a cero.' })
+    site?: number;
+
     @ApiPropertyOptional()
     @IsOptional()
     @IsString({ message: 'La búsqueda debe ser texto.' })

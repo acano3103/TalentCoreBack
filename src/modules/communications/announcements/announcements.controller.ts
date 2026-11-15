@@ -217,6 +217,21 @@ export class AnnouncementsController {
         return this.service.revision(activeUser, companyId, id);
     }
 
+    @Get('announcements/:id/versions')
+    @ApiOperation({
+        summary: 'Historial de versiones',
+        description: 'Número, fecha, autor y si fue una corrección menor. La primera es la versión vigente.',
+    })
+    @ApiResponse({ status: 200, description: 'Versiones del comunicado.' })
+    @ApiResponse({ status: 404, description: 'No existe o está fuera de tu alcance.' })
+    versiones(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+    ) {
+        return this.service.versiones(activeUser, companyId, id);
+    }
+
     @Post('announcements/:id/versions')
     @ApiOperation({
         summary: 'Corregir un comunicado enviado',
