@@ -26,10 +26,11 @@ describe('contenido del comunicado', () => {
         expect(listo.cuerpoHtml).toBe('Llega tarde');
     });
 
-    it('arma el checklist sin tope de WhatsApp', () => {
+    it('arma el checklist y muestra el tope sin impedir el envío', () => {
         const vacio = armarRevision(base({ total: 0 }));
         expect(vacio.listo).toBe(false);
         expect(vacio.whatsapp.tope).toBeNull();
+        expect(vacio.whatsapp.costoEstimado).toBeNull();
         expect(vacio.contenido.faltantes).toEqual([]);
 
         const sinPlantilla = armarRevision(base({ canalesForzados: ['WHATSAPP'], plantillasWhatsApp: null }));
@@ -39,6 +40,24 @@ describe('contenido del comunicado', () => {
         const listo = armarRevision(base({}));
         expect(listo.listo).toBe(true);
         expect(listo.audiencia.sinCanal).toBe(1);
+
+        const alTope = armarRevision(
+            base({
+                costoEstimado: 12.5,
+                moneda: 'MXN',
+                tope: {
+                    topeMensual: 100,
+                    consumido: 100,
+                    porcentaje: 100,
+                    accion: 'BLOQUEAR',
+                    estado: 'AL_TOPE',
+                    bloqueaEnvio: true,
+                },
+            }),
+        );
+        expect(alTope.listo).toBe(true);
+        expect(alTope.whatsapp.costoEstimado).toBe(12.5);
+        expect(alTope.whatsapp.tope?.estado).toBe('AL_TOPE');
     });
 });
 
@@ -46,6 +65,16 @@ function base(parcial: {
     total?: number;
     canalesForzados?: string[];
     plantillasWhatsApp?: unknown;
+    costoEstimado?: number | null;
+    moneda?: string | null;
+    tope?: {
+        topeMensual: number;
+        consumido: number;
+        porcentaje: number;
+        accion: string;
+        estado: 'OK' | 'AVISO' | 'AL_TOPE';
+        bloqueaEnvio: boolean;
+    } | null;
 }) {
     return {
         total: parcial.total ?? 3,
@@ -54,6 +83,9 @@ function base(parcial: {
         fueraDeAlcance: [],
         canalesForzados: parcial.canalesForzados ?? [],
         plantillasWhatsApp: parcial.plantillasWhatsApp === undefined ? { general: 'tpl_ok' } : parcial.plantillasWhatsApp,
+        costoEstimado: parcial.costoEstimado,
+        moneda: parcial.moneda,
+        tope: parcial.tope,
         vigenteHasta: new Date('2026-12-01T00:00:00Z'),
         ahora: new Date('2026-11-14T00:00:00Z'),
         esAviso: false,

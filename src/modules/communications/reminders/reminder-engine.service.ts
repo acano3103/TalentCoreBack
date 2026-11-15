@@ -17,6 +17,7 @@ import { resolverPlantillaWhatsApp } from '../delivery/plantilla-wa';
 import { FilaPrecioWa, precioVigente } from '../delivery/precio-wa';
 import { SilencioEmpresa, Turno } from '../delivery/silencio';
 import { whatsappBloqueado } from '../delivery/tope-wa';
+import { WhatsAppCapService } from '../whatsapp-usage/whatsapp-cap.service';
 import {
     COMMS_EVENTO_ESTATUS,
     HechoEstatus,
@@ -76,6 +77,7 @@ export class ReminderEngineService {
         private readonly campana: CampanaRealtimeService,
         private readonly config: ConfigService,
         @Optional() @Inject(WhatsappProvider) private readonly whatsapp?: WhatsappProvider,
+        @Optional() @Inject(WhatsAppCapService) private readonly caps?: WhatsAppCapService,
     ) {}
 
     @Cron(CronExpression.EVERY_MINUTE)
@@ -802,6 +804,7 @@ export class ReminderEngineService {
     }
 
     private async whatsappBloqueado(idTenant: number, idEmpresa: number, ahora: Date): Promise<boolean> {
+        if (this.caps) return !(await this.caps.canSend(idTenant, idEmpresa, 'NORMAL', ahora));
         const inicio = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), 1));
         const [suma, topes] = await Promise.all([
             this.prisma.waConsumo.aggregate({
@@ -858,6 +861,7 @@ export class ReminderEngineService {
                 EnviadoEn: ahora,
             },
         });
+        await this.caps?.revisarAviso(idTenant, candidato.idEmpresa, ahora);
     }
 
     private candidato(persona: Persona, regla: ReglaViva, resultado: ResultadoRegla, idDestinatario?: number): CandidatoEnvio | null {

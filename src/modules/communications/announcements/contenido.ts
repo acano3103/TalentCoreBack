@@ -84,12 +84,24 @@ export interface EntradaRevision {
     fueraDeAlcance: number[];
     canalesForzados: readonly string[];
     plantillasWhatsApp: unknown;
+    costoEstimado?: number | null;
+    moneda?: string | null;
+    tope?: TopeRevision | null;
     vigenteHasta: Date | null;
     ahora: Date;
     esAviso: boolean;
     titulo: string;
     resumen: string;
     cuerpo: string;
+}
+
+export interface TopeRevision {
+    topeMensual: number;
+    consumido: number;
+    porcentaje: number;
+    accion: string;
+    estado: 'OK' | 'AVISO' | 'AL_TOPE';
+    bloqueaEnvio: boolean;
 }
 
 export interface RevisionComunicado {
@@ -102,7 +114,9 @@ export interface RevisionComunicado {
     whatsapp: {
         aplica: boolean;
         plantillaConfigurada: boolean;
-        tope: null;
+        costoEstimado: number | null;
+        moneda: string | null;
+        tope: TopeRevision | null;
     };
     vigencia: {
         definida: boolean;
@@ -140,7 +154,9 @@ export function armarRevision(entrada: EntradaRevision): RevisionComunicado {
         whatsapp: {
             aplica: whatsappAplica,
             plantillaConfigurada: plantilla,
-            tope: null,
+            costoEstimado: entrada.costoEstimado ?? null,
+            moneda: entrada.moneda ?? null,
+            tope: entrada.tope ?? null,
         },
         vigencia: {
             definida,

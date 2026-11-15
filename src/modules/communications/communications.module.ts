@@ -9,6 +9,7 @@ import { NotificationCenterModule } from './notification-center/notification-cen
 import { PublicLinksModule } from './public-links/public-links.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { StaffClassificationModule } from './staff-classification/staff-classification.module';
+import { WhatsappUsageModule } from './whatsapp-usage/whatsapp-usage.module';
 
 @Module({
     imports: [
@@ -22,6 +23,7 @@ import { StaffClassificationModule } from './staff-classification/staff-classifi
         PublicLinksModule,
         KioskCommsModule,
         RemindersModule,
+        WhatsappUsageModule,
     ],
     exports: [CapabilitiesModule, StaffClassificationModule, ChannelsModule, AudiencesModule, AnnouncementsModule, MeModule],
 })

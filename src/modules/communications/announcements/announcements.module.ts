@@ -10,9 +10,10 @@ import { AnnouncementsController } from './announcements.controller';
 import { AnnouncementsService } from './announcements.service';
 import { CommsFilesController } from './comms-files.controller';
 import { CommsStorageService } from './comms-storage.service';
+import { WhatsappUsageModule } from '../whatsapp-usage/whatsapp-usage.module';
 
 @Module({
-    imports: [CapabilitiesModule, AudiencesModule, ChannelsModule, DeliveryModule, ExcelExportModule],
+    imports: [CapabilitiesModule, AudiencesModule, ChannelsModule, DeliveryModule, ExcelExportModule, WhatsappUsageModule],
     controllers: [AnnouncementsController, AnnouncementAnalyticsController, CommsFilesController],
     providers: [AnnouncementsService, AnnouncementAnalyticsService, CommsStorageService],
     exports: [CommsStorageService],

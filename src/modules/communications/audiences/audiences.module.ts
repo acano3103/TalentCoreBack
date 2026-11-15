@@ -7,9 +7,10 @@ import { AudiencePreviewStore, crearPreviewStore } from './audience-preview.stor
 import { AudienceResolverService } from './audience-resolver.service';
 import { AudiencesController } from './audiences.controller';
 import { AudiencesService } from './audiences.service';
+import { WhatsappUsageModule } from '../whatsapp-usage/whatsapp-usage.module';
 
 @Module({
-    imports: [CapabilitiesModule, ChannelsModule],
+    imports: [CapabilitiesModule, ChannelsModule, WhatsappUsageModule],
     controllers: [AudiencesController],
     providers: [
         AudienceResolverService,

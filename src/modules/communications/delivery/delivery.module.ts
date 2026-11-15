@@ -11,6 +11,7 @@ import { CommsDispatchProcessor } from './comms-dispatch.processor';
 import { CommsEscalationProcessor } from './comms-escalation.processor';
 import { GupshupStatusController } from './gupshup-status.controller';
 import { GupshupStatusService } from './gupshup-status.service';
+import { WhatsappUsageModule } from '../whatsapp-usage/whatsapp-usage.module';
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { GupshupStatusService } from './gupshup-status.service';
         CapabilitiesModule,
         AudiencesModule,
         ChannelsModule,
+        WhatsappUsageModule,
         BullModule.forRootAsync({
             imports: [ConfigModule],
             inject: [ConfigService],

@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
@@ -26,6 +26,7 @@ import { canalesParaEnvio } from './politica-canal';
 import { FilaPrecioWa, precioVigente } from './precio-wa';
 import { minutosDeReloj } from './silencio';
 import { whatsappBloqueado } from './tope-wa';
+import { WhatsAppCapService } from '../whatsapp-usage/whatsapp-cap.service';
 
 const TRANSACCION = { maxWait: 15_000, timeout: 60_000 };
 const ORIGEN = 'COMUNICADO';
@@ -107,6 +108,7 @@ export class AnnouncementDispatchService {
         private readonly config: ConfigService,
         @InjectQueue(COLA_ENVIO) private readonly colaEnvio: Queue,
         @InjectQueue(COLA_ESCALAMIENTO) private readonly colaEscala: Queue,
+        @Optional() @Inject(WhatsAppCapService) private readonly caps?: WhatsAppCapService,
     ) {}
 
     ahora(): Date {
@@ -787,6 +789,7 @@ export class AnnouncementDispatchService {
                 EnviadoEn: ahora,
             },
         });
+        if (!fallido) await this.caps?.revisarAviso(ctx.idTenant, ctx.idEmpresa, ahora);
     }
 
     private async precioActual(idTenant: number, ahora: Date, categoria: string): Promise<{ precio: number; moneda: string }> {
@@ -804,6 +807,7 @@ export class AnnouncementDispatchService {
     }
 
     private async bloqueado(ctx: ContextoEnvio): Promise<boolean> {
+        if (this.caps) return !(await this.caps.canSend(ctx.idTenant, ctx.idEmpresa, ctx.prioridad, this.ahora()));
         const ahora = this.ahora();
         const inicio = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), 1));
         const [suma, topes] = await Promise.all([

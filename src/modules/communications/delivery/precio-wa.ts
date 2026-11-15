@@ -1,4 +1,5 @@
 export interface FilaPrecioWa {
+    id?: number;
     idTenant: number | null;
     precioBase: number;
     preciosCategoria: unknown;
@@ -22,12 +23,19 @@ export function precioVigente(filas: readonly FilaPrecioWa[], idTenant: number, 
     const delTenant = vigentes.filter((fila) => fila.idTenant === idTenant);
     const pool = delTenant.length ? delTenant : vigentes.filter((fila) => fila.idTenant == null);
     if (!pool.length) return null;
-    const elegido = pool.reduce((mejor, fila) => (fila.vigenteDesde.getTime() > mejor.vigenteDesde.getTime() ? fila : mejor));
+    const elegido = pool.reduce((mejor, fila) => (esMasNueva(fila, mejor) ? fila : mejor));
     const deCategoria = leerCategoria(elegido.preciosCategoria, categoria);
     return {
         precio: deCategoria ?? elegido.precioBase,
         moneda: elegido.moneda?.trim() || 'MXN',
     };
+}
+
+/** A igual vigencia gana el id más alto. Sin id se conserva el primero, como hasta ahora. */
+function esMasNueva(candidata: FilaPrecioWa, actual: FilaPrecioWa): boolean {
+    const delta = candidata.vigenteDesde.getTime() - actual.vigenteDesde.getTime();
+    if (delta !== 0) return delta > 0;
+    return (candidata.id ?? -1) > (actual.id ?? -1);
 }
 
 function leerCategoria(valor: unknown, categoria: string): number | null {

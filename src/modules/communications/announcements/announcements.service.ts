@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from 'generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -23,6 +23,7 @@ import {
     vigenciaAviso,
 } from './contenido';
 import { AnnouncementDispatchService } from '../delivery/announcement-dispatch.service';
+import { WhatsAppCapService } from '../whatsapp-usage/whatsapp-cap.service';
 import { ProgramarComunicadoDto } from '../delivery/dto/programar-comunicado.dto';
 import { ActualizarComunicadoDto, CrearComunicadoDto, NuevaVersionDto } from './dto/comunicado.dto';
 import { ListarComunicadosQuery } from './dto/listar-comunicados.query';
@@ -53,6 +54,7 @@ export class AnnouncementsService {
         private readonly canales: EffectiveChannelService,
         private readonly storage: CommsStorageService,
         @Optional() private readonly envio?: AnnouncementDispatchService,
+        @Optional() @Inject(WhatsAppCapService) private readonly caps?: WhatsAppCapService,
     ) {}
 
     async tipos(activeUser: ActiveUserDto, companyId: number) {
@@ -320,13 +322,21 @@ export class AnnouncementsService {
             where: { idEmpresa: companyId },
             select: { PlantillasWhatsApp: true },
         });
+        const canalesForzados = leerCanales(actual.CanalesForzados);
+        const destinatariosWa = canalesForzados.includes('WHATSAPP') ? resuelto.ids.length : (canales?.resumen.WHATSAPP ?? 0);
+        const extra = this.caps
+            ? await this.caps.paraRevision(activeUser.idTenant, companyId, actual.Prioridad, destinatariosWa)
+            : { costoEstimado: null, moneda: null, tope: null };
         return armarRevision({
             total: resuelto.ids.length,
             sinCanal: canales?.resumen.SIN_CANAL ?? 0,
             porCanal: canales?.resumen ?? resumirCanales([]),
             fueraDeAlcance: resuelto.fueraDeAlcance,
-            canalesForzados: leerCanales(actual.CanalesForzados),
+            canalesForzados,
             plantillasWhatsApp: config?.PlantillasWhatsApp ?? null,
+            costoEstimado: extra.costoEstimado,
+            moneda: extra.moneda,
+            tope: extra.tope,
             vigenteHasta: actual.VigenteHasta,
             ahora: new Date(),
             esAviso: tipo.EsCorto,

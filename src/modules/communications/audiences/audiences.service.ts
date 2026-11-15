@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma } from 'generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -12,6 +12,8 @@ import { AudienceResolverService } from './audience-resolver.service';
 import { CriteriosAudiencia, normalizarCriterios, ResultadoAudiencia } from './criterios';
 import { GuardarAudienciaDto } from './dto/guardar-audiencia.dto';
 import { ActualizarAudienciaDto } from './dto/actualizar-audiencia.dto';
+import { WhatsAppCapService } from '../whatsapp-usage/whatsapp-cap.service';
+import { EstadoTope } from '../whatsapp-usage/periodo';
 
 const TRANSACCION = { maxWait: 15_000, timeout: 60_000 };
 const MUESTRA = 20;
@@ -35,6 +37,7 @@ export interface VistaPrevia {
         SIN_CANAL: number;
     };
     costoWhatsAppEstimado: string | null;
+    topeWhatsApp: EstadoTope | null;
     muestra: PersonaAudiencia[];
     fueraDeAlcance: number[];
     previewId: string;
@@ -74,6 +77,7 @@ export class AudiencesService {
         private readonly canales: EffectiveChannelService,
         private readonly previews: AudiencePreviewStore,
         private readonly catalogoOpciones: AudienceOptionsService,
+        @Optional() @Inject(WhatsAppCapService) private readonly caps?: WhatsAppCapService,
     ) {}
 
     async preview(activeUser: ActiveUserDto, companyId: number, criterios: CriteriosAudiencia): Promise<VistaPrevia> {
@@ -95,6 +99,7 @@ export class AudiencesService {
             total: resultado.ids.length,
             porCanal: canales.resumen,
             costoWhatsAppEstimado: precio ? multiplicarPrecio(precio, canales.resumen.WHATSAPP) : null,
+            topeWhatsApp: this.caps ? await this.caps.estado(activeUser.idTenant, companyId, 'NORMAL') : null,
             muestra: canales.porEmpleado.slice(0, MUESTRA).map((fila) => aPersona(fila, nombres.get(fila.idEmpleado))),
             fueraDeAlcance: resultado.fueraDeAlcance,
             previewId,

@@ -79,4 +79,16 @@ describe('CommsCapabilityGuard', () => {
             tiposPermitidos: ['AVISO_EQUIPO'],
         });
     });
+
+    it('acepta cualquiera de las capacidades y se queda con el alcance más amplio', async () => {
+        getAllAndOverride.mockReturnValue(['CFG_CANALES', 'COM_VER_ANALITICA']);
+        getEffective.mockResolvedValue([
+            { codigo: 'COM_VER_ANALITICA', alcance: 'EMPRESAS', referencias: [10], tiposPermitidos: null },
+            { codigo: 'CFG_CANALES', alcance: 'TENANT', referencias: null, tiposPermitidos: null },
+        ]);
+        const { request, context } = contexto({ companyId: '9' });
+
+        await expect(guard.canActivate(context)).resolves.toBe(true);
+        expect(request.commsScope).toMatchObject({ capacidad: 'CFG_CANALES', alcance: 'TENANT' });
+    });
 });

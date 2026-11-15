@@ -3233,6 +3233,7 @@ model WaTopes {
   TopeMensual Decimal     @db.Decimal(12, 2)
   Accion      String      @default("BLOQUEAR") @db.VarChar(20)
   Activo      Boolean     @default(true)
+  Aviso80Mes  String?     @db.Char(7)
   CatEmpresas CatEmpresas? @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_WaTopes_Empresa")
 
   @@index([idTenant], map: "IDX_WaTopes_Tenant")

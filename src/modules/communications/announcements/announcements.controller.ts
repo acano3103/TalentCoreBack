@@ -189,7 +189,8 @@ export class AnnouncementsController {
     @Get('announcements/:id/review')
     @ApiOperation({
         summary: 'Checklist antes de enviar',
-        description: 'Audiencia, personas sin canal, plantilla de WhatsApp, vigencia y contenido. El tope de WhatsApp queda en null hasta CA11.',
+        description:
+            'Audiencia, personas sin canal, plantilla de WhatsApp, costo estimado, estado del tope, vigencia y contenido. El tope no bloquea el checklist: CRÍTICA siempre puede enviarse.',
     })
     @ApiResponse({ status: 200, description: 'Checklist. No envía el comunicado.' })
     revision(
