@@ -12,6 +12,7 @@ import { ActualizarAudienciaDto } from './dto/actualizar-audiencia.dto';
 import { CriteriosAudienciaDto } from './dto/criterios-audiencia.dto';
 import { GuardarAudienciaDto } from './dto/guardar-audiencia.dto';
 import { PreviewRecipientsQueryDto } from './dto/preview-recipients.query';
+import { EJEMPLO_PREVIEW } from '../housekeeping/ejemplos-swagger';
 
 @ApiTags('Comunicación interna')
 @ApiBearerAuth()
@@ -27,7 +28,7 @@ export class AudiencesController {
         summary: 'Vista previa de una audiencia',
         description: 'Resuelve los criterios dentro del alcance y guarda los ids 15 minutos. La audiencia dinámica no se persiste.',
     })
-    @ApiResponse({ status: 200, description: 'Conteo, canales, costo estimado y una muestra de 20 personas.' })
+    @ApiResponse({ status: 200, description: 'Conteo, canales, costo estimado y una muestra de 20 personas.', schema: { example: EJEMPLO_PREVIEW } })
     @ApiResponse({ status: 400, description: 'AUDIENCIA_VACIA: la audiencia no incluye a nadie.' })
     @ApiResponse({ status: 403, description: 'SIN_CAPACIDAD o FUERA_DE_ALCANCE si no queda nadie dentro del alcance.' })
     preview(

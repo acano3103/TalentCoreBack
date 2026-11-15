@@ -45,6 +45,10 @@ async function bootstrap() {
     .setDescription('API documentation for the second version of the Talent Core backend in Nest JS')
     .setVersion('2.0')
     .addBearerAuth()
+    .addTag(
+      'Comunicación interna',
+      'Comunicados, audiencias, acuses, enlace seguro, kiosco y consumo de WhatsApp. Las respuestas exitosas llegan como { success, data }.',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ContextoAlcance } from '../capabilities/alcance';
 import { leerNumero } from '../comms-rows';
-import { consultaAudiencia, consultaEmpleadoEnAlcance } from './alcance-sql';
+import { consultaAudiencia, consultaEmpleadoEnAlcance, consultaEmpleadoEnCriterios } from './alcance-sql';
 import {
     CriteriosAudiencia,
     empresasPermitidas,
@@ -29,6 +29,14 @@ export class AudienceResolverService {
 
     async enAlcance(idEmpleado: number, scope: ContextoAlcance): Promise<boolean> {
         const filas = await this.prisma.$queryRaw<{ idEmpleado: number }[]>(consultaEmpleadoEnAlcance(idEmpleado, scope));
+        return filas.length > 0;
+    }
+
+    /** Criterios congelados de un comunicado, sin volver a aplicar el alcance del publicador. */
+    async coincideConCriterios(idEmpleado: number, criterios: CriteriosAudiencia, scope: ContextoAlcance): Promise<boolean> {
+        const filas = await this.prisma.$queryRaw<{ idEmpleado: number }[]>(
+            consultaEmpleadoEnCriterios(idEmpleado, normalizarCriterios(criterios), scope),
+        );
         return filas.length > 0;
     }
 

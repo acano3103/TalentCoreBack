@@ -1,5 +1,6 @@
 import { Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Query, Res, Body, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { ExcelExportService } from 'src/common/services/excel-export.service';
@@ -8,6 +9,8 @@ import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { CompanyTenantGuard } from 'src/modules/auth/guards/company-tenant.guard';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { CommsCapabilityGuard } from '../capabilities/comms-capability.guard';
+import { CommsThrottlerGuard } from '../housekeeping/comms-throttler.guard';
+import { EJEMPLO_ANALITICA, EJEMPLO_REENVIO } from '../housekeeping/ejemplos-swagger';
 import { AnnouncementAnalyticsService } from './announcement-analytics.service';
 import { DesgloseQuery, DestinatariosQuery, ReenviarDto, ResponderPreguntaDto } from './dto/analitica.dto';
 
@@ -31,7 +34,7 @@ export class AnnouncementAnalyticsController {
         summary: 'Analítica de un comunicado',
         description: 'KPIs, curva de las primeras 72 horas y entrega por canal. Sale de los destinatarios congelados y de los acuses.',
     })
-    @ApiResponse({ status: 200, description: 'Indicadores del comunicado.' })
+    @ApiResponse({ status: 200, description: 'Indicadores del comunicado.', schema: { example: EJEMPLO_ANALITICA } })
     @ApiResponse({ status: 401, description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 403, description: 'SIN_CAPACIDAD.' })
     @ApiResponse({ status: 404, description: 'No existe o está fuera de tu alcance.' })
@@ -94,12 +97,16 @@ export class AnnouncementAnalyticsController {
 
     @Post('announcements/:id/resend')
     @HttpCode(HttpStatus.OK)
+    @Throttle({ default: { limit: 10, ttl: 60_000 } })
+    @UseGuards(CommsThrottlerGuard)
     @ApiOperation({
         summary: 'Reenviar a quien sigue pendiente',
-        description: 'Encola de nuevo con los canales efectivos de ahora. Respeta el silencio y el tope de WhatsApp, y suma un recordatorio.',
+        description: 'Encola de nuevo con los canales efectivos de ahora. Respeta el silencio y el tope de WhatsApp, y suma un recordatorio. Máximo 10 reenvíos por minuto.',
     })
-    @ApiResponse({ status: 200, description: 'Personas reencoladas.' })
+    @ApiBody({ schema: { example: { alcance: 'PENDIENTES' } } })
+    @ApiResponse({ status: 200, description: 'Personas reencoladas.', schema: { example: EJEMPLO_REENVIO } })
     @ApiResponse({ status: 409, description: 'ESTADO_INVALIDO.' })
+    @ApiResponse({ status: 429, description: 'DEMASIADAS_SOLICITUDES.' })
     reenviar(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,

@@ -28,6 +28,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CoursesModule } from './modules/courses/courses.module';
 import { RoleplaysModule } from './modules/roleplays/roleplays.module';
@@ -65,6 +66,10 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
       validationSchema: envValidationSchema,
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 20 }],
+      errorMessage: 'Demasiadas solicitudes. Espera un momento e intenta de nuevo.',
+    }),
     EventEmitterModule.forRoot({ ignoreErrors: true }),
     ServeStaticModule.forRoot(
       {

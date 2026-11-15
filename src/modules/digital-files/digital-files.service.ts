@@ -1,6 +1,6 @@
 import { Inject, Injectable, ForbiddenException, NotFoundException, UnauthorizedException, InternalServerErrorException, BadRequestException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { COMMS_EVENTO_DOCUMENTO, emitirHecho } from 'src/common/events/comms-hechos';
+import { COMMS_EVENTO_DOCUMENTO, COMMS_EVENTO_EMPLEADO, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -1573,6 +1573,13 @@ export class DigitalFilesService {
       this.notifications.notify.bind(this.notifications),
     );
 
+    emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+      tipo: 'ALTA',
+      idTenant: activeUser.idTenant,
+      idEmpresa: companyId,
+      idEmpleado: result.idEmpleado,
+    });
+
     await this.employeeService.syncAllPendingToArtemis(activeUser, companyId)
 
     return {
@@ -2071,6 +2078,13 @@ export class DigitalFilesService {
         }
 
         const idEmpleado = empleadoCreado.idEmpleado;
+
+        emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+          tipo: 'ALTA',
+          idTenant: user.idTenant,
+          idEmpresa: companyId,
+          idEmpleado,
+        });
 
         // 3. Actualizar RFC y número de seguridad social
         await this.prisma.empleados.update({

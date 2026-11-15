@@ -9,6 +9,7 @@ import { CompanyTenantGuard } from 'src/modules/auth/guards/company-tenant.guard
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { CommsCapabilityGuard } from '../capabilities/comms-capability.guard';
 import { RequireCapability } from '../capabilities/require-capability.decorator';
+import { EJEMPLO_WHATSAPP } from '../housekeeping/ejemplos-swagger';
 import { ActualizarTopeDto, MesesWhatsappQuery, ResumenWhatsappQuery } from './dto/whatsapp-usage.query';
 import { WhatsappUsageService } from './whatsapp-usage.service';
 
@@ -28,7 +29,7 @@ export class WhatsappUsageController {
         summary: 'Resumen de consumo de WhatsApp',
         description: 'Mensajes, costo congelado, precio vigente y estado del tope. Solo el tenant de quien consulta.',
     })
-    @ApiResponse({ status: 200, description: 'Resumen del mes.' })
+    @ApiResponse({ status: 200, description: 'Resumen del mes.', schema: { example: EJEMPLO_WHATSAPP } })
     @ApiResponse({ status: 403, description: 'SIN_CAPACIDAD o FUERA_DE_ALCANCE.' })
     resumen(
         @GetActiveUser() activeUser: ActiveUserDto,

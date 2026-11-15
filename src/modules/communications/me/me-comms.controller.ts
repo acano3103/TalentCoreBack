@@ -7,6 +7,7 @@ import { CompanyTenantGuard } from 'src/modules/auth/guards/company-tenant.guard
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { contextoCliente, SolicitudCliente } from './cliente-http';
 import { BandejaCommsQuery, PreguntaComunicadoDto } from './dto/me-comms.dto';
+import { EJEMPLO_ACUSE, EJEMPLO_BANDEJA } from '../housekeeping/ejemplos-swagger';
 import { MeCommsService } from './me-comms.service';
 
 @ApiTags('Comunicación interna')
@@ -29,7 +30,7 @@ export class MeCommsController {
         summary: 'Mis comunicados',
         description: 'Pendientes son los que piden acuse, siguen vigentes y aún no se confirman.',
     })
-    @ApiResponse({ status: 200, description: 'Página de la bandeja.' })
+    @ApiResponse({ status: 200, description: 'Página de la bandeja.', schema: { example: EJEMPLO_BANDEJA } })
     listar(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
@@ -58,7 +59,7 @@ export class MeCommsController {
     @HttpCode(HttpStatus.OK)
     @ApiHeader({ name: 'X-Client', required: false, description: 'mobile registra el canal APP. Si no viene, el canal es WEB.' })
     @ApiOperation({ summary: 'Confirmar de enterado', description: 'Es idempotente para la versión vigente.' })
-    @ApiResponse({ status: 200, description: 'confirmadoEn, version y canal.' })
+    @ApiResponse({ status: 200, description: 'confirmadoEn, version y canal.', schema: { example: { ...EJEMPLO_ACUSE, canal: 'WEB' } } })
     @ApiResponse({ status: 409, description: 'ACUSE_NO_REQUERIDO o ESTADO_INVALIDO.' })
     acusar(
         @GetActiveUser() activeUser: ActiveUserDto,

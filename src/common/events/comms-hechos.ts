@@ -7,6 +7,17 @@ export const COMMS_EVENTO_DOCUMENTO = 'comms.documento';
 export const COMMS_EVENTO_CURSO = 'comms.curso';
 export const COMMS_EVENTO_APROBACION = 'comms.aprobacion';
 export const COMMS_EVENTO_ESTATUS = 'comms.estatus';
+export const COMMS_EVENTO_EMPLEADO = 'comms.empleado';
+
+export type TipoHechoEmpleado = 'ALTA' | 'MOVIMIENTO' | 'BAJA';
+
+/** Alta, cambio de puesto/ubicación/jefe/empresa, o baja. El emisor no decide la audiencia. */
+export interface HechoEmpleado {
+    tipo: TipoHechoEmpleado;
+    idTenant: number;
+    idEmpresa: number;
+    idEmpleado: number;
+}
 
 export type TipoDocumento = 'FALTANTE' | 'POR_VENCER' | 'RECHAZADO';
 export type TipoCurso = 'ASIGNADO' | 'POR_VENCER' | 'ATRASADO';

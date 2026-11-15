@@ -73,7 +73,16 @@ export function consultaEmpleadoEnAlcance(idEmpleado: number, scope: ContextoAlc
     `;
 }
 
-export function consultaAudiencia(criterios: CriteriosAudiencia, scope: ContextoAlcance): Prisma.Sql {
+/** Un empleado contra los criterios guardados. El alcance lo arma quien llama. */
+export function consultaEmpleadoEnCriterios(
+    idEmpleado: number,
+    criterios: CriteriosAudiencia,
+    scope: ContextoAlcance,
+): Prisma.Sql {
+    return consultaAudiencia(criterios, scope, idEmpleado);
+}
+
+export function consultaAudiencia(criterios: CriteriosAudiencia, scope: ContextoAlcance, soloId?: number): Prisma.Sql {
     const ctes = [cteAlcance(scope), cteJefes(criterios.jefes ?? [], scope)].filter(
         (cte): cte is Prisma.Sql => cte != null,
     );
@@ -84,6 +93,7 @@ export function consultaAudiencia(criterios: CriteriosAudiencia, scope: Contexto
         filtroAlcance(scope),
         ...filtrosCriterio(criterios, scope),
     ];
+    if (soloId != null) base.push(Prisma.sql`e.idEmpleado = ${soloId}`);
     if (criterios.excluir?.length) {
         base.push(Prisma.sql`e.idEmpleado NOT IN (${Prisma.join(criterios.excluir)})`);
     }
@@ -110,6 +120,7 @@ export function consultaAudiencia(criterios: CriteriosAudiencia, scope: Contexto
         filtroAlcance(scope),
         Prisma.sql`e.idEmpleado IN (${Prisma.join(criterios.agregarEmpleados)})`,
     ];
+    if (soloId != null) alta.push(Prisma.sql`e.idEmpleado = ${soloId}`);
     const selectAlta = Prisma.sql`
         SELECT e.idEmpleado AS idEmpleado
         FROM Empleados e

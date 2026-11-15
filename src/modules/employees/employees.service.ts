@@ -1,4 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_EMPLEADO, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeeQueryResult, EmployeeSchedule, SubordinateResponse } from './interfaces/employee.interface';
 import { SaveSalaryDto } from './dto/save-salary.dto';
@@ -16,6 +18,7 @@ export class EmployeesService {
   constructor(
     private prisma: PrismaService,
     private integrationFactory: IntegrationsFactory,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   // Método que obtiene un empleado por su id con horarios, sedes autorizadas y DIDs
@@ -337,6 +340,17 @@ export class EmployeesService {
         where: { idEmpleado: employeeId },
         data,
       });
+
+      const movioPuesto = employeeData.idPuesto !== undefined && employeeData.idPuesto !== employee.idPuesto;
+      const movioSite = employeeData.idSite !== undefined && employeeData.idSite !== employee.idSite;
+      if ((movioPuesto || movioSite) && employee.idTenant) {
+        emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+          tipo: 'MOVIMIENTO',
+          idTenant: employee.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: employeeId,
+        });
+      }
 
       this.logger.log(`Employee ${employeeId} general information updated by user ${activeUser?.id ?? 'unknown'}`);
 
@@ -957,7 +971,7 @@ export class EmployeesService {
         idTenant: user.idTenant,
         activo: true,
       },
-      select: { idEmpleado: true, nombre: true, primerApellido: true },
+      select: { idEmpleado: true, nombre: true, primerApellido: true, idJefeInmediato: true },
     });
 
     if (!employee) throw new NotFoundException('Empleado no encontrado.');
@@ -985,6 +999,15 @@ export class EmployeesService {
         AND idEmpresa = ${companyId}
         AND idTenant = ${user.idTenant};
     `;
+
+    if (employee.idJefeInmediato !== immediateBossId) {
+      emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+        tipo: 'MOVIMIENTO',
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        idEmpleado: employeeId,
+      });
+    }
 
     return {
       success: true,

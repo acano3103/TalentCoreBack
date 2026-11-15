@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
+import { COMMS_EVENTO_EMPLEADO, COMMS_EVENTO_ESTATUS, emitirHecho, HechoEmpleado } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateInternalMovementDto } from './dto/create-internal-movement.dto';
@@ -708,7 +708,8 @@ export class InternalMovementsService {
     idMovimiento: number,
     user?: ActiveUserDto,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    let hecho: HechoEmpleado | null = null;
+    const resultado = await this.prisma.$transaction(async (tx) => {
       // 1. Recuperar la solicitud del movimiento.
       const movimiento = await tx.movimientosInternos.findUnique({
         where: { idMovimiento },
@@ -759,6 +760,13 @@ export class InternalMovementsService {
             activo: false,
           },
         });
+
+        hecho = {
+          tipo: 'BAJA',
+          idTenant: movimiento.idTenant,
+          idEmpresa: movimiento.idEmpresa,
+          idEmpleado: movimiento.idEmpleado,
+        };
 
         await tx.historicoMovimientos.create({
           data: {
@@ -890,6 +898,20 @@ export class InternalMovementsService {
         });
       }
 
+      if (
+        movimiento.idPuestoNuevo != null ||
+        movimiento.idJefeNuevo != null ||
+        movimiento.idEmpresaNueva != null ||
+        movimiento.idSiteNuevo != null
+      ) {
+        hecho = {
+          tipo: 'MOVIMIENTO',
+          idTenant: movimiento.idTenant,
+          idEmpresa: movimiento.idEmpresaNueva ?? movimiento.idEmpresa,
+          idEmpleado: movimiento.idEmpleado,
+        };
+      }
+
       return {
         message: 'Movimiento aplicado correctamente al empleado.',
         data: {
@@ -898,6 +920,8 @@ export class InternalMovementsService {
         },
       };
     });
+    if (hecho) emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, hecho);
+    return resultado;
   }
 
   // ----------------------------------------------------------

@@ -8,7 +8,7 @@ import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { NotificationDispatcher } from 'src/modules/notifications/notification.dispatcher';
 import { CommsPayload } from 'src/modules/notifications/interfaces/comms-dispatch.interface';
 import { WebsocketGateway } from 'src/modules/notifications/gateways/websockets.gateway';
-import { errorComms } from '../comms-http';
+import { errorComms, esP2002 } from '../comms-http';
 import { CommsCapabilityService } from '../capabilities/comms-capability.service';
 import { AudienceResolverService } from '../audiences/audience-resolver.service';
 import { CriteriosAudiencia, criteriosVacios, normalizarCriterios } from '../audiences/criterios';
@@ -898,6 +898,54 @@ export class AnnouncementDispatchService {
             });
         } catch (error) {
             this.logger.warn(`No se emitió el progreso del comunicado ${ctx.idComunicado}: ${mensajeError(error)}`);
+        }
+    }
+
+    /**
+     * Suma a una persona que entró después del envío.
+     * No duplica si ya era destinataria. Devuelve false si el comunicado ya no está vigente.
+     */
+    async incorporarEmpleado(idComunicado: number, idEmpleado: number): Promise<boolean> {
+        const fila = await this.prisma.comComunicados.findUnique({ where: { idComunicado } });
+        if (!fila || fila.Estado !== 'ENVIADO') return false;
+        if (fila.VigenteHasta && fila.VigenteHasta.getTime() <= this.ahora().getTime()) return false;
+        const config = await this.prisma.comConfigEmpresa.findUnique({ where: { idEmpresa: fila.idEmpresa } });
+        const efectivos = await this.canales.forEmployees([idEmpleado], fila.idEmpresa);
+        const porEmpleado = new Map(efectivos.porEmpleado.map((item) => [item.idEmpleado, item.canales]));
+        const personas = await this.armarPersonas(
+            [idEmpleado],
+            porEmpleado,
+            listaONull(fila.CanalesForzados),
+            fila.Prioridad,
+            config?.PoliticaWhatsApp ?? 'IMPORTANTE_CRITICA',
+        );
+        const persona = personas[0];
+        if (!persona) return false;
+        try {
+            const dest = await this.prisma.comDestinatarios.create({
+                data: {
+                    idComunicado,
+                    idEmpleado: persona.idEmpleado,
+                    idUsuario: persona.idUsuario,
+                    idSite: persona.idSite,
+                    idArea: persona.idArea,
+                    idPuesto: persona.idPuesto,
+                    idTipoPersonal: persona.idTipoPersonal,
+                    idJefe: persona.idJefe,
+                    CanalesEfectivos: persona.canales as unknown as Prisma.InputJsonValue,
+                    Estado: persona.canales.length ? 'PENDIENTE' : 'SIN_CANAL',
+                    UltimoIntentoEn: persona.canales.length ? null : this.ahora(),
+                },
+            });
+            await this.prisma.comComunicados.update({
+                where: { idComunicado },
+                data: { TotalDestinatarios: { increment: 1 } },
+            });
+            if (dest.Estado !== 'SIN_CANAL') await this.procesarLote(idComunicado, [dest.idDestinatario]);
+            return true;
+        } catch (error) {
+            if (esP2002(error)) return false;
+            throw error;
         }
     }
 

@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { HttpExceptionFilter } from 'src/common/filters/http-exception.filter';
 import { GetActiveUser } from 'src/modules/auth/decorators/active-user.decorator';
@@ -28,6 +29,8 @@ import { CompanyTenantGuard } from 'src/modules/auth/guards/company-tenant.guard
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { CommsCapabilityGuard } from '../capabilities/comms-capability.guard';
 import { RequireCapability } from '../capabilities/require-capability.decorator';
+import { CommsThrottlerGuard } from '../housekeeping/comms-throttler.guard';
+import { EJEMPLO_BORRADOR, EJEMPLO_ENVIO, EJEMPLO_REVISION } from '../housekeeping/ejemplos-swagger';
 import { MAX_ADJUNTO_BYTES, MAX_PORTADA_BYTES } from './adjuntos';
 import { AnnouncementsService } from './announcements.service';
 import { ProgramarComunicadoDto } from '../delivery/dto/programar-comunicado.dto';
@@ -105,7 +108,20 @@ export class AnnouncementsController {
         summary: 'Crear un borrador',
         description: 'Crea la versión 1 y aplica los valores por defecto del tipo. No envía ni congela destinatarios.',
     })
-    @ApiResponse({ status: 201, description: 'Borrador creado.' })
+    @ApiBody({
+        schema: {
+            example: {
+                idTipo: 1,
+                titulo: 'Nuevo horario de caja',
+                resumen: 'A partir del lunes la caja abre a las 9.',
+                cuerpoHtml: '<p>A partir del lunes la caja abre a las 9.</p>',
+                acuseModo: 'LEI_ENTENDI',
+                incluirNuevos: true,
+                criteriosAudiencia: { ubicaciones: [4] },
+            },
+        },
+    })
+    @ApiResponse({ status: 201, description: 'Borrador creado.', schema: { example: EJEMPLO_BORRADOR } })
     @ApiResponse({ status: 400, description: 'CONTENIDO_INVALIDO.' })
     @ApiResponse({ status: 403, description: 'TIPO_NO_PERMITIDO, PRIORIDAD_NO_PERMITIDA o SIN_CAPACIDAD.' })
     crear(
@@ -192,7 +208,7 @@ export class AnnouncementsController {
         description:
             'Audiencia, personas sin canal, plantilla de WhatsApp, costo estimado, estado del tope, vigencia y contenido. El tope no bloquea el checklist: CRÍTICA siempre puede enviarse.',
     })
-    @ApiResponse({ status: 200, description: 'Checklist. No envía el comunicado.' })
+    @ApiResponse({ status: 200, description: 'Checklist. No envía el comunicado.', schema: { example: EJEMPLO_REVISION } })
     revision(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
@@ -256,14 +272,17 @@ export class AnnouncementsController {
 
     @Post('announcements/:id/send')
     @HttpCode(HttpStatus.OK)
+    @Throttle({ default: { limit: 10, ttl: 60_000 } })
+    @UseGuards(CommsThrottlerGuard)
     @ApiOperation({
         summary: 'Enviar un comunicado',
-        description: 'Congela la audiencia y encola la entrega por canal. Repetir el envío no duplica destinatarios.',
+        description: 'Congela la audiencia y encola la entrega por canal. Repetir el envío no duplica destinatarios. Máximo 10 envíos por minuto.',
     })
-    @ApiResponse({ status: 200, description: 'Envío aceptado o ya realizado.' })
+    @ApiResponse({ status: 200, description: 'Envío aceptado o ya realizado.', schema: { example: EJEMPLO_ENVIO } })
     @ApiResponse({ status: 400, description: 'AUDIENCIA_VACIA o CONTENIDO_INVALIDO.' })
     @ApiResponse({ status: 403, description: 'PRIORIDAD_NO_PERMITIDA o FUERA_DE_ALCANCE.' })
     @ApiResponse({ status: 409, description: 'ESTADO_INVALIDO o PLANTILLA_WA_NO_CONFIGURADA.' })
+    @ApiResponse({ status: 429, description: 'DEMASIADAS_SOLICITUDES.' })
     enviar(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
