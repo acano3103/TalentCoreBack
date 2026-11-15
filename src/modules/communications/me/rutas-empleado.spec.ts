@@ -5,6 +5,7 @@ import { KioskJwtAuthGuard } from 'src/modules/kiosks/kiosk-auth/guards/kiosk-jw
 import { MobileJwtAuthGuard } from 'src/modules/mobile/mobile-auth/guards/mobile-jwt-auth.guard';
 import { CommsCapabilityGuard } from '../capabilities/comms-capability.guard';
 import { KioskCommsController } from '../kiosk-comms/kiosk-comms.controller';
+import { CommsThrottlerGuard } from '../housekeeping/comms-throttler.guard';
 import { LinkThrottleGuard } from '../public-links/link-throttle.guard';
 import { PublicLinksController } from '../public-links/public-links.controller';
 import { contextoCliente } from './cliente-http';
@@ -25,7 +26,7 @@ describe('rutas de CA7', () => {
     });
 
     it('el enlace público no lleva JWT de usuario y el kiosco usa el suyo', () => {
-        expect(Reflect.getMetadata(GUARDS_METADATA, PublicLinksController)).toEqual([LinkThrottleGuard]);
+        expect(Reflect.getMetadata(GUARDS_METADATA, PublicLinksController)).toEqual([LinkThrottleGuard, CommsThrottlerGuard]);
         expect(Reflect.getMetadata(GUARDS_METADATA, KioskCommsController)).toEqual([KioskJwtAuthGuard]);
     });
 

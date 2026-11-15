@@ -70,7 +70,7 @@ export const envValidationSchema = Joi.object({
     COMMS_MEDIA_BASE_PATH: Joi.string().default('comms-media'),
     COMMS_PUBLIC_BASE_URL: Joi.string().allow('').default(''),
     EXPO_ACCESS_TOKEN: Joi.string().optional().allow(''),
-    // Firma o clave del webhook de estados de Gupshup. Si falta, se usa GUPSHUP_API_KEY.
+    // Secreto del webhook de estados de Gupshup. Si falta, el callback responde 503.
     GUPSHUP_WEBHOOK_SECRET: Joi.string().optional().allow(''),
     // Vista previa de audiencias. Sin valor se guarda en memoria del proceso.
     REDIS_URL: Joi.string().optional().allow(''),

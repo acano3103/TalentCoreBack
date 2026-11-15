@@ -296,8 +296,11 @@ async function guardarCelda(
     activa: boolean,
     ahora: Date,
 ) {
+    // La matriz nunca escribe categoria NULL. Las filas con NULL son del dispatcher anterior
+    // y el índice único no las distingue, así que no se hace upsert: se busca por id.
     const ya = await tx.preferenciasNotificacionesUsuario.findFirst({
         where: { user_uuid: userUuid, channel_id: channelId, categoria },
+        orderBy: { id: 'asc' },
     });
     if (ya) {
         await tx.preferenciasNotificacionesUsuario.update({

@@ -53,6 +53,18 @@ describe('silencio por turno', () => {
         expect(decision.inmediato).toBe(true);
     });
 
+    it('con el silencio de la empresa apagado no espera al turno', () => {
+        const decision = decisionSilencio({
+            ahora: sabadoNoche,
+            zonaHoraria: zona,
+            turnos: lunes,
+            prioridad: 'NORMAL',
+            canalInmediato: false,
+            silencio: { activo: false, inicio: '21:00', fin: '07:00' },
+        });
+        expect(decision).toEqual({ inmediato: true, en: sabadoNoche });
+    });
+
     it('sin turno usa la ventana de silencio de la empresa', () => {
         const decision = decisionSilencio({
             ahora: sabadoNoche,

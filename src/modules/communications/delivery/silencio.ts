@@ -29,10 +29,11 @@ const ZONA_DEFAULT = 'America/Mexico_City';
 
 /**
  * Fuera del turno del empleado, push, WhatsApp y correo esperan al siguiente inicio.
- * La zona es la de su ubicación. CRÍTICA no espera. Sin turno se usa el silencio de la empresa.
+ * La zona es la de su ubicación. CRÍTICA no espera. Si la empresa apagó el silencio,
+ * tampoco se difiere por turno. Sin turno y con silencio activo, se usa esa ventana.
  */
 export function decisionSilencio(entrada: EntradaSilencio): DecisionSilencio {
-    if (entrada.prioridad === 'CRITICA' || entrada.canalInmediato) {
+    if (entrada.prioridad === 'CRITICA' || entrada.canalInmediato || entrada.silencio?.activo === false) {
         return { inmediato: true, en: entrada.ahora };
     }
     const zona = zonaValida(entrada.zonaHoraria);

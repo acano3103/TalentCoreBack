@@ -1,5 +1,5 @@
 import { createHmac } from 'crypto';
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { errorComms } from '../comms-http';
@@ -9,13 +9,19 @@ const NO_COBRADOS = new Set(['FAILED', 'FAIL', 'UNDELIVERED', 'REJECTED', 'ERROR
 
 @Injectable()
 export class GupshupStatusService {
+    private readonly logger = new Logger(GupshupStatusService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly config: ConfigService,
     ) {}
 
-    async aplicar(headers: Record<string, string | string[] | undefined>, body: unknown): Promise<{ recibido: true }> {
-        this.verificar(headers, body);
+    async aplicar(
+        headers: Record<string, string | string[] | undefined>,
+        body: unknown,
+        token?: string,
+    ): Promise<{ recibido: true }> {
+        this.verificar(headers, body, token);
         const ids = idsMensaje(body);
         const estatus = estatusDe(body);
         if (!ids.length || !estatus) return { recibido: true };
@@ -33,12 +39,17 @@ export class GupshupStatusService {
         return { recibido: true };
     }
 
-    private verificar(headers: Record<string, string | string[] | undefined>, body: unknown): void {
-        const secreto = this.config.get<string>('GUPSHUP_WEBHOOK_SECRET') || this.config.get<string>('GUPSHUP_API_KEY') || '';
+    private verificar(headers: Record<string, string | string[] | undefined>, body: unknown, token?: string): void {
+        const secreto = (this.config.get<string>('GUPSHUP_WEBHOOK_SECRET') ?? '').trim();
         if (!secreto) {
-            throw errorComms(HttpStatus.UNAUTHORIZED, 'FIRMA_INVALIDA', 'La integración de WhatsApp no tiene clave de verificación.');
+            this.logger.warn('GUPSHUP_WEBHOOK_SECRET no está configurado. El webhook de Gupshup queda apagado.');
+            throw errorComms(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                'WEBHOOK_NO_CONFIGURADO',
+                'El webhook de WhatsApp no está configurado.',
+            );
         }
-        const clave = primerHeader(headers, 'x-api-key') || primerHeader(headers, 'apikey');
+        const clave = primerHeader(headers, 'x-api-key') || primerHeader(headers, 'apikey') || token?.trim() || '';
         if (clave && clavesCoinciden(clave, secreto)) return;
         const firma = primerHeader(headers, 'x-gupshup-signature');
         const esperada = createHmac('sha256', secreto).update(JSON.stringify(body ?? {})).digest('hex');

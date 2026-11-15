@@ -55,4 +55,30 @@ describe('GupshupStatusService', () => {
         });
         expect(prisma.waConsumo.updateMany).not.toHaveBeenCalled();
     });
+
+    it('acepta el secreto en el query token', async () => {
+        await service.aplicar({}, { payload: { id: 'msg-4', type: 'delivered' } }, secreto);
+        expect(prisma.waConsumo.updateMany).toHaveBeenCalledWith({
+            where: { ProveedorMsgId: { in: ['msg-4'] } },
+            data: { Estatus: 'DELIVERED' },
+        });
+    });
+
+    it('sin secreto responde 503 y no acepta la clave de la API', async () => {
+        const module = await Test.createTestingModule({
+            providers: [
+                GupshupStatusService,
+                { provide: PrismaService, useValue: prisma },
+                { provide: ConfigService, useValue: { get: (clave: string) => (clave === 'GUPSHUP_API_KEY' ? 'clave-api' : '') } },
+            ],
+        }).compile();
+        const apagado = module.get(GupshupStatusService);
+        await expect(
+            apagado.aplicar({ 'x-api-key': 'clave-api' }, { payload: { id: 'msg-5', type: 'failed' } }),
+        ).rejects.toMatchObject({
+            status: 503,
+            response: { code: 'WEBHOOK_NO_CONFIGURADO' },
+        });
+        expect(prisma.waConsumo.updateMany).not.toHaveBeenCalled();
+    });
 });

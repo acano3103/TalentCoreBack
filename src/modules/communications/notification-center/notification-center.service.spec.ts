@@ -98,6 +98,42 @@ describe('NotificationCenterService', () => {
         ).rejects.toBeInstanceOf(HttpException);
     });
 
+    it('guarda la celda por id y nunca deja la categoría vacía', async () => {
+        prisma.preferenciasNotificacionesUsuario.findFirst.mockResolvedValue(null);
+        prisma.preferenciasNotificacionesUsuario.findMany.mockResolvedValue([]);
+        prisma.preferenciasNotificacionesUsuario.create.mockResolvedValue({});
+        await service.guardarPreferencias(usuario, {
+            preferencias: [{ categoria: 'COMUNICADO', canal: 'PUSH', activa: false }],
+        });
+        expect(prisma.preferenciasNotificacionesUsuario.findFirst).toHaveBeenCalledWith({
+            where: { user_uuid: usuario.uuid, channel_id: 1, categoria: 'COMUNICADO' },
+            orderBy: { id: 'asc' },
+        });
+        expect(prisma.preferenciasNotificacionesUsuario.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                user_uuid: usuario.uuid,
+                channel_id: 1,
+                categoria: 'COMUNICADO',
+                enabled: false,
+            }),
+        });
+        expect(prisma.preferenciasNotificacionesUsuario.create.mock.calls[0][0].data.categoria).not.toBeNull();
+    });
+
+    it('actualiza la fila de esa categoría sin upsert', async () => {
+        prisma.preferenciasNotificacionesUsuario.findFirst.mockResolvedValue({ id: 4, categoria: 'COMUNICADO' });
+        prisma.preferenciasNotificacionesUsuario.findMany.mockResolvedValue([]);
+        prisma.preferenciasNotificacionesUsuario.update.mockResolvedValue({});
+        await service.guardarPreferencias(usuario, {
+            preferencias: [{ categoria: 'COMUNICADO', canal: 'PUSH', activa: true }],
+        });
+        expect(prisma.preferenciasNotificacionesUsuario.update).toHaveBeenCalledWith({
+            where: { id: 4 },
+            data: { enabled: true, updated_at: ahora },
+        });
+        expect(prisma.preferenciasNotificacionesUsuario.create).not.toHaveBeenCalled();
+    });
+
     it('reasigna el token si cambió de usuario', async () => {
         prisma.pushTokens.findUnique.mockResolvedValue({
             idPushToken: 9,
