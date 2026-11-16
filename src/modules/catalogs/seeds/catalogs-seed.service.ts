@@ -38,6 +38,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedPlantillasNotificaciones(); /** PlantillasNotificaciones */
             await this.seedModulosFlujo(); /** CatModuloFlujo (debe ir antes por FK) */
             await this.seedTiposMovimiento(); /** CatTipoMovimiento */
+            await this.seedCamposPlantilla(); // CatCamposPlantilla
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -715,4 +716,58 @@ export class CatalogsSeedService implements OnModuleInit {
         }
     }
 
+
+    private async seedCamposPlantilla() {
+        const campos = [
+            // DATOS DEL EMPLEADO
+            { clave: 'empleado.nombre', nombre: 'Nombre completo', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Nombre completo del empleado', orden: 1 },
+            { clave: 'empleado.nombres', nombre: 'Nombre(s)', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Nombre o nombres del empleado', orden: 2 },
+            { clave: 'empleado.apellido_paterno', nombre: 'Apellido paterno', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Apellido paterno del empleado', orden: 3 },
+            { clave: 'empleado.apellido_materno', nombre: 'Apellido materno', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Apellido materno del empleado', orden: 4 },
+            { clave: 'empleado.curp', nombre: 'CURP', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Clave Única de Registro de Población', orden: 5 },
+            { clave: 'empleado.rfc', nombre: 'RFC', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Registro Federal de Contribuyentes', orden: 6 },
+            { clave: 'empleado.nss', nombre: 'Número de seguridad social', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Número de Seguridad Social', orden: 7 },
+            { clave: 'empleado.fecha_nacimiento', nombre: 'Fecha de nacimiento', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Fecha de nacimiento del empleado', orden: 8 },
+            { clave: 'empleado.telefono', nombre: 'Teléfono', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Teléfono de contacto', orden: 9 },
+            { clave: 'empleado.correo', nombre: 'Correo electrónico', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Correo electrónico del empleado', orden: 10 },
+            { clave: 'empleado.direccion', nombre: 'Domicilio', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Domicilio del empleado', orden: 11 },
+            { clave: 'empleado.estado_civil', nombre: 'Estado civil', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Estado civil del empleado', orden: 12 },
+            { clave: 'empleado.puesto', nombre: 'Puesto', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Puesto que desempeña el empleado', orden: 13 },
+            { clave: 'empleado.area', nombre: 'Área', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Área a la que pertenece el empleado', orden: 14 },
+            { clave: 'empleado.fecha_ingreso', nombre: 'Fecha de ingreso', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Fecha de ingreso a la empresa', orden: 15 },
+            { clave: 'empleado.salarioBruto', nombre: 'Salario Bruto', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Salario bruto registrado para el empleado', orden: 16 },
+            { clave: 'empleado.salarioNeto', nombre: 'Salario Neto', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Salario bruto registrado para el empleado', orden: 17 },
+            { clave: 'empleado.cuenta_bancaria', nombre: 'Cuenta bancaria', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Cuenta bancaria del empleado, si está disponible y autorizado', orden: 18 },
+
+            // DATOS DE LA EMPRESA
+            { clave: 'empresa.nombre', nombre: 'Nombre comercial', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Nombre comercial de la empresa', orden: 1 },
+            { clave: 'empresa.razon_social', nombre: 'Razón social', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Razón social registrada de la empresa', orden: 2 },
+            { clave: 'empresa.rfc', nombre: 'RFC de la empresa', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'RFC de la empresa', orden: 3 },
+            { clave: 'empresa.direccion_fiscal', nombre: 'Dirección fiscal', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Domicilio fiscal de la empresa', orden: 4 },
+            { clave: 'empresa.codigo_postal', nombre: 'Código postal', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Código postal del domicilio fiscal', orden: 5 },
+            { clave: 'empresa.telefono', nombre: 'Teléfono de la empresa', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Teléfono de contacto de la empresa', orden: 6 },
+            { clave: 'empresa.correo', nombre: 'Correo de la empresa', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Correo electrónico de la empresa', orden: 7 },
+        ];
+
+        for (const campo of campos) {
+            await this.prisma.$executeRaw`
+            INSERT INTO CatCamposPlantilla
+                (clave, nombre, grupo, entidad, descripcion, orden)
+            VALUES (
+                ${campo.clave},
+                ${campo.nombre},
+                ${campo.grupo},
+                ${campo.entidad},
+                ${campo.descripcion},
+                ${campo.orden}
+            )
+            ON DUPLICATE KEY UPDATE
+                nombre = VALUES(nombre),
+                grupo = VALUES(grupo),
+                entidad = VALUES(entidad),
+                descripcion = VALUES(descripcion),
+                orden = VALUES(orden);
+        `;
+        }
+    }
 }
