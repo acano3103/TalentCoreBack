@@ -18,6 +18,7 @@ import { MediaPathService } from 'src/common/services/media-path.service';
 import { Response } from 'express';
 import { tmpdir } from 'os';
 import { convertDocxToPdf } from 'src/common/utils/libreoffice.util';
+import { Prisma } from 'generated/prisma/client';
 
 function decodeXmlText(value: string): string {
     return value.replace(
@@ -342,21 +343,33 @@ export class DocumentosTemplatesService {
     async findAll(
         companyId: number,
         page: number,
+        status: string,
         limit: number,
         search: string,
         idTipoDocumento?: number,
     ) {
         const skip = (page - 1) * limit;
 
-        const where: any = {
+        const where: Prisma.PlantillasDocumentosWhereInput = {
             idEmpresa: companyId,
-            activa: true,
         };
 
-        if (search) {
-            where.nombre = { contains: search };
+        // Filtro por estatus
+        if (status === 'ACTIVAS') {
+            where.activa = true;
+        } else if (status === 'DESACTIVADAS') {
+            where.activa = false;
+        }
+        // TODAS: no se agrega ningún filtro de activa
+
+        // Búsqueda por nombre
+        if (search?.trim()) {
+            where.nombre = {
+                contains: search.trim(),
+            };
         }
 
+        // Filtro por tipo de documento
         if (idTipoDocumento) {
             where.idTipoDocumento = idTipoDocumento;
         }
@@ -366,7 +379,9 @@ export class DocumentosTemplatesService {
                 where,
                 skip,
                 take: limit,
-                orderBy: { fechaCreacion: 'desc' },
+                orderBy: {
+                    fechaCreacion: 'desc',
+                },
                 include: {
                     TiposDocumento: {
                         select: {
@@ -381,7 +396,10 @@ export class DocumentosTemplatesService {
                     },
                 },
             }),
-            this.prisma.plantillasDocumentos.count({ where }),
+
+            this.prisma.plantillasDocumentos.count({
+                where,
+            }),
         ]);
 
         return {
@@ -438,6 +456,28 @@ export class DocumentosTemplatesService {
         return this.prisma.plantillasDocumentos.update({
             where: { id },
             data: { activa: false, fechaActualiz: new Date() },
+        });
+    }
+
+    async reactivate(companyId: number, id: number) {
+        const plantilla = await this.prisma.plantillasDocumentos.findFirst({
+            where: {
+                id,
+                idEmpresa: companyId,
+                activa: false,
+            },
+        });
+
+        if (!plantilla) {
+            throw new NotFoundException('Plantilla no encontrada o ya está activa');
+        }
+
+        return this.prisma.plantillasDocumentos.update({
+            where: { id },
+            data: {
+                activa: true,
+                fechaActualiz: new Date(),
+            },
         });
     }
 
@@ -875,10 +915,60 @@ export class DocumentosTemplatesService {
         })
     }
 
-    async findGenerated(companyId: number, page: number, limit: number) {
+    async findGenerated(
+        companyId: number,
+        page: number,
+        limit: number,
+        search?: string,
+    ) {
         const skip = (page - 1) * limit;
-        const where = {
-            plantilla: { idEmpresa: companyId },
+        const term = search?.trim();
+
+        const where: Prisma.DocumentosGeneradosWhereInput = {
+            plantilla: {
+                idEmpresa: companyId,
+            },
+            ...(term && {
+                OR: [
+                    {
+                        plantilla: {
+                            nombre: {
+                                contains: term,
+                            },
+                        },
+                    },
+                    {
+                        plantilla: {
+                            TiposDocumento: {
+                                nombre: {
+                                    contains: term,
+                                },
+                            },
+                        },
+                    },
+                    {
+                        Empleados: {
+                            nombre: {
+                                contains: term,
+                            },
+                        },
+                    },
+                    {
+                        Empleados: {
+                            primerApellido: {
+                                contains: term,
+                            },
+                        },
+                    },
+                    {
+                        Empleados: {
+                            segundoApellido: {
+                                contains: term,
+                            },
+                        },
+                    },
+                ],
+            }),
         };
 
         const [data, total] = await Promise.all([
@@ -886,9 +976,30 @@ export class DocumentosTemplatesService {
                 where,
                 skip,
                 take: limit,
-                orderBy: { fechaGeneracion: 'desc' },
+                orderBy: {
+                    fechaGeneracion: 'desc',
+                },
                 include: {
-                    plantilla: { select: { id: true, nombre: true } },
+                    plantilla: {
+                        select: {
+                            id: true,
+                            nombre: true,
+                            TiposDocumento: {
+                                select: {
+                                    id: true,
+                                    nombre: true,
+                                },
+                            },
+                        },
+                    },
+                    Empleados: {
+                        select: {
+                            idEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                        },
+                    },
                 },
             }),
             this.prisma.documentosGenerados.count({ where }),

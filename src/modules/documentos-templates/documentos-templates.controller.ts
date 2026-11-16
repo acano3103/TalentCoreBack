@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseIntPipe, UseGuards, DefaultValuePipe, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseIntPipe, UseGuards, DefaultValuePipe, UseInterceptors, UploadedFile, Res, Patch } from '@nestjs/common';
 import { DocumentosTemplatesService } from './documentos-templates.service';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -43,11 +43,12 @@ export class DocumentosTemplatesController {
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+        @Query('status') status: string,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query('search') search?: string,
         @Query('idTipoDocumento') idTipoDocumento?: string,
     ) {
-        return this.service.findAll(companyId, page, limit, search || '', idTipoDocumento ? Number(idTipoDocumento) : undefined);
+        return this.service.findAll(companyId, page, status, limit, search || '', idTipoDocumento ? Number(idTipoDocumento) : undefined);
     }
 
     @Get('catalog-fields')
@@ -70,8 +71,9 @@ export class DocumentosTemplatesController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+        @Query('search') search?: string,
     ) {
-        return this.service.findGenerated(companyId, page, limit);
+        return this.service.findGenerated(companyId, page, limit, search);
     }
 
     @Get('by-type/:idTipoDocumento')
@@ -323,5 +325,18 @@ export class DocumentosTemplatesController {
         res.setHeader('Content-Type', result.contentType);
         res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
         res.sendFile(result.path);
+    }
+
+    @Patch(':id/reactivate')
+    @ApiOperation({ summary: 'Reactivate template', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Template reactivated' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    @ApiResponse({ status: 404, description: 'Template not found' })
+    async reactivate(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+    ) {
+        return this.service.reactivate(companyId, id);
     }
 }
