@@ -98,6 +98,7 @@ describe('AnnouncementsService versiones', () => {
         comComunicadoVersiones: { findUnique: jest.fn() },
         comComunicadoAdjuntos: { findMany: jest.fn() },
         empleados: { findMany: jest.fn() },
+        auth_user: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const capabilities = { contexto: jest.fn(), getEffective: jest.fn() };
     const envio = { notificarActualizacion: jest.fn(), quitarProgramado: jest.fn() };

@@ -121,6 +121,39 @@ describe('NotificationDispatcher.dispatchComms', () => {
         expect(prisma.preferenciasNotificacionesUsuario.findFirst).not.toHaveBeenCalled();
         expect(push.enviar).toHaveBeenCalled();
     });
+
+    it('guarda el destino y lo manda en el push aunque la preferencia esté apagada', async () => {
+        prisma.preferenciasNotificacionesUsuario.findFirst.mockResolvedValue({ enabled: false });
+        prisma.pushTokens.findMany.mockResolvedValue([{ Token: 'ExponentPushToken[abc]' }]);
+        push.enviar.mockResolvedValue([{ token: 'ExponentPushToken[abc]', ticketId: 'ticket-1' }]);
+        await dispatcher.dispatchComms(
+            { userUuid: 'user-1' },
+            {
+                ...payload('COMUNICADO'),
+                prioridad: 'IMPORTANTE',
+                requiereAcuse: true,
+                destino: { tipo: 'MI_COMUNICADO', id: 9 },
+            },
+            [{ codigo: 'PUSH', enviarAhora: true }],
+        );
+        expect(prisma.notificaciones.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                DeepLink: null,
+                Destino: { tipo: 'MI_COMUNICADO', id: 9 },
+            }),
+        }));
+        expect(push.enviar).toHaveBeenCalledWith([
+            expect.objectContaining({
+                data: { destino: JSON.stringify({ tipo: 'MI_COMUNICADO', id: 9 }) },
+            }),
+        ]);
+        expect(campana.publicar).toHaveBeenCalledWith(
+            'user-1',
+            10,
+            3,
+            expect.objectContaining({ destino: { tipo: 'MI_COMUNICADO', id: 9 } }),
+        );
+    });
 });
 
 function payload(codigo: 'COMUNICADO' | 'APROBACION') {

@@ -1,3 +1,5 @@
+import { DestinoNotificacion } from 'src/modules/communications/notification-center/destino';
+
 export type CodigoCanalComms = 'PUSH' | 'EMAIL' | 'WHATSAPP' | 'SOCKETS' | 'KIOSCO';
 
 export type PrioridadComms = 'NORMAL' | 'IMPORTANTE' | 'CRITICA';
@@ -15,6 +17,9 @@ export interface CommsPayload {
     categoria?: string | null;
     prioridad: PrioridadComms;
     deepLink?: string | null;
+    destino?: DestinoNotificacion | null;
+    requiereAcuse?: boolean;
+    codigoRegla?: string | null;
     origenTipo: string;
     origenId: string;
     idTenant?: number | null;

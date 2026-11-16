@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
+import { Prisma } from "generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
+import { destinoEnPush } from "../communications/notification-center/destino";
 import { MailProvider } from "./providers/mail/mail.provider";
 import { WhatsappProvider } from "./providers/whatsapp/whatsapp.provider";
 import { NotificationOptions } from "./interfaces/message.interface";
@@ -159,6 +161,7 @@ export class NotificationDispatcher {
                 Categoria: payload.categoria ?? null,
                 Prioridad: payload.prioridad,
                 DeepLink: payload.deepLink ?? null,
+                Destino: payload.destino ? (payload.destino as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
                 OrigenTipo: payload.origenTipo,
                 OrigenId: payload.origenId,
                 ClaveAgrupacion: payload.claveAgrupacion ?? null,
@@ -269,7 +272,10 @@ export class NotificationDispatcher {
             categoria: payload.categoria,
             notificationTypeCode: payload.notificationTypeCode,
             origenTipo: payload.origenTipo,
+            origenId: payload.origenId,
+            codigoRegla: payload.codigoRegla,
             prioridad: payload.prioridad,
+            requiereAcuse: payload.requiereAcuse,
         };
         if (debeEnviarCanal({ ...base, preferenciaActiva: false })) return true;
         const categoria = categoriaDePreferencia(payload);
@@ -288,6 +294,7 @@ export class NotificationDispatcher {
             categoria: payload.categoria ?? null,
             prioridad: payload.prioridad,
             deepLink: payload.deepLink ?? null,
+            destino: payload.destino ?? null,
             creadoEn: creadoEn ?? new Date(),
             leida: false,
         });
@@ -365,7 +372,7 @@ export class NotificationDispatcher {
                 to: fila.Token,
                 title: payload.push?.title ?? payload.titulo,
                 body: payload.push?.body ?? payload.mensaje,
-                data: payload.push?.data,
+                data: datosPush(payload),
             })),
         );
         const ok = tickets.find((ticket) => ticket.ticketId);
@@ -401,6 +408,13 @@ export class NotificationDispatcher {
         }
         return null;
     }
+}
+
+function datosPush(payload: CommsPayload): Record<string, string> | undefined {
+    const data: Record<string, string> = { ...(payload.push?.data ?? {}) };
+    const destino = destinoEnPush(payload.destino);
+    if (destino) data.destino = destino;
+    return Object.keys(data).length ? data : undefined;
 }
 
 function idMensaje(respuesta: unknown): string | undefined {

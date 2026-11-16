@@ -13,6 +13,7 @@ import {
     PERMISSION_BLUEPRINTS,
     ROLE_NAMES,
 } from '../src/modules/super-admin/tenants/blueprints/tenant-blueprints';
+import { aplicarPuestaEnMarcha, imprimirPuestaEnMarcha, storePuestaDePrisma } from './puesta-en-marcha-comunicacion';
 
 /** Mismos módulos que el alta de un tenant: el padre y sus hijos, en ese orden. */
 export const MODULOS_COMUNICACION = MODULE_BLUEPRINTS.filter(
@@ -304,6 +305,8 @@ async function main() {
     try {
         const resumen = await aplicarBackfillModulos(storeDePrisma(prisma));
         imprimirResumen(resumen);
+        const puesta = await aplicarPuestaEnMarcha(storePuestaDePrisma(prisma));
+        imprimirPuestaEnMarcha(puesta);
     } finally {
         await prisma.$disconnect();
     }

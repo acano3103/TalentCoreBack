@@ -37,7 +37,7 @@ describe('ReminderEngineService', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        const ahora = localTimeToInstant('2026-11-16', new Date(Date.UTC(1970, 0, 1, 8, 50, 0)), 'America/Mexico_City');
+        const ahora = localTimeToInstant('2026-11-16', new Date(Date.UTC(1970, 0, 1, 9, 15, 0)), 'America/Mexico_City');
         service.ahora = () => ahora;
         const dia = localWeekdayName(ahora, 'America/Mexico_City');
         prisma.catEmpresas.findMany.mockResolvedValue([{ idEmpresa: 10, idTenant: 3 }]);
@@ -79,6 +79,8 @@ describe('ReminderEngineService', () => {
         expect(dispatchComms).toHaveBeenCalledTimes(1);
         expect(dispatchComms.mock.calls[0][0]).toEqual({ userUuid: 'u1' });
         expect(dispatchComms.mock.calls[0][1].origenId).toContain('R1');
+        expect(dispatchComms.mock.calls[0][1].destino).toEqual({ tipo: 'CHECADOR' });
+        expect(dispatchComms.mock.calls[0][1].codigoRegla).toBe('R1');
         expect(crearEnviado).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({ idEmpleado: 1, Codigo: 'R1' }),
         }));

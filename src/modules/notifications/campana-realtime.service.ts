@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DestinoNotificacion } from 'src/modules/communications/notification-center/destino';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { WebsocketGateway } from './gateways/websockets.gateway';
 import { armarConteo, ConteoCampana, whereNoLeidas } from './campana';
@@ -10,6 +11,7 @@ export interface AvisoCampana {
     categoria: string | null;
     prioridad: string;
     deepLink: string | null;
+    destino?: DestinoNotificacion | null;
     creadoEn: Date;
     leida: boolean;
 }

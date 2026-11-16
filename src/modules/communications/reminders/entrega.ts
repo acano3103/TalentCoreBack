@@ -1,4 +1,5 @@
 import { Canal } from '../channels/canales';
+import { DestinoNotificacion } from '../notification-center/destino';
 
 export interface CandidatoEnvio {
     idEmpleado: number;
@@ -12,6 +13,7 @@ export interface CandidatoEnvio {
     mensaje: string;
     deepLink: string;
     deepLinkApp: string;
+    destino: DestinoNotificacion;
     canales: Canal[];
     telefono: string | null;
     correo: string | null;
@@ -70,7 +72,7 @@ export function planificarTope(candidatos: readonly CandidatoEnvio[], enviadosHo
     return { individuales, grupos };
 }
 
-/** R1 y R2 avisan por WhatsApp a quien checa en kiosco y no tiene la app, si ese canal está en su perfil. */
+/** R1 (falta la entrada) y R12 (antes de entrar) avisan por WhatsApp a quien checa en kiosco y no tiene la app. */
 export function canalesDeRecordatorio(entrada: {
     codigo: string;
     canalesRegla: readonly Canal[];
@@ -80,7 +82,7 @@ export function canalesDeRecordatorio(entrada: {
 }): Canal[] {
     const efectivos = new Set(entrada.canalesEfectivos);
     const canales = entrada.canalesRegla.filter((canal) => efectivos.has(canal));
-    const respaldo = (entrada.codigo === 'R1' || entrada.codigo === 'R2')
+    const respaldo = (entrada.codigo === 'R1' || entrada.codigo === 'R12')
         && !entrada.tieneApp
         && entrada.kioscoActivo
         && efectivos.has('WHATSAPP')

@@ -61,8 +61,11 @@ export class MeNotificationsController {
     }
 
     @Get('notification-preferences')
-    @ApiOperation({ summary: 'Matriz de preferencias', description: 'bloqueada: true se muestra como Siempre.' })
-    @ApiResponse({ status: 200, description: 'Categoría por canal.' })
+    @ApiOperation({
+        summary: 'Matriz de preferencias',
+        description: 'bloqueada: true se muestra como Siempre. CELEBRACION va en fase 2 y no se edita. informativas lista avisos que no se pueden apagar.',
+    })
+    @ApiResponse({ status: 200, description: 'Categoría por canal, más filas informativas.' })
     preferencias(@GetActiveUser() activeUser: ActiveUserDto) {
         return this.service.preferencias(activeUser);
     }

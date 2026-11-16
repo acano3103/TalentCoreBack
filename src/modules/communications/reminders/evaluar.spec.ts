@@ -2,6 +2,7 @@ import { localTimeToInstant, localWeekdayName } from 'src/modules/attendance/uti
 import { relojLocal } from './zona-reloj';
 import {
     evaluarR1,
+    evaluarR12,
     evaluarR2,
     evaluarR3,
     evaluarR4,
@@ -31,23 +32,17 @@ function turno(tieneEntrada = false, tieneSalida = false) {
     return { dia: DIA, horaEntrada: 9 * 60, horaSalida: 18 * 60, tieneEntrada, tieneSalida };
 }
 
-describe('recordatorios R1–R11', () => {
-    it('R1 dispara antes de la entrada, se omite fuera de ventana y se cierra si ya checó', () => {
-        const dentro = instante('08:50');
-        const base = { ahora: dentro, zona: ZONA, companyId: 10, turno: turno(), previos: [] as const };
-        expect(evaluarR1({ ...base, minutosAntes: 15 }).accion).toBe('enviar');
-        expect(evaluarR1({ ...base, ahora: instante('08:20'), minutosAntes: 15 }).accion).toBe('omitir');
-        expect(evaluarR1({ ...base, turno: turno(true), minutosAntes: 15 }).accion).toBe('cerrado');
-    });
-
-    it('R2 dispara después de la hora de entrada, se omite antes y se cierra con la checada', () => {
+describe('recordatorios R1–R12', () => {
+    it('R1 dispara después de la hora de entrada, se omite antes y se cierra con la checada', () => {
         const base = { ahora: instante('09:15'), zona: ZONA, companyId: 10, turno: turno(), previos: [] as const };
-        expect(evaluarR2({ ...base, minutosDespues: 10 }).accion).toBe('enviar');
-        expect(evaluarR2({ ...base, ahora: instante('09:05'), minutosDespues: 10 }).accion).toBe('omitir');
-        expect(evaluarR2({ ...base, turno: turno(true), minutosDespues: 10 }).accion).toBe('cerrado');
+        const enviado = evaluarR1({ ...base, minutosDespues: 10 });
+        expect(enviado.accion).toBe('enviar');
+        expect(enviado.destino).toEqual({ tipo: 'CHECADOR' });
+        expect(evaluarR1({ ...base, ahora: instante('09:05'), minutosDespues: 10 }).accion).toBe('omitir');
+        expect(evaluarR1({ ...base, turno: turno(true), minutosDespues: 10 }).accion).toBe('cerrado');
     });
 
-    it('R3 dispara tras la salida sin registro, se omite antes y se cierra si ya salió o no entró', () => {
+    it('R2 dispara tras la salida sin registro, se omite antes y se cierra si ya salió o no entró', () => {
         const base = {
             ahora: instante('18:40'),
             zona: ZONA,
@@ -55,10 +50,35 @@ describe('recordatorios R1–R11', () => {
             turno: turno(true, false),
             previos: [] as const,
         };
-        expect(evaluarR3({ ...base, minutosDespues: 30 }).accion).toBe('enviar');
-        expect(evaluarR3({ ...base, ahora: instante('18:10'), minutosDespues: 30 }).accion).toBe('omitir');
-        expect(evaluarR3({ ...base, turno: turno(true, true), minutosDespues: 30 }).accion).toBe('cerrado');
-        expect(evaluarR3({ ...base, turno: turno(false, false), minutosDespues: 30 }).accion).toBe('cerrado');
+        expect(evaluarR2({ ...base, minutosDespues: 30 }).accion).toBe('enviar');
+        expect(evaluarR2({ ...base, ahora: instante('18:10'), minutosDespues: 30 }).accion).toBe('omitir');
+        expect(evaluarR2({ ...base, turno: turno(true, true), minutosDespues: 30 }).accion).toBe('cerrado');
+        expect(evaluarR2({ ...base, turno: turno(false, false), minutosDespues: 30 }).accion).toBe('cerrado');
+    });
+
+    it('R3 avisa una vez al jefe después del corte y omite si no hay ausentes', () => {
+        const base = {
+            ahora: instante('10:05'),
+            zona: ZONA,
+            companyId: 10,
+            horaCorte: '10:00',
+            ausentes: ['Luis', 'Mara'],
+            previos: [] as const,
+        };
+        const enviado = evaluarR3(base);
+        expect(enviado.accion).toBe('enviar');
+        expect(enviado.variables.equipo).toBe('Luis, Mara');
+        expect(enviado.destino).toEqual({ tipo: 'MIS_ASISTENCIAS' });
+        expect(evaluarR3({ ...base, ahora: instante('09:50') }).accion).toBe('omitir');
+        expect(evaluarR3({ ...base, ausentes: [] }).accion).toBe('omitir');
+    });
+
+    it('R12 dispara antes de la entrada, se omite fuera de ventana y se cierra si ya checó', () => {
+        const dentro = instante('08:50');
+        const base = { ahora: dentro, zona: ZONA, companyId: 10, turno: turno(), previos: [] as const };
+        expect(evaluarR12({ ...base, minutosAntes: 15 }).accion).toBe('enviar');
+        expect(evaluarR12({ ...base, ahora: instante('08:20'), minutosAntes: 15 }).accion).toBe('omitir');
+        expect(evaluarR12({ ...base, turno: turno(true), minutosAntes: 15 }).accion).toBe('cerrado');
     });
 
     it('R4 dispara si falta el documento, se omite si el intento es reciente y se cierra al cargarlo', () => {
@@ -170,7 +190,7 @@ describe('recordatorios R1–R11', () => {
         const tijuana = relojLocal(ahora, 'America/Tijuana');
         expect(ciudad.minutos).not.toBe(tijuana.minutos);
         const base = { ahora, companyId: 10, turno: turno(), previos: [] as const, minutosAntes: 15 };
-        expect(evaluarR1({ ...base, zona: ZONA }).accion).toBe('enviar');
-        expect(evaluarR1({ ...base, zona: 'America/Tijuana' }).accion).toBe('omitir');
+        expect(evaluarR12({ ...base, zona: ZONA }).accion).toBe('enviar');
+        expect(evaluarR12({ ...base, zona: 'America/Tijuana' }).accion).toBe('omitir');
     });
 });

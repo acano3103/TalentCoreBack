@@ -10,6 +10,7 @@ function aviso(parcial: Partial<Parameters<typeof agruparAvisos>[0][number]> & {
         categoria: 'RECORDATORIO',
         prioridad: 'NORMAL',
         deepLink: null,
+        destino: null,
         origenTipo: 'RECORDATORIO',
         origenId: 'curso-1',
         claveAgrupacion: null,

@@ -55,6 +55,7 @@ describe('WhatsAppCapService', () => {
         expect(dispatchComms.mock.calls[0][1]).toMatchObject({
             categoria: 'SISTEMA',
             origenTipo: 'TOPE_WHATSAPP',
+            destino: { tipo: 'CONSUMO_WA', id: 10 },
             correo: { to: 'ana@ejemplo.com' },
         });
         expect(dispatchComms.mock.calls[0][2]).toEqual([

@@ -81,7 +81,7 @@ export class ReminderRulesService {
             const actualizada = await tx.comReglasRecordatorio.update({
                 where: { idEmpresa_Codigo: { idEmpresa: companyId, Codigo: codigo } },
                 data: {
-                    Activo: true,
+                    Activo: base.activo,
                     Parametros: base.parametros as Prisma.InputJsonValue,
                     Canales: base.canales,
                     Plantilla: base.plantilla,
@@ -139,7 +139,7 @@ export class ReminderRulesService {
                         idTenant,
                         idEmpresa,
                         Codigo: regla.codigo,
-                        Activo: true,
+                        Activo: regla.activo,
                         Parametros: regla.parametros as Prisma.InputJsonValue,
                         Canales: regla.canales,
                         Plantilla: regla.plantilla,

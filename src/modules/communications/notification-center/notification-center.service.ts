@@ -8,13 +8,16 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { errorComms, esP2002 } from '../comms-http';
 import { agruparAvisos, AvisoPlano, PAGINA_CAMPANA } from './agrupar';
 import { GuardarPreferenciasDto, ListarNotificacionesQuery, RegistrarPushTokenDto } from './dto/notificaciones.dto';
+import { leerDestino } from './destino';
 import {
     CANALES_PREFERENCIA,
     CanalPreferencia,
     CATEGORIAS_PREFERENCIA,
     CategoriaPreferencia,
     codigoCanalCatalogo,
-    preferenciaBloqueada,
+    fasePreferencia,
+    FILAS_INFORMATIVAS,
+    preferenciaNoEditable,
 } from './preferencias-reglas';
 
 const TRANSACCION = { maxWait: 15_000, timeout: 60_000 };
@@ -56,6 +59,7 @@ export class NotificationCenterService {
             categoria: fila.Categoria,
             prioridad: fila.Prioridad,
             deepLink: fila.DeepLink,
+            destino: leerDestino(fila.Destino),
             origenTipo: fila.OrigenTipo,
             origenId: fila.OrigenId,
             claveAgrupacion: fila.ClaveAgrupacion,
@@ -102,11 +106,14 @@ export class NotificationCenterService {
         const filas = await this.prisma.preferenciasNotificacionesUsuario.findMany({
             where: { user_uuid: activeUser.uuid, categoria: { in: [...CATEGORIAS_PREFERENCIA] } },
         });
-        return { preferencias: matriz(filas, canales) };
+        return {
+            preferencias: matriz(filas, canales),
+            informativas: FILAS_INFORMATIVAS.map((fila) => ({ nombre: fila.nombre, bloqueada: fila.bloqueada })),
+        };
     }
 
     async guardarPreferencias(activeUser: ActiveUserDto, dto: GuardarPreferenciasDto) {
-        const apagada = dto.preferencias.find((fila) => !fila.activa && preferenciaBloqueada(fila.categoria, fila.canal));
+        const apagada = dto.preferencias.find((fila) => !fila.activa && preferenciaNoEditable(fila.categoria, fila.canal));
         if (apagada) {
             throw errorComms(
                 HttpStatus.BAD_REQUEST,
@@ -271,10 +278,11 @@ function matriz(
         canal: CanalPreferencia;
         activa: boolean;
         bloqueada: boolean;
+        fase: 1 | 2;
     }[] = [];
     for (const categoria of CATEGORIAS_PREFERENCIA) {
         for (const canal of CANALES_PREFERENCIA) {
-            const bloqueada = preferenciaBloqueada(categoria, canal);
+            const bloqueada = preferenciaNoEditable(categoria, canal);
             const channelId = canales.get(codigoCanalCatalogo(canal));
             const guardada = channelId === undefined ? undefined : elegidas.get(`${categoria}|${channelId}`);
             preferencias.push({
@@ -282,6 +290,7 @@ function matriz(
                 canal,
                 activa: bloqueada ? true : (guardada ?? true),
                 bloqueada,
+                fase: fasePreferencia(categoria),
             });
         }
     }

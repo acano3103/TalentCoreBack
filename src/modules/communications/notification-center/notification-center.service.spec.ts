@@ -134,6 +134,32 @@ describe('NotificationCenterService', () => {
         expect(prisma.preferenciasNotificacionesUsuario.create).not.toHaveBeenCalled();
     });
 
+    it('marca celebración en fase 2 y agrega las filas que no se apagan', async () => {
+        prisma.preferenciasNotificacionesUsuario.findMany.mockResolvedValue([]);
+        const respuesta = await service.preferencias(usuario);
+        const celebracion = respuesta.preferencias.find((fila) => fila.categoria === 'CELEBRACION' && fila.canal === 'PUSH');
+        expect(celebracion).toEqual({ categoria: 'CELEBRACION', canal: 'PUSH', activa: true, bloqueada: true, fase: 2 });
+        expect(respuesta.preferencias.find((fila) => fila.categoria === 'COMUNICADO')?.fase).toBe(1);
+        expect(respuesta.informativas).toEqual([
+            { nombre: 'Comunicados importantes y con confirmación', bloqueada: true },
+            { nombre: 'Recordatorios de checada', bloqueada: true },
+        ]);
+        await expect(service.guardarPreferencias(usuario, {
+            preferencias: [{ categoria: 'CELEBRACION', canal: 'PUSH', activa: false }],
+        })).rejects.toMatchObject({ response: { code: 'PREFERENCIA_BLOQUEADA' } });
+    });
+
+    it('devuelve el destino lógico junto con el enlace anterior', async () => {
+        prisma.notificaciones.findMany.mockResolvedValue([
+            { ...fila('a', '2026-11-14T16:00:00.000Z'), Destino: { tipo: 'MI_COMUNICADO', id: 9 } },
+        ]);
+        const pagina = await service.listar(usuario, 10, { tab: 'unread' });
+        expect(pagina.grupos[0].items[0]).toEqual(expect.objectContaining({
+            deepLink: null,
+            destino: { tipo: 'MI_COMUNICADO', id: 9 },
+        }));
+    });
+
     it('reasigna el token si cambió de usuario', async () => {
         prisma.pushTokens.findUnique.mockResolvedValue({
             idPushToken: 9,

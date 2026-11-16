@@ -719,6 +719,7 @@ model Notificaciones {
   Categoria              String?                  @db.VarChar(30)
   Prioridad              ComPrioridad             @default(NORMAL)
   DeepLink               String?                  @db.VarChar(500)
+  Destino                Json?
   OrigenTipo             String?                  @db.VarChar(40)
   OrigenId               String?                  @db.VarChar(40)
   ClaveAgrupacion        String?                  @db.VarChar(120)

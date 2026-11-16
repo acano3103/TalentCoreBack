@@ -22,10 +22,10 @@ import {
     COMMS_EVENTO_ESTATUS,
     HechoEstatus,
 } from 'src/common/events/comms-hechos';
-import { Previo, ResultadoRegla, evaluarR1, evaluarR10, evaluarR11, evaluarR2, evaluarR3, evaluarR4, evaluarR5, evaluarR6, evaluarR7, evaluarR8, evaluarR9 } from './evaluar';
+import { Previo, ResultadoRegla, evaluarR1, evaluarR10, evaluarR11, evaluarR12, evaluarR2, evaluarR3, evaluarR4, evaluarR5, evaluarR6, evaluarR7, evaluarR8, evaluarR9 } from './evaluar';
 import { CandidatoEnvio, aplicarPlantilla, canalesDeRecordatorio, planificarTope } from './entrega';
 import { CodigoRegla, REGLAS_DEFAULT, ReglaDefault } from './reglas-default';
-import { diasEntreFechas, relojLocal, zonaValida } from './zona-reloj';
+import { diasEntreFechas, mismoDia, relojLocal, zonaValida } from './zona-reloj';
 
 interface ReglaViva extends ReglaDefault {
     activo: boolean;
@@ -133,9 +133,10 @@ export class ReminderEngineService {
         const contexto = await this.contextoEmpresa(idEmpresa);
         const candidatos: CandidatoEnvio[] = [];
         if (fase === 'MINUTO') {
-            candidatos.push(...(await this.asistencia(idEmpresa, idTenant, reglas, ['R1', 'R2'])));
+            candidatos.push(...(await this.asistencia(idEmpresa, idTenant, reglas, ['R1', 'R12'])));
+            candidatos.push(...(await this.resumenJefes(idEmpresa, idTenant, reglas)));
         } else {
-            candidatos.push(...(await this.asistencia(idEmpresa, idTenant, reglas, ['R3'])));
+            candidatos.push(...(await this.asistencia(idEmpresa, idTenant, reglas, ['R2'])));
             candidatos.push(...(await this.documentos(idEmpresa, idTenant, reglas)));
             candidatos.push(...(await this.cursos(idEmpresa, idTenant, reglas)));
             candidatos.push(...(await this.aprobaciones(idEmpresa, idTenant, reglas)));
@@ -208,15 +209,65 @@ export class ReminderEngineService {
                         },
                         previos: previosDe(historial, persona.idEmpleado, regla.codigo),
                     };
-                    const resultado = regla.codigo === 'R1'
-                        ? evaluarR1({ ...base, minutosAntes: numero(regla.parametros, 'minutosAntes', 15) })
+                    const resultado = regla.codigo === 'R12'
+                        ? evaluarR12({ ...base, minutosAntes: numero(regla.parametros, 'minutosAntes', 15) })
                         : regla.codigo === 'R2'
-                            ? evaluarR2({ ...base, minutosDespues: numero(regla.parametros, 'minutosDespues', 10) })
-                            : evaluarR3({ ...base, minutosDespues: numero(regla.parametros, 'minutosDespues', 30) });
+                            ? evaluarR2({ ...base, minutosDespues: numero(regla.parametros, 'minutosDespues', 30) })
+                            : evaluarR1({ ...base, minutosDespues: numero(regla.parametros, 'minutosDespues', 10) });
                     const candidato = this.candidato(persona, regla, resultado);
                     if (candidato) salida.push(candidato);
                 }
             }
+        }
+        return salida;
+    }
+
+    /** R3: un aviso por jefe con quienes de su equipo directo no checaron entrada. */
+    private async resumenJefes(idEmpresa: number, idTenant: number, reglas: ReglaViva[]): Promise<CandidatoEnvio[]> {
+        const regla = reglas.find((item) => item.codigo === 'R3');
+        if (!regla?.activo) return [];
+        const empleados = await this.prisma.empleados.findMany({
+            where: { idEmpresa, idTenant, activo: true },
+            select: { idEmpleado: true },
+        });
+        const personas = await this.personas(idEmpresa, empleados.map((fila) => fila.idEmpleado), this.ahora());
+        if (!personas.size) return [];
+        const ahora = this.ahora();
+        const ids = [...personas.keys()];
+        const [registros, historial] = await Promise.all([
+            this.prisma.registrosAsistencia.findMany({
+                where: {
+                    idEmpleado: { in: ids },
+                    fechaHoraRegistro: { gte: new Date(ahora.getTime() - 36 * 3_600_000), lte: new Date(ahora.getTime() + 3_600_000) },
+                    tipo: { in: ['ENTRADA', 'SALIDA'] },
+                },
+                select: { idEmpleado: true, tipo: true, fechaHoraRegistro: true, estatusProcesamiento: true },
+            }),
+            this.historial(idEmpresa, ids),
+        ]);
+        const corte = horaCorte(regla.parametros);
+        const salida: CandidatoEnvio[] = [];
+        for (const jefe of personas.values()) {
+            if (!aplica(regla, jefe)) continue;
+            const relojJefe = relojLocal(ahora, jefe.zona);
+            if (relojJefe.minutos < minutosDeHora(corte)) continue;
+            const ausentes = [...personas.values()].filter((persona) => {
+                if (persona.idJefe !== jefe.idEmpleado || !aplica(regla, persona)) return false;
+                const reloj = relojLocal(ahora, persona.zona);
+                const turno = persona.turnos.find((item) => mismoDia(item.dia, reloj.dia) && item.entrada <= minutosDeHora(corte));
+                if (!turno || reloj.minutos < turno.entrada) return false;
+                return !marcasDelDia(registros, persona, ahora).entradas.size;
+            });
+            const resultado = evaluarR3({
+                ahora,
+                zona: jefe.zona,
+                companyId: idEmpresa,
+                horaCorte: corte,
+                ausentes: ausentes.map((persona) => persona.nombre),
+                previos: previosDe(historial, jefe.idEmpleado, 'R3'),
+            });
+            const candidato = this.candidato(jefe, regla, resultado);
+            if (candidato) salida.push(candidato);
         }
         return salida;
     }
@@ -513,6 +564,7 @@ export class ReminderEngineService {
                 categoria: 'RECORDATORIO',
                 prioridad: 'NORMAL',
                 deepLink: muestra.deepLink,
+                destino: muestra.destino,
                 creadoEn: this.ahora(),
                 leida: false,
             });
@@ -545,6 +597,8 @@ export class ReminderEngineService {
             categoria: candidato.codigo === 'R9' || candidato.codigo === 'R10' ? 'APROBACION' : 'RECORDATORIO',
             prioridad: 'NORMAL',
             deepLink: candidato.deepLink,
+            destino: candidato.destino,
+            codigoRegla: candidato.codigo,
             origenTipo: 'RECORDATORIO',
             origenId: `${candidato.codigo}:${candidato.referencia}`.slice(0, 40),
             idTenant,
@@ -714,7 +768,8 @@ export class ReminderEngineService {
                    ) THEN 1 ELSE 0 END AS pushActivo,
                    CASE WHEN e.idUsuario IS NOT NULL AND EXISTS (
                        SELECT 1 FROM usuarioslogin l
-                       WHERE l.UuidUsuario = e.idUsuario AND l.browser = ${MARCA_LOGIN_MOVIL}
+                       WHERE l.UuidUsuario COLLATE utf8mb4_unicode_ci = e.idUsuario
+                         AND l.browser COLLATE utf8mb4_unicode_ci = ${MARCA_LOGIN_MOVIL}
                    ) THEN 1 ELSE 0 END AS loginMovil,
                    CASE WHEN e.idSite IS NOT NULL AND EXISTS (
                        SELECT 1 FROM KioscoSites ks
@@ -765,7 +820,7 @@ export class ReminderEngineService {
         const porCodigo = new Map(filas.map((fila) => [fila.Codigo, fila]));
         return REGLAS_DEFAULT.map((base) => {
             const fila = porCodigo.get(base.codigo);
-            if (!fila) return { ...base, activo: true, aplicaTiposPersonal: null, excluyeSites: null };
+            if (!fila) return { ...base, aplicaTiposPersonal: null, excluyeSites: null };
             const canales = normalizarCanales(fila.Canales);
             return {
                 codigo: base.codigo,
@@ -886,13 +941,14 @@ export class ReminderEngineService {
             mensaje: aplicarPlantilla(regla.plantilla, { nombre: persona.nombre, ...resultado.variables }),
             deepLink: resultado.deepLink,
             deepLinkApp: resultado.deepLinkApp,
+            destino: resultado.destino,
             canales,
             telefono: persona.telefono,
             correo: persona.correo,
             zona: persona.zona,
             fechaLocal: persona.fechaLocal,
             idDestinatario,
-            inmediato: regla.codigo === 'R1' || regla.codigo === 'R2' || regla.codigo === 'R3' || regla.codigo === 'R10',
+            inmediato: regla.codigo === 'R1' || regla.codigo === 'R2' || regla.codigo === 'R3' || regla.codigo === 'R12' || regla.codigo === 'R10',
         };
     }
 
@@ -968,6 +1024,16 @@ function aplica(regla: ReglaViva, persona: Persona): boolean {
         return false;
     }
     return true;
+}
+
+function horaCorte(parametros: Record<string, unknown>): string {
+    const valor = parametros.horaCorte;
+    return typeof valor === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(valor) ? valor : '10:00';
+}
+
+function minutosDeHora(valor: string): number {
+    const [hora, minuto] = valor.split(':').map(Number);
+    return hora * 60 + minuto;
 }
 
 function numero(parametros: Record<string, unknown>, campo: string, defecto: number): number {

@@ -240,6 +240,7 @@ describe('AnnouncementAnalyticsService', () => {
             expect.objectContaining({
                 categoria: 'COMUNICADO',
                 deepLink: '/companies/10/comms/announcements/9',
+                destino: { tipo: 'MI_COMUNICADO', id: 9 },
                 notificationTypeCode: 'COMUNICADO',
             }),
             expect.arrayContaining([expect.objectContaining({ codigo: 'PUSH' }), expect.objectContaining({ codigo: 'SOCKETS' })]),

@@ -12,6 +12,7 @@ function candidato(parcial: Partial<CandidatoEnvio> & Pick<CandidatoEnvio, 'idEm
         mensaje: 'falta un documento',
         deepLink: '/companies/10/expediente',
         deepLinkApp: 'talentcore://companies/10/expediente',
+        destino: { tipo: 'MI_EXPEDIENTE' },
         canales: ['APP'],
         telefono: null,
         correo: null,

@@ -72,6 +72,7 @@ interface ContextoEnvio {
     silencioActivo: boolean;
     silencioInicio: string;
     silencioFin: string;
+    requiereAcuse: boolean;
 }
 
 interface Contacto {
@@ -715,6 +716,7 @@ export class AnnouncementDispatchService {
             silencioActivo: config?.SilencioActivo ?? true,
             silencioInicio: config?.SilencioInicio ?? '21:00',
             silencioFin: config?.SilencioFin ?? '07:00',
+            requiereAcuse: fila.AcuseModo === 'LEI_ENTENDI' || fila.AcuseModo === 'LEIDO',
         };
     }
 
@@ -727,6 +729,8 @@ export class AnnouncementDispatchService {
             categoria: (ctx.categoria ?? 'COMUNICADO').slice(0, 30),
             prioridad: ctx.prioridad,
             deepLink: `/companies/${ctx.idEmpresa}/comms/announcements/${ctx.idComunicado}`,
+            destino: { tipo: 'MI_COMUNICADO', id: ctx.idComunicado },
+            requiereAcuse: ctx.requiereAcuse,
             origenTipo: ORIGEN,
             origenId: String(ctx.idComunicado),
             idTenant: ctx.idTenant,

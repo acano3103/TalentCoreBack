@@ -128,6 +128,7 @@ export class WhatsAppCapService {
                         categoria: 'SISTEMA',
                         prioridad: 'IMPORTANTE',
                         deepLink: '/comunicacion/whatsapp',
+                        destino: { tipo: 'CONSUMO_WA', id: idEmpresa },
                         origenTipo: 'TOPE_WHATSAPP',
                         origenId: `${idTenant}:${idEmpresa}:${mes}`.slice(0, 40),
                         idTenant,

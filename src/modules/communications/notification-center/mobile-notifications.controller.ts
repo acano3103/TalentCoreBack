@@ -55,7 +55,10 @@ export class MobileNotificationsController {
     }
 
     @Get('notification-preferences')
-    @ApiOperation({ summary: 'Preferencias de la app', description: 'bloqueada: true se muestra como Siempre.' })
+    @ApiOperation({
+        summary: 'Preferencias de la app',
+        description: 'bloqueada: true se muestra como Siempre. CELEBRACION va en fase 2. informativas no se edita.',
+    })
     @ApiResponse({ status: 200, description: 'Categoría por canal.' })
     preferencias(@GetActiveUser() activeUser: ActiveUserDto) {
         return this.service.preferencias(activeUser);

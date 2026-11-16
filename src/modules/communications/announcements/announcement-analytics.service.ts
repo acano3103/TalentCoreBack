@@ -373,6 +373,7 @@ export class AnnouncementAnalyticsService {
                     categoria: 'COMUNICADO',
                     prioridad: 'NORMAL',
                     deepLink: `/companies/${companyId}/comms/announcements/${idComunicado}`,
+                    destino: { tipo: 'MI_COMUNICADO', id: idComunicado },
                     origenTipo: 'COMUNICADO_PREGUNTA',
                     origenId: String(idPregunta),
                     idTenant: comunicado.idTenant,

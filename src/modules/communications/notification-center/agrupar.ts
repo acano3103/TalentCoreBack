@@ -1,4 +1,5 @@
 import { diaLocal } from '../me/bandeja';
+import { DestinoNotificacion } from './destino';
 
 export const PAGINA_CAMPANA = 20;
 export const GRUPOS_TIEMPO = ['Hoy', 'Esta semana', 'Anteriores'] as const;
@@ -11,6 +12,7 @@ export interface AvisoPlano {
     categoria: string | null;
     prioridad: string;
     deepLink: string | null;
+    destino: DestinoNotificacion | null;
     origenTipo: string | null;
     origenId: string | null;
     claveAgrupacion: string | null;
@@ -26,6 +28,7 @@ export interface AvisoAgrupado {
     categoria: string | null;
     prioridad: string;
     deepLink: string | null;
+    destino: DestinoNotificacion | null;
     origenTipo: string | null;
     origenId: string | null;
     claveAgrupacion: string | null;
@@ -108,6 +111,7 @@ function aItem(lista: AvisoPlano[]): AvisoAgrupado {
         categoria: reciente.categoria,
         prioridad: reciente.prioridad,
         deepLink: reciente.deepLink,
+        destino: reciente.destino,
         origenTipo: reciente.origenTipo,
         origenId: reciente.origenId,
         claveAgrupacion: reciente.claveAgrupacion,

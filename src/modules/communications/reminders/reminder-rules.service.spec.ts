@@ -60,6 +60,11 @@ describe('ReminderRulesService', () => {
         findMany.mockResolvedValueOnce([]).mockResolvedValueOnce(REGLAS_DEFAULT.map((regla) => fila(regla.codigo)));
         const respuesta = await service.listar(usuario, 10);
         expect(createMany).toHaveBeenCalled();
+        const creadas = createMany.mock.calls[0][0].data as { Codigo: string; Activo: boolean }[];
+        expect(creadas).toHaveLength(REGLAS_DEFAULT.length);
+        expect(creadas.find((fila) => fila.Codigo === 'R1')?.Activo).toBe(true);
+        expect(creadas.find((fila) => fila.Codigo === 'R3')?.Activo).toBe(false);
+        expect(creadas.find((fila) => fila.Codigo === 'R12')?.Activo).toBe(false);
         expect(respuesta.reglas.map((regla) => regla.codigo)).toEqual(REGLAS_DEFAULT.map((regla) => regla.codigo));
     });
 
@@ -86,7 +91,10 @@ describe('ReminderRulesService', () => {
         findMany.mockResolvedValue([fila('R2', { Plantilla: 'otra' })]);
         update.mockResolvedValue(fila('R2'));
         const respuesta = await service.restablecer(usuario, 10, 'R2');
-        expect(respuesta.plantilla).toContain('{hora_entrada}');
+        expect(respuesta.plantilla).toContain('salida');
+        expect(update).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ Activo: true }),
+        }));
         expect(update).toHaveBeenCalledWith(expect.objectContaining({
             where: { idEmpresa_Codigo: { idEmpresa: 10, Codigo: 'R2' } },
         }));

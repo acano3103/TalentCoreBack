@@ -1,12 +1,13 @@
 import { Canal, CANALES, esCanal } from '../channels/canales';
 
-export const CODIGOS_REGLA = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11'] as const;
+export const CODIGOS_REGLA = ['R1', 'R2', 'R3', 'R12', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11'] as const;
 
 export type CodigoRegla = (typeof CODIGOS_REGLA)[number];
 
 export interface ReglaDefault {
     codigo: CodigoRegla;
     nombre: string;
+    activo: boolean;
     parametros: Record<string, unknown>;
     canales: Canal[];
     plantilla: string;
@@ -16,28 +17,40 @@ export interface ReglaDefault {
 export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R1',
-        nombre: 'Antes de la entrada',
-        parametros: { minutosAntes: 15 },
-        canales: ['APP', 'WEB'],
-        plantilla: '{nombre}, tu entrada es a las {hora_entrada}.',
-    },
-    {
-        codigo: 'R2',
-        nombre: 'Sin registro de entrada',
+        nombre: 'Falta checar entrada',
+        activo: true,
         parametros: { minutosDespues: 10 },
         canales: ['APP', 'WEB'],
         plantilla: '{nombre}, no vemos tu entrada de las {hora_entrada}.',
     },
     {
-        codigo: 'R3',
-        nombre: 'Sin registro de salida',
+        codigo: 'R2',
+        nombre: 'Olvidó checar salida',
+        activo: true,
         parametros: { minutosDespues: 30 },
         canales: ['APP', 'WEB'],
         plantilla: '{nombre}, recuerda registrar tu salida.',
     },
     {
+        codigo: 'R3',
+        nombre: 'Resumen de ausencias del equipo',
+        activo: false,
+        parametros: { horaCorte: '10:00' },
+        canales: ['APP', 'WEB'],
+        plantilla: '{nombre}, estas personas de tu equipo no registraron entrada: {equipo}.',
+    },
+    {
+        codigo: 'R12',
+        nombre: 'Antes de la entrada',
+        activo: false,
+        parametros: { minutosAntes: 15 },
+        canales: ['APP', 'WEB'],
+        plantilla: '{nombre}, tu entrada es a las {hora_entrada}.',
+    },
+    {
         codigo: 'R4',
         nombre: 'Documento faltante',
+        activo: true,
         parametros: { cadaDias: 3, maxIntentos: 5 },
         canales: ['APP', 'WEB', 'CORREO'],
         plantilla: '{nombre}, falta cargar {documento}.',
@@ -45,6 +58,7 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R5',
         nombre: 'Documento por vencer',
+        activo: true,
         parametros: { diasAntes: [30, 7, 1] },
         canales: ['APP', 'WEB', 'CORREO'],
         plantilla: '{nombre}, {documento} vence el {fecha_limite}.',
@@ -52,6 +66,7 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R6',
         nombre: 'Documento rechazado',
+        activo: true,
         parametros: { cadaDias: 2, maxIntentos: 5 },
         canales: ['APP', 'WEB', 'CORREO'],
         plantilla: '{nombre}, rechazamos {documento}. Vuelve a cargarlo.',
@@ -59,6 +74,7 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R7',
         nombre: 'Curso asignado',
+        activo: true,
         parametros: { cadaDias: 1, maxIntentos: 3 },
         canales: ['APP', 'WEB'],
         plantilla: '{nombre}, te asignamos el curso {curso}.',
@@ -66,6 +82,7 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R8',
         nombre: 'Curso por vencer o atrasado',
+        activo: true,
         parametros: { diasAntes: 3, cadaDias: 1, maxIntentos: 5 },
         canales: ['APP', 'WEB'],
         plantilla: '{nombre}, el curso {curso} tiene fecha límite {fecha_limite}.',
@@ -73,6 +90,7 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R9',
         nombre: 'Aprobación pendiente',
+        activo: true,
         parametros: { cadaDias: 1, maxIntentos: 5 },
         canales: ['APP', 'WEB', 'CORREO'],
         plantilla: '{nombre}, tienes pendiente la solicitud {solicitud}.',
@@ -80,6 +98,7 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R10',
         nombre: 'Cambio de estatus',
+        activo: true,
         parametros: {},
         canales: ['APP', 'WEB', 'CORREO'],
         plantilla: '{nombre}, tu solicitud {solicitud} cambió de estatus.',
@@ -87,6 +106,7 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R11',
         nombre: 'Comunicado pendiente',
+        activo: true,
         parametros: {},
         canales: ['APP', 'WEB'],
         plantilla: '{nombre}, tienes un comunicado pendiente: {solicitud}.',
@@ -119,8 +139,9 @@ export function validarParametros(codigo: string, valor: unknown): { ok: true; p
         if (claves.length) return { ok: false, message: 'Esta regla no lleva parámetros.' };
         return { ok: true, parametros: {} };
     }
-    if (codigo === 'R1') return soloEntero(crudo, claves, 'minutosAntes', 1, 180);
-    if (codigo === 'R2' || codigo === 'R3') return soloEntero(crudo, claves, 'minutosDespues', 1, 240);
+    if (codigo === 'R12') return soloEntero(crudo, claves, 'minutosAntes', 1, 180);
+    if (codigo === 'R1' || codigo === 'R2') return soloEntero(crudo, claves, 'minutosDespues', 1, 240);
+    if (codigo === 'R3') return soloHoraCorte(crudo, claves);
     if (codigo === 'R5') return soloDiasAntes(crudo, claves);
     if (codigo === 'R8') return ventanaCurso(crudo, claves);
     if (codigo === 'R4' || codigo === 'R6' || codigo === 'R7' || codigo === 'R9') return cadaDias(crudo, claves);
@@ -137,6 +158,19 @@ export function validarIds(valor: unknown): number[] | null {
     if (valor == null) return [];
     if (!Array.isArray(valor) || !valor.every((item) => Number.isInteger(item) && (item as number) > 0)) return null;
     return [...new Set(valor as number[])];
+}
+
+function soloHoraCorte(
+    crudo: Record<string, unknown>,
+    claves: string[],
+): { ok: true; parametros: Record<string, unknown> } | { ok: false; message: string } {
+    if (claves.length !== 1 || claves[0] !== 'horaCorte') {
+        return { ok: false, message: 'Indica solo horaCorte.' };
+    }
+    if (typeof crudo.horaCorte !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(crudo.horaCorte)) {
+        return { ok: false, message: 'horaCorte debe tener el formato HH:mm.' };
+    }
+    return { ok: true, parametros: { horaCorte: crudo.horaCorte } };
 }
 
 function soloEntero(
