@@ -224,130 +224,206 @@ export class DigitalFilesService {
     return await this.getExpediente(companyId, employeeId, pseudoUser);
   }
 
+
   async getCompanyDocuments(employeeId: number) {
     try {
-      const rows = await this.prisma.$queryRaw<any[]>`
-        SELECT
-          de.idDocumentoEmpresa,
-          de.nombre,
-          de.rutaOriginal,
-          de.rutaFirmado,
-          de.fechaEnvio,
-          de.fechaFirmado,
-          n.codigoValidacion,
-          n.hash,
-          n.rutaConstancia,
-          n.estatus AS estatusNOM151,
-          n.claveMensaje,
-          n.fechaObtencion
-        FROM DocumentosEmpresa de
-        LEFT JOIN DocumentosEmpresaNOM151 n ON n.idDocumentoEmpresa = de.idDocumentoEmpresa
-        WHERE de.idEmpleado = ${employeeId}
-        ORDER BY de.fechaEnvio DESC;
-      `;
-
-      // Función auxiliar para normalizar rutas y limpiar prefijos
+      // Normalizar las rutas para enviarlas al frontend
       const helperBuildUrl = (ruta: string | null): string | null => {
         if (!ruta) return null;
+
         let cleanPath = ruta.replace(/\\/g, '/');
-        cleanPath = cleanPath.replace(/^((\/RR-HH)?\/)?media\//, '');
+        cleanPath = cleanPath.replace(/^((\/RR-HH)?\/)?media\//i, '');
         cleanPath = cleanPath.replace(/^\/+/, '');
+
         return cleanPath;
       };
 
-      // Formateador de fechas nativo de JS
+      // Formatear fechas
       const formatFecha = (dateInput: any): string | null => {
         if (!dateInput) return null;
+
         const d = new Date(dateInput);
+
         if (isNaN(d.getTime())) return '';
+
         const pad = (num: number) => String(num).padStart(2, '0');
+
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       };
 
-      // Formatear los registros de DocumentosEmpresa
-      const documentos = rows.map((row) => {
-        const urlOriginal = helperBuildUrl(row.rutaOriginal) || '';
-        const urlFirmado = helperBuildUrl(row.rutaFirmado);
-        const urlConstancia = helperBuildUrl(row.rutaConstancia);
+      // Obtener la ruta de la constancia PDF cuando se almacena un .cer
+      const helperConstanciaUrl = (ruta: string | null): string | null => {
+        if (!ruta) return null;
 
-        return {
-          id: row.idDocumentoEmpresa,
-          nombre: row.nombre,
-          ruta: urlOriginal,
-          requereFirma: true,
-          firmado: !!row.rutaFirmado,
-          rutaFirmado: urlFirmado,
-          fechaEnvio: formatFecha(row.fechaEnvio) || '',
-          fechaFirmado: formatFecha(row.fechaFirmado),
-          nom151: {
-            certificado: !!row.codigoValidacion,
-            codigoValidacion: row.codigoValidacion || null,
-            hash: row.hash || null,
-            urlConstancia: urlConstancia,
-            estatus: row.estatusNOM151 || null,
-            claveMensaje: row.claveMensaje || null,
-            fechaObtencion: formatFecha(row.fechaObtencion),
-          },
-        };
+        let rutaConstancia = ruta;
+
+        if (rutaConstancia.toLowerCase().endsWith('.cer')) {
+          rutaConstancia = rutaConstancia.replace(/\.cer$/i, '_constancia.pdf');
+        }
+
+        return helperBuildUrl(rutaConstancia);
+      };
+
+      // Construir el objeto NOM151 con una estructura uniforme
+      const helperBuildNom151 = (
+        row: any,
+        esDocumentoEmpresa = false,
+      ) => ({
+        certificado: !!row.codigoValidacion,
+        codigoValidacion: row.codigoValidacion || null,
+        hash: row.hash || null,
+        urlConstancia: helperConstanciaUrl(row.rutaConstancia),
+        estatus: row.estatusNOM151
+          || (row.codigoValidacion && !esDocumentoEmpresa ? 'COMPLETADO' : null),
+        claveMensaje: row.claveMensaje || null,
+        fechaObtencion: formatFecha(row.fechaObtencion),
       });
 
-      // Consultar el contrato más reciente del empleado
-      const contratoRows = await this.prisma.$queryRaw<any[]>`
-        SELECT
-          c.idContrato,
-          dg.id AS idDocumentoGenerado,
-          dg.archivoGenerado AS rutaOriginal,
-          dg.firmado,
-          dg.fechaGeneracion,
-          dg.codigoValidacionNOM151 AS codigoValidacion,
-          dg.hashNOM151 AS hash,
-          dg.archivoNom151 AS rutaConstancia,
-          dg.fechaSellado AS fechaObtencion
-        FROM Contratos c
-        INNER JOIN DocumentosGenerados dg ON dg.idContrato = c.idContrato
-        WHERE c.idEmpleado = ${employeeId}
-          AND dg.archivoGenerado IS NOT NULL
-        ORDER BY dg.fechaGeneracion DESC
-        LIMIT 1
-      `;
+      // 1. Documentos de empresa
+      const rows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                de.idDocumentoEmpresa,
+                de.nombre,
+                de.rutaOriginal,
+                de.rutaFirmado,
+                de.fechaEnvio,
+                de.fechaFirmado,
+                n.codigoValidacion,
+                n.hash,
+                n.rutaConstancia,
+                n.estatus AS estatusNOM151,
+                n.claveMensaje,
+                n.fechaObtencion
+            FROM DocumentosEmpresa de
+            LEFT JOIN DocumentosEmpresaNOM151 n
+                ON n.idDocumentoEmpresa = de.idDocumentoEmpresa
+            WHERE de.idEmpleado = ${employeeId}
+            ORDER BY de.fechaEnvio DESC;
+        `;
 
-      if (contratoRows.length > 0) {
-        const row = contratoRows[0];
-        const urlOriginal = helperBuildUrl(row.rutaOriginal) || '';
+      const documentos = rows.map((row) => ({
+        id: row.idDocumentoEmpresa,
+        nombre: row.nombre,
+        ruta: helperBuildUrl(row.rutaOriginal) || '',
+        requereFirma: true,
+        firmado: !!row.rutaFirmado,
+        rutaFirmado: helperBuildUrl(row.rutaFirmado),
+        fechaEnvio: formatFecha(row.fechaEnvio) || '',
+        fechaFirmado: formatFecha(row.fechaFirmado),
+        nom151: helperBuildNom151(row, true),
+      }));
 
-        let rutaConstancia = row.rutaConstancia;
-        if (rutaConstancia && rutaConstancia.endsWith('.cer')) {
-          rutaConstancia = rutaConstancia.replace(/\.cer$/, '_constancia.pdf');
-        }
-        const urlConstancia = helperBuildUrl(rutaConstancia);
+      // 2. Documentos generados relacionados directamente con el empleado,
+      // excluyendo los que pertenecen a un contrato.
+      const documentosGeneradosRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                dg.id,
+                dg.archivoGenerado AS rutaOriginal,
+                dg.firmado,
+                dg.fechaGeneracion,
+                dg.codigoValidacionNOM151 AS codigoValidacion,
+                dg.hashNOM151 AS hash,
+                dg.archivoNom151 AS rutaConstancia,
+                dg.fechaSellado AS fechaObtencion
+            FROM DocumentosGenerados dg
+            WHERE dg.idEmpleado = ${employeeId}
+                AND dg.idContrato IS NULL
+                AND dg.archivoGenerado IS NOT NULL
+            ORDER BY dg.fechaGeneracion DESC;
+        `;
 
-        const contratoDocumento = {
-          id: -(row.idContrato),
-          nombre: 'Contrato Laboral',
-          ruta: urlOriginal,
+      const documentosGenerados = documentosGeneradosRows.map((row) => {
+        const rutaOriginal = helperBuildUrl(row.rutaOriginal) || '';
+
+        // Obtener el nombre del archivo a partir de su ruta
+        const nombreArchivo = rutaOriginal
+          ? rutaOriginal.split('/').pop() || 'Documento generado'
+          : 'Documento generado';
+
+        return {
+          id: -row.id,
+          idDocumentoGenerado: row.id,
+          nombre: nombreArchivo,
+          ruta: rutaOriginal,
           requereFirma: true,
           firmado: !!row.firmado,
           rutaFirmado: null,
           fechaEnvio: formatFecha(row.fechaGeneracion) || '',
           fechaFirmado: null,
-          nom151: {
-            certificado: !!row.codigoValidacion,
-            codigoValidacion: row.codigoValidacion || null,
-            hash: row.hash || null,
-            urlConstancia: urlConstancia,
-            estatus: row.codigoValidacion ? 'COMPLETADO' : null,
-            claveMensaje: null,
-            fechaObtencion: formatFecha(row.fechaObtencion),
-          },
+          tipo: 'DOCUMENTO_GENERADO',
+          nom151: helperBuildNom151(row),
         };
+      });
 
-        documentos.unshift(contratoDocumento);
+      // 3. Consultar el contrato más reciente del empleado
+      const contratoRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                c.idContrato,
+                dg.id AS idDocumentoGenerado,
+                dg.archivoGenerado AS rutaOriginal,
+                dg.firmado,
+                dg.fechaGeneracion,
+                dg.codigoValidacionNOM151 AS codigoValidacion,
+                dg.hashNOM151 AS hash,
+                dg.archivoNom151 AS rutaConstancia,
+                dg.fechaSellado AS fechaObtencion
+            FROM Contratos c
+            INNER JOIN DocumentosGenerados dg
+                ON dg.idContrato = c.idContrato
+            WHERE c.idEmpleado = ${employeeId}
+                AND dg.archivoGenerado IS NOT NULL
+            ORDER BY dg.fechaGeneracion DESC
+            LIMIT 1;
+        `;
+
+      let contratoDocumento: any = null;
+
+      if (contratoRows.length > 0) {
+        const row = contratoRows[0];
+
+        contratoDocumento = {
+          id: -(row.idContrato),
+          idDocumentoGenerado: row.idDocumentoGenerado,
+          nombre: 'Contrato Laboral',
+          ruta: helperBuildUrl(row.rutaOriginal) || '',
+          requereFirma: true,
+          firmado: !!row.firmado,
+          rutaFirmado: null,
+          fechaEnvio: formatFecha(row.fechaGeneracion) || '',
+          fechaFirmado: null,
+          tipo: 'CONTRATO',
+          nom151: helperBuildNom151(row),
+        };
       }
 
+      // 4. Unificar los documentos y ordenarlos por fecha
+      documentos.push(...documentosGenerados);
+
+      if (contratoDocumento) {
+        documentos.push(contratoDocumento);
+      }
+
+      documentos.sort((a, b) => {
+        const fechaA = a.fechaEnvio
+          ? new Date(a.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        const fechaB = b.fechaEnvio
+          ? new Date(b.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        return fechaB - fechaA;
+      });
+
       return { documentos };
+
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Error interno del servidor al obtener documentos';
+      const message = error instanceof Error
+        ? error.message
+        : 'Error interno del servidor al obtener documentos';
+
       this.logger.error(message);
+
       throw new InternalServerErrorException({ message });
     }
   }

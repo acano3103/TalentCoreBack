@@ -269,7 +269,7 @@ export class DocumentosTemplatesController {
     }
 
     // Generamos un documento a partir de una plantilla
-    @Post(':id/generate')
+    @Post(':id/generate/:employeeId')
     @ApiOperation({ summary: 'Generate document from template', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 201, description: 'Document generated' })
     @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
@@ -277,9 +277,10 @@ export class DocumentosTemplatesController {
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('id', ParseIntPipe) id: number,
+        @Param('employeeId', ParseIntPipe) employeeId: number,
         @Body() generateDto: GenerarDocumentoDto,
     ) {
-        return this.service.generate(companyId, id, generateDto, activeUser);
+        return this.service.generate(companyId, id, employeeId, generateDto, activeUser);
     }
 
     @Post('generated/:id/share')

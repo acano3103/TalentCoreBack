@@ -720,13 +720,12 @@ export class DocumentosTemplatesService {
     async generate(
         companyId: number,
         id: number,
+        employeeId: number,
         generateDto: GenerarDocumentoDto,
         activeUser: ActiveUserDto,
     ) {
         if (!activeUser.idTenant) {
-            throw new BadRequestException(
-                'El usuario no tiene un tenant asignado.',
-            );
+            throw new BadRequestException('El usuario no tiene un tenant asignado.');
         }
 
         const plantilla = await this.prisma.plantillasDocumentos.findFirst({
@@ -785,9 +784,7 @@ export class DocumentosTemplatesService {
                 buffer = await fs.readFile(tempPath);
             } catch (err) {
                 this.logger.error(`Error generando PDF: ${err.message}`);
-                throw new InternalServerErrorException(
-                    'Error al generar el documento PDF.',
-                );
+                throw new InternalServerErrorException('Error al generar el documento PDF.');
             } finally {
                 await fs.remove(tempPath);
             }
@@ -814,23 +811,26 @@ export class DocumentosTemplatesService {
                     throw new Error('La conversión no generó un PDF válido.');
                 }
             } catch (err) {
-                this.logger.error(
-                    `Error generando o convirtiendo DOCX a PDF: ${err.message}`,
-                );
-
-                throw new InternalServerErrorException(
-                    'Error al generar el documento PDF a partir de la plantilla Word.',
-                );
+                this.logger.error(`Error generando o convirtiendo DOCX a PDF: ${err.message}`);
+                throw new InternalServerErrorException('Error al generar el documento PDF a partir de la plantilla Word.');
             } finally {
                 await fs.remove(tempDir);
             }
         }
 
+        // Determinar si el documento pertenece a un empleado o candidato
+        const idEmpleado = employeeId && employeeId !== 0 ? employeeId : null;
+
+        // Definir la carpeta de almacenamiento
+        const subfolder = idEmpleado
+            ? `plantillas/documentos-generados/empleados/${idEmpleado}`
+            : `plantillas/documentos-generados/candidatos/${generateDto.idCandidato}`;
+
         const archivo = await this.mediaPathService.saveGeneratedFile(
             buffer,
             {
                 idTenant: activeUser.idTenant,
-                subfolder: 'plantillas/documentos-generados',
+                subfolder: subfolder,
                 fileName: filename,
                 mimeType,
             },
@@ -840,6 +840,7 @@ export class DocumentosTemplatesService {
             const documento = await this.prisma.documentosGenerados.create({
                 data: {
                     idPlantilla: id,
+                    idEmpleado: idEmpleado,
                     idVacante: generateDto.idVacante,
                     idCandidato: generateDto.idCandidato,
                     datosJson: generateDto.valores,
@@ -851,7 +852,15 @@ export class DocumentosTemplatesService {
 
             return documento;
         } catch (err) {
-            await this.mediaPathService.deleteFile(archivo.rutaRelativa);
+            console.log(err)
+            try {
+                await this.mediaPathService.deleteFile(archivo.rutaRelativa);
+            } catch (deleteError) {
+                this.logger.error(
+                    `No se pudo eliminar el archivo generado: ${deleteError.message}`,
+                );
+            }
+
             throw err;
         }
     }
@@ -1270,7 +1279,9 @@ export class DocumentosTemplatesService {
 
     async requestSignatureOtp(token: string) {
         const documento = await this.prisma.documentosGenerados.findFirst({
-            where: { tokenFirma: token },
+            where: {
+                tokenFirma: token,
+            },
             include: {
                 contrato: {
                     include: {
@@ -1289,29 +1300,85 @@ export class DocumentosTemplatesService {
             },
         });
 
-        if (!documento) throw new NotFoundException('Documento de firma no encontrado');
-        if (documento.firmado) throw new BadRequestException('El documento ya fue firmado');
-        if (!documento.contrato) throw new BadRequestException('El documento no está ligado a un contrato');
+        if (!documento) {
+            throw new NotFoundException('Documento de firma no encontrado');
+        }
 
-        const contrato = documento.contrato;
-        const empleado = contrato.Empleados;
+        if (documento.firmado) {
+            throw new BadRequestException('El documento ya fue firmado');
+        }
+
+        // Si existe contrato, conservamos el empleado asociado al contrato.
+        // Si no existe, utilizamos el idEmpleado del documento generado.
+        let empleado = documento.contrato?.Empleados ?? null;
+
+        if (!empleado && documento.idEmpleado) {
+            empleado = await this.prisma.empleados.findFirst({
+                where: {
+                    idEmpleado: documento.idEmpleado,
+                    activo: true,
+                },
+                select: {
+                    idEmpleado: true,
+                    nombre: true,
+                    primerApellido: true,
+                    correo: true,
+                    telefonoMovil: true,
+                    idUsuario: true,
+                },
+            });
+        }
+
+        if (!empleado) {
+            throw new BadRequestException(
+                'No se encontró un empleado asociado al documento de firma',
+            );
+        }
 
         if (!empleado.telefonoMovil) {
-            throw new BadRequestException('El empleado no tiene un teléfono registrado');
+            throw new BadRequestException(
+                'El empleado no tiene un teléfono registrado',
+            );
         }
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const fechaToken = new Date();
 
-        await this.prisma.contratos.update({
-            where: { idContrato: contrato.idContrato },
-            data: {
-                tokenValidacion: otp,
-                fechaToken: new Date(),
-            },
+        // El OTP siempre se guarda en DocumentosGenerados.
+        await this.prisma.$transaction(async (tx) => {
+            await tx.documentosGenerados.update({
+                where: {
+                    id: documento.id,
+                },
+                data: {
+                    tokenValidacion: otp,
+                    fechaToken,
+                },
+            });
+
+            // Compatibilidad con el flujo anterior de contratos.
+            if (documento.contrato) {
+                await tx.contratos.update({
+                    where: {
+                        idContrato: documento.contrato.idContrato,
+                    },
+                    data: {
+                        tokenValidacion: otp,
+                        fechaToken,
+                    },
+                });
+            }
         });
 
-        const nombreCompleto = `${empleado.nombre} ${empleado.primerApellido}`.trim();
-        const userUuid = empleado.idUsuario || `empleado-${empleado.idEmpleado}`;
+        const nombreCompleto = [
+            empleado.nombre,
+            empleado.primerApellido,
+        ]
+            .filter(Boolean)
+            .join(' ');
+
+        const userUuid =
+            empleado.idUsuario || `empleado-${empleado.idEmpleado}`;
 
         await this.notifications.notify({
             userUuid,
@@ -1322,48 +1389,47 @@ export class DocumentosTemplatesService {
             context: { otp },
         });
 
-        this.logger.log(`OTP de firma enviado a ${empleado.telefonoMovil} para contrato ${contrato.idContrato}`);
+        this.logger.log(
+            documento.contrato
+                ? `OTP de firma enviado a ${empleado.telefonoMovil} para contrato ${documento.contrato.idContrato}`
+                : `OTP de firma enviado a ${empleado.telefonoMovil} para documento generado ${documento.id}`,
+        );
 
-        return { sent: true, phone: `***${empleado.telefonoMovil.slice(-4)}` };
+        return {
+            sent: true,
+            phone: `***${empleado.telefonoMovil.slice(-4)}`,
+        };
     }
 
     private async verifySignatureOtp(documentoId: number, otp: string) {
-        const documento = await this.prisma.documentosGenerados.findFirst({
+        const documento = await this.prisma.documentosGenerados.findUnique({
             where: { id: documentoId },
-            include: { contrato: true },
+            select: {
+                id: true,
+                tokenValidacion: true,
+                fechaToken: true,
+            },
         });
 
-        if (!documento?.contrato) {
-            throw new BadRequestException('Documento sin contrato asociado');
+        if (!documento) {
+            throw new NotFoundException('Documento de firma no encontrado');
         }
 
-        const contrato = documento.contrato;
-
-        if (!contrato.tokenValidacion || !contrato.fechaToken) {
+        if (!documento.tokenValidacion || !documento.fechaToken) {
             throw new BadRequestException('No se ha solicitado un código de validación');
         }
 
-        const elapsed = Date.now() - new Date(contrato.fechaToken).getTime();
+        const elapsed = Date.now() - new Date(documento.fechaToken).getTime();
 
         if (elapsed > 10 * 60 * 1000) {
             throw new BadRequestException('El código ha expirado. Solicita uno nuevo.');
         }
 
-        if (contrato.tokenValidacion !== otp) {
+        if (documento.tokenValidacion !== otp) {
             throw new BadRequestException('Código incorrecto');
         }
 
-        return contrato.idContrato;
-    }
-
-    private async consumeSignatureOtp(idContrato: number) {
-        await this.prisma.contratos.update({
-            where: { idContrato },
-            data: {
-                tokenValidacion: null,
-                fechaToken: null,
-            },
-        });
+        return true;
     }
 
     async getForPublicSignature(token: string) {
@@ -1508,7 +1574,9 @@ export class DocumentosTemplatesService {
         }
 
         const documento = await this.prisma.documentosGenerados.findFirst({
-            where: { tokenFirma: token },
+            where: {
+                tokenFirma: token,
+            },
             include: {
                 contrato: true,
                 plantilla: {
@@ -1528,19 +1596,13 @@ export class DocumentosTemplatesService {
             throw new BadRequestException('El documento ya fue firmado');
         }
 
-        if (!documento.contrato) {
-            throw new BadRequestException('El documento no está ligado a un contrato');
-        }
-
         if (!documento.archivoGenerado) {
-            throw new BadRequestException('El documento no tiene un archivo generado');
+            throw new BadRequestException('El documento no tiene un archivo generado',);
         }
 
         // Validar que exista una posición de firma configurada.
         if (!documento.firmaConfigurada) {
-            throw new BadRequestException(
-                'El documento no tiene una posición de firma configurada',
-            );
+            throw new BadRequestException('El documento no tiene una posición de firma configurada');
         }
 
         if (
@@ -1550,9 +1612,7 @@ export class DocumentosTemplatesService {
             documento.firmaAncho == null ||
             documento.firmaAlto == null
         ) {
-            throw new BadRequestException(
-                'La posición de firma del documento está incompleta',
-            );
+            throw new BadRequestException('La posición de firma del documento está incompleta');
         }
 
         const posicionFirma = {
@@ -1573,10 +1633,10 @@ export class DocumentosTemplatesService {
             posicionFirma.x + posicionFirma.ancho > 100 ||
             posicionFirma.y + posicionFirma.alto > 100
         ) {
-            throw new BadRequestException(
-                'La posición de firma guardada no es válida',
-            );
+            throw new BadRequestException('La posición de firma guardada no es válida');
         }
+
+        await this.verifySignatureOtp(documento.id, signatureData.otp);
 
         // Resolver el archivo original.
         const outputPath = await this.mediaPathService.fileExists(
@@ -1587,9 +1647,7 @@ export class DocumentosTemplatesService {
         const ext = path.extname(outputPath).toLowerCase();
 
         if (ext !== '.pdf' && ext !== '.docx') {
-            throw new BadRequestException(
-                'El formato del documento no es compatible con la firma',
-            );
+            throw new BadRequestException('El formato del documento no es compatible con la firma');
         }
 
         // Validar que la imagen sea PNG.
@@ -1609,15 +1667,8 @@ export class DocumentosTemplatesService {
             );
         }
 
-        // Validar el OTP sin consumirlo todavía.
-        const idContrato = await this.verifySignatureOtp(
-            documento.id,
-            signatureData.otp,
-        );
-
         const outputDir = path.dirname(outputPath);
         const signedFilename = `${crypto.randomUUID()}_firmado.pdf`;
-
         const signedPath = path.join(outputDir, signedFilename);
 
         const relativeDirectory = path.posix.dirname(
@@ -1636,9 +1687,7 @@ export class DocumentosTemplatesService {
 
             // Si el documento original es DOCX, convertirlo antes de insertar la firma.
             if (ext === '.docx') {
-                tempDir = await fs.mkdtemp(
-                    path.join(tmpdir(), 'talentcore-signature-'),
-                );
+                tempDir = await fs.mkdtemp(path.join(tmpdir(), 'talentcore-signature-'));
 
                 pdfInputPath = path.join(tempDir, 'documento.pdf');
 
@@ -1665,36 +1714,41 @@ export class DocumentosTemplatesService {
                 posicionFirma,
             };
 
-            // Guardar documento firmado y consumir el OTP en una sola transacción.
-            await this.prisma.$transaction([
-                this.prisma.documentosGenerados.update({
-                    where: { id: documento.id },
+            // Guardar documento firmado y consumir OTP.
+            await this.prisma.$transaction(async (tx) => {
+                await tx.documentosGenerados.update({
+                    where: {
+                        id: documento.id,
+                    },
                     data: {
                         firmado: true,
                         estatus: 'firmado',
                         datosFirma: firmaMeta,
                         archivoGenerado: signedRelativePath,
-                    },
-                }),
-
-                this.prisma.contratos.update({
-                    where: { idContrato },
-                    data: {
                         tokenValidacion: null,
                         fechaToken: null,
                     },
-                }),
-            ]);
+                });
+
+                // Si existe contrato, conservar la actualización anterior.
+                if (documento.contrato) {
+                    await tx.contratos.update({
+                        where: {
+                            idContrato: documento.contrato.idContrato,
+                        },
+                        data: {
+                            tokenValidacion: null,
+                            fechaToken: null,
+                        },
+                    });
+                }
+            });
 
             // Una vez confirmado el guardado, eliminar el archivo anterior.
             try {
-                await this.mediaPathService.deleteFile(
-                    documento.archivoGenerado,
-                );
+                await this.mediaPathService.deleteFile(documento.archivoGenerado);
             } catch (error: any) {
-                this.logger.warn(
-                    `No se pudo eliminar el PDF anterior del documento ${documento.id}: ${error.message}`,
-                );
+                this.logger.warn(`No se pudo eliminar el PDF anterior del documento ${documento.id}: ${error.message}`);
             }
         } catch (error: any) {
             // Si algo falla, no dejamos archivos firmados huérfanos.
@@ -1703,9 +1757,7 @@ export class DocumentosTemplatesService {
                     await fs.remove(signedPath);
                 }
             } catch (cleanupError: any) {
-                this.logger.error(
-                    `No se pudo limpiar el archivo temporal de firma: ${cleanupError.message}`,
-                );
+                this.logger.error(`No se pudo limpiar el archivo temporal de firma: ${cleanupError.message}`);
             }
 
             throw error;

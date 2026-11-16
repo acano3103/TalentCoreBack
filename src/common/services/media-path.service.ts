@@ -155,17 +155,34 @@ export class MediaPathService {
         };
     }
 
+
     async deleteFile(rutaRelativa: string): Promise<void> {
+        if (!rutaRelativa || typeof rutaRelativa !== 'string') {
+            throw new BadRequestException('La ruta del archivo no es válida.');
+        }
+
+        // Normalizar separadores y quitar el prefijo /media/
+        const normalizedPath = rutaRelativa
+            .replace(/\\/g, '/')
+            .replace(/^\/+/, '')
+            .replace(/^media\//i, '');
+
+        // Evitar rutas que intenten salir de la carpeta de medios
+        const segments = normalizedPath.split('/');
+
         if (
-            !rutaRelativa ||
-            path.isAbsolute(rutaRelativa) ||
-            rutaRelativa.split(/[\\/]+/).includes('..')
+            !normalizedPath ||
+            segments.includes('..') ||
+            segments.includes('.')
         ) {
             throw new BadRequestException('La ruta del archivo no es válida.');
         }
 
-        const root = this.getMediaRoot();
-        const absolutePath = path.resolve(root, rutaRelativa);
+        // getMediaRoot() ya apunta a la carpeta media
+        const root = path.resolve(this.getMediaRoot());
+        const absolutePath = path.resolve(root, normalizedPath);
+
+        // Verificar que el archivo esté dentro de la carpeta media
         const relative = path.relative(root, absolutePath);
 
         if (
@@ -174,11 +191,14 @@ export class MediaPathService {
             relative.startsWith(`..${path.sep}`) ||
             path.isAbsolute(relative)
         ) {
-            throw new BadRequestException('No se permite eliminar archivos fuera de la carpeta de medios.');
+            throw new BadRequestException(
+                'No se permite eliminar archivos fuera de la carpeta de medios.',
+            );
         }
 
         await fs.remove(absolutePath);
     }
+
 
 
     /**

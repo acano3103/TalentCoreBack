@@ -104,6 +104,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 14, code: 'DOCUMENT_REJECTED', description: 'Notificación de rechazo de documentación', activo: true },
             { id: 15, code: 'CONTRACT_SIGN', description: 'Notificación que se le envía al empleado para que firme su contrato', activo: true },
             { id: 16, code: 'CONTRACT_SIGN_TOKEN', description: 'Notificación con token para firmar contrato', activo: true },
+            { id: 17, code: 'STAFF_REDUCTION_DOCUMENT_SIGN', description: 'Notificación con token para firmar documento de baja', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -198,6 +199,11 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 62, notification_type_id: 16, channel_id: 2, enabled: true }, // WhatsApp
             { id: 63, notification_type_id: 16, channel_id: 3, enabled: false }, // SMS
             { id: 64, notification_type_id: 16, channel_id: 4, enabled: false }, // Sockets
+            // --- 17. STAFF_REDUCTION_DOCUMENT_SIGN (Firma de documento de baja con token) ---
+            { id: 65, notification_type_id: 17, channel_id: 1, enabled: true }, // Email
+            { id: 66, notification_type_id: 17, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 67, notification_type_id: 17, channel_id: 3, enabled: false }, // SMS
+            { id: 68, notification_type_id: 17, channel_id: 4, enabled: false }, // Sockets
         ];
 
         for (const tc of typeChannels) {
