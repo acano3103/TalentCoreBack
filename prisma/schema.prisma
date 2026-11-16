@@ -1288,24 +1288,27 @@ model PlantillasDocumentos {
 }
 
 model CamposPlantilla {
-  id            Int                  @id @default(autoincrement())
-  idPlantilla   Int
-  identificador String               @db.VarChar(100)
-  nombreCampo   String               @db.VarChar(200)
-  tipoDato      String               @default("texto") @db.VarChar(50)
-  requerido     Boolean              @default(true)
-  orden         Int                  @default(0)
-  valorDefault  String?              @db.VarChar(500)
-  textoOriginal String?              @db.Text
-  alto          Float?               @map("alto")
-  ancho         Float?               @map("ancho")
-  pagina        Int?                 @map("pagina")
-  posicionX     Float?               @map("posicionX")
-  posicionY     Float?               @map("posicionY")
-  plantilla     PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Cascade, map: "fk_campo_plantilla")
+  id                 Int                  @id @default(autoincrement())
+  idPlantilla        Int
+  idCampoCatalogo    Int?
+  identificador      String               @db.VarChar(100)
+  nombreCampo        String               @db.VarChar(200)
+  tipoDato           String               @default("texto") @db.VarChar(50)
+  requerido          Boolean              @default(true)
+  orden              Int                  @default(0)
+  valorDefault       String?              @db.VarChar(500)
+  textoOriginal      String?              @db.Text
+  alto               Float?               @map("alto")
+  ancho              Float?               @map("ancho")
+  pagina             Int?                 @map("pagina")
+  posicionX          Float?               @map("posicionX")
+  posicionY          Float?               @map("posicionY")
+  plantilla          PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Cascade, map: "fk_campo_plantilla")
+  CatCamposPlantilla CatCamposPlantilla?  @relation(fields: [idCampoCatalogo], references: [id], onDelete: Restrict, map: "fk_campo_plantilla_catalogo")
 
   @@unique([idPlantilla, identificador], map: "uk_plantilla_identificador")
   @@index([idPlantilla], map: "idx_campo_plantilla")
+  @@index([idCampoCatalogo], map: "idx_campo_plantilla_catalogo")
 }
 
 model DocumentosGenerados {
@@ -1321,6 +1324,12 @@ model DocumentosGenerados {
   idUsuarioGenero        Int
   tokenFirma             String?              @unique(map: "tokenFirma") @db.VarChar(100)
   firmado                Boolean              @default(false)
+  firmaConfigurada       Boolean              @default(false)
+  firmaPagina            Int?
+  firmaX                 Decimal?             @db.Decimal(8, 4)
+  firmaY                 Decimal?             @db.Decimal(8, 4)
+  firmaAncho             Decimal?             @db.Decimal(8, 4)
+  firmaAlto              Decimal?             @db.Decimal(8, 4)
   datosFirma             Json?
   idContrato             Int?
   codigoValidacionNOM151 String?              @db.VarChar(100)
@@ -2824,6 +2833,22 @@ model DetalleCalendarioLaboralEmpleado {
 
   @@unique([idCalendario, numeroTurno], map: "UK_Calendario_NumeroTurno")
   @@index([idCalendario], map: "IDX_Detalle_Calendario")
+}
+
+model CatCamposPlantilla {
+  id              Int               @id @default(autoincrement())
+  clave           String            @unique(map: "uk_cat_campos_plantilla_clave") @db.VarChar(150)
+  nombre          String            @db.VarChar(200)
+  grupo           String            @db.VarChar(100)
+  entidad         String            @db.VarChar(50)
+  descripcion     String?           @db.VarChar(500)
+  activo          Boolean           @default(true)
+  orden           Int               @default(0)
+  fechaCreacion   DateTime?         @default(now()) @db.Timestamp(0)
+  CamposPlantilla CamposPlantilla[]
+
+  @@index([activo], map: "idx_cat_campos_plantilla_activo")
+  @@index([grupo], map: "idx_cat_campos_plantilla_grupo")
 }
 
 enum Entrevistas_interview_type {

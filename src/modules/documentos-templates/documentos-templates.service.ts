@@ -7,7 +7,7 @@ import { CreatePlantillaDto } from './dto/create-plantilla.dto';
 import { UpdateCamposDto } from './dto/update-campos.dto';
 import { GenerarDocumentoDto } from './dto/generar-documento.dto';
 import * as path from 'path';
-import * as fs from 'fs';
+import * as fs from 'fs-extra';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
@@ -15,176 +15,221 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as mammoth from 'mammoth';
 import PizZip = require('pizzip');
 import { MediaPathService } from 'src/common/services/media-path.service';
+import { Response } from 'express';
+import { tmpdir } from 'os';
+import { convertDocxToPdf } from 'src/common/utils/libreoffice.util';
 
-const execAsync = promisify(exec);
+function decodeXmlText(value: string): string {
+    return value.replace(
+        /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos);/gi,
+        (_match, entity: string) => {
+            const normalized = entity.toLowerCase();
+
+            if (normalized === 'amp') return '&';
+            if (normalized === 'lt') return '<';
+            if (normalized === 'gt') return '>';
+            if (normalized === 'quot') return '"';
+            if (normalized === 'apos') return "'";
+
+            if (normalized.startsWith('#x')) {
+                return String.fromCodePoint(
+                    parseInt(normalized.substring(2), 16),
+                );
+            }
+
+            if (normalized.startsWith('#')) {
+                return String.fromCodePoint(
+                    parseInt(normalized.substring(1), 10),
+                );
+            }
+
+            return _match;
+        },
+    );
+}
 
 /**
  * Reemplaza texto original en el XML interno del DOCX con un placeholder {{identificador}}.
  * Maneja la fragmentación de texto en múltiples <w:r> runs dentro de un <w:p> párrafo.
  */
-function replaceTextInDocxXml(xml: string, textoOriginal: string, placeholder: string): string {
-    // Intentar reemplazo directo primero (texto en un solo <w:t>)
-    if (xml.includes(textoOriginal)) {
-        return xml.split(textoOriginal).join(placeholder);
-    }
+function replaceTextInDocxXml(
+    xml: string,
+    textoOriginal: string,
+    replacement: string,
+): string {
+    if (!textoOriginal) return xml;
 
-    // Manejar texto fragmentado entre múltiples runs dentro de un párrafo
-    // Estrategia: en cada <w:p>, concatenar los <w:t> y si la concatenación contiene el texto,
-    // colapsar esos runs en uno solo con el placeholder
-    const paraRegex = /(<w:p[ >].*?<\/w:p>)/gs;
-    return xml.replace(paraRegex, (para) => {
-        // Extraer todos los textos de runs en orden
-        const runTexts: { run: string; text: string }[] = [];
-        const runRegex = /(<w:r[ >].*?<\/w:r>)/gs;
-        let match: RegExpExecArray | null;
-        while ((match = runRegex.exec(para)) !== null) {
-            const run = match[1];
-            const tMatch = run.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/);
-            runTexts.push({ run, text: tMatch ? tMatch[1] : '' });
-        }
+    return xml.replace(
+        /<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,
+        paragraph => {
+            const textNodeRegex =
+                /(<w:t(?:\s[^>]*)?>)([\s\S]*?)(<\/w:t>)/g;
 
-        const fullText = runTexts.map(r => r.text).join('');
-        if (!fullText.includes(textoOriginal)) return para;
+            const nodes: {
+                content: string;
+                start: number;
+                end: number;
+            }[] = [];
 
-        // Encontrar qué runs contienen el texto buscado
-        let accumulated = '';
-        let startIdx = -1;
-        let endIdx = -1;
-        for (let i = 0; i < runTexts.length; i++) {
-            accumulated += runTexts[i].text;
-            if (startIdx === -1 && accumulated.includes(textoOriginal.substring(0, 1))) {
-                // Buscar desde qué run empieza
-                let sub = '';
-                for (let j = i; j < runTexts.length; j++) {
-                    sub += runTexts[j].text;
-                    if (sub.includes(textoOriginal)) {
-                        startIdx = i;
-                        endIdx = j;
-                        break;
-                    }
-                }
-                if (startIdx !== -1) break;
+            let fullText = '';
+            let nodeMatch: RegExpExecArray | null;
+
+            while ((nodeMatch = textNodeRegex.exec(paragraph)) !== null) {
+                const content = decodeXmlText(nodeMatch[2]);
+                const start = fullText.length;
+
+                fullText += content;
+
+                nodes.push({
+                    content,
+                    start,
+                    end: fullText.length,
+                });
             }
-        }
 
-        if (startIdx === -1 || endIdx === -1) return para;
+            if (!nodes.length) return paragraph;
 
-        // Extraer rPr (propiedades) del primer run para mantener el estilo
-        const firstRun = runTexts[startIdx].run;
-        const rPrMatch = firstRun.match(/<w:rPr[\s\S]*?<\/w:rPr>/);
-        const rPr = rPrMatch ? rPrMatch[0] : '';
+            const matches: { start: number; end: number }[] = [];
+            let position = 0;
 
-        // Construir nuevo run con el placeholder
-        const newRun = `<w:r>${rPr}<w:t xml:space="preserve">${placeholder}</w:t></w:r>`;
+            while (true) {
+                const index = fullText.indexOf(textoOriginal, position);
 
-        // Reemplazar los runs afectados en el párrafo
-        let result = para;
-        const runsToReplace = runTexts.slice(startIdx, endIdx + 1).map(r => r.run);
-        // Reemplazar el primer run con el nuevo, eliminar los demás
-        result = result.replace(runsToReplace[0], newRun);
-        for (let k = 1; k < runsToReplace.length; k++) {
-            result = result.replace(runsToReplace[k], '');
-        }
-        return result;
-    });
+                if (index === -1) break;
+
+                matches.push({
+                    start: index,
+                    end: index + textoOriginal.length,
+                });
+
+                position = index + textoOriginal.length;
+            }
+
+            if (!matches.length) return paragraph;
+
+            for (const current of matches.reverse()) {
+                const startIndex = nodes.findIndex(
+                    node =>
+                        current.start >= node.start &&
+                        current.start < node.end,
+                );
+
+                const endIndex = nodes.findIndex(
+                    node =>
+                        current.end > node.start &&
+                        current.end <= node.end,
+                );
+
+                if (startIndex === -1 || endIndex === -1) continue;
+
+                const firstNode = nodes[startIndex];
+                const lastNode = nodes[endIndex];
+
+                const localStart = current.start - firstNode.start;
+                const localEnd = current.end - lastNode.start;
+
+                if (startIndex === endIndex) {
+                    firstNode.content =
+                        firstNode.content.slice(0, localStart) +
+                        replacement +
+                        firstNode.content.slice(localEnd);
+                } else {
+                    firstNode.content =
+                        firstNode.content.slice(0, localStart) +
+                        replacement;
+
+                    for (let i = startIndex + 1; i < endIndex; i++) {
+                        nodes[i].content = '';
+                    }
+
+                    lastNode.content =
+                        lastNode.content.slice(localEnd);
+                }
+            }
+
+            let nodeIndex = 0;
+
+            return paragraph.replace(
+                textNodeRegex,
+                (_full, openingTag, _content, closingTag) => {
+                    const content = escapeXmlText(
+                        nodes[nodeIndex++]?.content ?? '',
+                    );
+
+                    return `${openingTag}${content}${closingTag}`;
+                },
+            );
+        },
+    );
 }
 
-/**
- * Prepara un DOCX template reemplazando textoOriginal → {{identificador}} en el XML.
- * Guarda el resultado como archivoPrepared (al lado del original).
- */
-function prepareDocxTemplate(
-    originalPath: string,
-    preparedPath: string,
-    campos: { identificador: string; textoOriginal?: string | null }[],
-): void {
-    const buffer = fs.readFileSync(originalPath);
-    const zip = new PizZip(buffer);
-
-    const xmlFile = zip.file('word/document.xml');
-    if (!xmlFile) throw new Error('No se encontró word/document.xml en el DOCX');
-
-    let xml = xmlFile.asText();
-
-    for (const campo of campos) {
-        if (!campo.textoOriginal) continue;
-        xml = replaceTextInDocxXml(xml, campo.textoOriginal, `{{${campo.identificador}}}`);
-    }
-
-    zip.file('word/document.xml', xml);
-    const out = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-    fs.writeFileSync(preparedPath, out);
+function escapeXmlText(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
-/**
- * Genera un DOCX rellenando {{identificadores}} con valores.
- * Usa PizZip para leer/escribir el ZIP y string replace en el XML.
- * Funciona porque prepareDocxTemplate escribió los placeholders como nodos XML limpios.
- */
-function generateDocxFromTemplate(
+function generateDocxFromTemplate2(
     templatePath: string,
-    outputPath: string,
+    campos: {
+        identificador: string;
+        textoOriginal?: string | null;
+        valorDefault?: string | null;
+    }[],
     valores: Record<string, string>,
-): void {
+): Buffer {
     const buffer = fs.readFileSync(templatePath);
     const zip = new PizZip(buffer);
 
-    const xmlFile = zip.file('word/document.xml');
-    if (!xmlFile) throw new Error('No se encontró word/document.xml en el template DOCX');
+    const xmlFiles = Object.keys(zip.files).filter(file =>
+        /^word\/(document|header\d+|footer\d+|footnotes|endnotes)\.xml$/i.test(file),
+    );
 
-    let xml = xmlFile.asText();
-
-    for (const [key, value] of Object.entries(valores)) {
-        // Escapar caracteres XML especiales en el valor
-        const safeValue = value
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-        xml = xml.split(`{{${key}}}`).join(safeValue);
+    if (!xmlFiles.includes('word/document.xml')) {
+        throw new Error('No se encontró word/document.xml en el DOCX');
     }
 
-    zip.file('word/document.xml', xml);
-    const out = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-    fs.writeFileSync(outputPath, out);
-}
+    for (const fileName of xmlFiles) {
+        const xmlFile = zip.file(fileName);
+        if (!xmlFile) continue;
 
-/**
- * Convierte un archivo DOCX a PDF usando mammoth (DOCX→HTML) + puppeteer (HTML→PDF).
- */
-async function convertDocxToPdf(docxPath: string): Promise<Buffer> {
-    const mammothResult = await mammoth.convertToHtml({ path: docxPath });
-    const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <style>
-    @page { margin: 2cm; }
-    body { font-family: Arial, sans-serif; line-height: 1.7; color: #1a1a1a; font-size: 12pt; }
-    p { margin-bottom: 0.6em; }
-    table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
-    td, th { border: 1px solid #ccc; padding: 5px 8px; }
-    h1, h2, h3 { margin-top: 1em; margin-bottom: 0.5em; }
-    img { max-width: 100%; }
-  </style>
-</head>
-<body>${mammothResult.value}</body>
-</html>`;
+        let xml = xmlFile.asText();
 
-    const puppeteer = await import('puppeteer');
-    const browser = await puppeteer.default.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        xml = xml.replace(
+            /<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,
+            paragraph => {
+                let result = paragraph;
+
+                for (const campo of campos) {
+                    if (!campo.textoOriginal) continue;
+
+                    const value =
+                        valores[campo.identificador] ??
+                        campo.valorDefault ??
+                        '';
+
+                    result = replaceTextInDocxXml(
+                        result,
+                        campo.textoOriginal,
+                        String(value),
+                    );
+                }
+
+                return result;
+            },
+        );
+
+        zip.file(fileName, xml);
+    }
+
+    return zip.generate({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
     });
-    try {
-        const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: 'load' });
-        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
-        return Buffer.from(pdfBuffer);
-    } finally {
-        await browser.close();
-    }
 }
+
 
 @Injectable()
 export class DocumentosTemplatesService {
@@ -208,16 +253,39 @@ export class DocumentosTemplatesService {
         const ext = path.extname(file.originalname).toLowerCase();
         if (ext !== '.docx') throw new BadRequestException('Solo se permiten archivos DOCX (.docx)');
 
-        const plantillasDir = path.join(process.cwd(), 'media', 'plantillas');
-        if (!fs.existsSync(plantillasDir)) {
-            fs.mkdirSync(plantillasDir, { recursive: true });
+        // Guardar el archivo físico y sus metadatos.
+        const rutasArchivosGuardados: string[] = [];
+
+        try {
+            if (file) {
+                if (!file.buffer || file.buffer.length === 0) {
+                    throw new BadRequestException('El archivo recibido no contiene datos.');
+                }
+
+                const archivoGuardado = await this.mediaPathService.saveFile(
+                    file,
+                    {
+                        idTenant: activeUser.idTenant,
+                        subfolder: `plantillas/${createPlantillaDto.idTipoDocumento}`,
+                    },
+                );
+
+                rutasArchivosGuardados.push(archivoGuardado.rutaRelativa);
+            }
+        } catch (error) {
+            // Si falla el guardado, intentamos eliminar los archivos físicos.
+            await Promise.all(
+                rutasArchivosGuardados.map(
+                    async (ruta) => {
+                        try {
+                            await this.mediaPathService.deleteFile(ruta);
+                        } catch {
+                            // Conservamos el error original.
+                        }
+                    },
+                ),
+            );
         }
-
-        const fileId = crypto.randomUUID();
-        const filename = `${fileId}${ext}`;
-        const filePath = path.join(plantillasDir, filename);
-
-        fs.writeFileSync(filePath, file.buffer);
 
         // Convertir DOCX a HTML para vista previa
         let archivoHtml: string | null = null;
@@ -232,13 +300,11 @@ export class DocumentosTemplatesService {
             data: {
                 nombre: createPlantillaDto.nombre,
                 descripcion: createPlantillaDto.descripcion,
-                archivoOriginal: `media/plantillas/${filename}`,
+                archivoOriginal: rutasArchivosGuardados[0],
                 archivoHtml: archivoHtml ?? undefined,
                 idEmpresa: companyId,
                 idModulo: createPlantillaDto.idModulo,
-                idTipoDocumento: createPlantillaDto.idTipoDocumento
-                    ? Number(createPlantillaDto.idTipoDocumento)
-                    : undefined,
+                idTipoDocumento: createPlantillaDto.idTipoDocumento ? Number(createPlantillaDto.idTipoDocumento) : undefined,
                 idUsuarioCreador: activeUser.id,
             },
         });
@@ -273,8 +339,15 @@ export class DocumentosTemplatesService {
         });
     }
 
-    async findAll(companyId: number, page: number, limit: number, search: string, idTipoDocumento?: number) {
+    async findAll(
+        companyId: number,
+        page: number,
+        limit: number,
+        search: string,
+        idTipoDocumento?: number,
+    ) {
         const skip = (page - 1) * limit;
+
         const where: any = {
             idEmpresa: companyId,
             activa: true,
@@ -294,13 +367,29 @@ export class DocumentosTemplatesService {
                 skip,
                 take: limit,
                 orderBy: { fechaCreacion: 'desc' },
-                include: { TiposDocumento: { select: { id: true, nombre: true } } },
+                include: {
+                    TiposDocumento: {
+                        select: {
+                            id: true,
+                            nombre: true,
+                        },
+                    },
+                    _count: {
+                        select: {
+                            campos: true,
+                        },
+                    },
+                },
             }),
             this.prisma.plantillasDocumentos.count({ where }),
         ]);
 
         return {
-            data,
+            data: data.map((plantilla) => ({
+                ...plantilla,
+                totalCampos: plantilla._count.campos,
+                _count: undefined,
+            })),
             total,
             currentPage: page,
             totalPages: Math.ceil(total / limit),
@@ -350,6 +439,197 @@ export class DocumentosTemplatesService {
             where: { id },
             data: { activa: false, fechaActualiz: new Date() },
         });
+    }
+
+    async findByType(companyId: number, idTipoDocumento: number) {
+        const plantillas = await this.prisma.plantillasDocumentos.findMany({
+            where: {
+                idEmpresa: companyId,
+                idTipoDocumento,
+                activa: true,
+            },
+            orderBy: { fechaCreacion: 'desc' },
+            include: {
+                TiposDocumento: {
+                    select: {
+                        id: true,
+                        nombre: true,
+                    },
+                },
+                _count: {
+                    select: {
+                        campos: true,
+                    },
+                },
+            },
+        });
+
+        return plantillas.map((plantilla) => ({
+            ...plantilla,
+            totalCampos: plantilla._count.campos,
+            _count: undefined,
+        }));
+    }
+
+
+    async getGenerationData(user: ActiveUserDto, companyId: number, id: number, employeeId: number) {
+        const plantilla = await this.prisma.plantillasDocumentos.findFirst({
+            where: {
+                id,
+                idEmpresa: companyId,
+                activa: true,
+            },
+            include: {
+                campos: {
+                    orderBy: { orden: 'asc' },
+                },
+                TiposDocumento: {
+                    select: { id: true, nombre: true },
+                },
+            },
+        });
+
+        if (!plantilla) {
+            throw new NotFoundException('Plantilla no encontrada');
+        }
+
+        const empleado = await this.prisma.empleados.findFirst({
+            where: {
+                idEmpleado: employeeId,
+                idEmpresa: companyId,
+                idTenant: user.idTenant,
+                activo: true,
+            },
+        });
+
+        if (!empleado) {
+            throw new NotFoundException('Empleado no encontrado');
+        }
+
+        const [puesto, estadoCivil, salario, datosBancarios, empresa] = await Promise.all([
+            empleado.idPuesto
+                ? this.prisma.catPuestos.findUnique({
+                    where: { idPuesto: empleado.idPuesto },
+                })
+                : null,
+            empleado.idEstadoCivil
+                ? this.prisma.catEstadoCivil.findUnique({
+                    where: { idEstadoCivil: empleado.idEstadoCivil },
+                })
+                : null,
+            this.prisma.historialSalarios.findFirst({
+                where: {
+                    idEmpleado: employeeId,
+                    actual: true,
+                },
+                orderBy: { fechaInicio: 'desc' },
+            }),
+            this.prisma.datosBancarios.findFirst({
+                where: { idEmpleado: employeeId },
+            }),
+            this.prisma.catEmpresas.findFirst({
+                where: { idEmpresa: companyId },
+            }),
+        ]);
+
+        const [area, domicilioEmpresa, domicilioEmpleado] = await Promise.all([
+            puesto?.idArea
+                ? this.prisma.catAreas.findUnique({
+                    where: { idArea: puesto.idArea },
+                })
+                : null,
+            this.prisma.domicilioEmpresas.findFirst({
+                where: { idEmpresa: companyId },
+                orderBy: { idDomicilioEmpresa: 'desc' },
+            }),
+            this.prisma.domicilioEmpleado.findFirst({
+                where: { idEmpleado: employeeId },
+            }),
+        ]);
+
+        const nombreCompleto = [
+            empleado.nombre,
+            empleado.primerApellido,
+            empleado.segundoApellido,
+        ].filter(Boolean).join(' ');
+
+        const direccionEmpleado = domicilioEmpleado
+            ? [
+                domicilioEmpleado.calle,
+                domicilioEmpleado.numeroExterior,
+                domicilioEmpleado.numeroInterior,
+                domicilioEmpleado.colonia,
+                domicilioEmpleado.municipio,
+                domicilioEmpleado.estado,
+                domicilioEmpleado.codigoPostal,
+            ].filter(Boolean).join(', ')
+            : '';
+
+        const direccionFiscal = domicilioEmpresa
+            ? [
+                domicilioEmpresa.calle,
+                domicilioEmpresa.numero_exterior,
+                domicilioEmpresa.numero_interior,
+                domicilioEmpresa.colonia,
+                domicilioEmpresa.municipio,
+                domicilioEmpresa.estado,
+                domicilioEmpresa.codigo_postal,
+            ].filter(Boolean).join(', ')
+            : '';
+
+        const valoresDisponibles: Record<string, string> = {
+            'empleado.nombre': nombreCompleto,
+            'empleado.nombres': empleado.nombre || '',
+            'empleado.apellido_paterno': empleado.primerApellido || '',
+            'empleado.apellido_materno': empleado.segundoApellido || '',
+            'empleado.curp': empleado.curp || '',
+            'empleado.rfc': empleado.rfc || '',
+            'empleado.nss': empleado.numeroSeguroSocial || '',
+            'empleado.fecha_nacimiento': empleado.fechaNacimiento
+                ? new Date(empleado.fechaNacimiento).toISOString().slice(0, 10)
+                : '',
+            'empleado.telefono': empleado.telefonoMovil || empleado.telefonoLocal || '',
+            'empleado.correo': empleado.correo || '',
+            'empleado.direccion': direccionEmpleado,
+            'empleado.estado_civil': estadoCivil?.Descripcion || '',
+            'empleado.puesto': puesto?.NombrePuesto || '',
+            'empleado.area': area?.Descripcion || '',
+            'empleado.fecha_ingreso': empleado.fechaIngreso
+                ? new Date(empleado.fechaIngreso).toISOString().slice(0, 10)
+                : '',
+            'empleado.salarioBruto': salario?.salarioBruto?.toString() || '',
+            'empleado.salarioNeto': salario?.salarioNeto?.toString() || '',
+            'empleado.cuenta_bancaria': datosBancarios?.cuentaBancaria || '',
+            'empresa.nombre': empresa?.nombre_comercial || '',
+            'empresa.razon_social': empresa?.razon_social || '',
+            'empresa.rfc': empresa?.rfc || '',
+            'empresa.direccion_fiscal': direccionFiscal,
+            'empresa.codigo_postal': domicilioEmpresa?.codigo_postal || '',
+            'empresa.telefono': empresa?.telefono || '',
+            'empresa.correo': empresa?.correo || '',
+        };
+
+        const valoresIniciales: Record<string, string> = {};
+
+        for (const campo of plantilla.campos) {
+            const identificador = campo.identificador;
+            valoresIniciales[identificador] = valoresDisponibles[identificador] || '';
+        }
+
+        return {
+            plantilla,
+            empleado: {
+                ...empleado,
+                nombreCompleto,
+                nombrePuesto: puesto?.NombrePuesto || '',
+                nombreArea: area?.Descripcion || '',
+                salarioBruto: salario?.salarioBruto?.toString() || '',
+                salarioNeto: salario?.salarioNeto?.toString() || '',
+                nombreEmpresa: empresa?.nombre_comercial || '',
+                direccion: direccionEmpleado,
+            },
+            valoresIniciales,
+        };
     }
 
     private async generatePdf(
@@ -434,88 +714,158 @@ export class DocumentosTemplatesService {
             });
         });
 
-        // Preparar DOCX template: reemplazar textoOriginal → {{identificador}} en el XML
-        const ext = path.extname(plantilla.archivoOriginal).toLowerCase();
-        if (ext === '.docx') {
-            try {
-                const originalPath = path.join(process.cwd(), plantilla.archivoOriginal);
-                const preparedPath = originalPath.replace(/\.docx$/i, '_template.docx');
-                prepareDocxTemplate(originalPath, preparedPath, updateCamposDto.campos);
-                this.logger.log(`Template DOCX preparado en: ${preparedPath}`);
-            } catch (err) {PrismaService
-                this.logger.warn(`No se pudo preparar el template DOCX: ${err.message}`);
-            }
-        }
-
         return result;
     }
 
+    async generate(
+        companyId: number,
+        id: number,
+        generateDto: GenerarDocumentoDto,
+        activeUser: ActiveUserDto,
+    ) {
+        if (!activeUser.idTenant) {
+            throw new BadRequestException(
+                'El usuario no tiene un tenant asignado.',
+            );
+        }
 
-async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, activeUser: ActiveUserDto) {
-    if (!activeUser.idTenant) {
-        throw new BadRequestException('El usuario no tiene un tenant asignado.');
-    }
+        const plantilla = await this.prisma.plantillasDocumentos.findFirst({
+            where: {
+                id,
+                idEmpresa: companyId,
+                activa: true,
+            },
+            include: {
+                campos: true,
+            },
+        });
 
-    const plantilla = await this.prisma.plantillasDocumentos.findFirst({
-        where: { id, idEmpresa: companyId, activa: true },
-        include: { campos: true },
-    });
+        if (!plantilla) {
+            throw new NotFoundException('Plantilla no encontrada');
+        }
 
-    if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
+        const originalPath = await this.mediaPathService.fileExists(
+            plantilla.archivoOriginal,
+            'El archivo original de la plantilla no existe en el servidor.',
+        );
 
-    const originalPath = path.join(process.cwd(), plantilla.archivoOriginal);
-    if (!fs.existsSync(originalPath)) {
-        throw new BadRequestException('El archivo original de la plantilla no existe en el servidor');
-    }
+        const docId = crypto.randomUUID();
+        const ext = path.extname(originalPath).toLowerCase();
 
-    const baseMediaFolder = path.join(process.cwd(), 'media');
-    const outputDir = await this.mediaPathService.getTenantPath(baseMediaFolder, activeUser.idTenant, 'documentos-generados');
+        if (ext !== '.docx' && ext !== '.pdf') {
+            throw new BadRequestException('El formato de la plantilla no es compatible.');
+        }
 
-    const docId = crypto.randomUUID();
-    const ext = path.extname(plantilla.archivoOriginal).toLowerCase();
-    let outputPath: string;
-    let pdfFilename: string;
-    let tempDocxPath: string | null = null;
+        const filename = `${docId}.pdf`;
+        const mimeType = 'application/pdf';
 
-    if (ext === '.pdf') {
-        pdfFilename = `${docId}.pdf`;
-        outputPath = path.join(outputDir, pdfFilename);
-        await this.generatePdf(originalPath, plantilla.campos, generateDto.valores, outputPath);
-    } else {
-        pdfFilename = `${docId}.docx`;
-        outputPath = path.join(outputDir, pdfFilename);
+        let buffer: Buffer;
 
-        const preparedPath = originalPath.replace(/\.docx$/i, '_template.docx');
-        const templatePath = fs.existsSync(preparedPath) ? preparedPath : originalPath;
+        if (ext === '.pdf') {
+            const tempDir = await this.mediaPathService.getTenantPath(
+                this.mediaPathService.getMediaRootPath(),
+                activeUser.idTenant,
+                'documentos-generados-temp',
+            );
+
+            const tempPath = path.join(tempDir, filename);
+
+            try {
+                await this.generatePdf(
+                    originalPath,
+                    plantilla.campos,
+                    generateDto.valores,
+                    tempPath,
+                );
+
+                if (!await fs.pathExists(tempPath)) {
+                    throw new Error('No se generó el archivo PDF.');
+                }
+
+                buffer = await fs.readFile(tempPath);
+            } catch (err) {
+                this.logger.error(`Error generando PDF: ${err.message}`);
+                throw new InternalServerErrorException(
+                    'Error al generar el documento PDF.',
+                );
+            } finally {
+                await fs.remove(tempPath);
+            }
+        } else {
+
+            const tempDir = await fs.mkdtemp(
+                path.join(tmpdir(), 'talentcore-document-'),
+            );
+
+            const tempDocxPath = path.join(tempDir, `${docId}.docx`);
+
+            try {
+                const docxBuffer = generateDocxFromTemplate2(
+                    originalPath,
+                    plantilla.campos,
+                    generateDto.valores,
+                );
+
+                await fs.writeFile(tempDocxPath, docxBuffer);
+
+                buffer = await convertDocxToPdf(tempDocxPath);
+
+                if (!buffer || buffer.length === 0) {
+                    throw new Error('La conversión no generó un PDF válido.');
+                }
+            } catch (err) {
+                this.logger.error(
+                    `Error generando o convirtiendo DOCX a PDF: ${err.message}`,
+                );
+
+                throw new InternalServerErrorException(
+                    'Error al generar el documento PDF a partir de la plantilla Word.',
+                );
+            } finally {
+                await fs.remove(tempDir);
+            }
+        }
+
+        const archivo = await this.mediaPathService.saveGeneratedFile(
+            buffer,
+            {
+                idTenant: activeUser.idTenant,
+                subfolder: 'plantillas/documentos-generados',
+                fileName: filename,
+                mimeType,
+            },
+        );
 
         try {
-            generateDocxFromTemplate(templatePath, outputPath, generateDto.valores);
+            const documento = await this.prisma.documentosGenerados.create({
+                data: {
+                    idPlantilla: id,
+                    idVacante: generateDto.idVacante,
+                    idCandidato: generateDto.idCandidato,
+                    datosJson: generateDto.valores,
+                    archivoGenerado: archivo.rutaRelativa,
+                    estatus: 'generado',
+                    idUsuarioGenero: activeUser.id,
+                },
+            });
+
+            return documento;
         } catch (err) {
-            this.logger.error(`Error generando DOCX: ${err.message}`);
-            throw new InternalServerErrorException('Error al generar el documento DOCX');
+            await this.mediaPathService.deleteFile(archivo.rutaRelativa);
+            throw err;
         }
     }
 
-    if (!fs.existsSync(outputPath)) {
-        throw new InternalServerErrorException('Error al generar el documento: el archivo de salida no se creó');
+    async findCatalogsFiels(companyId: number) {
+        return this.prisma.catCamposPlantilla.findMany({
+            where: { activo: true },
+            orderBy: [
+                { grupo: "asc" },
+                { orden: "asc" },
+            ],
+        })
     }
 
-    const tenant = await this.prisma.catTenants.findUnique({ where: { idTenant: activeUser.idTenant }, select: { slug: true } });
-
-    const documento = await this.prisma.documentosGenerados.create({
-        data: {
-            idPlantilla: id,
-            idVacante: generateDto.idVacante,
-            idCandidato: generateDto.idCandidato,
-            datosJson: generateDto.valores,
-            archivoGenerado: `media/${tenant?.slug}/documentos-generados/${pdfFilename}`,
-            estatus: 'generado',
-            idUsuarioGenero: activeUser.id,
-        },
-    });
-
-    return documento;
-}
     async findGenerated(companyId: number, page: number, limit: number) {
         const skip = (page - 1) * limit;
         const where = {
@@ -543,12 +893,21 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
         };
     }
 
-    async servePdf(companyId: number, id: number): Promise<
-        { type: 'pdf'; path: string } | { type: 'pdfBuffer'; buffer: Buffer } | { type: 'html'; content: string }
-    > {
+
+    async servePdf(
+        companyId: number,
+        id: number,
+        res: Response,
+    ): Promise<void> {
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: { id },
-            include: { plantilla: { select: { idEmpresa: true } } },
+            include: {
+                plantilla: {
+                    select: {
+                        idEmpresa: true,
+                    },
+                },
+            },
         });
 
         if (!documento || documento.plantilla.idEmpresa !== companyId) {
@@ -556,35 +915,119 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
         }
 
         if (!documento.archivoGenerado) {
-            throw new BadRequestException('El documento no tiene un archivo generado');
+            throw new BadRequestException('El documento no tiene un archivo generado.');
         }
 
-        const originalPath = path.join(process.cwd(), documento.archivoGenerado);
-        if (!fs.existsSync(originalPath)) {
-            throw new NotFoundException('El archivo generado no existe en el servidor');
+        // Resolver y validar la ruta mediante MediaPathService.
+        let originalPath: string;
+        console.log(documento.archivoGenerado,)
+
+        try {
+            originalPath = await this.mediaPathService.fileExists(
+                documento.archivoGenerado,
+                'El archivo generado no existe en el servidor.',
+            );
+        } catch {
+            throw new NotFoundException('El archivo generado no existe en el servidor.');
         }
 
         const ext = path.extname(originalPath).toLowerCase();
+        const filename = path.basename(originalPath);
+
+        // Evitar caché de documentos generados.
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+
+        // Si ya es PDF, devolver directamente el archivo.
         if (ext === '.pdf') {
-            return { type: 'pdf', path: originalPath };
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader(
+                'Content-Disposition',
+                `inline; filename="${filename}"`,
+            );
+
+            await new Promise<void>((resolve, reject) => {
+                res.sendFile(originalPath, (err) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+
+            return;
         }
 
-        // DOCX → convertir a PDF (mammoth + puppeteer) para que el visor siempre muestre un PDF
-        try {
-            const pdfBuffer = await convertDocxToPdf(originalPath);
-            return { type: 'pdfBuffer', buffer: pdfBuffer };
-        } catch (err) {
-            this.logger.error(`Error convirtiendo DOCX generado a PDF: ${err.message}`);
-            // Fallback: vista previa HTML si la conversión a PDF falla
+        // DOCX → PDF.
+        if (ext === '.docx') {
             try {
-                const result = await mammoth.convertToHtml({ path: originalPath });
-                return { type: 'html', content: result.value };
-            } catch (mammothErr) {
-                this.logger.error(`Error convirtiendo DOCX generado a HTML con mammoth: ${mammothErr.message}`);
-                throw new Error('No se pudo generar vista previa del archivo DOCX generado.');
+                const pdfBuffer = await convertDocxToPdf(originalPath);
+
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader(
+                    'Content-Disposition',
+                    'inline; filename="documento.pdf"',
+                );
+
+                res.send(pdfBuffer);
+                return;
+
+            } catch (err) {
+                this.logger.error(
+                    `Error convirtiendo DOCX generado a PDF: ${err.message}`,
+                );
+
+                // Fallback: mostrar HTML si falla la conversión a PDF.
+                try {
+                    const result = await mammoth.convertToHtml({
+                        path: originalPath,
+                    });
+
+                    const fullHtml = `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2rem;
+            line-height: 1.7;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+        p { margin-bottom: 0.8rem; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        td, th {
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+        }
+        img { max-width: 100%; }
+    </style>
+</head>
+<body>${result.value}</body>
+</html>`;
+
+                    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                    res.send(fullHtml);
+                    return;
+
+                } catch (mammothErr) {
+                    this.logger.error(`Error convirtiendo DOCX a HTML: ${mammothErr.message}`);
+                    throw new InternalServerErrorException('No se pudo generar la vista previa del documento.');
+                }
             }
         }
+
+        throw new BadRequestException('El formato del documento no es compatible.');
     }
+
 
     async findOneGenerated(companyId: number, id: number) {
         const documento = await this.prisma.documentosGenerados.findFirst({
@@ -599,10 +1042,26 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
         return documento;
     }
 
-    async downloadGenerated(companyId: number, id: number): Promise<{ buffer?: Buffer; path?: string; contentType: string; filename: string }> {
+
+    async downloadGenerated(
+        companyId: number,
+        id: number,
+    ): Promise<{
+        buffer?: Buffer;
+        path?: string;
+        contentType: string;
+        filename: string;
+    }> {
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: { id },
-            include: { plantilla: { select: { idEmpresa: true, nombre: true } } },
+            include: {
+                plantilla: {
+                    select: {
+                        idEmpresa: true,
+                        nombre: true,
+                    },
+                },
+            },
         });
 
         if (!documento || documento.plantilla.idEmpresa !== companyId) {
@@ -610,81 +1069,183 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
         }
 
         if (!documento.archivoGenerado) {
-            throw new BadRequestException('El documento no tiene un archivo generado');
+            throw new BadRequestException(
+                'El documento no tiene un archivo generado',
+            );
         }
 
-        const filePath = path.join(process.cwd(), documento.archivoGenerado);
-        if (!fs.existsSync(filePath)) {
-            throw new NotFoundException('El archivo generado no existe en el servidor');
-        }
+        // Resolver y validar la ruta mediante MediaPathService.
+        const filePath = await this.mediaPathService.fileExists(
+            documento.archivoGenerado,
+            'El archivo generado no existe en el servidor.',
+        );
 
         const ext = path.extname(filePath).toLowerCase();
-        const baseName = documento.plantilla.nombre || 'documento';
-        const safeBase = baseName.replace(/[^a-zA-Z0-9_\-\u00C0-\u024F ]/g, '_');
 
+        const baseName = documento.plantilla.nombre || 'documento';
+
+        const safeBase = baseName.replace(
+            /[^a-zA-Z0-9_\-\u00C0-\u024F ]/g,
+            '_',
+        );
+
+        // Si ya es PDF, devolver directamente su ruta.
         if (ext === '.pdf') {
-            return { path: filePath, contentType: 'application/pdf', filename: `${safeBase}.pdf` };
+            return {
+                path: filePath,
+                contentType: 'application/pdf',
+                filename: `${safeBase}.pdf`,
+            };
         }
 
-        // DOCX → convertir a PDF con puppeteer
-        this.logger.log(`Convirtiendo DOCX a PDF para descarga: ${filePath}`);
-        const pdfBuffer = await convertDocxToPdf(filePath);
-        return {
-            buffer: pdfBuffer,
-            contentType: 'application/pdf',
-            filename: `${safeBase}.pdf`,
-        };
+        // Si es DOCX, convertirlo a PDF antes de descargarlo.
+        if (ext === '.docx') {
+            this.logger.log(
+                `Convirtiendo DOCX a PDF para descarga: ${documento.archivoGenerado}`,
+            );
+
+            const pdfBuffer = await convertDocxToPdf(filePath);
+
+            if (!pdfBuffer || pdfBuffer.length === 0) {
+                throw new BadRequestException(
+                    'No se pudo convertir el documento a PDF',
+                );
+            }
+
+            return {
+                buffer: pdfBuffer,
+                contentType: 'application/pdf',
+                filename: `${safeBase}.pdf`,
+            };
+        }
+
+        throw new BadRequestException(
+            'El formato del documento no es compatible con la descarga',
+        );
     }
 
-    async updateGenerated(companyId: number, id: number, generateDto: GenerarDocumentoDto, activeUser: ActiveUserDto) {
+
+    async updateGenerated(
+        companyId: number,
+        id: number,
+        generateDto: GenerarDocumentoDto,
+        activeUser: ActiveUserDto,
+    ) {
+        if (!activeUser.idTenant) {
+            throw new BadRequestException('El usuario no tiene un tenant asignado.');
+        }
+
         const documento = await this.prisma.documentosGenerados.findFirst({
-            where: { id, plantilla: { idEmpresa: companyId } },
-            include: { plantilla: { include: { campos: true } } }
+            where: {
+                id,
+                plantilla: { idEmpresa: companyId },
+            },
+            include: {
+                plantilla: {
+                    include: { campos: true },
+                },
+            },
         });
 
-        if (!documento) throw new NotFoundException('Documento generado no encontrado');
-
-        const originalPath = path.join(process.cwd(), documento.plantilla.archivoOriginal);
-        if (!fs.existsSync(originalPath)) {
-            throw new BadRequestException('El archivo original de la plantilla no existe en el servidor');
+        if (!documento) {
+            throw new NotFoundException('Documento generado no encontrado');
         }
 
-        const ext = path.extname(documento.plantilla.archivoOriginal).toLowerCase();
-        
-        if (!documento.archivoGenerado) {
-            throw new BadRequestException('El documento no tiene un archivo generado');
+        if (documento.firmado) {
+            throw new BadRequestException('No se puede modificar un documento que ya fue firmado.');
         }
-        
-        let outputPath = path.join(process.cwd(), documento.archivoGenerado);
-        
-        if (ext === '.pdf') {
-            await this.generatePdf(originalPath, documento.plantilla.campos, generateDto.valores, outputPath);
-        } else {
-            const preparedPath = originalPath.replace(/\.docx$/i, '_template.docx');
-            const templatePath = fs.existsSync(preparedPath) ? preparedPath : originalPath;
-            try {
-                generateDocxFromTemplate(templatePath, outputPath, generateDto.valores);
-            } catch (err) {
-                this.logger.error(`Error con docxtemplater (update): ${err.message}. Usando fallback.`);
-                let content = fs.readFileSync(originalPath, 'latin1');
-                for (const campo of documento.plantilla.campos) {
-                    const value = generateDto.valores[campo.identificador] ?? campo.valorDefault ?? '';
-                    if (campo.textoOriginal) {
-                        content = content.split(campo.textoOriginal).join(value);
-                    }
-                }
-                fs.writeFileSync(outputPath, content, 'latin1');
+
+        const originalPath = await this.mediaPathService.fileExists(
+            documento.plantilla.archivoOriginal,
+            'El archivo original de la plantilla no existe en el servidor.',
+        );
+
+        const ext = path.extname(originalPath).toLowerCase();
+
+        if (ext !== '.docx' && ext !== '.pdf') {
+            throw new BadRequestException('El formato de la plantilla no es compatible.');
+        }
+
+        const tempDir = await fs.mkdtemp(
+            path.join(tmpdir(), 'talentcore-document-update-'),
+        );
+
+        let buffer: Buffer;
+
+        try {
+            if (ext === '.pdf') {
+                const tempPdfPath = path.join(tempDir, 'documento.pdf');
+
+                await this.generatePdf(
+                    originalPath,
+                    documento.plantilla.campos,
+                    generateDto.valores,
+                    tempPdfPath,
+                );
+
+                buffer = await fs.readFile(tempPdfPath);
+            } else {
+
+                const docxBuffer = generateDocxFromTemplate2(
+                    originalPath,
+                    documento.plantilla.campos,
+                    generateDto.valores,
+                );
+
+                const tempDocxPath = path.join(tempDir, 'documento.docx');
+
+                await fs.writeFile(tempDocxPath, docxBuffer);
+
+                buffer = await convertDocxToPdf(tempDocxPath);
             }
+
+            if (!buffer || buffer.length === 0) {
+                throw new Error('No se generó el PDF actualizado.');
+            }
+        } catch (err) {
+            this.logger.error(`Error actualizando documento generado: ${err.message}`);
+
+            throw new InternalServerErrorException(
+                'No se pudo actualizar el documento PDF.',
+            );
+        } finally {
+            await fs.remove(tempDir);
         }
 
-        return this.prisma.documentosGenerados.update({
-            where: { id },
-            data: {
-                datosJson: generateDto.valores,
-                fechaGeneracion: new Date(),
-                idUsuarioGenero: activeUser.id,
+        const archivoAnterior = documento.archivoGenerado;
+
+        const archivoNuevo = await this.mediaPathService.saveGeneratedFile(
+            buffer,
+            {
+                idTenant: activeUser.idTenant,
+                subfolder: 'plantillas/documentos-generados',
+                fileName: `${crypto.randomUUID()}.pdf`,
+                mimeType: 'application/pdf',
+            },
+        );
+
+        try {
+            const actualizado = await this.prisma.documentosGenerados.update({
+                where: { id },
+                data: {
+                    datosJson: generateDto.valores,
+                    archivoGenerado: archivoNuevo.rutaRelativa,
+                    fechaGeneracion: new Date(),
+                    idUsuarioGenero: activeUser.id,
+                    firmado: false,
+                    estatus: 'generado',
+                },
+            });
+
+            if (archivoAnterior && archivoAnterior !== archivoNuevo.rutaRelativa) {
+                await this.mediaPathService.deleteFile(archivoAnterior);
             }
-        });
+
+            return actualizado;
+        } catch (err) {
+            await this.mediaPathService.deleteFile(archivoNuevo.rutaRelativa);
+            throw err;
+        }
     }
 
 
@@ -779,22 +1340,29 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
         const contrato = documento.contrato;
 
         if (!contrato.tokenValidacion || !contrato.fechaToken) {
-            throw new UnauthorizedException('No se ha solicitado un código de validación');
+            throw new BadRequestException('No se ha solicitado un código de validación');
         }
 
         const elapsed = Date.now() - new Date(contrato.fechaToken).getTime();
+
         if (elapsed > 10 * 60 * 1000) {
-            throw new UnauthorizedException('El código ha expirado. Solicita uno nuevo.');
+            throw new BadRequestException('El código ha expirado. Solicita uno nuevo.');
         }
 
         if (contrato.tokenValidacion !== otp) {
-            throw new UnauthorizedException('Código incorrecto');
+            throw new BadRequestException('Código incorrecto');
         }
 
-        // Invalidar token (single-use)
+        return contrato.idContrato;
+    }
+
+    private async consumeSignatureOtp(idContrato: number) {
         await this.prisma.contratos.update({
-            where: { idContrato: contrato.idContrato },
-            data: { tokenValidacion: null, fechaToken: null },
+            where: { idContrato },
+            data: {
+                tokenValidacion: null,
+                fechaToken: null,
+            },
         });
     }
 
@@ -816,9 +1384,15 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
         if (documento.archivoGenerado) {
             const ext = path.extname(documento.archivoGenerado).toLowerCase();
             if (ext === '.pdf') {
-                const pdfPath = path.join(process.cwd(), documento.archivoGenerado);
-                if (fs.existsSync(pdfPath)) {
-                    previewUrl = `/api/v2/documentos/public/firmar/${token}/pdf`;
+                try {
+                    await this.mediaPathService.fileExists(
+                        documento.archivoGenerado,
+                        'El archivo generado no existe en el servidor.',
+                    );
+
+                    previewUrl = `/api/v2/documents/public/sign/${token}/pdf`;
+                } catch {
+                    previewUrl = null;
                 }
             }
         }
@@ -839,10 +1413,19 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
                 alto: c.alto || 60,
             })),
             previewUrl,
+            firmaConfigurada: documento.firmaConfigurada,
+            firmaPagina: documento.firmaPagina,
+            firmaX: documento.firmaX,
+            firmaY: documento.firmaY,
+            firmaAncho: documento.firmaAncho,
+            firmaAlto: documento.firmaAlto
         };
     }
 
-    async serveSignaturePdf(token: string, res: any) {
+    async serveSignaturePdf(
+        token: string,
+        res: Response,
+    ): Promise<void> {
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: { tokenFirma: token },
         });
@@ -851,186 +1434,484 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
             throw new NotFoundException('Documento no encontrado');
         }
 
-        const filePath = path.join(process.cwd(), documento.archivoGenerado);
-        if (!fs.existsSync(filePath)) {
+        let filePath: string;
+
+        try {
+            filePath = await this.mediaPathService.fileExists(
+                documento.archivoGenerado,
+                'El archivo generado no existe en el servidor.',
+            );
+        } catch {
             throw new NotFoundException('Archivo no encontrado');
         }
 
         const ext = path.extname(filePath).toLowerCase();
+        const filename = path.basename(filePath);
+
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
 
         if (ext === '.pdf') {
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', 'inline');
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            res.setHeader('Pragma', 'no-cache');
-            res.setHeader('Expires', '0');
-            res.sendFile(filePath);
-        } else {
-            // DOCX → convertir a PDF con mammoth + puppeteer
-            const pdfBuffer = await convertDocxToPdf(filePath);
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', 'inline');
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            res.setHeader('Pragma', 'no-cache');
-            res.setHeader('Expires', '0');
-            res.end(pdfBuffer);
+
+            await new Promise<void>((resolve, reject) => {
+                res.sendFile(filePath, (error) => {
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+
+                    resolve();
+                });
+            });
+
+            return;
         }
+
+        if (ext === '.docx') {
+            let pdfBuffer: Buffer;
+
+            try {
+                pdfBuffer = await convertDocxToPdf(filePath);
+            } catch (error) {
+                this.logger.error(`Error convirtiendo DOCX para firma: ${error.message}`);
+                throw new InternalServerErrorException('No se pudo generar la vista previa del documento.');
+            }
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'inline; filename="documento.pdf"');
+            res.send(pdfBuffer);
+
+            return;
+        }
+
+        throw new BadRequestException('El formato del documento no es compatible.');
     }
 
-    async savePublicSignature(token: string, signatureData: { imagen: string; camposFirmados?: Record<string, string>; otp: string }) {
+
+    async savePublicSignature(
+        token: string,
+        signatureData: {
+            imagen: string;
+            camposFirmados?: Record<string, string>;
+            otp: string;
+        },
+    ) {
         if (!signatureData.otp) {
             throw new BadRequestException('El código de validación es requerido');
+        }
+
+        if (!signatureData.imagen) {
+            throw new BadRequestException('La imagen de la firma es requerida');
         }
 
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: { tokenFirma: token },
             include: {
+                contrato: true,
                 plantilla: {
-                    include: { campos: true }
-                }
-            }
+                    select: {
+                        nombre: true,
+                        idEmpresa: true,
+                    },
+                },
+            },
         });
 
-        if (!documento) throw new NotFoundException('Documento de firma no encontrado');
-        if (documento.firmado) throw new BadRequestException('El documento ya fue firmado');
+        if (!documento) {
+            throw new NotFoundException('Documento de firma no encontrado');
+        }
 
-        await this.verifySignatureOtp(documento.id, signatureData.otp);
+        if (documento.firmado) {
+            throw new BadRequestException('El documento ya fue firmado');
+        }
+
+        if (!documento.contrato) {
+            throw new BadRequestException('El documento no está ligado a un contrato');
+        }
 
         if (!documento.archivoGenerado) {
             throw new BadRequestException('El documento no tiene un archivo generado');
         }
 
-        const firmaCampos = documento.plantilla.campos.filter(c => c.tipoDato === 'firma');
-        if (firmaCampos.length === 0) {
-            throw new BadRequestException('El documento no tiene campos de firma');
+        // Validar que exista una posición de firma configurada.
+        if (!documento.firmaConfigurada) {
+            throw new BadRequestException(
+                'El documento no tiene una posición de firma configurada',
+            );
         }
 
-        const outputPath = path.join(process.cwd(), documento.archivoGenerado);
-        const ext = path.extname(outputPath).toLowerCase();
+        if (
+            documento.firmaPagina == null ||
+            documento.firmaX == null ||
+            documento.firmaY == null ||
+            documento.firmaAncho == null ||
+            documento.firmaAlto == null
+        ) {
+            throw new BadRequestException(
+                'La posición de firma del documento está incompleta',
+            );
+        }
 
-        const firmaMeta = {
-            fechaFirma: new Date().toISOString(),
-            camposFirmados: signatureData.camposFirmados || {},
+        const posicionFirma = {
+            pagina: Number(documento.firmaPagina),
+            x: Number(documento.firmaX),
+            y: Number(documento.firmaY),
+            ancho: Number(documento.firmaAncho),
+            alto: Number(documento.firmaAlto),
         };
 
-        if (ext === '.pdf') {
-            await this.embedSignatureInPdf(outputPath, firmaCampos, signatureData.imagen);
-
-            await this.prisma.documentosGenerados.update({
-                where: { id: documento.id },
-                data: { firmado: true, estatus: 'firmado', datosFirma: firmaMeta },
-            });
-        } else {
-            // DOCX: convertir a PDF, incrustar firma, guardar PDF firmado
-            const pdfBuffer = await convertDocxToPdf(outputPath);
-
-            const outputDir = path.join(process.cwd(), 'media', 'documentos-generados');
-            const pdfFilename = `${crypto.randomUUID()}_firmado.pdf`;
-            const pdfPath = path.join(outputDir, pdfFilename);
-
-            fs.writeFileSync(pdfPath, pdfBuffer);
-
-            // Incrustar firma en el PDF recién generado
-            if (firmaCampos.some(c => c.posicionX != null && c.posicionY != null && c.pagina != null)) {
-                await this.embedSignatureInPdf(pdfPath, firmaCampos, signatureData.imagen);
-            }
-
-            await this.prisma.documentosGenerados.update({
-                where: { id: documento.id },
-                data: {
-                    firmado: true,
-                    estatus: 'firmado',
-                    datosFirma: firmaMeta,
-                    archivoGenerado: `media/documentos-generados/${pdfFilename}`,
-                },
-            });
+        if (
+            !Number.isInteger(posicionFirma.pagina) ||
+            posicionFirma.pagina < 1 ||
+            posicionFirma.x < 0 ||
+            posicionFirma.y < 0 ||
+            posicionFirma.ancho <= 0 ||
+            posicionFirma.alto <= 0 ||
+            posicionFirma.x + posicionFirma.ancho > 100 ||
+            posicionFirma.y + posicionFirma.alto > 100
+        ) {
+            throw new BadRequestException(
+                'La posición de firma guardada no es válida',
+            );
         }
 
-        // Sellado NOM-151 síncrono: si falla, el documento queda 'firmado' sin sello
+        // Resolver el archivo original.
+        const outputPath = await this.mediaPathService.fileExists(
+            documento.archivoGenerado,
+            'El archivo generado no existe en el servidor.',
+        );
+
+        const ext = path.extname(outputPath).toLowerCase();
+
+        if (ext !== '.pdf' && ext !== '.docx') {
+            throw new BadRequestException(
+                'El formato del documento no es compatible con la firma',
+            );
+        }
+
+        // Validar que la imagen sea PNG.
+        const base64Data = signatureData.imagen.replace(
+            /^data:image\/png;base64,/i,
+            '',
+        );
+
+        const imageBytes = Buffer.from(base64Data, 'base64');
+
+        if (
+            imageBytes.length === 0 ||
+            imageBytes.toString('hex', 0, 8) !== '89504e470d0a1a0a'
+        ) {
+            throw new BadRequestException(
+                'La imagen de firma no es un PNG válido',
+            );
+        }
+
+        // Validar el OTP sin consumirlo todavía.
+        const idContrato = await this.verifySignatureOtp(
+            documento.id,
+            signatureData.otp,
+        );
+
+        const outputDir = path.dirname(outputPath);
+        const signedFilename = `${crypto.randomUUID()}_firmado.pdf`;
+
+        const signedPath = path.join(outputDir, signedFilename);
+
+        const relativeDirectory = path.posix.dirname(
+            documento.archivoGenerado.replace(/\\/g, '/'),
+        );
+
+        const signedRelativePath = path.posix.join(
+            relativeDirectory,
+            signedFilename,
+        );
+
+        let tempDir: string | null = null;
+
+        try {
+            let pdfInputPath = outputPath;
+
+            // Si el documento original es DOCX, convertirlo antes de insertar la firma.
+            if (ext === '.docx') {
+                tempDir = await fs.mkdtemp(
+                    path.join(tmpdir(), 'talentcore-signature-'),
+                );
+
+                pdfInputPath = path.join(tempDir, 'documento.pdf');
+
+                const pdfBuffer = await convertDocxToPdf(outputPath);
+
+                if (!pdfBuffer || pdfBuffer.length === 0) {
+                    throw new Error('No se pudo convertir el documento a PDF');
+                }
+
+                await fs.writeFile(pdfInputPath, pdfBuffer);
+            }
+
+            // Insertar la firma usando las coordenadas porcentuales guardadas.
+            await this.embedSignatureInPdf(
+                pdfInputPath,
+                signedPath,
+                posicionFirma,
+                signatureData.imagen,
+            );
+
+            const firmaMeta = {
+                fechaFirma: new Date().toISOString(),
+                camposFirmados: signatureData.camposFirmados || {},
+                posicionFirma,
+            };
+
+            // Guardar documento firmado y consumir el OTP en una sola transacción.
+            await this.prisma.$transaction([
+                this.prisma.documentosGenerados.update({
+                    where: { id: documento.id },
+                    data: {
+                        firmado: true,
+                        estatus: 'firmado',
+                        datosFirma: firmaMeta,
+                        archivoGenerado: signedRelativePath,
+                    },
+                }),
+
+                this.prisma.contratos.update({
+                    where: { idContrato },
+                    data: {
+                        tokenValidacion: null,
+                        fechaToken: null,
+                    },
+                }),
+            ]);
+
+            // Una vez confirmado el guardado, eliminar el archivo anterior.
+            try {
+                await this.mediaPathService.deleteFile(
+                    documento.archivoGenerado,
+                );
+            } catch (error: any) {
+                this.logger.warn(
+                    `No se pudo eliminar el PDF anterior del documento ${documento.id}: ${error.message}`,
+                );
+            }
+        } catch (error: any) {
+            // Si algo falla, no dejamos archivos firmados huérfanos.
+            try {
+                if (await fs.pathExists(signedPath)) {
+                    await fs.remove(signedPath);
+                }
+            } catch (cleanupError: any) {
+                this.logger.error(
+                    `No se pudo limpiar el archivo temporal de firma: ${cleanupError.message}`,
+                );
+            }
+
+            throw error;
+        } finally {
+            if (tempDir) {
+                await fs.remove(tempDir);
+            }
+        }
+
+        // Sellado NOM-151 después de guardar la firma.
         const sellado = await this.sellarConNOM151(documento.id);
 
         const actualizado = await this.prisma.documentosGenerados.findUnique({
             where: { id: documento.id },
         });
 
-        return { ...actualizado, sellado };
+        return {
+            ...actualizado,
+            sellado,
+        };
     }
 
+
     /**
-     * Sella el PDF firmado con constancia NOM-151 vía Nubarium.
-     * Éxito → estatus 'sellado' + campos NOM-151 + constancia en disco.
-     * Fallo → estatus queda 'firmado', error en log y en datosFirma.selladoError.
-     * Nunca lanza excepción (devuelve false).
-     */
+ * Sella el PDF firmado con constancia NOM-151 vía Nubarium.
+ *
+ * Éxito:
+ * - estatus = 'sellado'
+ * - Guarda los datos NOM-151.
+ * - Guarda el certificado .cer.
+ * - Guarda la representación visual PDF si Nubarium la devuelve.
+ *
+ * Fallo:
+ * - El documento conserva su firma.
+ * - Registra el error en datosFirma.selladoError.
+ * - Devuelve false.
+ */
     private async sellarConNOM151(documentoId: number): Promise<boolean> {
+        let archivoCer: string | null = null;
+        let archivoPdfConstancia: string | null = null;
+
         try {
             const documento = await this.prisma.documentosGenerados.findUnique({
                 where: { id: documentoId },
+                include: {
+                    plantilla: {
+                        select: {
+                            idEmpresa: true,
+                        },
+                    },
+                },
             });
 
             if (!documento?.archivoGenerado) {
                 throw new Error('El documento no tiene archivo generado');
             }
 
-            const pdfPath = path.join(process.cwd(), documento.archivoGenerado);
-            if (!fs.existsSync(pdfPath)) {
-                throw new Error(`El archivo firmado no existe: ${documento.archivoGenerado}`);
+            // Obtener el tenant de la empresa asociada a la plantilla.
+            const empresa = await this.prisma.catEmpresas.findFirst({
+                where: {
+                    idEmpresa: documento.plantilla.idEmpresa,
+                },
+                select: {
+                    idTenant: true,
+                },
+            });
+
+            if (!empresa?.idTenant) {
+                throw new Error('No se pudo identificar el tenant de la empresa del documento');
             }
+
+            // Resolver el PDF firmado mediante MediaPathService.
+            const pdfPath = await this.mediaPathService.fileExists(
+                documento.archivoGenerado,
+                'El archivo firmado no existe en el servidor.',
+            );
+
             if (path.extname(pdfPath).toLowerCase() !== '.pdf') {
                 throw new Error('El archivo firmado no es PDF');
             }
 
-            const pdfBuffer = fs.readFileSync(pdfPath);
+            const pdfBuffer = await fs.readFile(pdfPath);
+
+            if (!pdfBuffer.length) {
+                throw new Error('El archivo PDF firmado está vacío');
+            }
+
+            // Enviar el documento a Nubarium.
             const sello = await this.nubarium.sellarNOM151(pdfBuffer);
 
-            // Guardar constancia ASN.1 (.cer) y representación visual (PDF) en media
-            const nom151Dir = path.join(process.cwd(), 'media', 'documentos-generados', 'nom151');
-            if (!fs.existsSync(nom151Dir)) {
-                fs.mkdirSync(nom151Dir, { recursive: true });
+            if (!sello.nom151Base64) {
+                throw new Error('Nubarium no devolvió el certificado NOM-151');
             }
+
+            // Carpeta de certificados dentro de documentos-generados.
+            const subfolder = 'plantillas/documentos-generados/certificados';
 
             const cerFilename = `${documento.uuid}.cer`;
             const pdfConstanciaFilename = `${documento.uuid}_constancia.pdf`;
-            fs.writeFileSync(path.join(nom151Dir, cerFilename), Buffer.from(sello.nom151Base64, 'base64'));
 
-            let archivoNom151 = `media/documentos-generados/nom151/${cerFilename}`;
+            // Guardar certificado ASN.1 (.cer).
+            const cerBuffer = Buffer.from(
+                sello.nom151Base64.replace(
+                    /^data:.*?;base64,/i,
+                    '',
+                ),
+                'base64',
+            );
 
-            if (sello.representacionVisualBase64) {
-                fs.writeFileSync(
-                    path.join(nom151Dir, pdfConstanciaFilename),
-                    Buffer.from(sello.representacionVisualBase64, 'base64'),
+            if (!cerBuffer.length) {
+                throw new Error(
+                    'El certificado NOM-151 recibido está vacío',
                 );
-                archivoNom151 = `media/documentos-generados/nom151/${pdfConstanciaFilename}`;
             }
 
+            const certificado = await this.mediaPathService.saveGeneratedFile(
+                cerBuffer,
+                {
+                    idTenant: empresa.idTenant,
+                    subfolder,
+                    fileName: cerFilename,
+                    mimeType: 'application/pkix-cert',
+                },
+            );
+
+            archivoCer = certificado.rutaRelativa;
+
+            // Guardar representación visual PDF si Nubarium la devuelve.
+            if (sello.representacionVisualBase64) {
+                const constanciaBuffer = Buffer.from(
+                    sello.representacionVisualBase64.replace(
+                        /^data:.*?;base64,/i,
+                        '',
+                    ),
+                    'base64',
+                );
+
+                if (constanciaBuffer.length) {
+                    const constancia =
+                        await this.mediaPathService.saveGeneratedFile(
+                            constanciaBuffer,
+                            {
+                                idTenant: empresa.idTenant,
+                                subfolder,
+                                fileName: pdfConstanciaFilename,
+                                mimeType: 'application/pdf',
+                            },
+                        );
+
+                    archivoPdfConstancia = constancia.rutaRelativa;
+                }
+            }
+
+            // Guardar siempre la ruta del certificado .cer.
             await this.prisma.documentosGenerados.update({
                 where: { id: documentoId },
                 data: {
                     estatus: 'sellado',
                     codigoValidacionNOM151: sello.codigoValidacion,
                     hashNOM151: sello.hash,
-                    archivoNom151,
+                    archivoNom151: archivoCer,
                     fechaSellado: new Date(),
                 },
             });
 
-            this.logger.log(`Documento ${documentoId} sellado NOM-151: ${sello.codigoValidacion}`);
+            this.logger.log(
+                `Documento ${documentoId} sellado NOM-151: ${sello.codigoValidacion}`,
+            );
+
             return true;
         } catch (error: any) {
             this.logger.error(`Fallo sellado NOM-151 documento ${documentoId}: ${error.message}`);
-            // Registrar el error sin revertir la firma
+            // Limpiar archivos si el proceso no pudo completarse.
+            for (const archivo of [archivoCer, archivoPdfConstancia]) {
+                if (!archivo) continue;
+                try {
+                    await this.mediaPathService.deleteFile(archivo);
+                } catch (cleanupError: any) {
+                    this.logger.warn(`No se pudo eliminar archivo NOM-151 ${archivo}: ${cleanupError.message}`);
+                }
+            }
+
+            // Registrar el error sin revertir la firma del documento.
             try {
                 const documento = await this.prisma.documentosGenerados.findUnique({
                     where: { id: documentoId },
                 });
-                const datosFirma = (documento?.datosFirma as Record<string, any>) || {};
+
+                const datosFirma =
+                    (documento?.datosFirma as Record<string, any>) || {};
+
                 await this.prisma.documentosGenerados.update({
                     where: { id: documentoId },
-                    data: { datosFirma: { ...datosFirma, selladoError: error.message } },
+                    data: {
+                        datosFirma: {
+                            ...datosFirma,
+                            selladoError: error.message,
+                        },
+                    },
                 });
-            } catch (dbErr: any) {
-                this.logger.error(`No se pudo guardar selladoError en documento ${documentoId}: ${dbErr.message}`);
+            } catch (dbError: any) {
+                this.logger.error(
+                    `No se pudo guardar selladoError en documento ${documentoId}: ${dbError.message}`,
+                );
             }
+
             return false;
         }
     }
@@ -1060,71 +1941,158 @@ async generate(companyId: number, id: number, generateDto: GenerarDocumentoDto, 
     }
 
     /**
-     * Obtiene el archivo de constancia NOM-151 (.cer o representación visual PDF).
-     */
-    async getNom151File(companyId: number, id: number, tipo: 'cer' | 'pdf' = 'cer') {
+ * Obtiene el archivo de constancia NOM-151 (.cer o representación visual PDF).
+ */
+    async getNom151File(
+        companyId: number,
+        id: number,
+        tipo: 'cer' | 'pdf' = 'cer',
+    ) {
         const documento = await this.prisma.documentosGenerados.findFirst({
-            where: { id, plantilla: { idEmpresa: companyId } },
+            where: {
+                id,
+                plantilla: {
+                    idEmpresa: companyId,
+                },
+            },
         });
 
-        if (!documento) throw new NotFoundException('Documento generado no encontrado');
+        if (!documento) {
+            throw new NotFoundException(
+                'Documento generado no encontrado',
+            );
+        }
+
         if (!documento.archivoNom151) {
-            throw new BadRequestException('El documento no tiene constancia NOM-151');
+            throw new BadRequestException(
+                'El documento no tiene constancia NOM-151',
+            );
         }
 
-        let filePath = path.join(process.cwd(), documento.archivoNom151);
-        if (tipo === 'pdf') {
-            filePath = filePath.replace(/\.cer$/i, '_constancia.pdf');
+        const rutaGuardada = documento.archivoNom151;
+
+        let rutaRelativa: string;
+
+        // Compatibilidad con registros anteriores que guardaron el PDF
+        // en archivoNom151 en lugar del certificado .cer.
+        if (/_constancia\.pdf$/i.test(rutaGuardada)) {
+            rutaRelativa =
+                tipo === 'pdf'
+                    ? rutaGuardada
+                    : rutaGuardada.replace(
+                        /_constancia\.pdf$/i,
+                        '.cer',
+                    );
+        } else {
+            rutaRelativa =
+                tipo === 'pdf'
+                    ? rutaGuardada.replace(
+                        /\.cer$/i,
+                        '_constancia.pdf',
+                    )
+                    : rutaGuardada;
         }
 
-        if (!fs.existsSync(filePath)) {
-            throw new NotFoundException('El archivo de constancia no existe en el servidor');
+        // Resolver y validar el archivo mediante MediaPathService.
+        let filePath: string;
+
+        try {
+            filePath = await this.mediaPathService.fileExists(
+                rutaRelativa,
+                'El archivo de constancia NOM-151 no existe en el servidor.',
+            );
+        } catch {
+            throw new NotFoundException(
+                tipo === 'pdf'
+                    ? 'La representación visual de la constancia no existe en el servidor'
+                    : 'El certificado NOM-151 no existe en el servidor',
+            );
         }
 
         return {
             path: filePath,
-            contentType: tipo === 'pdf' ? 'application/pdf' : 'application/octet-stream',
+            contentType:
+                tipo === 'pdf'
+                    ? 'application/pdf'
+                    : 'application/pkix-cert',
             filename: path.basename(filePath),
         };
     }
 
+
     private async embedSignatureInPdf(
         pdfPath: string,
-        firmaCampos: any[],
+        outputPath: string,
+        posicionFirma: {
+            pagina: number;
+            x: number;
+            y: number;
+            ancho: number;
+            alto: number;
+        },
         signatureBase64: string,
-    ) {
-        const pdfBytes = fs.readFileSync(pdfPath);
+    ): Promise<void> {
+        const pdfBytes = await fs.readFile(pdfPath);
+
         const pdfDoc = await PDFDocument.load(pdfBytes);
 
-        const base64Data = signatureBase64.replace(/^data:image\/png;base64,/, '');
-        const imageBytes = Buffer.from(base64Data, 'base64');
-        const signatureImage = await pdfDoc.embedPng(imageBytes);
+        const pages = pdfDoc.getPages();
 
-        for (const campo of firmaCampos) {
-            if (campo.pagina == null || campo.posicionX == null || campo.posicionY == null) continue;
+        const pageIndex = posicionFirma.pagina - 1;
+        const page = pages[pageIndex];
 
-            const pages = pdfDoc.getPages();
-            const page = pages[campo.pagina - 1];
-            if (!page) continue;
-
-            const { height } = page.getSize();
-            const x = campo.posicionX;
-            const y = height - campo.posicionY;
-
-            const ancho = campo.ancho || 150;
-            const alto = campo.alto || 60;
-
-            page.drawImage(signatureImage, {
-                x,
-                y: y - alto,
-                width: ancho,
-                height: alto,
-            });
+        if (!page) {
+            throw new BadRequestException(
+                `La página ${posicionFirma.pagina} no existe en el documento`,
+            );
         }
 
+        const base64Data = signatureBase64.replace(
+            /^data:image\/png;base64,/i,
+            '',
+        );
+
+        const imageBytes = Buffer.from(base64Data, 'base64');
+
+        const signatureImage = await pdfDoc.embedPng(imageBytes);
+
+        const { width: pageWidth, height: pageHeight } = page.getSize();
+
+        // Convertir porcentajes del frontend a puntos PDF.
+        const x = (posicionFirma.x / 100) * pageWidth;
+
+        const width = (posicionFirma.ancho / 100) * pageWidth;
+        const height = (posicionFirma.alto / 100) * pageHeight;
+
+        // El frontend utiliza origen superior izquierdo.
+        // PDF-lib utiliza origen inferior izquierdo.
+        const top = (posicionFirma.y / 100) * pageHeight;
+        const y = pageHeight - top - height;
+
+        // Validar límites reales de la página.
+        if (
+            x < 0 ||
+            y < 0 ||
+            x + width > pageWidth + 0.01 ||
+            y + height > pageHeight + 0.01
+        ) {
+            throw new BadRequestException(
+                'La posición de la firma queda fuera de los límites de la página PDF',
+            );
+        }
+
+        page.drawImage(signatureImage, {
+            x,
+            y,
+            width,
+            height,
+        });
+
         const modifiedPdfBytes = await pdfDoc.save();
-        fs.writeFileSync(pdfPath, modifiedPdfBytes);
+
+        await fs.writeFile(outputPath, modifiedPdfBytes);
     }
+
 
     async serveOriginalPdf(companyId: number, id: number): Promise<
         { type: 'pdf'; path: string } | { type: 'html'; content: string }

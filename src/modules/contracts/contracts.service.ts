@@ -205,7 +205,7 @@ export class ContractsService {
         LEFT JOIN HistorialSalarios hs ON hs.idEmpleado = e.idEmpleado AND hs.actual = true
         WHERE e.idEmpresa = ${companyId}
           AND e.activo = 1
-          AND ex.idEstatus = 4
+          -- AND ex.idEstatus = 4
           AND (${searchQuery} IS NULL OR 
                e.nombre LIKE ${searchQuery} OR 
                e.primerApellido LIKE ${searchQuery} OR 
@@ -221,7 +221,7 @@ export class ContractsService {
         INNER JOIN Expedientes ex ON e.idEmpleado = ex.idEmpleado
         WHERE e.idEmpresa = ${companyId}
           AND e.activo = 1
-          AND ex.idEstatus = 4
+          -- AND ex.idEstatus = 4
           AND (${searchQuery} IS NULL OR 
                e.nombre LIKE ${searchQuery} OR 
                e.primerApellido LIKE ${searchQuery} OR 
