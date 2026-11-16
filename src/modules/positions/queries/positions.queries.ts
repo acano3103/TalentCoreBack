@@ -3,9 +3,10 @@ import { Prisma } from 'generated/prisma/client';
 import { EtiquetaPuesto, adjuntarClasificacionEnFila } from '../position-classification';
 
 export class PositionQueries {
-  static async findAll(prisma: PrismaService, idTenant: number, companyId: number, search: string, page: number, limit: number, aprobada: number) {
+  static async findAll(prisma: PrismaService, idTenant: number, companyId: number, search: string, page: number, limit: number, aprobada: number, idTipoPuesto?: number) {
     const skip = (page - 1) * limit;
     const searchQuery = search ? `%${search}%` : '%';
+    const clasificacion = idTipoPuesto ? Prisma.sql`AND p.idTipoPuesto = ${idTipoPuesto}` : Prisma.empty;
 
     const [data, [{ total }]] = await Promise.all([
       prisma.$queryRaw`
@@ -40,6 +41,7 @@ export class PositionQueries {
           AND p.idTenant = ${idTenant}
           AND p.aprobada = ${aprobada}
           AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
+          ${clasificacion}
         ORDER BY p.idPuesto DESC
         LIMIT ${limit} OFFSET ${skip};
       ` as Promise<any[]>,
@@ -51,7 +53,8 @@ export class PositionQueries {
         WHERE a.idEmpresa = ${companyId}
           AND p.idTenant = ${idTenant}
           AND p.aprobada = ${aprobada}
-          AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery});
+          AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
+          ${clasificacion};
       ` as Promise<[{ total: bigint | number }]>
     ]);
 

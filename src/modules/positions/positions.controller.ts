@@ -117,9 +117,12 @@ export class PositionsController {
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query('aprobada', new DefaultValuePipe(1), ParseIntPipe) aprobada: number,
         @Query('search') search?: string,
+        @Query('idTipoPuesto') idTipoPuesto?: string,
     ) {
         const querySearch = search || '';
-        return this.service.findAll(activeUser, companyId, page, querySearch, limit, aprobada);
+        const clasificacion = Number(idTipoPuesto);
+        const filtroClasificacion = Number.isInteger(clasificacion) && clasificacion > 0 ? clasificacion : undefined;
+        return this.service.findAll(activeUser, companyId, page, querySearch, limit, aprobada, filtroClasificacion);
     }
 
     // Exporta a Excel todos los puestos que cumplan los filtros (sin paginar)

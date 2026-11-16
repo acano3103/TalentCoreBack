@@ -35,8 +35,8 @@ export class PositionsService {
 
     private readonly logger = new Logger(PositionsService.name);
 
-    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number, aprobada: number) {
-        const { positions, total } = await PositionQueries.findAll(this.prisma, activeUser.idTenant, companyId, search, page, limit, aprobada);
+    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number, aprobada: number, idTipoPuesto?: number) {
+        const { positions, total } = await PositionQueries.findAll(this.prisma, activeUser.idTenant, companyId, search, page, limit, aprobada, idTipoPuesto);
 
         if ((!positions || positions.length === 0) && page === 1 && !search) {
             return {
