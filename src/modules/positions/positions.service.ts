@@ -20,7 +20,7 @@ import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import * as ExcelJS from 'exceljs';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
-import { asegurarTipoPersonal, reemplazarEtiquetas } from '../communications/staff-classification/clasificacion-puesto';
+import { reemplazarEtiquetas, tipoPersonalDesdeClasificacion } from '../communications/staff-classification/clasificacion-puesto';
 import { presentarEtiquetas, presentarPuesto, presentarTipoPersonal } from './position-classification';
 
 @Injectable()
@@ -273,7 +273,11 @@ export class PositionsService {
         return await this.prisma.$transaction(async (tx) => {
 
             const { generalInfo, languages } = dto;
-            await asegurarTipoPersonal(tx, activeUser.idTenant, dto.idTipoPersonal);
+            const idTipoPersonal = await tipoPersonalDesdeClasificacion(
+                tx,
+                activeUser.idTenant,
+                Number(generalInfo.idTipoPuesto),
+            );
 
             // Creamos el puesto padre de forma secuencial (Obligatorio para obtener el ID)
             const nuevoPuesto = await tx.catPuestos.create({
@@ -281,7 +285,7 @@ export class PositionsService {
                     idTenant: activeUser.idTenant,
                     idEmpresa: companyId,
                     NombrePuesto: generalInfo.nombrePuesto.trim(),
-                    idTipoPersonal: dto.idTipoPersonal,
+                    idTipoPersonal,
                     idTipoPuesto: Number(generalInfo.idTipoPuesto),
                     idArea: Number(generalInfo.idArea),
                     idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,
@@ -440,7 +444,11 @@ export class PositionsService {
 
             const puestoExistente = await tx.catPuestos.findFirst({ where: { idPuesto: positionId, idTenant: activeUser.idTenant, idEmpresa: companyId } });
             if (!puestoExistente) throw new NotFoundException('El puesto solicitado no existe en esta empresa');
-            await asegurarTipoPersonal(tx, activeUser.idTenant, data.idTipoPersonal);
+            const idTipoPersonal = await tipoPersonalDesdeClasificacion(
+                tx,
+                activeUser.idTenant,
+                Number(generalInfo.idTipoPuesto),
+            );
 
             // =========================================================================
             // FASE 1: ACTUALIZACIÓN PADRE Y LIMPIEZA DE RELACIONES ANTERIORES EN PARALELO
@@ -450,7 +458,7 @@ export class PositionsService {
                     where: { idPuesto: positionId },
                     data: {
                         NombrePuesto: generalInfo.nombrePuesto.trim(),
-                        idTipoPersonal: data.idTipoPersonal,
+                        idTipoPersonal,
                         idTipoPuesto: Number(generalInfo.idTipoPuesto),
                         idArea: Number(generalInfo.idArea),
                         idTipoContratacion: generalInfo.idTipoContratacion ? Number(generalInfo.idTipoContratacion) : null,

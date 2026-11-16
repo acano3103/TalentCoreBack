@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiPropertyOptional } from "@nestjs/swagger";
 import { IsNotEmpty, IsOptional, IsString, IsBoolean, IsNumber, IsArray, IsInt, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -131,11 +131,14 @@ export class CreatePositionDto {
         cursosSeleccionados: SelectedCourseDto[];
     };
 
-    @ApiProperty({ example: 1, description: 'Tipo de personal del puesto. Obligatorio al crear y al editar.' })
-    @Type(() => Number)
-    @IsInt({ message: 'El tipo de personal debe ser un número.' })
-    @Min(1, { message: 'El tipo de personal es obligatorio.' })
-    idTipoPersonal: number;
+    @ApiPropertyOptional({
+        deprecated: true,
+        example: 1,
+        description:
+            'Deprecado. Se ignora si llega. El tipo de personal se calcula a partir de la clasificación del puesto (generalInfo.idTipoPuesto): Operativo, Administrativo o Directivo.',
+    })
+    @IsOptional()
+    idTipoPersonal?: number;
 
     @ApiPropertyOptional({
         type: [Number],

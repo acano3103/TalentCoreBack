@@ -1,10 +1,26 @@
 import { HttpStatus } from '@nestjs/common';
 import { errorComms } from '../comms-http';
+import { codigoTipoDeClasificacion } from './codigo-clasificacion';
 
 interface TxTipoPersonal {
     catTiposPersonal: {
         findFirst(args: {
             where: { idTipoPersonal: number; idTenant: number; Activo: boolean };
+            select: { idTipoPersonal: true };
+        }): Promise<{ idTipoPersonal: number } | null>;
+    };
+}
+
+interface TxClasificacionPuesto {
+    catTipoPuesto: {
+        findFirst(args: {
+            where: { idTipoPuesto: number };
+            select: { Descripcion: true; Activo: true };
+        }): Promise<{ Descripcion: string | null; Activo: boolean | null } | null>;
+    };
+    catTiposPersonal: {
+        findFirst(args: {
+            where: { idTenant: number; Codigo: string; Activo: boolean };
             select: { idTipoPersonal: true };
         }): Promise<{ idTipoPersonal: number } | null>;
     };
@@ -39,6 +55,65 @@ export async function asegurarTipoPersonal(
             'El tipo de personal no existe o no está activo.',
         );
     }
+}
+
+/**
+ * El id que mande el cliente se ignora: la clasificación del puesto decide el tipo de personal.
+ */
+export async function tipoPersonalDesdeClasificacion(
+    tx: TxClasificacionPuesto,
+    idTenant: number,
+    idTipoPuesto: number,
+): Promise<number> {
+    if (!Number.isInteger(idTipoPuesto) || idTipoPuesto < 1) {
+        throw errorComms(
+            HttpStatus.BAD_REQUEST,
+            'CONTENIDO_INVALIDO',
+            'La clasificación del puesto no es válida.',
+        );
+    }
+
+    const clasificacion = await tx.catTipoPuesto.findFirst({
+        where: { idTipoPuesto },
+        select: { Descripcion: true, Activo: true },
+    });
+    if (!clasificacion) {
+        throw errorComms(
+            HttpStatus.BAD_REQUEST,
+            'CONTENIDO_INVALIDO',
+            'La clasificación del puesto no existe.',
+        );
+    }
+    if (clasificacion.Activo === false) {
+        throw errorComms(
+            HttpStatus.BAD_REQUEST,
+            'CONTENIDO_INVALIDO',
+            'La clasificación del puesto no está activa.',
+        );
+    }
+
+    const codigo = codigoTipoDeClasificacion(clasificacion.Descripcion);
+    if (!codigo) {
+        const visible = clasificacion.Descripcion?.trim() || 'sin nombre';
+        throw errorComms(
+            HttpStatus.BAD_REQUEST,
+            'CONTENIDO_INVALIDO',
+            `La clasificación «${visible}» no tiene un tipo de personal equivalente. Usa Operativo, Administrativo o Directivo.`,
+        );
+    }
+
+    const tipo = await tx.catTiposPersonal.findFirst({
+        where: { idTenant, Codigo: codigo, Activo: true },
+        select: { idTipoPersonal: true },
+    });
+    if (!tipo) {
+        throw errorComms(
+            HttpStatus.BAD_REQUEST,
+            'CONTENIDO_INVALIDO',
+            `No hay un tipo de personal activo con código ${codigo} en esta organización.`,
+        );
+    }
+    return tipo.idTipoPersonal;
 }
 
 /**

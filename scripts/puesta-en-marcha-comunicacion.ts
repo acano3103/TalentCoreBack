@@ -1,9 +1,13 @@
 /**
  * Catálogos, plantilla 11.3 y clasificación de puestos para tenants que ya existían.
- * Idempotente: no duplica filas y no pisa capacidades ni tipos de personal ya ajustados.
+ * Idempotente: no duplica filas, no pisa el nombre de un tipo de personal que ya existía
+ * y no pisa las capacidades de un rol que ya tenía alguna.
+ * El tipo de personal del puesto sí se realinea siempre con su clasificación,
+ * porque ese valor es derivado.
  */
 import { Prisma, PrismaClient } from '../generated/prisma/client';
 import { ComAcuseModo, ComPrioridad } from '../generated/prisma/enums';
+import { codigoTipoDeClasificacion } from '../src/modules/communications/staff-classification/codigo-clasificacion';
 import {
     CAPACIDADES,
     FilaTipoComunicado,
@@ -40,8 +44,9 @@ export interface AsignacionNueva {
     tiposPermitidos: string[] | null;
 }
 
-export interface PuestoDefault {
+export interface PuestoClasificado {
     idPuesto: number;
+    idTipoPersonal: number | null;
     clasificacion: string | null;
 }
 
@@ -54,6 +59,7 @@ export interface ResumenPuestaEnMarcha {
     capacidadesAsignadas: number;
     puestosActualizados: number;
     puestosSinMapear: number;
+    puestosSinMapearIds: number[];
 }
 
 export interface PuestaEnMarchaStore {
@@ -69,21 +75,11 @@ export interface PuestaEnMarchaStore {
     listarRoles(idTenant: number): Promise<RolSimple[]>;
     rolesConAlgunaCapacidad(idRoles: readonly number[]): Promise<number[]>;
     insertarAsignaciones(filas: readonly AsignacionNueva[]): Promise<void>;
-    listarPuestosEnDefault(idTenant: number, idTipoAdministrativo: number): Promise<PuestoDefault[]>;
+    listarPuestos(idTenant: number): Promise<PuestoClasificado[]>;
     actualizarTipoPersonal(idPuestos: readonly number[], idTipoPersonal: number): Promise<number>;
 }
 
-export function codigoTipoDeClasificacion(nombre: string | null): 'OPERATIVO' | 'ADMINISTRATIVO' | 'DIRECTIVO' | null {
-    const normal = (nombre ?? '')
-        .trim()
-        .toUpperCase()
-        .normalize('NFD')
-        .replace(/\p{M}/gu, '');
-    if (normal === 'OPERATIVO') return 'OPERATIVO';
-    if (normal === 'ADMINISTRATIVO') return 'ADMINISTRATIVO';
-    if (normal === 'DIRECTIVO' || normal === 'GERENCIAL' || normal === 'EJECUTIVO') return 'DIRECTIVO';
-    return null;
-}
+export { codigoTipoDeClasificacion };
 
 interface FilaPlantilla {
     codigo: string;
@@ -179,27 +175,25 @@ export async function aplicarPuestaEnMarcha(store: PuestaEnMarchaStore): Promise
         if (asignaciones.length) await store.insertarAsignaciones(asignaciones);
 
         const idPorCodigo = new Map(tipos.map((fila) => [fila.codigo, fila.id]));
-        const idAdmin = idPorCodigo.get('ADMINISTRATIVO');
+        const puestos = await store.listarPuestos(idTenant);
+        const porTipo = new Map<number, number[]>();
+        const puestosSinMapearIds: number[] = [];
+        for (const puesto of puestos) {
+            const codigo = codigoTipoDeClasificacion(puesto.clasificacion);
+            const idDestino = codigo ? idPorCodigo.get(codigo) : undefined;
+            if (!codigo || idDestino == null) {
+                puestosSinMapearIds.push(puesto.idPuesto);
+                continue;
+            }
+            if (puesto.idTipoPersonal === idDestino) continue;
+            const lista = porTipo.get(idDestino) ?? [];
+            lista.push(puesto.idPuesto);
+            porTipo.set(idDestino, lista);
+        }
+        puestosSinMapearIds.sort((a, b) => a - b);
         let puestosActualizados = 0;
-        let puestosSinMapear = 0;
-        if (idAdmin != null) {
-            const puestos = await store.listarPuestosEnDefault(idTenant, idAdmin);
-            const porTipo = new Map<number, number[]>();
-            for (const puesto of puestos) {
-                const codigo = codigoTipoDeClasificacion(puesto.clasificacion);
-                const idDestino = codigo ? idPorCodigo.get(codigo) : undefined;
-                if (!codigo || idDestino == null) {
-                    puestosSinMapear += 1;
-                    continue;
-                }
-                if (idDestino === idAdmin) continue;
-                const lista = porTipo.get(idDestino) ?? [];
-                lista.push(puesto.idPuesto);
-                porTipo.set(idDestino, lista);
-            }
-            for (const [idTipoPersonal, idPuestos] of porTipo) {
-                puestosActualizados += await store.actualizarTipoPersonal(idPuestos, idTipoPersonal);
-            }
+        for (const [idTipoPersonal, idPuestos] of porTipo) {
+            puestosActualizados += await store.actualizarTipoPersonal(idPuestos, idTipoPersonal);
         }
 
         resumen.push({
@@ -210,7 +204,8 @@ export async function aplicarPuestaEnMarcha(store: PuestaEnMarchaStore): Promise
             rolesConPlantilla: rolesPlantilla.size,
             capacidadesAsignadas: asignaciones.length,
             puestosActualizados,
-            puestosSinMapear,
+            puestosSinMapear: puestosSinMapearIds.length,
+            puestosSinMapearIds,
         });
     }
     return resumen;
@@ -312,10 +307,11 @@ export function storePuestaDePrisma(prisma: PrismaClient): PuestaEnMarchaStore {
                 })),
             });
         },
-        async listarPuestosEnDefault(idTenant, idTipoAdministrativo) {
+        async listarPuestos(idTenant) {
             const puestos = await prisma.catPuestos.findMany({
-                where: { idTenant, idTipoPersonal: idTipoAdministrativo },
-                select: { idPuesto: true, idTipoPuesto: true },
+                where: { idTenant },
+                select: { idPuesto: true, idTipoPuesto: true, idTipoPersonal: true },
+                orderBy: { idPuesto: 'asc' },
             });
             const idsTipo = [...new Set(puestos.flatMap((puesto) => (puesto.idTipoPuesto == null ? [] : [puesto.idTipoPuesto])))];
             const tipos = idsTipo.length
@@ -327,6 +323,7 @@ export function storePuestaDePrisma(prisma: PrismaClient): PuestaEnMarchaStore {
             const nombre = new Map(tipos.map((tipo) => [tipo.idTipoPuesto, tipo.Descripcion]));
             return puestos.map((puesto) => ({
                 idPuesto: puesto.idPuesto,
+                idTipoPersonal: puesto.idTipoPersonal,
                 clasificacion: puesto.idTipoPuesto == null ? null : nombre.get(puesto.idTipoPuesto) ?? null,
             }));
         },
@@ -346,7 +343,8 @@ export function imprimirPuestaEnMarcha(resumen: ResumenPuestaEnMarcha[]): void {
         console.log(
             `Tenant ${fila.idTenant}: personal ${fila.tiposPersonalCreados}, tipos de comunicado ${fila.tiposComunicadoCreados}, ` +
             `config ${fila.configsCreadas}, roles con plantilla ${fila.rolesConPlantilla}, capacidades ${fila.capacidadesAsignadas}, ` +
-            `puestos actualizados ${fila.puestosActualizados}, puestos sin mapear ${fila.puestosSinMapear}`,
+            `puestos actualizados ${fila.puestosActualizados}, puestos sin mapear ${fila.puestosSinMapear}` +
+            (fila.puestosSinMapearIds.length ? ` [${fila.puestosSinMapearIds.join(', ')}]` : ''),
         );
     }
 }

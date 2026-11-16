@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { asegurarTipoPersonal, reemplazarEtiquetas } from './clasificacion-puesto';
+import { asegurarTipoPersonal, reemplazarEtiquetas, tipoPersonalDesdeClasificacion } from './clasificacion-puesto';
 
 describe('reemplazarEtiquetas', () => {
     const tx = {
@@ -87,6 +87,69 @@ describe('asegurarTipoPersonal', () => {
         expect(tx.catTiposPersonal.findFirst).toHaveBeenCalledWith({
             where: { idTipoPersonal: 8, idTenant: 4, Activo: true },
             select: { idTipoPersonal: true },
+        });
+    });
+});
+
+describe('tipoPersonalDesdeClasificacion', () => {
+    const tx = {
+        catTipoPuesto: { findFirst: jest.fn() },
+        catTiposPersonal: { findFirst: jest.fn() },
+    };
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+    });
+
+    it('toma el tipo de personal del tenant con el mismo código que la clasificación', async () => {
+        tx.catTipoPuesto.findFirst.mockResolvedValue({ Descripcion: ' Operativo ', Activo: true });
+        tx.catTiposPersonal.findFirst.mockResolvedValue({ idTipoPersonal: 11 });
+
+        await expect(tipoPersonalDesdeClasificacion(tx, 8, 2)).resolves.toBe(11);
+
+        expect(tx.catTipoPuesto.findFirst).toHaveBeenCalledWith({
+            where: { idTipoPuesto: 2 },
+            select: { Descripcion: true, Activo: true },
+        });
+        expect(tx.catTiposPersonal.findFirst).toHaveBeenCalledWith({
+            where: { idTenant: 8, Codigo: 'OPERATIVO', Activo: true },
+            select: { idTipoPersonal: true },
+        });
+    });
+
+    it('trata gerencial como directivo', async () => {
+        tx.catTipoPuesto.findFirst.mockResolvedValue({ Descripcion: 'gerencial', Activo: null });
+        tx.catTiposPersonal.findFirst.mockResolvedValue({ idTipoPersonal: 13 });
+
+        await expect(tipoPersonalDesdeClasificacion(tx, 8, 3)).resolves.toBe(13);
+        expect(tx.catTiposPersonal.findFirst).toHaveBeenCalledWith({
+            where: { idTenant: 8, Codigo: 'DIRECTIVO', Activo: true },
+            select: { idTipoPersonal: true },
+        });
+    });
+
+    it('rechaza una clasificación sin equivalente', async () => {
+        tx.catTipoPuesto.findFirst.mockResolvedValue({ Descripcion: 'Supervisor', Activo: true });
+
+        await expect(tipoPersonalDesdeClasificacion(tx, 8, 9)).rejects.toMatchObject({
+            response: {
+                code: 'CONTENIDO_INVALIDO',
+                message: 'La clasificación «Supervisor» no tiene un tipo de personal equivalente. Usa Operativo, Administrativo o Directivo.',
+            },
+            status: HttpStatus.BAD_REQUEST,
+        });
+        expect(tx.catTiposPersonal.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('rechaza cuando el catálogo del tenant no tiene ese código', async () => {
+        tx.catTipoPuesto.findFirst.mockResolvedValue({ Descripcion: 'Administrativo', Activo: true });
+        tx.catTiposPersonal.findFirst.mockResolvedValue(null);
+
+        await expect(tipoPersonalDesdeClasificacion(tx, 8, 4)).rejects.toMatchObject({
+            response: {
+                code: 'CONTENIDO_INVALIDO',
+                message: 'No hay un tipo de personal activo con código ADMINISTRATIVO en esta organización.',
+            },
         });
     });
 });

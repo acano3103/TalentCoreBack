@@ -4,7 +4,7 @@ import {
     AsignacionNueva,
     CapacidadCatalogo,
     codigoTipoDeClasificacion,
-    PuestoDefault,
+    PuestoClasificado,
     PuestaEnMarchaStore,
     RolSimple,
     TipoPersonalExistente,
@@ -20,7 +20,7 @@ class MemoriaPuesta implements PuestaEnMarchaStore {
     capacidades: CapacidadCatalogo[] = [];
     roles: (RolSimple & { idTenant: number })[] = [];
     asignaciones: AsignacionNueva[] = [];
-    puestos: (PuestoDefault & { idTenant: number; idTipoPersonal: number })[] = [];
+    puestos: (PuestoClasificado & { idTenant: number })[] = [];
     private siguienteTipo = 1;
 
     listarTenants() {
@@ -104,11 +104,15 @@ class MemoriaPuesta implements PuestaEnMarchaStore {
         return Promise.resolve();
     }
 
-    listarPuestosEnDefault(idTenant: number, idTipoAdministrativo: number) {
+    listarPuestos(idTenant: number) {
         return Promise.resolve(
             this.puestos
-                .filter((puesto) => puesto.idTenant === idTenant && puesto.idTipoPersonal === idTipoAdministrativo)
-                .map((puesto) => ({ idPuesto: puesto.idPuesto, clasificacion: puesto.clasificacion })),
+                .filter((puesto) => puesto.idTenant === idTenant)
+                .map((puesto) => ({
+                    idPuesto: puesto.idPuesto,
+                    idTipoPersonal: puesto.idTipoPersonal,
+                    clasificacion: puesto.clasificacion,
+                })),
         );
     }
 
@@ -169,6 +173,7 @@ describe('puesta en marcha de comunicación', () => {
             { idPuesto: 3, idTenant: 7, idTipoPersonal: 50, clasificacion: 'Administrativo' },
             { idPuesto: 4, idTenant: 7, idTipoPersonal: 50, clasificacion: 'Supervisor' },
             { idPuesto: 5, idTenant: 7, idTipoPersonal: 99, clasificacion: 'Operativo' },
+            { idPuesto: 6, idTenant: 7, idTipoPersonal: 99, clasificacion: 'Administrativo' },
         ];
 
         const primera = await aplicarPuestaEnMarcha(memoria);
@@ -180,8 +185,9 @@ describe('puesta en marcha de comunicación', () => {
                 configsCreadas: 1,
                 rolesConPlantilla: 3,
                 capacidadesAsignadas: CAPACIDADES_FASE_1.length * 2 + 3,
-                puestosActualizados: 2,
+                puestosActualizados: 4,
                 puestosSinMapear: 1,
+                puestosSinMapearIds: [4],
             },
         ]);
 
@@ -209,7 +215,8 @@ describe('puesta en marcha de comunicación', () => {
         expect(memoria.puestos.find((puesto) => puesto.idPuesto === 2)?.idTipoPersonal).toBe(idDirectivo);
         expect(memoria.puestos.find((puesto) => puesto.idPuesto === 3)?.idTipoPersonal).toBe(50);
         expect(memoria.puestos.find((puesto) => puesto.idPuesto === 4)?.idTipoPersonal).toBe(50);
-        expect(memoria.puestos.find((puesto) => puesto.idPuesto === 5)?.idTipoPersonal).toBe(99);
+        expect(memoria.puestos.find((puesto) => puesto.idPuesto === 5)?.idTipoPersonal).toBe(idOperativo);
+        expect(memoria.puestos.find((puesto) => puesto.idPuesto === 6)?.idTipoPersonal).toBe(50);
         expect(memoria.personal.find((fila) => fila.codigo === 'ADMINISTRATIVO')?.nombre).toBe('Administrativo a mano');
         expect(memoria.configs).toEqual([
             { idTenant: 7, idEmpresa: 10 },
@@ -227,6 +234,7 @@ describe('puesta en marcha de comunicación', () => {
                 capacidadesAsignadas: 0,
                 puestosActualizados: 0,
                 puestosSinMapear: 1,
+                puestosSinMapearIds: [4],
             },
         ]);
         expect(memoria.asignaciones.filter((fila) => fila.idRol === 1)).toHaveLength(CAPACIDADES_FASE_1.length);
