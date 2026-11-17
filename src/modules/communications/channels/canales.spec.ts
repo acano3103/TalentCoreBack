@@ -92,6 +92,15 @@ describe('canal efectivo', () => {
             { idEmpleado: 2, canales: ['CORREO', 'KIOSCO'], sinCanal: false, nivelPerfil: 'DEFAULT' },
             { idEmpleado: 3, canales: [], sinCanal: true, nivelPerfil: 'DEFAULT' },
         ];
-        expect(resumirCanales(filas)).toEqual({ APP: 1, WHATSAPP: 1, CORREO: 1, KIOSCO: 1, SIN_CANAL: 1 });
+        expect(resumirCanales(filas)).toEqual({ APP: 1, WEB: 0, WHATSAPP: 1, CORREO: 1, KIOSCO: 1, SIN_CANAL: 1 });
+    });
+
+    it('cuenta a quien solo tiene web en WEB y no lo deja fuera del resumen', () => {
+        const filas: CanalDeEmpleado[] = [
+            { idEmpleado: 1, canales: ['WEB'], sinCanal: false, nivelPerfil: 'DEFAULT' },
+            { idEmpleado: 2, canales: ['APP', 'WEB'], sinCanal: false, nivelPerfil: 'DEFAULT' },
+            { idEmpleado: 3, canales: [], sinCanal: true, nivelPerfil: 'DEFAULT' },
+        ];
+        expect(resumirCanales(filas)).toEqual({ APP: 1, WEB: 2, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 1 });
     });
 });

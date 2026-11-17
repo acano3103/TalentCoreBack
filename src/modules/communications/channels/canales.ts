@@ -1,4 +1,4 @@
-/** Orden estable. WEB llega al empleado; el resumen del preview no la cuenta aparte. */
+/** Orden estable. El resumen cuenta cada canal que la persona puede recibir, WEB incluido. */
 export const CANALES = ['APP', 'WEB', 'WHATSAPP', 'CORREO', 'KIOSCO'] as const;
 
 export type Canal = (typeof CANALES)[number];
@@ -41,6 +41,7 @@ export interface CanalDeEmpleado {
 
 export interface ResumenCanales {
     APP: number;
+    WEB: number;
     WHATSAPP: number;
     CORREO: number;
     KIOSCO: number;
@@ -80,10 +81,11 @@ export function canalEfectivo(
 }
 
 export function resumirCanales(filas: readonly CanalDeEmpleado[]): ResumenCanales {
-    const resumen: ResumenCanales = { APP: 0, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 0 };
+    const resumen: ResumenCanales = { APP: 0, WEB: 0, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 0 };
     for (const fila of filas) {
         if (fila.sinCanal) resumen.SIN_CANAL += 1;
         if (fila.canales.includes('APP')) resumen.APP += 1;
+        if (fila.canales.includes('WEB')) resumen.WEB += 1;
         if (fila.canales.includes('WHATSAPP')) resumen.WHATSAPP += 1;
         if (fila.canales.includes('CORREO')) resumen.CORREO += 1;
         if (fila.canales.includes('KIOSCO')) resumen.KIOSCO += 1;

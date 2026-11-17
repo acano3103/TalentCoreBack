@@ -111,6 +111,28 @@ describe('CommsCapabilityService', () => {
         expect(consultasDeRoles).toHaveLength(1);
     });
 
+    it('incluye el nombre de cada empresa o unidad del alcance', async () => {
+        reglas = [
+            { codigo: 'COM_CREAR', alcance: 'EMPRESAS', referencias: [2, 3], tiposPermitidos: null },
+            { codigo: 'COM_VER_ANALITICA', alcance: 'UNIDADES', referencias: [8], tiposPermitidos: null },
+        ];
+        prisma.catEmpresas.findMany.mockResolvedValue([
+            { idEmpresa: 2, nombre_comercial: ' Norte ' },
+            { idEmpresa: 3, nombre_comercial: 'Sur' },
+        ]);
+        prisma.catUnidadesOperativas.findMany.mockResolvedValue([{ idUnidadOperativa: 8, Nombre: 'Planta' }]);
+
+        const efectivas = await service.efectivasConNombres(usuario, 10);
+
+        expect(efectivas.find((item) => item.codigo === 'COM_CREAR')?.referenciasDetalle).toEqual([
+            { id: 2, nombre: 'Norte' },
+            { id: 3, nombre: 'Sur' },
+        ]);
+        expect(efectivas.find((item) => item.codigo === 'COM_VER_ANALITICA')?.referenciasDetalle).toEqual([
+            { id: 8, nombre: 'Planta' },
+        ]);
+    });
+
     it('la ruta de roles no consulta el aviso de equipo', async () => {
         await service.getEffective(usuario, 0);
 

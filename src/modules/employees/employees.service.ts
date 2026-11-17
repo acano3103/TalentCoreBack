@@ -10,6 +10,7 @@ import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 import { UpdateEmployeeGeneralDataDto } from './dto/update-employee-general-data.dto';
+import { condicionBusquedaColaborador } from './busqueda-colaborador';
 
 @Injectable()
 export class EmployeesService {
@@ -442,16 +443,7 @@ export class EmployeesService {
   ) {
     const skip = (page - 1) * limit;
 
-    // Condición opcional para búsqueda por nombre, apellidos, correo o puesto
-    const searchCondition = search?.trim()
-      ? Prisma.sql`AND (
-        ep.nombre LIKE ${`%${search}%`} OR
-        ep.primerApellido LIKE ${`%${search}%`} OR
-        ep.segundoApellido LIKE ${`%${search}%`} OR
-        ep.correo LIKE ${`%${search}%`} OR
-        p.nombrePuesto LIKE ${`%${search}%`}
-      )`
-      : Prisma.empty;
+    const searchCondition = condicionBusquedaColaborador(search ?? '');
 
     // Condición opcional para empleados sin jefe inmediato asignado
     const withoutManagerCondition = withoutManager

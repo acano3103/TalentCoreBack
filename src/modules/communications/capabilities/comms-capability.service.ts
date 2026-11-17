@@ -18,6 +18,15 @@ import {
 import { asignacionesPlantilla, ROLES_PLANTILLA } from './plantilla-roles';
 import { ReemplazarCapacidadesDto } from './dto/reemplazar-capacidades.dto';
 
+export interface ReferenciaNombrada {
+    id: number;
+    nombre: string;
+}
+
+export interface CapacidadConNombres extends CapacidadEfectiva {
+    referenciasDetalle: ReferenciaNombrada[] | null;
+}
+
 const OPCIONES_TRANSACCION = {
     maxWait: 15_000,
     timeout: 20_000,
@@ -78,6 +87,39 @@ export class CommsCapabilityService {
             });
         }
         return fusionarReglas(reglas);
+    }
+
+    /** La misma fusión, con el nombre de cada empresa o unidad de la lista. */
+    async efectivasConNombres(activeUser: ActiveUserDto, companyId: number): Promise<CapacidadConNombres[]> {
+        const efectivas = await this.getEffective(activeUser, companyId);
+        const empresas = new Set<number>();
+        const unidades = new Set<number>();
+        for (const item of efectivas) {
+            if (item.alcance === 'EMPRESAS') for (const id of item.referencias ?? []) empresas.add(id);
+            if (item.alcance === 'UNIDADES') for (const id of item.referencias ?? []) unidades.add(id);
+        }
+        const [filasEmpresa, filasUnidad] = await Promise.all([
+            empresas.size
+                ? this.prisma.catEmpresas.findMany({
+                      where: { idTenant: activeUser.idTenant, idEmpresa: { in: [...empresas] } },
+                      select: { idEmpresa: true, nombre_comercial: true },
+                  })
+                : Promise.resolve([] as { idEmpresa: number; nombre_comercial: string }[]),
+            unidades.size
+                ? this.prisma.catUnidadesOperativas.findMany({
+                      where: { idTenant: activeUser.idTenant, idUnidadOperativa: { in: [...unidades] } },
+                      select: { idUnidadOperativa: true, Nombre: true },
+                  })
+                : Promise.resolve([] as { idUnidadOperativa: number; Nombre: string }[]),
+        ]);
+        const nombreEmpresa = new Map<number, string>();
+        for (const fila of filasEmpresa) nombreEmpresa.set(fila.idEmpresa, fila.nombre_comercial.trim());
+        const nombreUnidad = new Map<number, string>();
+        for (const fila of filasUnidad) nombreUnidad.set(fila.idUnidadOperativa, fila.Nombre.trim());
+        return efectivas.map((item) => ({
+            ...item,
+            referenciasDetalle: detalleReferencias(item, nombreEmpresa, nombreUnidad),
+        }));
     }
 
     async resolveScopeEmployeeIds(
@@ -654,6 +696,18 @@ export class CommsCapabilityService {
             throw errorComms(HttpStatus.BAD_REQUEST, 'CONTENIDO_INVALIDO', 'La empresa no es válida.');
         }
     }
+}
+
+function detalleReferencias(
+    item: CapacidadEfectiva,
+    nombreEmpresa: Map<number, string>,
+    nombreUnidad: Map<number, string>,
+): ReferenciaNombrada[] | null {
+    if (item.alcance !== 'EMPRESAS' && item.alcance !== 'UNIDADES') return null;
+    const ids = item.referencias ?? [];
+    if (!ids.length) return null;
+    const nombres = item.alcance === 'EMPRESAS' ? nombreEmpresa : nombreUnidad;
+    return ids.map((id) => ({ id, nombre: nombres.get(id) ?? '' }));
 }
 
 function normalizarIds(ids?: number[]): number[] | null {

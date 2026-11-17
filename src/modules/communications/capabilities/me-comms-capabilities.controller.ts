@@ -19,13 +19,13 @@ export class MeCommsCapabilitiesController {
         summary: 'Capacidades de comunicación de la persona autenticada',
         description: SWAGGER_AUTH_DESCRIPTION,
     })
-    @ApiResponse({ status: 200, description: 'Capacidades efectivas, con el alcance mayor y los tipos unidos.' })
+    @ApiResponse({ status: 200, description: 'Capacidades efectivas, con el alcance mayor, los tipos unidos y el nombre de cada referencia.' })
     @ApiResponse({ status: 401, description: 'Token ausente o inválido.' })
     @ApiResponse({ status: 403, description: 'La empresa no pertenece al tenant del usuario.' })
     misCapacidades(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
     ) {
-        return this.service.getEffective(activeUser, companyId);
+        return this.service.efectivasConNombres(activeUser, companyId);
     }
 }

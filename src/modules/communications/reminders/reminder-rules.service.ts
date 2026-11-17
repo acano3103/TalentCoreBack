@@ -15,6 +15,7 @@ import {
     validarCanales,
     validarIds,
     validarParametros,
+    validarPlantilla,
 } from './reglas-default';
 
 const TRANSACCION = { maxWait: 15_000, timeout: 20_000 };
@@ -23,6 +24,11 @@ const PAGINA = 50;
 export interface ReglaRespuesta {
     codigo: string;
     nombre: string;
+    descripcion: string;
+    destinatario: string;
+    seCierraCuando: string;
+    campos: { clave: string; etiqueta: string; ayuda: string; tipo: string; min: number | null; max: number | null }[];
+    variables: { token: string; etiqueta: string }[];
     activo: boolean;
     parametros: Record<string, unknown>;
     canales: string[];
@@ -189,6 +195,8 @@ function datos(codigo: string, dto: ActualizarReglaDto): Prisma.ComReglasRecorda
         if (!plantilla || plantilla.length > 500) {
             throw errorComms(HttpStatus.BAD_REQUEST, 'CONTENIDO_INVALIDO', 'La plantilla debe tener entre 1 y 500 caracteres.');
         }
+        const variables = validarPlantilla(codigo, plantilla);
+        if (!variables.ok) throw errorComms(HttpStatus.BAD_REQUEST, 'CONTENIDO_INVALIDO', variables.message);
         data.Plantilla = plantilla;
     }
     if (dto.aplicaTiposPersonal !== undefined) {
@@ -226,6 +234,11 @@ function aRegla(fila: {
     return {
         codigo: fila.Codigo,
         nombre: catalogo?.nombre ?? fila.Codigo,
+        descripcion: catalogo?.descripcion ?? '',
+        destinatario: catalogo?.destinatario ?? '',
+        seCierraCuando: catalogo?.seCierraCuando ?? '',
+        campos: catalogo?.campos.map((campo) => ({ ...campo })) ?? [],
+        variables: catalogo?.variables.map((variable) => ({ ...variable })) ?? [],
         activo: fila.Activo,
         parametros,
         canales: normalizarCanales(fila.Canales),

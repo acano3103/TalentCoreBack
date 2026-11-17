@@ -764,11 +764,14 @@ export class ReminderEngineService {
                    CASE WHEN EXISTS (
                        SELECT 1 FROM PushTokens t
                        WHERE t.Activo = 1 AND t.FechaBaja IS NULL
-                         AND (t.idEmpleado = e.idEmpleado OR (e.idUsuario IS NOT NULL AND t.user_uuid = e.idUsuario))
+                         AND (t.idEmpleado = e.idEmpleado OR (
+                             e.idUsuario IS NOT NULL
+                             AND t.user_uuid COLLATE utf8mb4_unicode_ci = e.idUsuario COLLATE utf8mb4_unicode_ci
+                         ))
                    ) THEN 1 ELSE 0 END AS pushActivo,
                    CASE WHEN e.idUsuario IS NOT NULL AND EXISTS (
                        SELECT 1 FROM usuarioslogin l
-                       WHERE l.UuidUsuario COLLATE utf8mb4_unicode_ci = e.idUsuario
+                       WHERE l.UuidUsuario COLLATE utf8mb4_unicode_ci = e.idUsuario COLLATE utf8mb4_unicode_ci
                          AND l.browser COLLATE utf8mb4_unicode_ci = ${MARCA_LOGIN_MOVIL}
                    ) THEN 1 ELSE 0 END AS loginMovil,
                    CASE WHEN e.idSite IS NOT NULL AND EXISTS (
@@ -823,8 +826,7 @@ export class ReminderEngineService {
             if (!fila) return { ...base, aplicaTiposPersonal: null, excluyeSites: null };
             const canales = normalizarCanales(fila.Canales);
             return {
-                codigo: base.codigo,
-                nombre: base.nombre,
+                ...base,
                 activo: fila.Activo,
                 parametros: objeto(fila.Parametros),
                 canales: canales.length ? canales : base.canales,

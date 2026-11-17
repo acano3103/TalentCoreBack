@@ -5,6 +5,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { errorComms } from '../comms-http';
 import { CommsCapabilityService } from '../capabilities/comms-capability.service';
+import { ResumenCanales } from '../channels/canales';
 import { EffectiveChannelService } from '../channels/effective-channel.service';
 import { AudienceOptionsService, OpcionesAudiencia } from './audience-options.service';
 import { AudiencePreviewStore } from './audience-preview.store';
@@ -29,13 +30,7 @@ export interface PersonaAudiencia {
 
 export interface VistaPrevia {
     total: number;
-    porCanal: {
-        APP: number;
-        WHATSAPP: number;
-        CORREO: number;
-        KIOSCO: number;
-        SIN_CANAL: number;
-    };
+    porCanal: ResumenCanales;
     costoWhatsAppEstimado: string | null;
     topeWhatsApp: EstadoTope | null;
     muestra: PersonaAudiencia[];

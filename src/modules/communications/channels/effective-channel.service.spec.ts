@@ -62,7 +62,7 @@ describe('EffectiveChannelService', () => {
             { idEmpleado: 8, canales: [], sinCanal: true, nivelPerfil: 'TIPO_PERSONAL' },
             { idEmpleado: 9, canales: [], sinCanal: true, nivelPerfil: 'DEFAULT' },
         ]);
-        expect(resultado.resumen).toEqual({ APP: 1, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 2 });
+        expect(resultado.resumen).toEqual({ APP: 1, WEB: 1, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 2 });
         const sql = JSON.stringify(queryRaw.mock.calls[0][0]);
         expect(sql).toContain('PushTokens');
     });

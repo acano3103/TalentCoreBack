@@ -79,7 +79,7 @@ function base(parcial: {
     return {
         total: parcial.total ?? 3,
         sinCanal: 1,
-        porCanal: { APP: 2, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 1 },
+        porCanal: { APP: 2, WEB: 0, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 1 },
         fueraDeAlcance: [],
         canalesForzados: parcial.canalesForzados ?? [],
         plantillasWhatsApp: parcial.plantillasWhatsApp === undefined ? { general: 'tpl_ok' } : parcial.plantillasWhatsApp,

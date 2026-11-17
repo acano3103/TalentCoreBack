@@ -4,20 +4,76 @@ export const CODIGOS_REGLA = ['R1', 'R2', 'R3', 'R12', 'R4', 'R5', 'R6', 'R7', '
 
 export type CodigoRegla = (typeof CODIGOS_REGLA)[number];
 
+export const TIPOS_CAMPO = ['minutos', 'horas', 'dias', 'hora', 'entero'] as const;
+
+export type TipoCampoRegla = (typeof TIPOS_CAMPO)[number];
+
+export interface CampoRegla {
+    clave: string;
+    etiqueta: string;
+    ayuda: string;
+    tipo: TipoCampoRegla;
+    min: number | null;
+    max: number | null;
+}
+
+export interface VariableRegla {
+    token: string;
+    etiqueta: string;
+}
+
 export interface ReglaDefault {
     codigo: CodigoRegla;
     nombre: string;
+    descripcion: string;
+    destinatario: string;
+    seCierraCuando: string;
+    campos: CampoRegla[];
+    variables: VariableRegla[];
     activo: boolean;
     parametros: Record<string, unknown>;
     canales: Canal[];
     plantilla: string;
 }
 
+function minutos(clave: string, etiqueta: string, ayuda: string, min: number, max: number): CampoRegla {
+    return { clave, etiqueta, ayuda, tipo: 'minutos', min, max };
+}
+
+function campoDias(clave: string, etiqueta: string, ayuda: string, min: number, max: number): CampoRegla {
+    return { clave, etiqueta, ayuda, tipo: 'dias', min, max };
+}
+
+function hora(clave: string, etiqueta: string, ayuda: string): CampoRegla {
+    return { clave, etiqueta, ayuda, tipo: 'hora', min: null, max: null };
+}
+
+function enteroCampo(clave: string, etiqueta: string, ayuda: string, min: number, max: number): CampoRegla {
+    return { clave, etiqueta, ayuda, tipo: 'entero', min, max };
+}
+
+const NOMBRE: VariableRegla = { token: '{nombre}', etiqueta: 'Nombre' };
+const HORA_ENTRADA: VariableRegla = { token: '{hora_entrada}', etiqueta: 'Hora de entrada' };
+const DOCUMENTO: VariableRegla = { token: '{documento}', etiqueta: 'Documento' };
+const FECHA_LIMITE: VariableRegla = { token: '{fecha_limite}', etiqueta: 'Fecha límite' };
+const CURSO: VariableRegla = { token: '{curso}', etiqueta: 'Curso' };
+const SOLICITUD: VariableRegla = { token: '{solicitud}', etiqueta: 'Solicitud' };
+const EQUIPO: VariableRegla = { token: '{equipo}', etiqueta: 'Equipo' };
+const TITULO: VariableRegla = { token: '{solicitud}', etiqueta: 'Título' };
+
+const CADA_DIAS = campoDias('cadaDias', 'Repetir cada', 'Días entre un aviso y el siguiente.', 1, 30);
+const MAX_INTENTOS = enteroCampo('maxIntentos', 'Máximo de avisos', 'Cuántas veces se puede enviar este recordatorio.', 1, 10);
+
 /** Valores iniciales de la pantalla de recordatorios. Se crean al abrir la configuración. */
 export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R1',
         nombre: 'Falta checar entrada',
+        descripcion: 'Avisa si no hay registro de entrada pasados los minutos indicados.',
+        destinatario: 'El colaborador',
+        seCierraCuando: 'Cuando registra la entrada o llega la hora de salida del turno.',
+        campos: [minutos('minutosDespues', 'Minutos después de la entrada', 'Minutos después de la hora de entrada antes de avisar.', 1, 240)],
+        variables: [NOMBRE, HORA_ENTRADA],
         activo: true,
         parametros: { minutosDespues: 10 },
         canales: ['APP', 'WEB'],
@@ -26,6 +82,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R2',
         nombre: 'Olvidó checar salida',
+        descripcion: 'Avisa si hay entrada y no hay salida pasados los minutos indicados.',
+        destinatario: 'El colaborador',
+        seCierraCuando: 'Cuando registra la salida, o si ese turno no tuvo entrada.',
+        campos: [minutos('minutosDespues', 'Minutos después de la salida', 'Minutos después de la hora de salida del turno.', 1, 240)],
+        variables: [NOMBRE, HORA_ENTRADA],
         activo: true,
         parametros: { minutosDespues: 30 },
         canales: ['APP', 'WEB'],
@@ -34,6 +95,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R3',
         nombre: 'Resumen de ausencias del equipo',
+        descripcion: 'Un aviso al jefe con las personas de su equipo que no registraron entrada.',
+        destinatario: 'El jefe directo',
+        seCierraCuando: 'Un solo aviso por día, después de la hora de corte, si hay ausencias.',
+        campos: [hora('horaCorte', 'Hora de corte', 'Hora local en la que se envía el resumen.')],
+        variables: [NOMBRE, EQUIPO],
         activo: false,
         parametros: { horaCorte: '10:00' },
         canales: ['APP', 'WEB'],
@@ -42,6 +108,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R12',
         nombre: 'Antes de la entrada',
+        descripcion: 'Avisa antes de la hora de entrada si todavía no hay registro.',
+        destinatario: 'El colaborador',
+        seCierraCuando: 'Cuando registra la entrada o llega la hora de entrada.',
+        campos: [minutos('minutosAntes', 'Minutos antes de la entrada', 'Minutos antes de la hora de entrada.', 1, 180)],
+        variables: [NOMBRE, HORA_ENTRADA],
         activo: false,
         parametros: { minutosAntes: 15 },
         canales: ['APP', 'WEB'],
@@ -50,6 +121,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R4',
         nombre: 'Documento faltante',
+        descripcion: 'Recuerda cargar un documento que falta en el expediente.',
+        destinatario: 'El colaborador',
+        seCierraCuando: 'Cuando el documento deja de estar faltante.',
+        campos: [CADA_DIAS, MAX_INTENTOS],
+        variables: [NOMBRE, DOCUMENTO],
         activo: true,
         parametros: { cadaDias: 3, maxIntentos: 5 },
         canales: ['APP', 'WEB', 'CORREO'],
@@ -58,6 +134,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R5',
         nombre: 'Documento por vencer',
+        descripcion: 'Avisa los días indicados antes de que venza un documento.',
+        destinatario: 'El colaborador',
+        seCierraCuando: 'Cuando el documento vence, se renueva o deja de tener fecha.',
+        campos: [campoDias('diasAntes', 'Días de anticipación', 'Días antes del vencimiento. Una lista de 1 a 6 enteros.', 1, 365)],
+        variables: [NOMBRE, DOCUMENTO, FECHA_LIMITE],
         activo: true,
         parametros: { diasAntes: [30, 7, 1] },
         canales: ['APP', 'WEB', 'CORREO'],
@@ -66,6 +147,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R6',
         nombre: 'Documento rechazado',
+        descripcion: 'Recuerda volver a cargar un documento rechazado.',
+        destinatario: 'El colaborador',
+        seCierraCuando: 'Cuando el documento deja de estar rechazado.',
+        campos: [CADA_DIAS, MAX_INTENTOS],
+        variables: [NOMBRE, DOCUMENTO],
         activo: true,
         parametros: { cadaDias: 2, maxIntentos: 5 },
         canales: ['APP', 'WEB', 'CORREO'],
@@ -74,6 +160,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R7',
         nombre: 'Curso asignado',
+        descripcion: 'Recuerda un curso asignado que sigue abierto.',
+        destinatario: 'La persona inscrita',
+        seCierraCuando: 'Cuando el curso deja de estar abierto.',
+        campos: [CADA_DIAS, MAX_INTENTOS],
+        variables: [NOMBRE, CURSO],
         activo: true,
         parametros: { cadaDias: 1, maxIntentos: 3 },
         canales: ['APP', 'WEB'],
@@ -82,6 +173,15 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R8',
         nombre: 'Curso por vencer o atrasado',
+        descripcion: 'Avisa cuando un curso está por vencer o ya se atrasó.',
+        destinatario: 'La persona inscrita',
+        seCierraCuando: 'Cuando el curso deja de estar abierto o no tiene fecha límite.',
+        campos: [
+            campoDias('diasAntes', 'Días de anticipación', 'Días antes de la fecha límite en los que empieza el aviso.', 1, 90),
+            CADA_DIAS,
+            MAX_INTENTOS,
+        ],
+        variables: [NOMBRE, CURSO, FECHA_LIMITE],
         activo: true,
         parametros: { diasAntes: 3, cadaDias: 1, maxIntentos: 5 },
         canales: ['APP', 'WEB'],
@@ -90,6 +190,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R9',
         nombre: 'Aprobación pendiente',
+        descripcion: 'Recuerda una solicitud que sigue pendiente de aprobación.',
+        destinatario: 'Quien debe aprobarla',
+        seCierraCuando: 'Cuando la solicitud deja de estar pendiente.',
+        campos: [CADA_DIAS, MAX_INTENTOS],
+        variables: [NOMBRE, SOLICITUD],
         activo: true,
         parametros: { cadaDias: 1, maxIntentos: 5 },
         canales: ['APP', 'WEB', 'CORREO'],
@@ -98,6 +203,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R10',
         nombre: 'Cambio de estatus',
+        descripcion: 'Avisa a quien la solicitó cuando cambia el estatus.',
+        destinatario: 'La persona que la solicitó',
+        seCierraCuando: 'Un aviso por cada cambio de estatus.',
+        campos: [],
+        variables: [NOMBRE, SOLICITUD],
         activo: true,
         parametros: {},
         canales: ['APP', 'WEB', 'CORREO'],
@@ -106,6 +216,11 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
     {
         codigo: 'R11',
         nombre: 'Comunicado pendiente',
+        descripcion: 'Recuerda un comunicado pendiente. Cada cuánto se avisa lo define el comunicado.',
+        destinatario: 'El destinatario del comunicado',
+        seCierraCuando: 'Cuando la persona cumple el acuse, el comunicado deja de estar vigente o ya no está enviado.',
+        campos: [],
+        variables: [NOMBRE, TITULO],
         activo: true,
         parametros: {},
         canales: ['APP', 'WEB'],
@@ -146,6 +261,24 @@ export function validarParametros(codigo: string, valor: unknown): { ok: true; p
     if (codigo === 'R8') return ventanaCurso(crudo, claves);
     if (codigo === 'R4' || codigo === 'R6' || codigo === 'R7' || codigo === 'R9') return cadaDias(crudo, claves);
     return { ok: false, message: 'Esa regla de recordatorio no existe.' };
+}
+
+const TOKEN_PLANTILLA = /\{([a-zA-Z0-9_]+)\}/g;
+
+/** Rechaza `{horaEntrada}` y cualquier token que el motor de esa regla no sustituye. `{Nombre}` sí vale. */
+export function validarPlantilla(codigo: string, plantilla: string): { ok: true } | { ok: false; message: string } {
+    const catalogo = reglaDefault(codigo);
+    if (!catalogo) return { ok: false, message: 'Esa regla de recordatorio no existe.' };
+    const permitidas = new Set(catalogo.variables.map((variable) => variable.token.slice(1, -1).toLowerCase()));
+    const desconocidas: string[] = [];
+    for (const match of plantilla.matchAll(TOKEN_PLANTILLA)) {
+        const token = match[0];
+        if (!permitidas.has(match[1].toLowerCase()) && !desconocidas.includes(token)) desconocidas.push(token);
+    }
+    if (desconocidas.length) {
+        return { ok: false, message: `La plantilla usa variables que esta regla no tiene: ${desconocidas.join(', ')}.` };
+    }
+    return { ok: true };
 }
 
 export function validarCanales(valor: unknown): Canal[] | null {

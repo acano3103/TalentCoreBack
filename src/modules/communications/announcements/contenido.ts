@@ -1,5 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
-import { Canal } from '../channels/canales';
+import { Canal, ResumenCanales } from '../channels/canales';
 import { errorComms } from '../comms-http';
 import { aTextoPlano, sanitizarCuerpo } from './sanitize-cuerpo';
 
@@ -80,7 +80,7 @@ export function faltanContenido(titulo: string, resumen: string, cuerpo: string)
 export interface EntradaRevision {
     total: number;
     sinCanal: number;
-    porCanal: { APP: number; WHATSAPP: number; CORREO: number; KIOSCO: number; SIN_CANAL: number };
+    porCanal: ResumenCanales;
     fueraDeAlcance: number[];
     canalesForzados: readonly string[];
     plantillasWhatsApp: unknown;

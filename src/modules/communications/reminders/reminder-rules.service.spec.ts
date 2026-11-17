@@ -1,6 +1,6 @@
 import { HttpException } from '@nestjs/common';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
-import { REGLAS_DEFAULT } from './reglas-default';
+import { REGLAS_DEFAULT, validarParametros, validarPlantilla } from './reglas-default';
 import { ReminderRulesService } from './reminder-rules.service';
 
 const usuario = {
@@ -66,6 +66,20 @@ describe('ReminderRulesService', () => {
         expect(creadas.find((fila) => fila.Codigo === 'R3')?.Activo).toBe(false);
         expect(creadas.find((fila) => fila.Codigo === 'R12')?.Activo).toBe(false);
         expect(respuesta.reglas.map((regla) => regla.codigo)).toEqual(REGLAS_DEFAULT.map((regla) => regla.codigo));
+        const r1 = respuesta.reglas.find((regla) => regla.codigo === 'R1');
+        expect(r1?.campos.map((campo) => campo.clave)).toEqual(['minutosDespues']);
+        expect(r1?.variables.map((variable) => variable.token)).toEqual(['{nombre}', '{hora_entrada}']);
+        expect(respuesta.reglas.find((regla) => regla.codigo === 'R3')?.campos[0]).toMatchObject({ clave: 'horaCorte', tipo: 'hora' });
+        expect(respuesta.reglas.find((regla) => regla.codigo === 'R12')?.campos[0].clave).toBe('minutosAntes');
+    });
+
+    it('el catálogo rechaza llaves ajenas y variables que el motor no sustituye', () => {
+        for (const regla of REGLAS_DEFAULT) {
+            expect(validarParametros(regla.codigo, { ...regla.parametros, llaveInventada: 1 }).ok).toBe(false);
+            expect(validarPlantilla(regla.codigo, regla.plantilla).ok).toBe(true);
+        }
+        expect(validarPlantilla('R1', '{nombre} a las {horaEntrada}').ok).toBe(false);
+        expect(validarPlantilla('R1', '{Nombre}, a las {hora_entrada}.').ok).toBe(true);
     });
 
     it('rechaza parámetros que no corresponden a la regla', async () => {
@@ -76,6 +90,17 @@ describe('ReminderRulesService', () => {
         } catch (error) {
             expect((error as HttpException).getResponse()).toMatchObject({ code: 'CONTENIDO_INVALIDO' });
         }
+    });
+
+    it('rechaza una variable desconocida en la plantilla', async () => {
+        findMany.mockResolvedValue([fila('R1')]);
+        await expect(service.actualizar(usuario, 10, 'R1', { plantilla: '{nombre} a las {horaEntrada}' })).rejects.toBeInstanceOf(HttpException);
+        try {
+            await service.actualizar(usuario, 10, 'R1', { plantilla: '{nombre} a las {horaEntrada}' });
+        } catch (error) {
+            expect((error as HttpException).getResponse()).toMatchObject({ code: 'CONTENIDO_INVALIDO' });
+        }
+        expect(update).not.toHaveBeenCalled();
     });
 
     it('actualiza la regla y deja bitácora', async () => {

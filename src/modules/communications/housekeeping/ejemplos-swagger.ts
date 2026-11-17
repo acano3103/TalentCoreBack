@@ -23,7 +23,7 @@ export const EJEMPLO_REVISION = {
     audiencia: {
         total: 12,
         sinCanal: 1,
-        porCanal: { APP: 8, WHATSAPP: 0, CORREO: 6, KIOSCO: 4, SIN_CANAL: 1 },
+        porCanal: { APP: 8, WEB: 9, WHATSAPP: 0, CORREO: 6, KIOSCO: 4, SIN_CANAL: 1 },
         fueraDeAlcance: [],
     },
     whatsapp: {
@@ -47,7 +47,7 @@ export const EJEMPLO_ENVIO = {
 
 export const EJEMPLO_PREVIEW = {
     total: 12,
-    porCanal: { APP: 8, WHATSAPP: 0, CORREO: 6, KIOSCO: 4, SIN_CANAL: 1 },
+    porCanal: { APP: 8, WEB: 9, WHATSAPP: 0, CORREO: 6, KIOSCO: 4, SIN_CANAL: 1 },
     costoWhatsAppEstimado: null,
     muestra: [{ idEmpleado: 42, nombre: 'Ana López', canales: ['APP', 'WEB'] }],
     fueraDeAlcance: [],

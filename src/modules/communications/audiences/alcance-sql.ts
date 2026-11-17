@@ -1,6 +1,6 @@
 import { Prisma } from 'generated/prisma/client';
 import { ContextoAlcance, PROFUNDIDAD_ESTRUCTURA } from '../capabilities/alcance';
-import { CriteriosAudiencia, CriterioJefe, empresasPermitidas } from './criterios';
+import { CriteriosAudiencia, CriterioJefe, empresasPermitidas, hayListasFiltro } from './criterios';
 
 /** Misma forma que el CTE de capacidades: descendientes activos, sin el jefe, tope de profundidad. */
 export function cteAlcance(scope: ContextoAlcance): Prisma.Sql | null {
@@ -87,6 +87,16 @@ export function consultaAudiencia(criterios: CriteriosAudiencia, scope: Contexto
         (cte): cte is Prisma.Sql => cte != null,
     );
     const withSql = ctes.length ? Prisma.sql`WITH RECURSIVE ${Prisma.join(ctes, ', ')}` : Prisma.empty;
+    const soloPersonas = !hayListasFiltro(criterios) && (criterios.agregarEmpleados?.length ?? 0) > 0;
+    if (soloPersonas) {
+        return Prisma.sql`
+            ${withSql}
+            SELECT idEmpleado FROM (
+                ${selectPersonas(criterios, scope, soloId)}
+            ) audiencia
+            ORDER BY idEmpleado
+        `;
+    }
     const base = [
         Prisma.sql`e.activo = 1`,
         Prisma.sql`e.idTenant = ${scope.idTenant}`,
@@ -136,6 +146,25 @@ export function consultaAudiencia(criterios: CriteriosAudiencia, scope: Contexto
             ${selectAlta}
         ) audiencia
         ORDER BY idEmpleado
+    `;
+}
+
+function selectPersonas(criterios: CriteriosAudiencia, scope: ContextoAlcance, soloId?: number): Prisma.Sql {
+    const alta = [
+        Prisma.sql`e.activo = 1`,
+        Prisma.sql`e.idTenant = ${scope.idTenant}`,
+        filtroAlcance(scope),
+        Prisma.sql`e.idEmpleado IN (${Prisma.join(criterios.agregarEmpleados ?? [])})`,
+    ];
+    if (criterios.excluir?.length) {
+        alta.push(Prisma.sql`e.idEmpleado NOT IN (${Prisma.join(criterios.excluir)})`);
+    }
+    if (soloId != null) alta.push(Prisma.sql`e.idEmpleado = ${soloId}`);
+    return Prisma.sql`
+        SELECT e.idEmpleado AS idEmpleado
+        FROM Empleados e
+        LEFT JOIN CatSites s ON s.idSite = e.idSite
+        WHERE ${Prisma.join(alta, ' AND ')}
     `;
 }
 

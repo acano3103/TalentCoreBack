@@ -54,6 +54,18 @@ describe('combinación de audiencia', () => {
         expect(evaluarCriterios(plantilla, {}, alcance()).ids).toEqual([1, 2, 3, 4]);
     });
 
+    it('solo agregarEmpleados devuelve exactamente esas personas', () => {
+        expect(evaluarCriterios(plantilla, { agregarEmpleados: [1, 4] }, alcance()).ids).toEqual([1, 4]);
+    });
+
+    it('solo personas resta excluir y no mete al resto de la empresa', () => {
+        expect(evaluarCriterios(plantilla, { agregarEmpleados: [1, 2, 4], excluir: [2] }, alcance()).ids).toEqual([1, 4]);
+    });
+
+    it('filtros más agregarEmpleados es la unión', () => {
+        expect(evaluarCriterios(plantilla, { puestos: [6], agregarEmpleados: [4] }, alcance()).ids).toEqual([2, 4]);
+    });
+
     it('excluye después del filtro y agregar vuelve a sumar, aunque estuviera excluido', () => {
         const criterios: CriteriosAudiencia = { puestos: [5], excluir: [1, 3], agregarEmpleados: [1, 2] };
         expect(evaluarCriterios(plantilla, criterios, alcance()).ids).toEqual([1, 2, 4]);

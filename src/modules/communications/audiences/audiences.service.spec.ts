@@ -60,7 +60,7 @@ describe('AudiencesService', () => {
                 sinCanal: false,
                 nivelPerfil: 'DEFAULT',
             })),
-            resumen: { APP: ids.length, WHATSAPP: 1, CORREO: 0, KIOSCO: 0, SIN_CANAL: 0 },
+            resumen: { APP: ids.length, WEB: 0, WHATSAPP: 1, CORREO: 0, KIOSCO: 0, SIN_CANAL: 0 },
         }));
         prisma.empleados.findMany.mockImplementation(async ({ where }: { where: { idEmpleado: { in: number[] } } }) =>
             where.idEmpleado.in.map((id) => ({

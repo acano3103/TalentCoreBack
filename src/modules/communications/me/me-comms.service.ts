@@ -170,6 +170,23 @@ export class MeCommsService {
         return { id: creada.idPregunta, fechaPregunta: creada.FechaPregunta };
     }
 
+    async misPreguntas(activeUser: ActiveUserDto, companyId: number, id: number) {
+        const empleado = await this.empleadoDe(activeUser, companyId);
+        await this.destinatario(empleado.idEmpleado, companyId, activeUser.idTenant, id);
+        const filas = await this.prisma.comPreguntas.findMany({
+            where: { idComunicado: id, idEmpleado: empleado.idEmpleado },
+            orderBy: { FechaPregunta: 'desc' },
+        });
+        return filas.map((fila) => ({
+            id: fila.idPregunta,
+            pregunta: fila.Pregunta,
+            respuesta: fila.Respuesta,
+            fechaPregunta: fila.FechaPregunta,
+            fechaRespuesta: fila.FechaRespuesta,
+            respondida: fila.Respuesta != null,
+        }));
+    }
+
     async modalPendiente(activeUser: ActiveUserDto, companyId: number) {
         const empleado = await this.empleadoDe(activeUser, companyId);
         const ahora = this.ahora();

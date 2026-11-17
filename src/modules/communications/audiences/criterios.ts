@@ -10,6 +10,8 @@ import {
  * OR dentro de cada lista, AND entre listas no vacías,
  * después se resta `excluir`, se suman `agregarEmpleados`
  * y el resultado se cruza con el alcance. Solo empleados activos del tenant.
+ * Sin ninguna lista de filtro y con `agregarEmpleados`, la base es vacía:
+ * la audiencia son solo esas personas (menos `excluir`). `{}` sigue siendo todos.
  * La consulta de AudienceResolverService sigue esta misma regla.
  */
 export interface CriterioJefe {
@@ -68,6 +70,21 @@ export function normalizarCriterios(criterios: CriteriosAudiencia | null | undef
     };
 }
 
+/** Empresas, unidades, ubicaciones, áreas, puestos, etiquetas, tipos, campañas o jefes. */
+export function hayListasFiltro(criterios: CriteriosAudiencia): boolean {
+    return Boolean(
+        criterios.empresas?.length ||
+            criterios.unidades?.length ||
+            criterios.ubicaciones?.length ||
+            criterios.areas?.length ||
+            criterios.puestos?.length ||
+            criterios.etiquetas?.length ||
+            criterios.tiposPersonal?.length ||
+            criterios.campanas?.length ||
+            criterios.jefes?.length,
+    );
+}
+
 export function criteriosVacios(criterios: CriteriosAudiencia): boolean {
     return (
         !criterios.empresas?.length &&
@@ -124,29 +141,25 @@ export function evaluarCriterios(
     const alcanzables = new Set(empleadosAlcanzables(aAlcance(empleados), contexto));
     const equipo = equipoDeJefes(empleados, limpios.jefes ?? [], scope);
 
-    const hayFiltro =
-        !!limpios.empresas?.length ||
-        !!limpios.unidades?.length ||
-        !!limpios.ubicaciones?.length ||
-        !!limpios.areas?.length ||
-        !!limpios.puestos?.length ||
-        !!limpios.etiquetas?.length ||
-        !!limpios.tiposPersonal?.length ||
-        !!limpios.campanas?.length ||
-        !!limpios.jefes?.length;
+    const hayFiltro = hayListasFiltro(limpios);
+    const soloPersonas = !hayFiltro && (limpios.agregarEmpleados?.length ?? 0) > 0;
 
     const excluidos = new Set(limpios.excluir ?? []);
     const ids = new Set<number>();
 
-    for (const empleado of empleados) {
-        if (!alcanzables.has(empleado.idEmpleado)) continue;
-        if (hayFiltro && !coincide(empleado, limpios, equipo)) continue;
-        if (excluidos.has(empleado.idEmpleado)) continue;
-        ids.add(empleado.idEmpleado);
+    if (!soloPersonas) {
+        for (const empleado of empleados) {
+            if (!alcanzables.has(empleado.idEmpleado)) continue;
+            if (hayFiltro && !coincide(empleado, limpios, equipo)) continue;
+            if (excluidos.has(empleado.idEmpleado)) continue;
+            ids.add(empleado.idEmpleado);
+        }
     }
 
     for (const id of limpios.agregarEmpleados ?? []) {
-        if (alcanzables.has(id)) ids.add(id);
+        if (!alcanzables.has(id)) continue;
+        if (soloPersonas && excluidos.has(id)) continue;
+        ids.add(id);
     }
 
     const jefesVisibles = new Set(

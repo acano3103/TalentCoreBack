@@ -61,11 +61,15 @@ export class EffectiveChannelService {
                            SELECT 1 FROM PushTokens t
                            WHERE t.Activo = 1
                              AND t.FechaBaja IS NULL
-                             AND (t.idEmpleado = e.idEmpleado OR (e.idUsuario IS NOT NULL AND t.user_uuid = e.idUsuario))
+                             AND (t.idEmpleado = e.idEmpleado OR (
+                                 e.idUsuario IS NOT NULL
+                                 AND t.user_uuid COLLATE utf8mb4_unicode_ci = e.idUsuario COLLATE utf8mb4_unicode_ci
+                             ))
                        ) THEN 1 ELSE 0 END AS pushActivo,
                        CASE WHEN e.idUsuario IS NOT NULL AND EXISTS (
                            SELECT 1 FROM usuarioslogin l
-                           WHERE l.UuidUsuario = e.idUsuario AND l.browser = ${MARCA_LOGIN_MOVIL}
+                           WHERE l.UuidUsuario COLLATE utf8mb4_unicode_ci = e.idUsuario COLLATE utf8mb4_unicode_ci
+                             AND l.browser COLLATE utf8mb4_unicode_ci = ${MARCA_LOGIN_MOVIL}
                        ) THEN 1 ELSE 0 END AS loginMovil,
                        CASE WHEN e.idSite IS NOT NULL AND EXISTS (
                            SELECT 1 FROM KioscoSites ks
@@ -77,7 +81,7 @@ export class EffectiveChannelService {
                        ) THEN 1 ELSE 0 END AS kioscoActivo
                 FROM Empleados e
                 LEFT JOIN CatPuestos p ON p.idPuesto = e.idPuesto
-                LEFT JOIN auth_user u ON u.uuid = e.idUsuario
+                LEFT JOIN auth_user u ON u.uuid COLLATE utf8mb4_unicode_ci = e.idUsuario COLLATE utf8mb4_unicode_ci
                 WHERE e.activo = 1
                   AND e.idEmpleado IN (${Prisma.join(lote)})
             `);

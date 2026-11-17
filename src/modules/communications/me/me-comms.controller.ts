@@ -70,6 +70,18 @@ export class MeCommsController {
         return this.service.acusar(activeUser, companyId, id, contextoCliente(req));
     }
 
+    @Get(':id/questions')
+    @ApiOperation({ summary: 'Preguntas propias del comunicado', description: 'Solo las de quien consulta, con estado enviada o respondida y el texto de la respuesta.' })
+    @ApiResponse({ status: 200, description: 'Preguntas del empleado.' })
+    @ApiResponse({ status: 404, description: 'NO_DESTINATARIO.' })
+    misPreguntas(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('id', ParseIntPipe) id: number,
+    ) {
+        return this.service.misPreguntas(activeUser, companyId, id);
+    }
+
     @Post(':id/questions')
     @ApiOperation({ summary: 'Preguntar sobre el comunicado', description: 'Solo si lo permite. Máximo 3 preguntas y 1000 caracteres.' })
     @ApiResponse({ status: 201, description: 'Pregunta registrada.' })
