@@ -1407,16 +1407,16 @@ model SolicitudPuesto {
 }
 
 model HistoricoMovimientos {
-  id            Int       @id @default(autoincrement())
-  idUsuario     Int
-  idEmpresa     Int
-  accion        String    @db.VarChar(50)
-  tablaOrigen   String    @db.VarChar(100)
-  idRegistro    String    @db.VarChar(36)
-  descripcion   String    @db.Text
+  id            Int        @id @default(autoincrement())
+  idUsuario     Int?
+  idEmpresa     Int?
+  accion        String     @db.VarChar(50)
+  tablaOrigen   String     @db.VarChar(100)
+  idRegistro    String     @db.VarChar(36)
+  descripcion   String     @db.Text
   detalles_json Json?
-  fechaCreacion DateTime? @default(now()) @db.Timestamp(0)
-  auth_user     auth_user @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
+  fechaCreacion DateTime?  @default(now()) @db.Timestamp(0)
+  auth_user     auth_user? @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
 
   @@index([fechaCreacion], map: "idx_creado_at")
   @@index([tablaOrigen, idRegistro], map: "idx_polimorfico")

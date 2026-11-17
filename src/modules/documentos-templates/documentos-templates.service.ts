@@ -297,6 +297,7 @@ export class DocumentosTemplatesService {
             this.logger.warn(`No se pudo convertir DOCX a HTML: ${err.message}`);
         }
 
+        // Creamos la plantilla en db
         const plantilla = await this.prisma.plantillasDocumentos.create({
             data: {
                 nombre: createPlantillaDto.nombre,
@@ -309,6 +310,19 @@ export class DocumentosTemplatesService {
                 idUsuarioCreador: activeUser.id,
             },
         });
+
+        // Almacenamos el movimiento en el historico
+        await this.prisma.historicoMovimientos.create({
+            data: {
+                idUsuario: activeUser.id,
+                idEmpresa: companyId,
+                accion: 'CREAR',
+                tablaOrigen: 'PlantillasDocumentos',
+                idRegistro: String(plantilla.id),
+                descripcion: `Plantila creada por ${activeUser.first_name} ${activeUser.last_name}`,
+                fechaCreacion: new Date()
+            }
+        })
 
         return plantilla;
     }
@@ -718,7 +732,7 @@ export class DocumentosTemplatesService {
         fs.writeFileSync(outputPath, modifiedPdfBytes);
     }
 
-    async saveCampos(companyId: number, id: number, updateCamposDto: UpdateCamposDto) {
+    async saveCampos(activeUser: ActiveUserDto, companyId: number, id: number, updateCamposDto: UpdateCamposDto) {
         const plantilla = await this.prisma.plantillasDocumentos.findFirst({
             where: { id, idEmpresa: companyId, activa: true },
         });
@@ -726,9 +740,9 @@ export class DocumentosTemplatesService {
         if (!plantilla) throw new NotFoundException('Plantilla no encontrada');
 
         const result = await this.prisma.$transaction(async (tx) => {
-            await tx.camposPlantilla.deleteMany({ where: { idPlantilla: id } });
-
             if (updateCamposDto.campos.length > 0) {
+                await tx.camposPlantilla.deleteMany({ where: { idPlantilla: id } });
+
                 await tx.camposPlantilla.createMany({
                     data: updateCamposDto.campos.map((c, index) => ({
                         idPlantilla: id,
@@ -747,6 +761,19 @@ export class DocumentosTemplatesService {
                     })),
                 });
             }
+
+            // Almacenamos el movimiento en el historico
+            await tx.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'CREAR',
+                    tablaOrigen: 'PlantillasDocumentos',
+                    idRegistro: String(id),
+                    descripcion: `Campos creados por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            })
 
             return tx.camposPlantilla.findMany({
                 where: { idPlantilla: id },
@@ -889,6 +916,18 @@ export class DocumentosTemplatesService {
                     idUsuarioGenero: activeUser.id,
                 },
             });
+
+            await this.prisma.historicoMovimientos.create({
+                data: {
+                    idUsuario: activeUser.id,
+                    idEmpresa: companyId,
+                    accion: 'CREAR',
+                    tablaOrigen: 'DocumentosGenerados',
+                    idRegistro: String(documento.id),
+                    descripcion: `Documento generado por ${activeUser.first_name} ${activeUser.last_name}`,
+                    fechaCreacion: new Date()
+                }
+            })
 
             return documento;
         } catch (err) {
@@ -1853,6 +1892,18 @@ export class DocumentosTemplatesService {
                         },
                     });
                 }
+
+                await tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: null,
+                        idEmpresa: null,
+                        accion: 'UPDATE',
+                        tablaOrigen: 'DocumentosGenerados',
+                        idRegistro: String(documento.id),
+                        descripcion: `Documento firmado digitalmente de forma correcta.`,
+                        fechaCreacion: new Date()
+                    }
+                })
             });
 
             // Una vez confirmado el guardado, eliminar el archivo anterior.
@@ -1880,6 +1931,18 @@ export class DocumentosTemplatesService {
 
         // Sellado NOM-151 después de guardar la firma.
         const sellado = await this.sellarConNOM151(documento.id);
+
+        await this.prisma.historicoMovimientos.create({
+            data: {
+                idUsuario: null,
+                idEmpresa: null,
+                accion: 'UPDATE',
+                tablaOrigen: 'DocumentosGenerados',
+                idRegistro: String(documento.id),
+                descripcion: `Documento sellado con la constancia NOM_151 correctamente.`,
+                fechaCreacion: new Date()
+            }
+        })
 
         const actualizado = await this.prisma.documentosGenerados.findUnique({
             where: { id: documento.id },

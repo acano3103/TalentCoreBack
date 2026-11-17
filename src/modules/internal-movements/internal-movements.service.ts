@@ -791,6 +791,18 @@ export class InternalMovementsService {
         },
       });
 
+      await this.prisma.historicoMovimientos.create({
+        data: {
+          idUsuario: activeUser.id,
+          idEmpresa: companyId,
+          accion: 'UPDATE',
+          tablaOrigen: 'DocumentosGenerados',
+          idRegistro: String(documento.id),
+          descripcion: `Documento de baja enviado para su firma por ${activeUser.first_name} ${activeUser.last_name}`,
+          fechaCreacion: new Date()
+        }
+      })
+
       this.logger.log(`Notificación de firma enviada para el documento ${documentId}, empleado ${empleado.idEmpleado}.`);
 
       return {

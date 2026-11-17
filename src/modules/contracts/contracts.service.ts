@@ -4,6 +4,7 @@ import { CreateContractDto } from './dto/create-contract.dto';
 import { NotificationDispatcher } from '../notifications/notification.dispatcher';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { ActiveUserDto } from '../auth/dto/active-user.dto';
 
 @Injectable()
 export class ContractsService {
@@ -15,7 +16,9 @@ export class ContractsService {
     private readonly configService: ConfigService,
   ) { }
 
-  async create(companyId: number, employeeId: number, dto: CreateContractDto, userId: number) {
+  async create(companyId: number, employeeId: number, dto: CreateContractDto, activeUser: ActiveUserDto) {
+    const userId = activeUser.id;
+
     const employee = await this.prisma.empleados.findFirst({
       where: { idEmpleado: employeeId, idEmpresa: companyId, activo: true },
     });
@@ -68,6 +71,18 @@ export class ContractsService {
     }
 
     await this.sendSigningLink(contrato.idContrato);
+
+    await this.prisma.historicoMovimientos.create({
+      data: {
+        idUsuario: activeUser.id,
+        idEmpresa: companyId,
+        accion: 'UPDATE',
+        tablaOrigen: 'DocumentosGenerados',
+        idRegistro: String(dto.idDocumentoGenerado),
+        descripcion: `Contrato enviado para su firma por ${activeUser.first_name} ${activeUser.last_name}`,
+        fechaCreacion: new Date()
+      }
+    })
 
     return contrato;
   }

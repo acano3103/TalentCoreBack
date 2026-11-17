@@ -267,7 +267,7 @@ export class DocumentosTemplatesController {
         @Param('id', ParseIntPipe) id: number,
         @Body() updateCamposDto: UpdateCamposDto,
     ) {
-        return this.service.saveCampos(companyId, id, updateCamposDto);
+        return this.service.saveCampos(activeUser, companyId, id, updateCamposDto);
     }
 
     // Generamos un documento a partir de una plantilla
