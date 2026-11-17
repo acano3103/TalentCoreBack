@@ -66,4 +66,5 @@ export const envValidationSchema = Joi.object({
     ATTENDANCE_ENGINE_ENABLED: Joi.string().valid('true', 'false').default('true'),
     ATTENDANCE_JOBS_ENABLED: Joi.string().valid('true', 'false').default('true'),
     GOOGLE_MAPS_API_KEY: Joi.string().required(),
+    LIBREOFFICE_PATH: Joi.string().required(),
 });
