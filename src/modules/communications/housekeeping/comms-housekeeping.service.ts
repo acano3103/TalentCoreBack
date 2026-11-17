@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { AnnouncementDispatchService } from '../delivery/announcement-dispatch.service';
 import { DIAS_ENTREGAS, DIAS_NOTIFICACIONES, ESTADOS_ABIERTOS, LOTE_PURGA, restarDias } from './cortes';
 
 export interface ResultadoHousekeeping {
@@ -14,9 +15,30 @@ export interface ResultadoHousekeeping {
 export class CommsHousekeepingService {
     private readonly logger = new Logger(CommsHousekeepingService.name);
     private ocupado = false;
+    private reencolando = false;
     ahora: () => Date = () => new Date();
 
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly dispatch?: AnnouncementDispatchService,
+    ) {}
+
+    @Cron('* * * * *', { name: 'comms-reencolar-envios' })
+    async reencolarEnvios(): Promise<void> {
+        if (!this.dispatch || this.reencolando) return;
+        this.reencolando = true;
+        try {
+            const listos = await this.dispatch.reencolarEnviosAtorados(this.ahora());
+            if (listos > 0) {
+                this.logger.log(`comms-housekeeping: reencoló ${listos} envíos que estaban pendientes.`);
+            }
+        } catch (error) {
+            const texto = error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(`comms-housekeeping (reencolar): ${texto}`);
+        } finally {
+            this.reencolando = false;
+        }
+    }
 
     @Cron('0 2 * * *', { name: 'comms-housekeeping' })
     async tick(): Promise<void> {

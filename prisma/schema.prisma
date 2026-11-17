@@ -2946,6 +2946,8 @@ model ComComunicados {
   VigenteHasta         DateTime?                @db.DateTime(0)
   VersionActual        Int                      @default(1)
   TotalDestinatarios   Int                      @default(0)
+  EnvioPendiente       Boolean                  @default(false)
+  EnvioPendienteDesde  DateTime?                @db.DateTime(0)
   CreadoPor            String                   @db.VarChar(36)
   FechaRegistro        DateTime                 @default(now()) @db.DateTime(0)
   ArchivadoEn          DateTime?                @db.DateTime(0)

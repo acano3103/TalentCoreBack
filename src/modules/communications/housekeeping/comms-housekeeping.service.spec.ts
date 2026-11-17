@@ -58,6 +58,22 @@ describe('CommsHousekeepingService', () => {
         expect(prisma.comComunicadoVersiones.deleteMany).not.toHaveBeenCalled();
     });
 
+    it('cada minuto reencola los envíos atascados', async () => {
+        const prisma = {
+            comComunicados: { updateMany: jest.fn(), deleteMany: jest.fn() },
+            comDestinatarios: { updateMany: jest.fn(), deleteMany: jest.fn() },
+            comComunicadoVersiones: { deleteMany: jest.fn() },
+            comAcuses: { deleteMany: jest.fn() },
+            notificaciones: { findMany: jest.fn(), deleteMany: jest.fn() },
+            notificacionesEntregas: { deleteMany: jest.fn() },
+        };
+        const dispatch = { reencolarEnviosAtorados: jest.fn().mockResolvedValue(1) };
+        const service = new CommsHousekeepingService(prisma as never, dispatch as never);
+        service.ahora = () => ahora;
+        await service.reencolarEnvios();
+        expect(dispatch.reencolarEnviosAtorados).toHaveBeenCalledWith(ahora);
+    });
+
     it('sigue con la purga si expirar comunicados falla', async () => {
         const { service, prisma } = armar();
         prisma.comComunicados.updateMany.mockRejectedValue(new Error('caído'));

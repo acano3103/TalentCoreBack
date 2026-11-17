@@ -1,4 +1,5 @@
-import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import Redis from 'ioredis';
 import { InjectQueue } from '@nestjs/bull';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
@@ -45,6 +46,8 @@ interface FilaComunicado {
     VigenteHasta: Date | null;
     VersionActual: number;
     TotalDestinatarios: number;
+    EnvioPendiente: boolean;
+    EnvioPendienteDesde: Date | null;
     CreadoPor: string;
     ComTiposComunicado: { Codigo: string; EsCorto: boolean };
 }
@@ -96,8 +99,9 @@ interface PersonaCongelada {
 }
 
 @Injectable()
-export class AnnouncementDispatchService {
+export class AnnouncementDispatchService implements OnModuleInit {
     private readonly logger = new Logger(AnnouncementDispatchService.name);
+    limiteColaMs = 5_000;
 
     constructor(
         private readonly prisma: PrismaService,
@@ -116,10 +120,41 @@ export class AnnouncementDispatchService {
         return new Date();
     }
 
+    async onModuleInit(): Promise<void> {
+        const configurada = this.config.get<string>('REDIS_URL')?.trim() ?? '';
+        const url = configurada || 'redis://127.0.0.1:6379';
+        const destino = destinoRedis(url);
+        if (!configurada) {
+            this.logger.warn(`REDIS_URL no está definido. El envío de comunicados intentará ${destino}.`);
+        }
+        let redis: Redis | undefined;
+        try {
+            redis = new Redis(url, {
+                connectTimeout: 2_000,
+                maxRetriesPerRequest: 1,
+                enableReadyCheck: false,
+                lazyConnect: true,
+                retryStrategy: () => null,
+            });
+            redis.on('error', () => undefined);
+            await redis.connect();
+            const pong = await redis.ping();
+            if (pong !== 'PONG') throw new Error(String(pong));
+        } catch {
+            this.logger.warn(
+                `Redis no responde en ${destino}. Los envíos no podrán encolarse hasta que la cola esté disponible.`,
+            );
+        } finally {
+            redis?.disconnect();
+        }
+    }
+
     async enviar(activeUser: ActiveUserDto, companyId: number, id: number) {
         const fila = await this.cargar(id, companyId, activeUser.idTenant);
-        if (fila.Estado === 'ENVIADO' || fila.Estado === 'ENVIANDO') {
-            return this.respuesta(fila, true);
+        if (fila.Estado === 'ENVIADO') return this.respuesta(fila, true);
+        if (fila.Estado === 'ENVIANDO') {
+            if (!fila.EnvioPendiente) return this.respuesta(fila, true);
+            return this.publicarEncolado(activeUser, companyId, id);
         }
         exigirTransicion(fila.Estado as 'BORRADOR', 'ENVIANDO');
         const personas = await this.preparar(activeUser, companyId, fila);
@@ -129,24 +164,17 @@ export class AnnouncementDispatchService {
         });
         if (claim.count === 0) {
             const actual = await this.cargar(id, companyId, activeUser.idTenant);
-            if (actual.Estado === 'ENVIADO' || actual.Estado === 'ENVIANDO') return this.respuesta(actual, true);
+            if (actual.Estado === 'ENVIADO') return this.respuesta(actual, true);
+            if (actual.Estado === 'ENVIANDO') {
+                if (!actual.EnvioPendiente) return this.respuesta(actual, true);
+                return this.publicarEncolado(activeUser, companyId, id);
+            }
             exigirTransicion(actual.Estado as 'BORRADOR', 'ENVIANDO');
         }
         await this.quitarProgramado(id);
         try {
             await this.congelar(id, personas);
-            const total = await this.prisma.comDestinatarios.count({ where: { idComunicado: id } });
-            await this.encolarLotes(id);
-            await this.prisma.$transaction(async (tx) => {
-                await tx.comComunicados.update({
-                    where: { idComunicado: id },
-                    data: { Estado: 'ENVIADO', EnviadoEn: this.ahora(), TotalDestinatarios: total },
-                });
-                await tx.historicoMovimientos.create({
-                    data: bitacora(activeUser, companyId, 'ACTUALIZAR', id, `envió el comunicado a ${total} personas.`),
-                });
-            }, TRANSACCION);
-            return { id, estado: 'ENVIADO', totalDestinatarios: total, idempotente: false };
+            return await this.publicarEncolado(activeUser, companyId, id);
         } catch (error) {
             const cuantos = await this.prisma.comDestinatarios.count({ where: { idComunicado: id } });
             if (cuantos === 0) {
@@ -154,6 +182,10 @@ export class AnnouncementDispatchService {
                     where: { idComunicado: id },
                     data: { Estado: fila.Estado as 'BORRADOR' },
                 });
+                throw error;
+            }
+            if (esColaNoDisponible(error)) {
+                await this.marcarEnvioPendiente(id);
             }
             throw error;
         }
@@ -537,7 +569,88 @@ export class AnnouncementDispatchService {
         }
     }
 
+    /**
+     * Comunicados que quedaron en ENVIANDO porque la cola no aceptó los lotes.
+     * Espera 2 minutos desde el fallo para no pisar un envío que acaba de intentarlo.
+     */
+    async reencolarEnviosAtorados(ahora = this.ahora()): Promise<number> {
+        const corte = new Date(ahora.getTime() - 2 * 60 * 1000);
+        const filas = await this.prisma.comComunicados.findMany({
+            where: {
+                Estado: 'ENVIANDO',
+                EnvioPendiente: true,
+                EnvioPendienteDesde: { lte: corte },
+            },
+            select: { idComunicado: true },
+        });
+        let listos = 0;
+        for (const fila of filas) {
+            try {
+                await this.encolarLotes(fila.idComunicado);
+                const total = await this.prisma.comDestinatarios.count({ where: { idComunicado: fila.idComunicado } });
+                const cerrado = await this.prisma.comComunicados.updateMany({
+                    where: { idComunicado: fila.idComunicado, Estado: 'ENVIANDO' },
+                    data: {
+                        Estado: 'ENVIADO',
+                        EnviadoEn: this.ahora(),
+                        TotalDestinatarios: total,
+                        EnvioPendiente: false,
+                        EnvioPendienteDesde: null,
+                    },
+                });
+                if (cerrado.count > 0) listos += 1;
+            } catch (error) {
+                this.logger.warn(`No se reencoló el comunicado ${fila.idComunicado}: ${mensajeError(error)}`);
+            }
+        }
+        return listos;
+    }
+
+    private async publicarEncolado(activeUser: ActiveUserDto, companyId: number, id: number) {
+        await this.encolarLotes(id);
+        const total = await this.prisma.comDestinatarios.count({ where: { idComunicado: id } });
+        await this.prisma.$transaction(async (tx) => {
+            await tx.comComunicados.update({
+                where: { idComunicado: id },
+                data: {
+                    Estado: 'ENVIADO',
+                    EnviadoEn: this.ahora(),
+                    TotalDestinatarios: total,
+                    EnvioPendiente: false,
+                    EnvioPendienteDesde: null,
+                },
+            });
+            await tx.historicoMovimientos.create({
+                data: bitacora(activeUser, companyId, 'ACTUALIZAR', id, `envió el comunicado a ${total} personas.`),
+            });
+        }, TRANSACCION);
+        return { id, estado: 'ENVIADO' as const, totalDestinatarios: total, idempotente: false };
+    }
+
+    private async marcarEnvioPendiente(id: number): Promise<void> {
+        try {
+            await this.prisma.comComunicados.updateMany({
+                where: { idComunicado: id, EnvioPendiente: false },
+                data: { EnvioPendiente: true, EnvioPendienteDesde: this.ahora() },
+            });
+        } catch (error) {
+            this.logger.error(`No se marcó el envío pendiente del comunicado ${id}: ${mensajeError(error)}`);
+        }
+    }
+
     private async encolarLotes(idComunicado: number): Promise<void> {
+        const tarea = this.encolarLotesAhora(idComunicado);
+        tarea.catch(() => undefined);
+        try {
+            await this.conLimite(tarea);
+        } catch (error) {
+            if (esColaNoDisponible(error)) throw error;
+            this.logger.warn(`No se encolaron los lotes del comunicado ${idComunicado}: ${mensajeError(error)}`);
+            throw colaNoDisponible();
+        }
+    }
+
+    private async encolarLotesAhora(idComunicado: number): Promise<void> {
         const filas = await this.prisma.comDestinatarios.findMany({
             where: { idComunicado, Estado: { not: 'SIN_CANAL' } },
             select: { idDestinatario: true },
@@ -551,6 +664,18 @@ export class AnnouncementDispatchService {
                 attempts: 3,
                 backoff: { type: 'exponential', delay: 5000 },
             });
+        }
+    }
+
+    private async conLimite<T>(tarea: Promise<T>): Promise<T> {
+        let timer: NodeJS.Timeout | undefined;
+        const limitado = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(colaNoDisponible()), this.limiteColaMs);
+        });
+        try {
+            return await Promise.race([tarea, limitado]);
+        } finally {
+            if (timer) clearTimeout(timer);
         }
     }
 
@@ -1027,4 +1152,27 @@ function aNumero(valor: unknown): number {
 
 function mensajeError(error: unknown): string {
     return error instanceof Error ? error.message : 'Error desconocido.';
+}
+
+function colaNoDisponible(): HttpException {
+    return errorComms(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        'COLA_NO_DISPONIBLE',
+        'No se pudo iniciar el envío; intenta de nuevo en unos minutos',
+    );
+}
+
+function esColaNoDisponible(error: unknown): boolean {
+    if (!(error instanceof HttpException)) return false;
+    const cuerpo = error.getResponse();
+    return typeof cuerpo === 'object' && cuerpo !== null && (cuerpo as { code?: string }).code === 'COLA_NO_DISPONIBLE';
+}
+
+function destinoRedis(url: string): string {
+    try {
+        const parsed = new URL(url);
+        return `${parsed.hostname}:${parsed.port || '6379'}`;
+    } catch {
+        return 'la URL configurada';
+    }
 }

@@ -60,7 +60,7 @@ describe('AnnouncementDispatchService', () => {
 
     function prismaDe() {
         const prisma = {
-            comComunicados: { findFirst: jest.fn(), updateMany: jest.fn(), update: jest.fn(), count: jest.fn() },
+            comComunicados: { findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn(), count: jest.fn() },
             comComunicadoVersiones: { findUnique: jest.fn() },
             comConfigEmpresa: { findUnique: jest.fn() },
             comDestinatarios: {
@@ -456,5 +456,127 @@ describe('AnnouncementDispatchService', () => {
         );
         expect(colaEnvio.add).toHaveBeenCalledWith('lote', { idComunicado: 9, ids: [1] }, expect.objectContaining({ attempts: 3 }));
         expect(resultado).toEqual({ reenviados: 1, sinCanal: 1 });
+    });
+
+    it('si la cola no responde, el envío responde 503 y queda pendiente', async () => {
+        const prisma = prismaDe();
+        let estado = 'BORRADOR';
+        prisma.comComunicados.findFirst.mockImplementation(async () => fila(estado, { EnvioPendiente: false }));
+        prisma.comComunicados.updateMany.mockImplementation(async ({ data }: { data: { Estado?: string } }) => {
+            if (data.Estado === 'ENVIANDO' && (estado === 'BORRADOR' || estado === 'PROGRAMADO')) {
+                estado = 'ENVIANDO';
+                return { count: 1 };
+            }
+            return { count: 1 };
+        });
+        prisma.comComunicadoVersiones.findUnique.mockResolvedValue(version);
+        prisma.comConfigEmpresa.findUnique.mockResolvedValue({
+            PoliticaWhatsApp: 'NUNCA',
+            PlantillasWhatsApp: null,
+            SilencioActivo: false,
+            SilencioInicio: '21:00',
+            SilencioFin: '07:00',
+            EscalaImportanteMin: 240,
+            EscalaCriticaMin: 120,
+            EscalaCorreoMin: 240,
+        });
+        prisma.empleados.findMany.mockResolvedValue([
+            {
+                idEmpleado: 1,
+                idUsuario: 'user-1',
+                idSite: 1,
+                idPuesto: 2,
+                idTipoPersonalOverride: null,
+                idJefeInmediato: null,
+                nombre: 'Ana',
+                primerApellido: 'López',
+                telefonoMovil: null,
+                correo: null,
+                CatPuestos: { idArea: 4, idTipoPersonal: 5 },
+            },
+        ]);
+        resolver.resolve.mockResolvedValue({ ids: [1], fueraDeAlcance: [] });
+        canales.forEmployees.mockResolvedValue({
+            porEmpleado: [{ idEmpleado: 1, canales: ['APP'], sinCanal: false, nivelPerfil: 'DEFAULT' }],
+            resumen: { APP: 1, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 0 },
+        });
+        prisma.comDestinatarios.createMany.mockResolvedValue({ count: 1 });
+        prisma.comDestinatarios.count.mockResolvedValue(1);
+        prisma.comDestinatarios.findMany.mockResolvedValue([{ idDestinatario: 1 }]);
+        prisma.catEmpresas.findUnique.mockResolvedValue({ nombre_comercial: 'Acme' });
+        colaEnvio.add.mockImplementation(() => new Promise(() => undefined));
+
+        const service = await servicio(prisma);
+        service.limiteColaMs = 40;
+        const inicio = Date.now();
+        const error = await service.enviar(usuario, 10, 9).catch((causa) => causa);
+
+        expect(Date.now() - inicio).toBeLessThan(6_000);
+        expect(error).toBeInstanceOf(HttpException);
+        expect((error as HttpException).getStatus()).toBe(503);
+        expect((error as HttpException).getResponse()).toMatchObject({
+            code: 'COLA_NO_DISPONIBLE',
+            message: 'No se pudo iniciar el envío; intenta de nuevo en unos minutos',
+        });
+        expect(estado).toBe('ENVIANDO');
+        expect(prisma.comComunicados.update).not.toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ Estado: 'BORRADOR' }) }),
+        );
+        expect(prisma.comComunicados.updateMany).toHaveBeenCalledWith({
+            where: { idComunicado: 9, EnvioPendiente: false },
+            data: expect.objectContaining({ EnvioPendiente: true }),
+        });
+    });
+
+    it('un ENVIANDO atorado reintenta el encolado y lo termina', async () => {
+        const prisma = prismaDe();
+        prisma.comComunicados.findFirst.mockResolvedValue(fila('ENVIANDO', { EnvioPendiente: true, TotalDestinatarios: 1 }));
+        prisma.comComunicadoVersiones.findUnique.mockResolvedValue(version);
+        prisma.comDestinatarios.findMany.mockResolvedValue([{ idDestinatario: 4 }]);
+        prisma.comDestinatarios.count.mockResolvedValue(1);
+        prisma.historicoMovimientos.create.mockResolvedValue({});
+        colaEnvio.add.mockResolvedValue(undefined);
+
+        const service = await servicio(prisma);
+        const resultado = await service.enviar(usuario, 10, 9);
+
+        expect(resultado).toEqual({ id: 9, estado: 'ENVIADO', totalDestinatarios: 1, idempotente: false });
+        expect(colaEnvio.add).toHaveBeenCalledWith(
+            'lote',
+            { idComunicado: 9, ids: [4] },
+            expect.objectContaining({ jobId: 'lote-9-0' }),
+        );
+        expect(prisma.comComunicados.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ Estado: 'ENVIADO', EnvioPendiente: false, EnvioPendienteDesde: null }),
+            }),
+        );
+        expect(resolver.resolve).not.toHaveBeenCalled();
+    });
+
+    it('reencola un envío pendiente de más de dos minutos cuando la cola vuelve', async () => {
+        const prisma = prismaDe();
+        prisma.comComunicados.findMany.mockResolvedValue([{ idComunicado: 9 }]);
+        prisma.comDestinatarios.findMany.mockResolvedValue([{ idDestinatario: 4 }]);
+        prisma.comDestinatarios.count.mockResolvedValue(1);
+        prisma.comComunicados.updateMany.mockResolvedValue({ count: 1 });
+        colaEnvio.add.mockResolvedValue(undefined);
+
+        const service = await servicio(prisma);
+        const ahora = new Date('2026-11-16T18:00:00.000Z');
+        await expect(service.reencolarEnviosAtorados(ahora)).resolves.toBe(1);
+        expect(prisma.comComunicados.findMany).toHaveBeenCalledWith({
+            where: {
+                Estado: 'ENVIANDO',
+                EnvioPendiente: true,
+                EnvioPendienteDesde: { lte: new Date('2026-11-16T17:58:00.000Z') },
+            },
+            select: { idComunicado: true },
+        });
+        expect(prisma.comComunicados.updateMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ Estado: 'ENVIADO', EnvioPendiente: false }),
+            }),
+        );
     });
 });
