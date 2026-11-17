@@ -1,0 +1,1 @@
+export type VacancyStatus = 'ACTIVA' | 'CERRADA' | 'CANCELADA' | 'TODAS';

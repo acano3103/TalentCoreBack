@@ -42,7 +42,7 @@ export class ContractsController {
     @Body() dto: CreateContractDto,
     @GetActiveUser() activeUser: ActiveUserDto,
   ) {
-    return this.contractsService.create(companyId, employeeId, dto, activeUser.id);
+    return this.contractsService.create(companyId, employeeId, dto, activeUser);
   }
 
   @Patch(':contractId/status')

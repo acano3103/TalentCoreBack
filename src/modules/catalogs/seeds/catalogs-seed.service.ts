@@ -38,6 +38,7 @@ export class CatalogsSeedService implements OnModuleInit {
             await this.seedPlantillasNotificaciones(); /** PlantillasNotificaciones */
             await this.seedModulosFlujo(); /** CatModuloFlujo (debe ir antes por FK) */
             await this.seedTiposMovimiento(); /** CatTipoMovimiento */
+            await this.seedCamposPlantilla(); // CatCamposPlantilla
             this.logger.log('Sembrado de catálogos completado.');
         } catch (error) {
             this.logger.error('Error al sembrar catálogos:', error);
@@ -103,6 +104,9 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 14, code: 'DOCUMENT_REJECTED', description: 'Notificación de rechazo de documentación', activo: true },
             { id: 15, code: 'CONTRACT_SIGN', description: 'Notificación que se le envía al empleado para que firme su contrato', activo: true },
             { id: 16, code: 'CONTRACT_SIGN_TOKEN', description: 'Notificación con token para firmar contrato', activo: true },
+            { id: 17, code: 'STAFF_REDUCTION_DOCUMENT_SIGN', description: 'Notificación con token para firmar documento de baja', activo: true },
+            { id: 18, code: 'RECRUITMENT_DOCUMENT_SIGN', description: 'Notificación con token para firmar una carta oferta', activo: true },
+            { id: 19, code: 'RECRUITMENT_DOCUMENT_READ', description: 'Notificación para leer una carta oferta', activo: true },
         ]
 
         for (const notificationType of notificationsTypes) {
@@ -197,6 +201,21 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 62, notification_type_id: 16, channel_id: 2, enabled: true }, // WhatsApp
             { id: 63, notification_type_id: 16, channel_id: 3, enabled: false }, // SMS
             { id: 64, notification_type_id: 16, channel_id: 4, enabled: false }, // Sockets
+            // --- 17. STAFF_REDUCTION_DOCUMENT_SIGN (Firma de documento de baja con token) ---
+            { id: 65, notification_type_id: 17, channel_id: 1, enabled: true }, // Email
+            { id: 66, notification_type_id: 17, channel_id: 2, enabled: true }, // WhatsApp
+            { id: 67, notification_type_id: 17, channel_id: 3, enabled: false }, // SMS
+            { id: 68, notification_type_id: 17, channel_id: 4, enabled: false }, // Sockets
+            // --- 18. RECRUITMENT_DOCUMENT_SIGN (Firma de carta oferta con token) ---
+            { id: 69, notification_type_id: 18, channel_id: 1, enabled: true }, // Email
+            { id: 70, notification_type_id: 18, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 71, notification_type_id: 18, channel_id: 3, enabled: false }, // SMS
+            { id: 72, notification_type_id: 18, channel_id: 4, enabled: false }, // Sockets
+            // --- 17. RECRUITMENT_DOCUMENT_READ (Lectura de carta oferta ) ---
+            { id: 73, notification_type_id: 19, channel_id: 1, enabled: true }, // Email
+            { id: 74, notification_type_id: 19, channel_id: 2, enabled: false }, // WhatsApp
+            { id: 75, notification_type_id: 19, channel_id: 3, enabled: false }, // SMS
+            { id: 76, notification_type_id: 19, channel_id: 4, enabled: false }, // Sockets
         ];
 
         for (const tc of typeChannels) {
@@ -715,4 +734,69 @@ export class CatalogsSeedService implements OnModuleInit {
         }
     }
 
+
+    private async seedCamposPlantilla() {
+        const campos = [
+            // DATOS DEL EMPLEADO
+            { clave: 'empleado.nombre', nombre: 'Nombre completo', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Nombre completo del empleado', orden: 1 },
+            { clave: 'empleado.nombres', nombre: 'Nombre(s)', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Nombre o nombres del empleado', orden: 2 },
+            { clave: 'empleado.apellido_paterno', nombre: 'Apellido paterno', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Apellido paterno del empleado', orden: 3 },
+            { clave: 'empleado.apellido_materno', nombre: 'Apellido materno', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Apellido materno del empleado', orden: 4 },
+            { clave: 'empleado.curp', nombre: 'CURP', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Clave Única de Registro de Población', orden: 5 },
+            { clave: 'empleado.rfc', nombre: 'RFC', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Registro Federal de Contribuyentes', orden: 6 },
+            { clave: 'empleado.nss', nombre: 'Número de seguridad social', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Número de Seguridad Social', orden: 7 },
+            { clave: 'empleado.fecha_nacimiento', nombre: 'Fecha de nacimiento', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Fecha de nacimiento del empleado', orden: 8 },
+            { clave: 'empleado.telefono', nombre: 'Teléfono', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Teléfono de contacto', orden: 9 },
+            { clave: 'empleado.correo', nombre: 'Correo electrónico', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Correo electrónico del empleado', orden: 10 },
+            { clave: 'empleado.direccion', nombre: 'Domicilio', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Domicilio del empleado', orden: 11 },
+            { clave: 'empleado.estado_civil', nombre: 'Estado civil', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Estado civil del empleado', orden: 12 },
+            { clave: 'empleado.puesto', nombre: 'Puesto', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Puesto que desempeña el empleado', orden: 13 },
+            { clave: 'empleado.area', nombre: 'Área', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Área a la que pertenece el empleado', orden: 14 },
+            { clave: 'empleado.ubicacion', nombre: 'Ubicación de trabajo', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Ubicación o centro de trabajo asignado al empleado', orden: 15 },
+            { clave: 'empleado.fecha_ingreso', nombre: 'Fecha de ingreso', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Fecha de ingreso a la empresa', orden: 16 },
+            { clave: 'empleado.salarioBruto', nombre: 'Salario Bruto', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Salario bruto registrado para el empleado', orden: 17 },
+            { clave: 'empleado.salarioNeto', nombre: 'Salario Neto', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Salario neto registrado para el empleado', orden: 18 },
+            { clave: 'empleado.cuenta_bancaria', nombre: 'Cuenta bancaria', grupo: 'Datos del empleado', entidad: 'empleado', descripcion: 'Cuenta bancaria del empleado, si está disponible y autorizado', orden: 19 },
+            // DATOS DEL CANDIDATO
+            { clave: 'candidato.nombre', nombre: 'Nombre completo', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Nombre completo del candidato', orden: 1 },
+            { clave: 'candidato.nombres', nombre: 'Nombre(s)', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Nombre o nombres del candidato', orden: 2 },
+            { clave: 'candidato.apellido_paterno', nombre: 'Apellido paterno', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Apellido paterno del candidato', orden: 3 },
+            { clave: 'candidato.apellido_materno', nombre: 'Apellido materno', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Apellido materno del candidato', orden: 4 },
+            { clave: 'candidato.correo', nombre: 'Correo electrónico', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Correo electrónico de contacto del candidato', orden: 5 },
+            { clave: 'candidato.telefono', nombre: 'Teléfono', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Teléfono de contacto del candidato', orden: 6 },
+            { clave: 'candidato.curp', nombre: 'CURP', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Clave Única de Registro de Población del candidato', orden: 7 },
+            { clave: 'candidato.puesto', nombre: 'Puesto al que se postula', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Puesto al que está postulándose el candidato', orden: 8 },
+            { clave: 'candidato.area', nombre: 'Área de contratación', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Área a la que pertenecerá el candidato si es contratado', orden: 9 },
+            { clave: 'candidato.ubicacion', nombre: 'Ubicación de trabajo', grupo: 'Datos del candidato', entidad: 'candidato', descripcion: 'Ubicación o centro de trabajo al que será asignado el candidato', orden: 10 },
+            // DATOS DE LA EMPRESA
+            { clave: 'empresa.nombre', nombre: 'Nombre comercial', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Nombre comercial de la empresa', orden: 1 },
+            { clave: 'empresa.razon_social', nombre: 'Razón social', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Razón social registrada de la empresa', orden: 2 },
+            { clave: 'empresa.rfc', nombre: 'RFC de la empresa', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'RFC de la empresa', orden: 3 },
+            { clave: 'empresa.direccion_fiscal', nombre: 'Dirección fiscal', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Domicilio fiscal de la empresa', orden: 4 },
+            { clave: 'empresa.codigo_postal', nombre: 'Código postal', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Código postal del domicilio fiscal', orden: 5 },
+            { clave: 'empresa.telefono', nombre: 'Teléfono de la empresa', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Teléfono de contacto de la empresa', orden: 6 },
+            { clave: 'empresa.correo', nombre: 'Correo de la empresa', grupo: 'Datos de la empresa', entidad: 'empresa', descripcion: 'Correo electrónico de la empresa', orden: 7 },
+        ];
+
+        for (const campo of campos) {
+            await this.prisma.$executeRaw`
+            INSERT INTO CatCamposPlantilla
+                (clave, nombre, grupo, entidad, descripcion, orden)
+            VALUES (
+                ${campo.clave},
+                ${campo.nombre},
+                ${campo.grupo},
+                ${campo.entidad},
+                ${campo.descripcion},
+                ${campo.orden}
+            )
+            ON DUPLICATE KEY UPDATE
+                nombre = VALUES(nombre),
+                grupo = VALUES(grupo),
+                entidad = VALUES(entidad),
+                descripcion = VALUES(descripcion),
+                orden = VALUES(orden);
+        `;
+        }
+    }
 }

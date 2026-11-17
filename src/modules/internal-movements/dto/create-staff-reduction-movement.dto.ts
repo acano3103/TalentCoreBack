@@ -1,5 +1,4 @@
-
-import { Transform, Type } from "class-transformer";
+import { Transform, Type } from 'class-transformer';
 import {
     Allow,
     ArrayMaxSize,
@@ -7,14 +6,15 @@ import {
     IsInt,
     IsNotEmpty,
     IsObject,
+    IsOptional,
     IsString,
     Min,
     ValidateNested,
-} from "class-validator";
-import { BadRequestException } from "@nestjs/common";
+} from 'class-validator';
+import { BadRequestException } from '@nestjs/common';
 
 function parseJsonField(value: unknown): unknown {
-    if (typeof value !== "string") {
+    if (typeof value !== 'string') {
         return value;
     }
 
@@ -22,37 +22,49 @@ function parseJsonField(value: unknown): unknown {
         return JSON.parse(value);
     } catch {
         throw new BadRequestException(
-            "Uno de los campos JSON de la solicitud tiene un formato inválido."
+            'Uno de los campos JSON de la solicitud tiene un formato inválido.',
         );
     }
 }
 
 export class StaffReductionFileMetadataDto {
-    @Allow()
     @IsString()
     @IsNotEmpty()
     campo!: string;
 
-    @Allow()
     @IsString()
     @IsNotEmpty()
     nombreArchivo!: string;
 
-    @Allow()
     @Type(() => Number)
     @IsInt()
     @Min(0)
     indice!: number;
 
-    @Allow()
     @IsString()
     tipo!: string;
 
-    @Allow()
     @Type(() => Number)
     @IsInt()
     @Min(0)
     tamano!: number;
+}
+
+export class BajaDocumentoGeneradoDto {
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    id!: number;
+
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    templateId!: number;
+
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    employeeId!: number;
 }
 
 export class CreateStaffReductionMovementDto {
@@ -73,8 +85,16 @@ export class CreateStaffReductionMovementDto {
     @IsObject()
     bajaDatos!: Record<string, string>;
 
-    @Transform(({ value }) => parseJsonField(value))
+    @IsOptional()
+    @Transform(({ value }) => value === '' || value == null ? [] : parseJsonField(value))
     @IsArray()
     @ArrayMaxSize(20)
-    archivosMetadata!: StaffReductionFileMetadataDto[];
+    @ValidateNested({ each: true })
+    @Type(() => StaffReductionFileMetadataDto)
+    archivosMetadata?: StaffReductionFileMetadataDto[];
+
+    @IsOptional()
+    @Transform(({ value }) => value === '' || value == null ? {} : parseJsonField(value))
+    @IsObject()
+    bajaDocumentosGenerados?: Record<string, BajaDocumentoGeneradoDto>;
 }

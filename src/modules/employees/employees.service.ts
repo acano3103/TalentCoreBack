@@ -425,6 +425,7 @@ export class EmployeesService {
     withoutManager: boolean = false,
     idSite?: string,
     idUnidadOperativa?: string,
+    idArea?: string,
   ) {
     const skip = (page - 1) * limit;
 
@@ -444,14 +445,19 @@ export class EmployeesService {
       ? Prisma.sql`AND (ep.idJefeInmediato IS NULL OR ep.idJefeInmediato = 0)`
       : Prisma.empty;
 
-    // Optional location filter
+    // Condición opcional para filtrar por ubicción
     const siteCondition = idSite?.trim()
       ? Prisma.sql`AND ep.idSite = ${Number(idSite)}`
       : Prisma.empty;
 
-    // Optional operational unit filter
+    // Condición opcional para filtrar por unidad operativa 
     const operationalUnitCondition = idUnidadOperativa?.trim()
       ? Prisma.sql`AND s.idUnidadOperativa = ${Number(idUnidadOperativa)}`
+      : Prisma.empty;
+
+    // Condición opcional para filtrar por área
+    const areaCondition = idArea?.trim()
+      ? Prisma.sql`AND p.idArea = ${Number(idArea)}`
       : Prisma.empty;
 
     // 1. Obtener registros paginados
@@ -488,6 +494,7 @@ export class EmployeesService {
         ${withoutManagerCondition}
         ${siteCondition}
         ${operationalUnitCondition}
+        ${areaCondition}
       ORDER BY ep.nombre ASC
       LIMIT ${limit} OFFSET ${skip};
     `;
@@ -516,6 +523,7 @@ export class EmployeesService {
         ${withoutManagerCondition}
         ${siteCondition}
         ${operationalUnitCondition}
+        ${areaCondition}
     `;
 
     // Ejecución paralela

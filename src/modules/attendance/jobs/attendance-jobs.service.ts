@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { unlink } from 'fs/promises';
-import { join } from 'path';
+import { isAbsolute, join, relative, resolve, sep } from 'path';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AttendanceEngineService } from '../engine/attendance-engine.service';
 import {
@@ -365,7 +365,18 @@ export class AttendanceJobsService {
             continue;
           }
 
-          const absoluta = this.resolverRutaEvidencia(ruta);
+          let absoluta: string;
+          try {
+            absoluta = this.resolverRutaEvidencia(ruta);
+          } catch (err: unknown) {
+            this.logger.warn(
+              `purgarEvidencias: ruta rechazada ${ruta}: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+            continue;
+          }
+
           try {
             await unlink(absoluta);
             archivos += 1;
@@ -474,13 +485,48 @@ export class AttendanceJobsService {
   }
 
   private resolverRutaEvidencia(rutaArchivo: string): string {
-    if (rutaArchivo.startsWith('media/') || rutaArchivo.startsWith('media\\')) {
+    const normalizada = rutaArchivo.replace(/\\/g, '/');
+
+    if (normalizada.startsWith('/media/')) {
+      return this.rutaDentroDeMediaRoot(normalizada.slice('/media/'.length));
+    }
+
+    if (normalizada.startsWith('media/')) {
+      this.logger.warn(
+        `purgarEvidencias: ruta legacy en la carpeta del repositorio (${rutaArchivo}). ` +
+          'Las evidencias nuevas viven en MEDIA_ROOT_PATH.',
+      );
       return join(process.cwd(), rutaArchivo);
     }
-    const mediaRoot =
+
+    return this.rutaDentroDeMediaRoot(normalizada);
+  }
+
+  private rutaDentroDeMediaRoot(relativa: string): string {
+    const mediaRoot = resolve(
       this.configService.get<string>('MEDIA_ROOT_PATH') ||
-      join(process.cwd(), 'media');
-    return join(mediaRoot, rutaArchivo);
+        join(process.cwd(), 'media'),
+    );
+    const segmentos = relativa.split(/[\\/]+/);
+    const absoluta = resolve(mediaRoot, relativa);
+    const dentro = relative(mediaRoot, absoluta);
+
+    if (
+      !relativa ||
+      relativa.startsWith('/') ||
+      isAbsolute(relativa) ||
+      segmentos.includes('..') ||
+      !dentro ||
+      dentro === '..' ||
+      dentro.startsWith(`..${sep}`) ||
+      isAbsolute(dentro)
+    ) {
+      throw new Error(
+        `La ruta de evidencia queda fuera de MEDIA_ROOT_PATH: ${relativa}`,
+      );
+    }
+
+    return absoluta;
   }
 
   private async resolverZonasEmpleados(

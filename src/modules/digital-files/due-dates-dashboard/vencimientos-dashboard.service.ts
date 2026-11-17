@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { DigitalFilesQueries } from './queries/digital-files.queries';
+import { DigitalFilesQueries } from '../queries/digital-files.queries';
 
 @Injectable()
 export class VencimientosDashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getVencimientosDashboard(
     companyId: number,

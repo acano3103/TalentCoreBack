@@ -52,8 +52,8 @@ export async function createEmployee(
     apellido1: string;
     apellido2: string;
     curp: string;
-    correo: string;
-    telefono: string;
+    correo: string | null;
+    telefono: string | null;
     numeroEmpleado: string | null;
     fechaIngreso: string;
     idPuesto: number;

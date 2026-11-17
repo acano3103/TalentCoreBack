@@ -22,6 +22,7 @@ import {
   Punto,
 } from '../utils/geofence.util';
 import {
+  BanderaRevisionKiosco,
   CanonicalCheck,
   ResultadoCheck,
 } from './interfaces/canonical-check.interface';
@@ -38,6 +39,11 @@ import {
  * ANTIREBOTE_SEGUNDOS quedó reemplazada en registerCheck: solo la usa
  * hayReboteSemantico, y sigue en 60 s.
  */
+/**
+ * Los cálculos del motor solo ven PROCESADO.
+ * ANULADO no cuenta, igual que DUPLICADO y RECHAZADO.
+ */
+const ESTATUS_VIGENTE = 'PROCESADO' as const;
 const ANTIREBOTE_SEGUNDOS = 60;
 const PRECISION_GPS_MAXIMA_METROS = 100;
 const DESFASE_RELOJ_MAXIMO_SEGUNDOS = 300;
@@ -136,6 +142,12 @@ const CANALES_PROVEEDOR: ReadonlySet<CanonicalCheck['canal']> = new Set([
 
 @Injectable()
 export class AttendanceEngineService {
+  /**
+   * Fuente aleatoria del muestreo de kiosco, en [0, 1).
+   * Las pruebas la sustituyen para fijar MUESTREO.
+   */
+  generadorAleatorio: () => number = Math.random;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly attendanceConfigService: AttendanceTrackingConfigService,
@@ -247,13 +259,13 @@ export class AttendanceEngineService {
     const ultimo = await this.prisma.registrosAsistencia.findFirst({
       where: {
         idEmpleado,
-        estatusProcesamiento: 'PROCESADO',
+        estatusProcesamiento: ESTATUS_VIGENTE,
         JornadasEmpleado: { fecha: fechaJornada },
       },
       orderBy: { fechaHoraRegistro: 'desc' },
     });
 
-    const ultimoTipo = (ultimo?.tipo as TipoChecada | undefined) ?? null;
+    const ultimoTipo = ultimo?.tipo ?? null;
     return {
       ...siguienteAccion(
         ultimoTipo,
@@ -313,12 +325,24 @@ export class AttendanceEngineService {
         input.idEmpleado,
         decision.tipo,
         input.fechaHoraRegistro,
+        input.canal === 'KIOSCO' ? input.canal : undefined,
       )
     ) {
       return this.registrarDuplicadoSemantico(input, ctx, decision.tipo);
     }
 
-    if (!decision.ok) {
+    // D7: el mismo tipo en otro canal se acepta; no es transición inválida.
+    const dobleCanal =
+      input.canal === 'KIOSCO' &&
+      (await this.hayDobleCanal(
+        input.idEmpleado,
+        decision.tipo,
+        input.canal,
+        input.fechaHoraRegistro,
+        ctx.config.kiosco.ventanaDobleCanalSegundos,
+      ));
+
+    if (!decision.ok && !dobleCanal) {
       return this.aplicarRechazoTransicion(input, ctx, decision);
     }
 
@@ -369,10 +393,17 @@ export class AttendanceEngineService {
       });
     }
 
-    const { requiereRevision, advertencias } = this.evaluarOffline(
-      input,
-      ubicacion,
-    );
+    const banderas =
+      input.canal === 'KIOSCO'
+        ? this.armarBanderasKiosco(input, ctx.config, dobleCanal)
+        : [];
+    const revisionMovil =
+      input.canal === 'KIOSCO'
+        ? { requiereRevision: false, advertencias: [] as string[] }
+        : this.evaluarOffline(input, ubicacion);
+    const requiereRevision =
+      revisionMovil.requiereRevision || banderas.length > 0;
+    const advertencias = revisionMovil.advertencias;
 
     const escrito = await this.prisma.$transaction(async (tx) => {
       const urlFoto = await this.consumirSelfieSiAplica(tx, input, ctx.config);
@@ -403,6 +434,8 @@ export class AttendanceEngineService {
           idJornada: jornada.idJornada,
           ubicacion,
           urlFoto,
+          requiereRevision: banderas.length > 0,
+          banderasRevision: banderas,
         }),
       });
 
@@ -446,7 +479,7 @@ export class AttendanceEngineService {
     tx?: ClienteDb,
     opciones?: { requiereRevision?: boolean; advertencias?: string[] },
   ): Promise<void> {
-    const client = (tx ?? this.prisma) as ClienteDb;
+    const client = tx ?? this.prisma;
     const jornada = await client.jornadasEmpleado.findUnique({
       where: { idJornada },
     });
@@ -455,7 +488,7 @@ export class AttendanceEngineService {
     }
 
     const registros = await client.registrosAsistencia.findMany({
-      where: { idJornada, estatusProcesamiento: 'PROCESADO' },
+      where: { idJornada, estatusProcesamiento: ESTATUS_VIGENTE },
       orderBy: { fechaHoraRegistro: 'asc' },
     });
 
@@ -616,6 +649,171 @@ export class AttendanceEngineService {
     });
   }
 
+  /**
+   * Marca el registro como ANULADO y recalcula la jornada.
+   * Repetir la llamada no cambia el resultado. motivo y usuario identifican
+   * la decisión; la bitácora humana la escribe KB6, no este método.
+   */
+  async anularRegistro(
+    idRegistro: bigint | string,
+    motivo: string,
+    usuario: string,
+  ): Promise<ResultadoCheck> {
+    if (!motivo?.trim() || !usuario?.trim()) {
+      throw new BadRequestException(
+        'La anulación requiere motivo y usuario.',
+      );
+    }
+
+    const id = this.aIdRegistro(idRegistro);
+    const registro = await this.prisma.registrosAsistencia.findUnique({
+      where: { idRegistro: id },
+    });
+    if (!registro) {
+      throw new NotFoundException(`No se encontró el registro ${id.toString()}.`);
+    }
+
+    if (registro.estatusProcesamiento !== 'ANULADO') {
+      await this.prisma.registrosAsistencia.update({
+        where: { idRegistro: id },
+        data: { estatusProcesamiento: 'ANULADO' },
+      });
+    }
+
+    if (registro.idJornada != null) {
+      await this.recalcJornada(registro.idJornada);
+    }
+
+    return this.resultadoDesdeRegistro(
+      { ...registro, estatusProcesamiento: 'ANULADO' },
+      this.checkDesdeRegistro(registro),
+      false,
+    );
+  }
+
+  /**
+   * Copia hora, tipo, canal, kiosco y evidencia del original a otro empleado.
+   * El nuevo registro apunta al origen con idRegistroOrigen.
+   */
+  async registrarDesdeOrigen(
+    idRegistroOrigen: bigint | string,
+    idEmpleadoNuevo: number,
+    usuario: string,
+  ): Promise<ResultadoCheck> {
+    if (!usuario?.trim()) {
+      throw new BadRequestException(
+        'El registro desde origen requiere usuario.',
+      );
+    }
+
+    const id = this.aIdRegistro(idRegistroOrigen);
+    const origen = await this.prisma.registrosAsistencia.findUnique({
+      where: { idRegistro: id },
+    });
+    if (!origen) {
+      throw new NotFoundException(`No se encontró el registro ${id.toString()}.`);
+    }
+    if (origen.idEmpleado === idEmpleadoNuevo) {
+      throw new BadRequestException('El registro ya pertenece a ese empleado.');
+    }
+
+    const ctx = await this.resolveContext(
+      idEmpleadoNuevo,
+      origen.fechaHoraRegistro,
+      origen.canal,
+    );
+    if (ctx.idTenant !== origen.idTenant || ctx.idEmpresa !== origen.idEmpresa) {
+      throw new BadRequestException(
+        'El empleado no pertenece a la empresa del registro original.',
+      );
+    }
+
+    const modo = this.modoDeCanal(origen.canal);
+    const escrito = await this.prisma.$transaction(async (tx) => {
+      const jornada = await tx.jornadasEmpleado.upsert({
+        where: {
+          idEmpleado_fecha: {
+            idEmpleado: idEmpleadoNuevo,
+            fecha: ctx.fechaJornada,
+          },
+        },
+        create: {
+          idTenant: origen.idTenant,
+          idEmpresa: origen.idEmpresa,
+          idEmpleado: idEmpleadoNuevo,
+          fecha: ctx.fechaJornada,
+          horaEntradaTeorica: ctx.horario?.HoraEntrada ?? null,
+          horaSalidaTeorica: ctx.horario?.HoraSalida ?? null,
+          estatusJornada: 'ABIERTA',
+          revisada: false,
+        },
+        update: { fechaActualizacion: new Date() },
+      });
+
+      const registro = await tx.registrosAsistencia.create({
+        data: {
+          idTenant: origen.idTenant,
+          idEmpresa: origen.idEmpresa,
+          idEmpleado: idEmpleadoNuevo,
+          idUsuarioRegistro: usuario,
+          idJornada: jornada.idJornada,
+          idRegistroOrigen: origen.idRegistro,
+          idKiosco: origen.idKiosco,
+          idEmpleadoRegistra: origen.idEmpleadoRegistra,
+          numeroEmpleadoCapturado: origen.numeroEmpleadoCapturado,
+          metodoIdentificacion: origen.metodoIdentificacion,
+          rostroDetectado: origen.rostroDetectado,
+          deteccionRostroActiva: origen.deteccionRostroActiva,
+          canal: origen.canal,
+          telefonoOrigen: origen.telefonoOrigen,
+          telefonoDestino: origen.telefonoDestino,
+          tipo: origen.tipo,
+          fechaHoraRegistro: origen.fechaHoraRegistro,
+          esOffline: origen.esOffline,
+          latitud: origen.latitud,
+          longitud: origen.longitud,
+          resultadoGeocerca: origen.resultadoGeocerca,
+          idSitioDetectado: origen.idSitioDetectado,
+          nombreDispositivo: origen.nombreDispositivo,
+          urlFoto: origen.urlFoto,
+          estatusProcesamiento: 'PROCESADO',
+          idEvidencia: origen.idEvidencia,
+          desfaseRelojSegundos: origen.desfaseRelojSegundos,
+          zonaHoraria: origen.zonaHoraria ?? ctx.zonaHoraria,
+          requiereRevision: false,
+        },
+      });
+
+      await this.recalcJornada(jornada.idJornada, tx);
+      const actualizada = await tx.jornadasEmpleado.findUnique({
+        where: { idJornada: jornada.idJornada },
+      });
+      return { registro, jornada: actualizada ?? jornada };
+    });
+
+    const siguiente = await this.resolveNextType(
+      idEmpleadoNuevo,
+      ctx.fechaJornada,
+      ctx.config,
+      modo,
+    );
+
+    return this.armarResultado({
+      registro: escrito.registro,
+      jornada: escrito.jornada,
+      tipo: origen.tipo,
+      duplicado: false,
+      resultadoGeocerca: origen.resultadoGeocerca,
+      distanciaGeocercaMetros: numeroONull(origen.distanciaGeocercaMetros),
+      requiereRevision: false,
+      advertencias: [],
+      rechazado: false,
+      motivoRechazo: null,
+      codigoRechazo: null,
+      siguiente,
+    });
+  }
+
   private async buscarIdempotente(input: CanonicalCheck) {
     if (input.uuidCliente) {
       const porUuid = await this.prisma.registrosAsistencia.findUnique({
@@ -773,7 +971,7 @@ export class AttendanceEngineService {
     const previo = await this.prisma.registrosAsistencia.findFirst({
       where: {
         idEmpleado,
-        estatusProcesamiento: 'PROCESADO',
+        estatusProcesamiento: ESTATUS_VIGENTE,
         fechaHoraRegistro: {
           gte: new Date(instante.getTime() - ventanaMs),
           lte: new Date(instante.getTime() + ventanaMs),
@@ -793,13 +991,15 @@ export class AttendanceEngineService {
     idEmpleado: number,
     tipo: TipoChecada,
     instante: Date,
+    canal?: CanonicalCheck['canal'],
   ): Promise<boolean> {
     const ventanaMs = ANTIREBOTE_SEGUNDOS * 1000;
     const cercano = await this.prisma.registrosAsistencia.findFirst({
       where: {
         idEmpleado,
         tipo,
-        estatusProcesamiento: 'PROCESADO',
+        ...(canal ? { canal } : {}),
+        estatusProcesamiento: ESTATUS_VIGENTE,
         fechaHoraRegistro: {
           gte: new Date(instante.getTime() - ventanaMs),
           lte: new Date(instante.getTime() + ventanaMs),
@@ -862,10 +1062,82 @@ export class AttendanceEngineService {
     });
   }
 
+  private async hayDobleCanal(
+    idEmpleado: number,
+    tipo: TipoChecada,
+    canal: CanonicalCheck['canal'],
+    instante: Date,
+    ventanaSegundos: number,
+  ): Promise<boolean> {
+    if (ventanaSegundos <= 0) return false;
+    const ventanaMs = ventanaSegundos * 1000;
+    const previo = await this.prisma.registrosAsistencia.findFirst({
+      where: {
+        idEmpleado,
+        tipo,
+        canal: { not: canal },
+        estatusProcesamiento: ESTATUS_VIGENTE,
+        fechaHoraRegistro: {
+          gte: new Date(instante.getTime() - ventanaMs),
+          lte: new Date(instante.getTime() + ventanaMs),
+        },
+      },
+      orderBy: { fechaHoraRegistro: 'desc' },
+      select: { fechaHoraRegistro: true },
+    });
+    if (!previo) return false;
+    return (
+      Math.abs(instante.getTime() - previo.fechaHoraRegistro.getTime()) <=
+      ventanaMs
+    );
+  }
+
+  private armarBanderasKiosco(
+    input: CanonicalCheck,
+    config: AttendanceModuleConfig,
+    dobleCanal: boolean,
+  ): BanderaRevisionKiosco[] {
+    const banderas: BanderaRevisionKiosco[] = [];
+    const kiosco = config.kiosco;
+
+    if (input.deteccionRostroActiva === true && input.rostroDetectado === false) {
+      banderas.push('SIN_ROSTRO');
+    }
+    if (
+      input.desfaseRelojSegundos != null &&
+      Math.abs(input.desfaseRelojSegundos) > kiosco.umbralDesfaseRelojSegundos
+    ) {
+      banderas.push('DESFASE_RELOJ');
+    }
+    if (input.esOffline) {
+      const horas =
+        (Date.now() - input.fechaHoraRegistro.getTime()) / 3_600_000;
+      if (horas > kiosco.horasOfflineParaBandera) {
+        banderas.push('OFFLINE');
+      }
+    }
+    if (dobleCanal) {
+      banderas.push('DOBLE_CANAL');
+    }
+    if (
+      banderas.length === 0 &&
+      this.generadorAleatorio() < kiosco.porcentajeMuestreo / 100
+    ) {
+      banderas.push('MUESTREO');
+    }
+    return banderas;
+  }
+
   private evaluarUbicacion(
     input: CanonicalCheck,
     ctx: ContextoAsistencia,
   ): EvaluacionUbicacion {
+    if (input.canal === 'KIOSCO') {
+      return {
+        ...this.ubicacionNoAplica(),
+        idSitioDetectado: input.idSitioKiosco ?? null,
+      };
+    }
     if (input.canal !== 'APP_MOVIL') {
       return this.ubicacionNoAplica();
     }
@@ -1109,6 +1381,10 @@ export class AttendanceEngineService {
     input: CanonicalCheck,
     config: AttendanceModuleConfig,
   ): Promise<string | null> {
+    if (input.canal === 'KIOSCO') {
+      return this.consumirEvidenciaKiosco(tx, input);
+    }
+
     const exigeSelfie =
       input.canal === 'APP_MOVIL' && config.movil.selfieObligatoria;
 
@@ -1145,6 +1421,52 @@ export class AttendanceEngineService {
     await tx.asistenciaEvidencias.update({
       where: { idEvidencia: input.idEvidencia },
       data: { consumida: true },
+    });
+
+    return evidencia.rutaArchivo ?? input.urlFoto ?? null;
+  }
+
+  private async consumirEvidenciaKiosco(
+    tx: ClienteDb,
+    input: CanonicalCheck,
+  ): Promise<string | null> {
+    if (!input.idEvidencia) {
+      return input.urlFoto ?? null;
+    }
+
+    const evidencia = await tx.asistenciaEvidencias.findUnique({
+      where: { idEvidencia: input.idEvidencia },
+    });
+    if (!evidencia) {
+      throw new BadRequestException({
+        code: 'EVIDENCIA_AJENA',
+        message:
+          'Esa foto no está disponible. Toma una nueva e intenta de nuevo.',
+        detail: {},
+      });
+    }
+    if (
+      evidencia.idEmpleado != null &&
+      evidencia.idEmpleado !== input.idEmpleado
+    ) {
+      throw new BadRequestException({
+        code: 'EVIDENCIA_AJENA',
+        message:
+          'Esa foto no corresponde a tu usuario. Toma una nueva e intenta de nuevo.',
+        detail: {},
+      });
+    }
+    if (evidencia.consumida) {
+      throw new BadRequestException({
+        code: 'EVIDENCIA_CONSUMIDA',
+        message: 'Esa foto ya se usó. Toma una nueva e intenta de nuevo.',
+        detail: {},
+      });
+    }
+
+    await tx.asistenciaEvidencias.update({
+      where: { idEvidencia: input.idEvidencia },
+      data: { consumida: true, idEmpleado: input.idEmpleado },
     });
 
     return evidencia.rutaArchivo ?? input.urlFoto ?? null;
@@ -1323,6 +1645,8 @@ export class AttendanceEngineService {
       idJornada: number | null;
       ubicacion: EvaluacionUbicacion;
       urlFoto: string | null;
+      requiereRevision?: boolean;
+      banderasRevision?: BanderaRevisionKiosco[];
     },
   ) {
     return {
@@ -1330,6 +1654,16 @@ export class AttendanceEngineService {
       idEmpresa: input.idEmpresa,
       idEmpleado: input.idEmpleado,
       idJornada: extra.idJornada,
+      idKiosco: input.idKiosco ?? null,
+      idEmpleadoRegistra: input.idEmpleadoRegistra ?? null,
+      numeroEmpleadoCapturado: input.numeroEmpleadoCapturado ?? null,
+      metodoIdentificacion: input.metodoIdentificacion ?? null,
+      rostroDetectado: input.rostroDetectado ?? null,
+      deteccionRostroActiva: input.deteccionRostroActiva ?? null,
+      requiereRevision: extra.requiereRevision ?? false,
+      ...(extra.banderasRevision?.length
+        ? { banderasRevision: extra.banderasRevision }
+        : {}),
       canal: input.canal,
       telefonoOrigen: input.telefonoOrigen ?? null,
       telefonoDestino: input.telefonoDestino ?? null,
@@ -1384,6 +1718,38 @@ export class AttendanceEngineService {
       requiereRevision: false,
       advertencias: [],
       bloqueada: false,
+    };
+  }
+
+  private aIdRegistro(idRegistro: bigint | string): bigint {
+    return typeof idRegistro === 'bigint' ? idRegistro : BigInt(idRegistro);
+  }
+
+  private modoDeCanal(canal: CanonicalCheck['canal']): ModoInferencia {
+    if (canal === 'BIOMETRICO' || canal === 'NFC' || canal === 'IVR') {
+      return 'ALTERNANTE_SIMPLE';
+    }
+    return 'SECUENCIA_COMPLETA';
+  }
+
+  private checkDesdeRegistro(registro: {
+    idTenant: number;
+    idEmpresa: number;
+    idEmpleado: number;
+    canal: CanonicalCheck['canal'];
+    tipo: TipoChecada;
+    fechaHoraRegistro: Date;
+    uuidCliente: string | null;
+  }): CanonicalCheck {
+    return {
+      idTenant: registro.idTenant,
+      idEmpresa: registro.idEmpresa,
+      idEmpleado: registro.idEmpleado,
+      canal: registro.canal,
+      tipo: registro.tipo,
+      modoInferencia: this.modoDeCanal(registro.canal),
+      fechaHoraRegistro: registro.fechaHoraRegistro,
+      uuidCliente: registro.uuidCliente,
     };
   }
 }

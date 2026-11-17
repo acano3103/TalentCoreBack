@@ -30,6 +30,13 @@ export interface LogbookItemDto {
         label: string; // ej. "En línea", "Offline", "Artemis"
     };
     estatusProcesamiento: 'PENDIENTE' | 'PROCESADO' | 'DUPLICADO' | 'RECHAZADO' | 'ANULADO';
+    kiosco: {
+        idKiosco: number;
+        codigo: string;
+        nombre: string;
+    } | null;
+    requiereRevision: boolean;
+    banderasRevision: string[] | null;
 }
 
 export interface PaginatedLogbookResponseDto {

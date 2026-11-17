@@ -2,12 +2,12 @@ import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, UploadedFile, Us
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { GetActiveUser } from '../auth/decorators/active-user.decorator';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { GetActiveUser } from '../../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { BiometricPhotoUpload, EmployeeBiometricsService, MAX_FOTO_ROSTRO_BYTES } from './employee-biometrics.service';
-import { CreateBiometricPersonDto } from './dto/create-biometric-person.dto';
-import { UploadBiometricFingerprintsDto } from './dto/upload-biometric-fingerprints.dto';
+import { CreateBiometricPersonDto } from '../dto/create-biometric-person.dto';
+import { UploadBiometricFingerprintsDto } from '../dto/upload-biometric-fingerprints.dto';
 
 // Endpoints de biométricos del empleado (ZkBio Integration API vía integración de la empresa)
 @ApiTags('Employee Biometrics')

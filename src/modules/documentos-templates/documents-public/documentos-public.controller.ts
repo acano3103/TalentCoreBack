@@ -1,35 +1,35 @@
 import { Controller, Get, Post, Body, Param, Res } from '@nestjs/common';
-import { DocumentosTemplatesService } from './documentos-templates.service';
+import { DocumentosTemplatesService } from '../documentos-templates.service';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 
 @ApiTags('Documentos - Firma Pública')
-@Controller('documentos/public')
+@Controller('documents/public')
 export class DocumentosPublicController {
     constructor(private readonly service: DocumentosTemplatesService) { }
 
-    @Get('firmar/:token')
+    @Get('sign/:token')
     @ApiOperation({ summary: 'Get document for public signature' })
     @ApiResponse({ status: 200, description: 'Document info with signature fields' })
     async getForSignature(@Param('token') token: string) {
         return this.service.getForPublicSignature(token);
     }
 
-    @Get('firmar/:token/pdf')
+    @Get('sign/:token/pdf')
     @ApiOperation({ summary: 'Serve PDF for public signature preview' })
     @ApiResponse({ status: 200, description: 'PDF file streamed' })
     async servePdf(@Param('token') token: string, @Res() res: Response) {
         return this.service.serveSignaturePdf(token, res);
     }
 
-    @Post('firmar/:token/solicitar-codigo')
+    @Post('sign/:token/solicitar-codigo')
     @ApiOperation({ summary: 'Request OTP code for signature validation' })
     @ApiResponse({ status: 200, description: 'OTP sent via WhatsApp' })
     async requestOtp(@Param('token') token: string) {
         return this.service.requestSignatureOtp(token);
     }
 
-    @Post('firmar/:token')
+    @Post('sign/:token')
     @ApiOperation({ summary: 'Save signature for document' })
     @ApiResponse({ status: 200, description: 'Signature saved and embedded in PDF' })
     async saveSignature(

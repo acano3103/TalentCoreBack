@@ -768,21 +768,22 @@ model PesoCategoriaPuesto {
 }
 
 model Postulaciones {
-  idPostulacion   Int       @id @default(autoincrement())
-  uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
-  idEstatus       Int?      @default(1)
-  idVacante       Int
-  nombre          String    @db.VarChar(100)
-  primerApellido  String    @db.VarChar(100)
-  segundoApellido String?   @db.VarChar(100)
-  correo          String    @db.VarChar(250)
-  telefono        String    @db.VarChar(10)
-  curp            String?   @db.VarChar(45)
-  utmSource       String?   @db.VarChar(100)
-  rutaCV          String    @db.VarChar(500)
-  fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
-  idCampa_a       Int?      @map("idCampaña")
-  Vacantes        Vacantes  @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+  idPostulacion             Int                        @id @default(autoincrement())
+  uuid                      String                     @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  idEstatus                 Int?                       @default(1)
+  idVacante                 Int
+  nombre                    String                     @db.VarChar(100)
+  primerApellido            String                     @db.VarChar(100)
+  segundoApellido           String?                    @db.VarChar(100)
+  correo                    String                     @db.VarChar(250)
+  telefono                  String                     @db.VarChar(10)
+  curp                      String?                    @db.VarChar(45)
+  utmSource                 String?                    @db.VarChar(100)
+  rutaCV                    String                     @db.VarChar(500)
+  fechaRegistro             DateTime?                  @default(now()) @db.Timestamp(0)
+  idCampa_a                 Int?                       @map("idCampaña")
+  Vacantes                  Vacantes                   @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+  RelEmpleadosPostulaciones RelEmpleadosPostulaciones?
 
   @@index([idVacante], map: "fk_postulacion_vacante")
 }
@@ -1140,11 +1141,12 @@ model Empleados {
   artemisUserId                                                                              String?                            @db.VarChar(50)
   artemisSyncedAt                                                                            DateTime?                          @db.DateTime(0)
   ArchivosSolicitudes                                                                        ArchivosSolicitudes[]
+  CalendarioLaboralEmpleado                                                                  CalendarioLaboralEmpleado[]
   Contratos                                                                                  Contratos[]
   CursoParticipantes                                                                         CursoParticipantes[]
-  RolePlayAsignaciones                                                                       RolePlayAsignaciones[]
   CursoSesiones                                                                              CursoSesiones[]
   DispositivosAsistencia                                                                     DispositivosAsistencia[]
+  DocumentosGenerados                                                                        DocumentosGenerados[]
   CatPuestos                                                                                 CatPuestos?                        @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
   Empleados                                                                                  Empleados?                         @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                                                            Empleados[]                        @relation("EmpleadosToEmpleados")
@@ -1164,8 +1166,10 @@ model Empleados {
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados")
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados  RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados")
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados   RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados")
+  RelEmpleadosPostulaciones                                                                  RelEmpleadosPostulaciones[]
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados       RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados")
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados     RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados")
+  RolePlayAsignaciones                                                                       RolePlayAsignaciones[]
   SolicitudesIncidencias_SolicitudesIncidencias_idAprobadorToEmpleados                       SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idAprobadorToEmpleados")
   SolicitudesIncidencias_SolicitudesIncidencias_idEmpleadoToEmpleados                        SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_idEmpleadoToEmpleados")
   SolicitudesIncidencias_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados           SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados")
@@ -1242,6 +1246,7 @@ model Vacantes {
   comentarios                                        String?              @db.Text
   fechaCreacion                                      DateTime?            @default(now()) @db.Timestamp(0)
   fechaActualizacion                                 DateTime?            @default(now()) @db.Timestamp(0)
+  fechaCierre                                        DateTime?            @db.DateTime(0)
   Entrevistas                                        Entrevistas[]
   Postulaciones                                      Postulaciones[]
   CatEmpresas                                        CatEmpresas          @relation(fields: [idEmpresa], references: [idEmpresa], map: "fk_vacante_empresa")
@@ -1287,24 +1292,27 @@ model PlantillasDocumentos {
 }
 
 model CamposPlantilla {
-  id            Int                  @id @default(autoincrement())
-  idPlantilla   Int
-  identificador String               @db.VarChar(100)
-  nombreCampo   String               @db.VarChar(200)
-  tipoDato      String               @default("texto") @db.VarChar(50)
-  requerido     Boolean              @default(true)
-  orden         Int                  @default(0)
-  valorDefault  String?              @db.VarChar(500)
-  textoOriginal String?              @db.Text
-  alto          Float?               @map("alto")
-  ancho         Float?               @map("ancho")
-  pagina        Int?                 @map("pagina")
-  posicionX     Float?               @map("posicionX")
-  posicionY     Float?               @map("posicionY")
-  plantilla     PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Cascade, map: "fk_campo_plantilla")
+  id                 Int                  @id @default(autoincrement())
+  idPlantilla        Int
+  idCampoCatalogo    Int?
+  identificador      String               @db.VarChar(100)
+  nombreCampo        String               @db.VarChar(200)
+  tipoDato           String               @default("texto") @db.VarChar(50)
+  requerido          Boolean              @default(true)
+  orden              Int                  @default(0)
+  valorDefault       String?              @db.VarChar(500)
+  textoOriginal      String?              @db.Text
+  alto               Float?               @map("alto")
+  ancho              Float?               @map("ancho")
+  pagina             Int?                 @map("pagina")
+  posicionX          Float?               @map("posicionX")
+  posicionY          Float?               @map("posicionY")
+  plantilla          PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Cascade, map: "fk_campo_plantilla")
+  CatCamposPlantilla CatCamposPlantilla?  @relation(fields: [idCampoCatalogo], references: [id], onDelete: Restrict, map: "fk_campo_plantilla_catalogo")
 
   @@unique([idPlantilla, identificador], map: "uk_plantilla_identificador")
   @@index([idPlantilla], map: "idx_campo_plantilla")
+  @@index([idCampoCatalogo], map: "idx_campo_plantilla_catalogo")
 }
 
 model DocumentosGenerados {
@@ -1313,13 +1321,22 @@ model DocumentosGenerados {
   idPlantilla            Int
   idVacante              Int?
   idCandidato            Int?
+  idEmpleado             Int?
   datosJson              Json?
   archivoGenerado        String?              @db.VarChar(500)
   estatus                String               @default("pendiente") @db.VarChar(50)
   fechaGeneracion        DateTime?            @default(now()) @db.Timestamp(0)
   idUsuarioGenero        Int
   tokenFirma             String?              @unique(map: "tokenFirma") @db.VarChar(100)
+  tokenValidacion        String?              @db.VarChar(10)
+  fechaToken             DateTime?            @db.Timestamp(0)
   firmado                Boolean              @default(false)
+  firmaConfigurada       Boolean              @default(false)
+  firmaPagina            Int?
+  firmaX                 Decimal?             @db.Decimal(8, 4)
+  firmaY                 Decimal?             @db.Decimal(8, 4)
+  firmaAncho             Decimal?             @db.Decimal(8, 4)
+  firmaAlto              Decimal?             @db.Decimal(8, 4)
   datosFirma             Json?
   idContrato             Int?
   codigoValidacionNOM151 String?              @db.VarChar(100)
@@ -1327,12 +1344,14 @@ model DocumentosGenerados {
   archivoNom151          String?              @db.VarChar(500)
   fechaSellado           DateTime?            @db.Timestamp(0)
   contrato               Contratos?           @relation(fields: [idContrato], references: [idContrato], map: "fk_docgen_contrato")
+  Empleados              Empleados?           @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_docgen_empleado")
   plantilla              PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], map: "fk_docgen_plantilla")
 
   @@index([idPlantilla], map: "idx_docgen_plantilla")
   @@index([idVacante], map: "idx_docgen_vacante")
   @@index([idCandidato], map: "idx_docgen_candidato")
   @@index([idContrato], map: "idx_docgen_contrato")
+  @@index([idEmpleado], map: "idx_docgen_empleado")
 }
 
 model CatEstatusPostulacion {
@@ -1391,16 +1410,16 @@ model SolicitudPuesto {
 }
 
 model HistoricoMovimientos {
-  id            Int       @id @default(autoincrement())
-  idUsuario     Int
-  idEmpresa     Int
-  accion        String    @db.VarChar(50)
-  tablaOrigen   String    @db.VarChar(100)
-  idRegistro    String    @db.VarChar(36)
-  descripcion   String    @db.Text
+  id            Int        @id @default(autoincrement())
+  idUsuario     Int?
+  idEmpresa     Int?
+  accion        String     @db.VarChar(50)
+  tablaOrigen   String     @db.VarChar(100)
+  idRegistro    String     @db.VarChar(36)
+  descripcion   String     @db.Text
   detalles_json Json?
-  fechaCreacion DateTime? @default(now()) @db.Timestamp(0)
-  auth_user     auth_user @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
+  fechaCreacion DateTime?  @default(now()) @db.Timestamp(0)
+  auth_user     auth_user? @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
 
   @@index([fechaCreacion], map: "idx_creado_at")
   @@index([tablaOrigen, idRegistro], map: "idx_polimorfico")
@@ -1691,7 +1710,7 @@ model HorariosEmpleado {
   DiaSemana   String?   @db.VarChar(10)
   HoraEntrada DateTime? @db.Time(0)
   HoraSalida  DateTime? @db.Time(0)
-  Modalidad   String?   @db.VarChar(100)
+  Modalidad   String    @default("PRESENCIAL") @db.VarChar(100)
 
   @@index([idEmpleado], map: "idx_idEmpleado")
 }
@@ -1913,8 +1932,8 @@ model RolePlays {
   FechaRegistro        DateTime?              @default(now()) @db.DateTime(0)
   FechaActualizacion   DateTime?              @db.DateTime(0)
   EvaluationCriteria   EvaluationCriteria[]
-  RolePlayLlamadas     RolePlayLlamadas[]
   RolePlayAsignaciones RolePlayAsignaciones[]
+  RolePlayLlamadas     RolePlayLlamadas[]
 
   @@index([idEmpresa], map: "idx_roleplays_idEmpresa")
   @@index([idTenant], map: "idx_roleplays_idTenant")
@@ -1932,8 +1951,8 @@ model RolePlayAsignaciones {
   idUsuarioAsigno    Int
   FechaRegistro      DateTime? @default(now()) @db.DateTime(0)
   FechaActualizacion DateTime? @db.DateTime(0)
+  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_Empleado")
   RolePlays          RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_RolePlay")
-  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "FK_RolePlayAsignaciones_Empleado")
 
   @@unique([idRolePlay, idEmpleado], map: "UK_RolePlayAsignaciones_RolePlay_Empleado")
   @@index([idEmpleado], map: "idx_roleasig_idEmpleado")
@@ -2039,6 +2058,11 @@ model RegistrosAsistencia {
   idKiosco                                                    Int?
   idEmpleadoRegistra                                          Int?
   numeroEmpleadoCapturado                                     String?                                  @db.VarChar(20)
+  metodoIdentificacion                                        String?                                  @db.VarChar(30)
+  rostroDetectado                                             Boolean?
+  deteccionRostroActiva                                       Boolean?
+  requiereRevision                                            Boolean                                  @default(false)
+  banderasRevision                                            Json?
   idRegistroOrigen                                            BigInt?
   canal                                                       RegistrosAsistencia_canal
   telefonoOrigen                                              String?                                  @db.VarChar(20)
@@ -2568,25 +2592,27 @@ model SolicitudesPermisosDetalle {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model ArchivosSolicitudes {
-  idArchivoSolicitud Int       @id @default(autoincrement())
-  idTenant           Int
-  idEmpresa          Int
-  idEmpleado         Int
-  moduloSolicitud    String    @db.VarChar(30)
-  idSolicitud        Int
-  nombreOriginal     String    @db.VarChar(255)
-  nombreAlmacenado   String    @db.VarChar(255)
-  rutaRelativa       String    @db.VarChar(700)
-  mimeType           String?   @db.VarChar(150)
-  tamanoBytes        BigInt    @default(0) @db.UnsignedBigInt
-  usuarioRegistro    String?   @db.VarChar(100)
-  fechaRegistro      DateTime  @default(now()) @db.DateTime(0)
-  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_archivos_empleado")
+  idArchivoSolicitud  Int       @id @default(autoincrement())
+  idTenant            Int
+  idEmpresa           Int
+  idEmpleado          Int
+  moduloSolicitud     String    @db.VarChar(30)
+  idSolicitud         Int
+  nombreOriginal      String    @db.VarChar(255)
+  nombreAlmacenado    String    @db.VarChar(255)
+  rutaRelativa        String?   @db.VarChar(700)
+  idDocumentoGenerado Int?
+  mimeType            String?   @db.VarChar(150)
+  tamanoBytes         BigInt    @default(0) @db.UnsignedBigInt
+  usuarioRegistro     String?   @db.VarChar(100)
+  fechaRegistro       DateTime  @default(now()) @db.DateTime(0)
+  Empleados           Empleados @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_archivos_empleado")
 
   @@index([idEmpleado], map: "fk_archivos_empleado")
   @@index([idTenant, idEmpresa, idEmpleado], map: "idx_archivos_empleado")
   @@index([idTenant, idEmpresa], map: "idx_archivos_empresa")
   @@index([moduloSolicitud, idSolicitud], map: "idx_archivos_solicitud")
+  @@index([idDocumentoGenerado], map: "idx_archivos_documento_generado")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -2692,9 +2718,14 @@ model KioscosAsistencia {
   modalidad                     KioscosAsistencia_modalidad
   idEmpleadoResponsable         Int
   estatus                       KioscosAsistencia_estatus       @default(PENDIENTE_ACTIVACION)
+  estatusAntesBloqueo           String?                         @db.VarChar(30)
   identificadorDispositivo      String?                         @unique(map: "UK_Kiosco_Dispositivo") @db.VarChar(150)
   tokenJti                      String?                         @unique(map: "UK_Kiosco_TokenJti") @db.VarChar(100)
   ultimoLatido                  DateTime?                       @db.DateTime(0)
+  plataforma                    String?                         @db.VarChar(20)
+  modelo                        String?                         @db.VarChar(120)
+  versionApp                    String?                         @db.VarChar(20)
+  pendientesReportados          Int                             @default(0)
   politicas                     Json
   fechaCreacion                 DateTime                        @default(now()) @db.DateTime(0)
   fechaActualizacion            DateTime                        @default(now()) @db.DateTime(0)
@@ -2728,6 +2759,9 @@ model RegistrosKioscoPorIdentificar {
   longitud                                                               Decimal?                                     @db.Decimal(11, 8)
   idEvidencia                                                            Int?
   uuidCliente                                                            String                                       @unique(map: "UK_Kiosco_Identificar_UUID") @db.VarChar(64)
+  metodoIdentificacion                                                   String?                                      @db.VarChar(30)
+  esOffline                                                              Boolean                                      @default(false)
+  desfaseRelojSegundos                                                   Int?
   estatus                                                                RegistrosKioscoPorIdentificar_estatus        @default(PENDIENTE)
   idEmpleadoAsignado                                                     Int?
   agregarEmpleadoSite                                                    Boolean                                      @default(false)
@@ -2780,6 +2814,63 @@ model RevisionesRegistroAsistencia {
   @@index([idKiosco, fechaRevision], map: "IDX_Revision_Kiosco")
   @@index([idRegistro], map: "IDX_Revision_Registro")
   @@index([idEmpleadoRevisor], map: "IDX_Revision_Revisor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model CalendarioLaboralEmpleado {
+  idCalendario                     BigInt                             @id @default(autoincrement())
+  idEmpleado                       Int
+  fecha                            DateTime                           @db.Date
+  tipoDia                          String                             @default("LABORAL") @db.VarChar(20)
+  observaciones                    String?                            @db.VarChar(500)
+  fechaRegistro                    DateTime?                          @default(now()) @db.Timestamp(0)
+  fechaActualizacion               DateTime?                          @default(now()) @db.Timestamp(0)
+  Empleados                        Empleados                          @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "FK_Calendario_Empleado")
+  DetalleCalendarioLaboralEmpleado DetalleCalendarioLaboralEmpleado[]
+
+  @@unique([idEmpleado, fecha], map: "UK_Calendario_Empleado_Fecha")
+  @@index([fecha], map: "IDX_Calendario_Fecha")
+}
+
+model DetalleCalendarioLaboralEmpleado {
+  idDetalle                 BigInt                    @id @default(autoincrement())
+  idCalendario              BigInt
+  numeroTurno               Int                       @default(1) @db.UnsignedSmallInt
+  HoraEntrada               DateTime                  @db.Time(0)
+  HoraSalida                DateTime                  @db.Time(0)
+  Modalidad                 String                    @default("PRESENCIAL") @db.VarChar(100)
+  fechaRegistro             DateTime?                 @default(now()) @db.Timestamp(0)
+  CalendarioLaboralEmpleado CalendarioLaboralEmpleado @relation(fields: [idCalendario], references: [idCalendario], onDelete: Cascade, map: "FK_Detalle_Calendario")
+
+  @@unique([idCalendario, numeroTurno], map: "UK_Calendario_NumeroTurno")
+  @@index([idCalendario], map: "IDX_Detalle_Calendario")
+}
+
+model CatCamposPlantilla {
+  id              Int               @id @default(autoincrement())
+  clave           String            @unique(map: "uk_cat_campos_plantilla_clave") @db.VarChar(150)
+  nombre          String            @db.VarChar(200)
+  grupo           String            @db.VarChar(100)
+  entidad         String            @db.VarChar(50)
+  descripcion     String?           @db.VarChar(500)
+  activo          Boolean           @default(true)
+  orden           Int               @default(0)
+  fechaCreacion   DateTime?         @default(now()) @db.Timestamp(0)
+  CamposPlantilla CamposPlantilla[]
+
+  @@index([activo], map: "idx_cat_campos_plantilla_activo")
+  @@index([grupo], map: "idx_cat_campos_plantilla_grupo")
+}
+
+model RelEmpleadosPostulaciones {
+  idRelacion    Int           @id @default(autoincrement())
+  idEmpleado    Int
+  idPostulacion Int           @unique(map: "UK_RelEmpleadosPostulaciones_Postulacion")
+  fechaRegistro DateTime?     @default(now()) @db.Timestamp(0)
+  Empleados     Empleados     @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_RelEmpPost_Empleado")
+  Postulaciones Postulaciones @relation(fields: [idPostulacion], references: [idPostulacion], map: "FK_RelEmpPost_Postulacion")
+
+  @@index([idEmpleado], map: "IDX_RelEmpleadosPostulaciones_Empleado")
 }
 
 enum Entrevistas_interview_type {

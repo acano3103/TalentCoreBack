@@ -96,6 +96,7 @@ export class DigitalFilesService {
   }
 
   async getExpediente(companyId: number, employeeId: number, user: ActiveUserDto) {
+    console.log(employeeId)
     if (!user.idTenant) {
       throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
@@ -121,7 +122,7 @@ export class DigitalFilesService {
       select: { idPuesto: true, idEstatus: true },
     });
 
-    const idPuesto = expediente?.idPuesto ?? null;
+    const idPuesto = empleado?.idPuesto ?? null;
     const estatusExpediente = expediente?.idEstatus ?? null;
     const [documentosRequeridos, documentosSubidos, infoEmpleado, catalogos, horarioEmpleado] =
       await Promise.all([
@@ -224,133 +225,385 @@ export class DigitalFilesService {
     return await this.getExpediente(companyId, employeeId, pseudoUser);
   }
 
+
   async getCompanyDocuments(employeeId: number) {
     try {
-      const rows = await this.prisma.$queryRaw<any[]>`
-        SELECT
-          de.idDocumentoEmpresa,
-          de.nombre,
-          de.rutaOriginal,
-          de.rutaFirmado,
-          de.fechaEnvio,
-          de.fechaFirmado,
-          n.codigoValidacion,
-          n.hash,
-          n.rutaConstancia,
-          n.estatus AS estatusNOM151,
-          n.claveMensaje,
-          n.fechaObtencion
-        FROM DocumentosEmpresa de
-        LEFT JOIN DocumentosEmpresaNOM151 n ON n.idDocumentoEmpresa = de.idDocumentoEmpresa
-        WHERE de.idEmpleado = ${employeeId}
-        ORDER BY de.fechaEnvio DESC;
-      `;
-
-      // Función auxiliar para normalizar rutas y limpiar prefijos
+      // Normalizar las rutas para enviarlas al frontend
       const helperBuildUrl = (ruta: string | null): string | null => {
         if (!ruta) return null;
+
         let cleanPath = ruta.replace(/\\/g, '/');
-        cleanPath = cleanPath.replace(/^((\/RR-HH)?\/)?media\//, '');
+        cleanPath = cleanPath.replace(/^((\/RR-HH)?\/)?media\//i, '');
         cleanPath = cleanPath.replace(/^\/+/, '');
+
         return cleanPath;
       };
 
-      // Formateador de fechas nativo de JS
+      // Formatear fechas
       const formatFecha = (dateInput: any): string | null => {
         if (!dateInput) return null;
+
         const d = new Date(dateInput);
+
         if (isNaN(d.getTime())) return '';
+
         const pad = (num: number) => String(num).padStart(2, '0');
+
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       };
 
-      // Formatear los registros de DocumentosEmpresa
-      const documentos = rows.map((row) => {
-        const urlOriginal = helperBuildUrl(row.rutaOriginal) || '';
-        const urlFirmado = helperBuildUrl(row.rutaFirmado);
-        const urlConstancia = helperBuildUrl(row.rutaConstancia);
+      // Obtener la ruta de la constancia PDF cuando se almacena un .cer
+      const helperConstanciaUrl = (ruta: string | null): string | null => {
+        if (!ruta) return null;
 
-        return {
-          id: row.idDocumentoEmpresa,
-          nombre: row.nombre,
-          ruta: urlOriginal,
-          requereFirma: true,
-          firmado: !!row.rutaFirmado,
-          rutaFirmado: urlFirmado,
-          fechaEnvio: formatFecha(row.fechaEnvio) || '',
-          fechaFirmado: formatFecha(row.fechaFirmado),
-          nom151: {
-            certificado: !!row.codigoValidacion,
-            codigoValidacion: row.codigoValidacion || null,
-            hash: row.hash || null,
-            urlConstancia: urlConstancia,
-            estatus: row.estatusNOM151 || null,
-            claveMensaje: row.claveMensaje || null,
-            fechaObtencion: formatFecha(row.fechaObtencion),
-          },
-        };
+        let rutaConstancia = ruta;
+
+        if (rutaConstancia.toLowerCase().endsWith('.cer')) {
+          rutaConstancia = rutaConstancia.replace(/\.cer$/i, '_constancia.pdf');
+        }
+
+        return helperBuildUrl(rutaConstancia);
+      };
+
+      // Construir el objeto NOM151 con una estructura uniforme
+      const helperBuildNom151 = (
+        row: any,
+        esDocumentoEmpresa = false,
+      ) => ({
+        certificado: !!row.codigoValidacion,
+        codigoValidacion: row.codigoValidacion || null,
+        hash: row.hash || null,
+        urlConstancia: helperConstanciaUrl(row.rutaConstancia),
+        estatus: row.estatusNOM151
+          || (row.codigoValidacion && !esDocumentoEmpresa ? 'COMPLETADO' : null),
+        claveMensaje: row.claveMensaje || null,
+        fechaObtencion: formatFecha(row.fechaObtencion),
       });
 
-      // Consultar el contrato más reciente del empleado
-      const contratoRows = await this.prisma.$queryRaw<any[]>`
-        SELECT
-          c.idContrato,
-          dg.id AS idDocumentoGenerado,
-          dg.archivoGenerado AS rutaOriginal,
-          dg.firmado,
-          dg.fechaGeneracion,
-          dg.codigoValidacionNOM151 AS codigoValidacion,
-          dg.hashNOM151 AS hash,
-          dg.archivoNom151 AS rutaConstancia,
-          dg.fechaSellado AS fechaObtencion
-        FROM Contratos c
-        INNER JOIN DocumentosGenerados dg ON dg.idContrato = c.idContrato
-        WHERE c.idEmpleado = ${employeeId}
-          AND dg.archivoGenerado IS NOT NULL
-        ORDER BY dg.fechaGeneracion DESC
-        LIMIT 1
-      `;
+      // 1. Documentos de empresa
+      const rows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                de.idDocumentoEmpresa,
+                de.nombre,
+                de.rutaOriginal,
+                de.rutaFirmado,
+                de.fechaEnvio,
+                de.fechaFirmado,
+                n.codigoValidacion,
+                n.hash,
+                n.rutaConstancia,
+                n.estatus AS estatusNOM151,
+                n.claveMensaje,
+                n.fechaObtencion
+            FROM DocumentosEmpresa de
+            LEFT JOIN DocumentosEmpresaNOM151 n
+                ON n.idDocumentoEmpresa = de.idDocumentoEmpresa
+            WHERE de.idEmpleado = ${employeeId}
+            ORDER BY de.fechaEnvio DESC;
+        `;
 
-      if (contratoRows.length > 0) {
-        const row = contratoRows[0];
-        const urlOriginal = helperBuildUrl(row.rutaOriginal) || '';
+      const documentos = rows.map((row) => ({
+        id: row.idDocumentoEmpresa,
+        nombre: row.nombre,
+        ruta: helperBuildUrl(row.rutaOriginal) || '',
+        requereFirma: true,
+        firmado: !!row.rutaFirmado,
+        rutaFirmado: helperBuildUrl(row.rutaFirmado),
+        fechaEnvio: formatFecha(row.fechaEnvio) || '',
+        fechaFirmado: formatFecha(row.fechaFirmado),
+        nom151: helperBuildNom151(row, true),
+      }));
 
-        let rutaConstancia = row.rutaConstancia;
-        if (rutaConstancia && rutaConstancia.endsWith('.cer')) {
-          rutaConstancia = rutaConstancia.replace(/\.cer$/, '_constancia.pdf');
-        }
-        const urlConstancia = helperBuildUrl(rutaConstancia);
+      // 2. Documentos generados relacionados directamente con el empleado,
+      // excluyendo los que pertenecen a un contrato.
+      const documentosGeneradosRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                dg.id,
+                dg.archivoGenerado AS rutaOriginal,
+                dg.firmado,
+                dg.fechaGeneracion,
+                dg.codigoValidacionNOM151 AS codigoValidacion,
+                dg.hashNOM151 AS hash,
+                dg.archivoNom151 AS rutaConstancia,
+                dg.fechaSellado AS fechaObtencion
+            FROM DocumentosGenerados dg
+            WHERE dg.idEmpleado = ${employeeId}
+                AND dg.idContrato IS NULL
+                AND dg.archivoGenerado IS NOT NULL
+            ORDER BY dg.fechaGeneracion DESC;
+        `;
 
-        const contratoDocumento = {
-          id: -(row.idContrato),
-          nombre: 'Contrato Laboral',
-          ruta: urlOriginal,
+      const documentosGenerados = documentosGeneradosRows.map((row) => {
+        const rutaOriginal = helperBuildUrl(row.rutaOriginal) || '';
+
+        // Obtener el nombre del archivo a partir de su ruta
+        const nombreArchivo = rutaOriginal
+          ? rutaOriginal.split('/').pop() || 'Documento generado'
+          : 'Documento generado';
+
+        return {
+          id: -row.id,
+          idDocumentoGenerado: row.id,
+          nombre: nombreArchivo,
+          ruta: rutaOriginal,
           requereFirma: true,
           firmado: !!row.firmado,
           rutaFirmado: null,
           fechaEnvio: formatFecha(row.fechaGeneracion) || '',
           fechaFirmado: null,
-          nom151: {
-            certificado: !!row.codigoValidacion,
-            codigoValidacion: row.codigoValidacion || null,
-            hash: row.hash || null,
-            urlConstancia: urlConstancia,
-            estatus: row.codigoValidacion ? 'COMPLETADO' : null,
-            claveMensaje: null,
-            fechaObtencion: formatFecha(row.fechaObtencion),
-          },
+          tipo: 'DOCUMENTO_GENERADO',
+          nom151: helperBuildNom151(row),
         };
+      });
 
-        documentos.unshift(contratoDocumento);
+      // 3. Consultar el contrato más reciente del empleado
+      const contratoRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                c.idContrato,
+                dg.id AS idDocumentoGenerado,
+                dg.archivoGenerado AS rutaOriginal,
+                dg.firmado,
+                dg.fechaGeneracion,
+                dg.codigoValidacionNOM151 AS codigoValidacion,
+                dg.hashNOM151 AS hash,
+                dg.archivoNom151 AS rutaConstancia,
+                dg.fechaSellado AS fechaObtencion
+            FROM Contratos c
+            INNER JOIN DocumentosGenerados dg
+                ON dg.idContrato = c.idContrato
+            WHERE c.idEmpleado = ${employeeId}
+                AND dg.archivoGenerado IS NOT NULL
+            ORDER BY dg.fechaGeneracion DESC
+            LIMIT 1;
+        `;
+
+      let contratoDocumento: any = null;
+
+      if (contratoRows.length > 0) {
+        const row = contratoRows[0];
+
+        contratoDocumento = {
+          id: -(row.idContrato),
+          idDocumentoGenerado: row.idDocumentoGenerado,
+          nombre: 'Contrato Laboral',
+          ruta: helperBuildUrl(row.rutaOriginal) || '',
+          requereFirma: true,
+          firmado: !!row.firmado,
+          rutaFirmado: null,
+          fechaEnvio: formatFecha(row.fechaGeneracion) || '',
+          fechaFirmado: null,
+          tipo: 'CONTRATO',
+          nom151: helperBuildNom151(row),
+        };
       }
 
+      // 4. Unificar los documentos y ordenarlos por fecha
+      documentos.push(...documentosGenerados);
+
+      if (contratoDocumento) {
+        documentos.push(contratoDocumento);
+      }
+
+      documentos.sort((a, b) => {
+        const fechaA = a.fechaEnvio
+          ? new Date(a.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        const fechaB = b.fechaEnvio
+          ? new Date(b.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        return fechaB - fechaA;
+      });
+
       return { documentos };
+
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Error interno del servidor al obtener documentos';
+      const message = error instanceof Error
+        ? error.message
+        : 'Error interno del servidor al obtener documentos';
+
       this.logger.error(message);
+
       throw new InternalServerErrorException({ message });
     }
   }
+
+  async getRecruitmentDocuments(companyId: number, employeeId: number) {
+    try {
+      // Normalizar las rutas para enviarlas al frontend.
+      const helperBuildUrl = (ruta: string | null): string | null => {
+        if (!ruta) return null;
+
+        let cleanPath = ruta.replace(/\\/g, '/');
+        cleanPath = cleanPath.replace(/^((\/RR-HH)?\/)?media\//i, '');
+        cleanPath = cleanPath.replace(/^\/+/, '');
+
+        return cleanPath;
+      };
+
+      // Formatear fechas.
+      const formatFecha = (dateInput: any): string | null => {
+        if (!dateInput) return null;
+
+        const d = new Date(dateInput);
+
+        if (isNaN(d.getTime())) return '';
+
+        const pad = (num: number) => String(num).padStart(2, '0');
+
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+
+      // Obtener la ruta de la constancia PDF cuando se almacena un .cer.
+      const helperConstanciaUrl = (ruta: string | null): string | null => {
+        if (!ruta) return null;
+
+        let rutaConstancia = ruta;
+
+        if (rutaConstancia.toLowerCase().endsWith('.cer')) {
+          rutaConstancia = rutaConstancia.replace(/\.cer$/i, '_constancia.pdf');
+        }
+
+        return helperBuildUrl(rutaConstancia);
+      };
+
+      // Construir el objeto NOM151 con estructura uniforme.
+      const helperBuildNom151 = (row: any) => ({
+        certificado: !!row.codigoValidacion,
+        codigoValidacion: row.codigoValidacion || null,
+        hash: row.hash || null,
+        urlConstancia: helperConstanciaUrl(row.rutaConstancia),
+        estatus: row.estatusNOM151
+          || (row.codigoValidacion ? 'COMPLETADO' : null),
+        claveMensaje: row.claveMensaje || null,
+        fechaObtencion: formatFecha(row.fechaObtencion),
+      });
+
+      // 1. Buscar la postulación relacionada con el empleado.
+      const postulacionRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                p.idPostulacion,
+                p.nombre,
+                p.primerApellido,
+                p.segundoApellido,
+                p.correo,
+                p.telefono,
+                p.rutaCV,
+                p.fechaRegistro
+            FROM RelEmpleadosPostulaciones rep
+            INNER JOIN Postulaciones p
+                ON p.idPostulacion = rep.idPostulacion
+            WHERE rep.idEmpleado = ${employeeId}
+            LIMIT 1;
+        `;
+
+      // El expediente de selección es opcional.
+      if (postulacionRows.length === 0) {
+        return {
+          documentos: [],
+        };
+      }
+
+      const postulacion = postulacionRows[0];
+
+      // 2. Agregar el CV de la postulación.
+      const documentos: any[] = [];
+
+      if (postulacion.rutaCV) {
+        documentos.push({
+          id: 0,
+          nombre: 'Currículum vitae',
+          ruta: helperBuildUrl(postulacion.rutaCV) || '',
+          requereFirma: false,
+          firmado: false,
+          rutaFirmado: null,
+          fechaEnvio: formatFecha(postulacion.fechaRegistro) || '',
+          fechaFirmado: null,
+          tipo: 'CV',
+          nom151: {
+            certificado: false,
+            codigoValidacion: null,
+            hash: null,
+            urlConstancia: null,
+            estatus: null,
+            claveMensaje: null,
+            fechaObtencion: null,
+          },
+        });
+      }
+
+      // 3. Obtener documentos generados durante el proceso de selección.
+      // Se relacionan mediante el idPostulacion guardado en idCandidato.
+      const documentosGeneradosRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                dg.id,
+                dg.archivoGenerado AS rutaOriginal,
+                dg.firmado,
+                dg.fechaGeneracion,
+                dg.codigoValidacionNOM151 AS codigoValidacion,
+                dg.hashNOM151 AS hash,
+                dg.archivoNom151 AS rutaConstancia,
+                dg.fechaSellado AS fechaObtencion
+            FROM DocumentosGenerados dg
+            WHERE dg.idCandidato = ${postulacion.idPostulacion}
+                AND dg.archivoGenerado IS NOT NULL
+            ORDER BY dg.fechaGeneracion DESC;
+        `;
+
+      // 4. Formatear documentos generados.
+      const documentosGenerados = documentosGeneradosRows.map((row) => {
+        const rutaOriginal = helperBuildUrl(row.rutaOriginal) || '';
+
+        const nombreArchivo = rutaOriginal
+          ? rutaOriginal.split('/').pop() || 'Documento generado'
+          : 'Documento generado';
+
+        return {
+          id: -row.id,
+          idDocumentoGenerado: row.id,
+          nombre: nombreArchivo,
+          ruta: rutaOriginal,
+          requereFirma: true,
+          firmado: !!row.firmado,
+          rutaFirmado: null,
+          fechaEnvio: formatFecha(row.fechaGeneracion) || '',
+          fechaFirmado: null,
+          tipo: 'DOCUMENTO_GENERADO',
+          nom151: helperBuildNom151(row),
+        };
+      });
+
+      documentos.push(...documentosGenerados);
+
+      // 5. Ordenar todos los documentos por fecha.
+      documentos.sort((a, b) => {
+        const fechaA = a.fechaEnvio
+          ? new Date(a.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        const fechaB = b.fechaEnvio
+          ? new Date(b.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        return fechaB - fechaA;
+      });
+
+      return {
+        documentos,
+      };
+
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Error interno del servidor al obtener documentos del proceso de selección';
+
+      this.logger.error(message);
+
+      throw new InternalServerErrorException({ message });
+    }
+  }
+
 
   private async getEmployeeSchedule(employeeId: number) {
     const horarios = await this.prisma.$queryRaw<
@@ -1475,7 +1728,7 @@ export class DigitalFilesService {
     }
 
     const requiredFields = [
-      'nombre', 'apellido1', 'curp', 'correo', 'telefono',
+      'nombre', 'apellido1', 'curp',
       'idPuesto', 'idJefeInmediato', 'idSite', 'idModalidad',
     ];
     const faltantes = requiredFields.filter((f) => data[f] === undefined || data[f] === null || data[f] === '');
@@ -1640,8 +1893,13 @@ export class DigitalFilesService {
       { header: 'Primer Apellido *', key: 'apellido1', width: 20 },
       { header: 'Segundo Apellido', key: 'apellido2', width: 20 },
       { header: 'CURP *', key: 'curp', width: 22 },
-      { header: 'Correo Electrónico *', key: 'correo', width: 30 },
-      { header: 'Teléfono Móvil *', key: 'telefono', width: 18 },
+      // Campos opcionales
+      { header: 'RFC (Opcional)', key: 'rfc', width: 18 },
+      { header: 'Número de Seguridad Social - NSS (Opcional)', key: 'nss', width: 38 },
+      { header: 'Nombre del Banco (Opcional)', key: 'banco', width: 26 },
+      { header: 'Cuenta Bancaria (Opcional)', key: 'cuentaBancaria', width: 26 },
+      { header: 'Correo Electrónico (Opcional)', key: 'correo', width: 30 },
+      { header: 'Teléfono Móvil (Opcional)', key: 'telefono', width: 24 },
       { header: 'Puesto *', key: 'puesto', width: 32 },
       { header: 'Ubicación / Site *', key: 'site', width: 24 },
       { header: 'Número de Empleado (Opcional)', key: 'numeroEmpleado', width: 28 },
@@ -1682,6 +1940,10 @@ export class DigitalFilesService {
       apellido1: 'Pérez',
       apellido2: 'García',
       curp: 'PEGC850101HDFRRN09',
+      rfc: 'PEGC850101ABC',
+      nss: '12345678901',
+      banco: 'BBVA',
+      cuentaBancaria: '012345678901234567',
       correo: 'juan.perez@ejemplo.com',
       telefono: '5512345678',
       puesto: puestos[0]?.NombrePuesto || '',
@@ -1696,7 +1958,11 @@ export class DigitalFilesService {
       sabado: '',
       domingo: '',
     });
-    sampleRow1.font = { italic: true, color: { argb: 'FF64748B' } };
+
+    sampleRow1.font = {
+      italic: true,
+      color: { argb: 'FF64748B' },
+    };
 
     // Fila 3: Ejemplo 2 - Horario variado/dinámico por día
     const sampleRow2 = mainSheet.addRow({
@@ -1704,6 +1970,10 @@ export class DigitalFilesService {
       apellido1: 'López',
       apellido2: 'Hernández',
       curp: 'LOHM920315MDFRRN01',
+      rfc: 'LOHM920315XYZ',
+      nss: '98765432109',
+      banco: 'Santander',
+      cuentaBancaria: '123456789012345678',
       correo: 'maria.lopez@ejemplo.com',
       telefono: '5598765432',
       puesto: puestos[0]?.NombrePuesto || '',
@@ -1718,7 +1988,11 @@ export class DigitalFilesService {
       sabado: '',
       domingo: '',
     });
-    sampleRow2.font = { italic: true, color: { argb: 'FF64748B' } };
+
+    sampleRow2.font = {
+      italic: true,
+      color: { argb: 'FF64748B' },
+    };
 
     // Validaciones de lista desplegable (filas 2 a 500)
     const totalPuestos = puestos.length;
@@ -1726,7 +2000,7 @@ export class DigitalFilesService {
 
     for (let row = 2; row <= 500; row++) {
       if (totalPuestos > 0) {
-        mainSheet.getCell(`G${row}`).dataValidation = {
+        mainSheet.getCell(`K${row}`).dataValidation = {
           type: 'list',
           allowBlank: false,
           formulae: [`Catalogos!$A$2:$A$${totalPuestos + 1}`],
@@ -1737,7 +2011,7 @@ export class DigitalFilesService {
       }
 
       if (totalSites > 0) {
-        mainSheet.getCell(`H${row}`).dataValidation = {
+        mainSheet.getCell(`L${row}`).dataValidation = {
           type: 'list',
           allowBlank: false,
           formulae: [`Catalogos!$B$2:$B$${totalSites + 1}`],
@@ -1756,9 +2030,9 @@ export class DigitalFilesService {
   // PROCESAR ARCHIVO EXCEL CARGADO
   // ─────────────────────────────────────────────────────────────
   async processBulkExpedientes(
+    user: ActiveUserDto,
     companyId: number,
     file: Express.Multer.File,
-    user: ActiveUserDto,
   ) {
     if (!user.idTenant) throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     if (!file) throw new BadRequestException('Se requiere adjuntar un archivo Excel para la carga masiva.');
@@ -1813,26 +2087,33 @@ export class DigitalFilesService {
     for (let rowNumber = 2; rowNumber <= rowCount; rowNumber++) {
       const row = sheet.getRow(rowNumber);
 
+
       const rawNombre = row.getCell(1).text?.trim();
       const rawApellido1 = row.getCell(2).text?.trim();
       const rawApellido2 = row.getCell(3).text?.trim() || '';
       const rawCurp = normalizarCurp(row.getCell(4).text);
-      const rawCorreo = row.getCell(5).text?.trim().toLowerCase();
-      const rawTelefono = row.getCell(6).text?.trim();
-      const rawPuesto = row.getCell(7).text?.trim();
-      const rawSite = row.getCell(8).text?.trim();
-      const rawNumeroEmpleado = row.getCell(9).text?.trim() || null;
-      let rawFechaIngreso = row.getCell(10).text?.trim();
+      // Datos opcionales
+      const rawRfc = row.getCell(5).text?.trim().toUpperCase() || null;
+      const rawNss = row.getCell(6).text?.trim() || null;
+      const rawBanco = row.getCell(7).text?.trim() || null;
+      const rawCuentaBancaria = row.getCell(8).text?.trim() || null;
+      const rawCorreo = row.getCell(9).text?.trim().toLowerCase() || null;
+      const rawTelefono = row.getCell(10).text?.trim() || null;
+      // Puesto y ubicación
+      const rawPuesto = row.getCell(11).text?.trim();
+      const rawSite = row.getCell(12).text?.trim();
+      const rawNumeroEmpleado = row.getCell(13).text?.trim() || null;
+      let rawFechaIngreso = row.getCell(14).text?.trim();
 
-      // Celdas de horarios por día (Columnas 11 a 17)
+      // Horarios: columnas 15 a 21
       const rawDays: { dia: string; value: string }[] = [
-        { dia: 'LUNES', value: row.getCell(11).text?.trim() },
-        { dia: 'MARTES', value: row.getCell(12).text?.trim() },
-        { dia: 'MIERCOLES', value: row.getCell(13).text?.trim() },
-        { dia: 'JUEVES', value: row.getCell(14).text?.trim() },
-        { dia: 'VIERNES', value: row.getCell(15).text?.trim() },
-        { dia: 'SABADO', value: row.getCell(16).text?.trim() },
-        { dia: 'DOMINGO', value: row.getCell(17).text?.trim() },
+        { dia: 'LUNES', value: row.getCell(15).text?.trim() || '' },
+        { dia: 'MARTES', value: row.getCell(16).text?.trim() || '' },
+        { dia: 'MIERCOLES', value: row.getCell(17).text?.trim() || '' },
+        { dia: 'JUEVES', value: row.getCell(18).text?.trim() || '' },
+        { dia: 'VIERNES', value: row.getCell(19).text?.trim() || '' },
+        { dia: 'SABADO', value: row.getCell(20).text?.trim() || '' },
+        { dia: 'DOMINGO', value: row.getCell(21).text?.trim() || '' },
       ];
 
       // Si la fila está completamente en blanco, la omitimos
@@ -1859,12 +2140,9 @@ export class DigitalFilesService {
         errors.push({ row: rowNumber, error: `La CURP "${rawCurp}" no tiene un formato válido.` });
         continue;
       }
-      if (!rawCorreo || !emailRegex.test(rawCorreo)) {
-        errors.push({ row: rowNumber, error: `El correo "${rawCorreo || ''}" no es válido.` });
-        continue;
-      }
-      if (!rawTelefono) {
-        errors.push({ row: rowNumber, error: 'El teléfono es obligatorio.' });
+      // El correo solamente se valida cuando tiene información
+      if (rawCorreo && !emailRegex.test(rawCorreo)) {
+        errors.push({ row: rowNumber, error: `El correo "${rawCorreo}" no tiene un formato válido.` });
         continue;
       }
 
@@ -1952,6 +2230,7 @@ export class DigitalFilesService {
       }
 
       try {
+        // 1. Crear el expediente del empleado y envía el link personal
         await generateEmployeeAndLink(
           {
             jwtService: this.jwtService,
@@ -1980,6 +2259,53 @@ export class DigitalFilesService {
           this.notifications.notify.bind(this.notifications),
         );
 
+        // 2. Recuperar el empleado recién creado
+        const empleadoCreado = await this.prisma.empleados.findFirst({
+          where: {
+            curp: rawCurp,
+            idTenant: user.idTenant,
+            idEmpresa: companyId,
+          },
+          select: {
+            idEmpleado: true,
+          },
+        });
+
+        if (!empleadoCreado) {
+          throw new Error('El expediente fue generado, pero no se pudo recuperar el empleado para guardar sus datos adicionales.');
+        }
+
+        const idEmpleado = empleadoCreado.idEmpleado;
+
+        // 3. Actualizar RFC y número de seguridad social
+        await this.prisma.empleados.update({
+          where: {
+            idEmpleado,
+          },
+          data: {
+            rfc: rawRfc,
+            numeroSeguroSocial: rawNss,
+          },
+        });
+
+        // 4. Guardar información bancaria solamente si existe
+        if (rawBanco || rawCuentaBancaria) {
+          await this.prisma.datosBancarios.upsert({
+            where: {
+              idEmpleado,
+            },
+            create: {
+              idEmpleado,
+              banco: rawBanco,
+              cuentaBancaria: rawCuentaBancaria,
+            },
+            update: {
+              banco: rawBanco,
+              cuentaBancaria: rawCuentaBancaria,
+            },
+          });
+        }
+
         successCount++;
       } catch (err: any) {
         errors.push({
@@ -1988,6 +2314,8 @@ export class DigitalFilesService {
         });
       }
     }
+
+    await this.employeeService.syncAllPendingToArtemis(user, companyId)
 
     return {
       success: true,

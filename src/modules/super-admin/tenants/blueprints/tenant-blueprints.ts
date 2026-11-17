@@ -73,8 +73,6 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     { codigo: 'user-administration', descripcion: 'Admin. de usuarios', codigoPadre: 'configuration' },
     { codigo: 'integrations', descripcion: 'Integraciones', codigoPadre: 'configuration' },
     { codigo: 'document-templates', descripcion: 'Plantillas Documentos', codigoPadre: 'configuration' },
-    { codigo: 'document-templates-generated', descripcion: 'Documentos Generados', codigoPadre: 'configuration' },
-    { codigo: 'career-plan-config', descripcion: 'Plan de Carrera Conf', codigoPadre: 'configuration' },
     { codigo: 'settings', descripcion: 'Ajustes', codigoPadre: 'configuration' },
 ];
 
@@ -147,8 +145,6 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Admin', moduloCodigo: 'user-administration', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'integrations', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'document-templates', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
-    { rolName: 'Admin', moduloCodigo: 'document-templates-generated', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
-    { rolName: 'Admin', moduloCodigo: 'career-plan-config', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'settings', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
 
     // =========================================================================
@@ -208,8 +204,6 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'RH', moduloCodigo: 'user-administration', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'document-templates', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
-    { rolName: 'RH', moduloCodigo: 'document-templates-generated', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
-    { rolName: 'RH', moduloCodigo: 'career-plan-config', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 
     // =========================================================================
@@ -269,8 +263,6 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Finanzas', moduloCodigo: 'user-administration', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'document-templates', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
-    { rolName: 'Finanzas', moduloCodigo: 'document-templates-generated', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
-    { rolName: 'Finanzas', moduloCodigo: 'career-plan-config', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 
     // =========================================================================
@@ -330,8 +322,6 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Reclutador', moduloCodigo: 'user-administration', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'document-templates', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
-    { rolName: 'Reclutador', moduloCodigo: 'document-templates-generated', puedeVer: true, puedeCrear: true, puedeActualizar: false, puedeEliminar: false },
-    { rolName: 'Reclutador', moduloCodigo: 'career-plan-config', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 
     // =========================================================================
@@ -391,8 +381,6 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Manager', moduloCodigo: 'user-administration', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'document-templates', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
-    { rolName: 'Manager', moduloCodigo: 'document-templates-generated', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
-    { rolName: 'Manager', moduloCodigo: 'career-plan-config', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 
     // =========================================================================
@@ -452,7 +440,5 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Empleado', moduloCodigo: 'user-administration', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'document-templates', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
-    { rolName: 'Empleado', moduloCodigo: 'document-templates-generated', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
-    { rolName: 'Empleado', moduloCodigo: 'career-plan-config', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 ];

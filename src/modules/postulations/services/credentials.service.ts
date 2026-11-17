@@ -19,8 +19,8 @@ export async function generateEmployeeAndLink(
         apellido1: string,
         apellido2: string,
         curp: string,
-        correo: string,
-        telefono: string,
+        correo: string | null,
+        telefono: string | null,
         numeroEmpleado: string | null,
         fechaIngreso: string,
         idPuesto: number,
@@ -171,26 +171,27 @@ export async function generateEmployeeAndLink(
         }
     }
 
-    // Enviamos la notificación al nuevo empleado para que suba su documentación
-    await notify({
-        userUuid: String(idEmpleado),
-        notificationTypeCode: 'LINK_CREATED',
-        to: data.correo || '',
-        phone: data.telefono || undefined,
-        subject: '📎 Documentación requerida para tu postulación',
 
-        context: {
-            nombre: `${data.nombre} ${data.apellido1 || ''} ${data.apellido2 || ''}`,
-            documentos,
-            link: uploadLink,
-            docs_empresa: docsEmpresaAdjuntos
-        },
-
-        attachments: files?.map(file => ({
-            filename: file.originalname,
-            content: file.buffer
-        })) || []
-    });
+    // Enviamos la notificación solamente si existe un correo electrónico
+    if (data.correo?.trim()) {
+        await notify({
+            userUuid: String(idEmpleado),
+            notificationTypeCode: 'LINK_CREATED',
+            to: data.correo.trim(),
+            phone: data.telefono?.trim() || undefined,
+            subject: '📎 Documentación requerida para tu postulación',
+            context: {
+                nombre: `${data.nombre} ${data.apellido1 || ''} ${data.apellido2 || ''}`,
+                documentos,
+                link: uploadLink,
+                docs_empresa: docsEmpresaAdjuntos
+            },
+            attachments: files?.map(file => ({
+                filename: file.originalname,
+                content: file.buffer
+            })) || []
+        });
+    }
 
     return result;
 }
