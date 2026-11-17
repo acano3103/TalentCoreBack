@@ -111,6 +111,20 @@ export class DigitalFilesController {
     return this.digitalFilesService.getCompanyDocuments(employeeId);
   }
 
+  // Endpoint para obtener los documentos del proceso de selección
+  @UseGuards(JwtAuthGuard)
+  @Get('documents/:employeeId/recruitment')
+  @ApiOperation({ summary: 'Get employee recruitment documents', description: 'Get the documents generated during the employee recruitment process' })
+  @ApiOkResponse({ description: 'Recruitment documents obtained successfully', type: [DocumentoRequeridoDto] })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  getRecruitmentDocuments(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+  ) {
+    return this.digitalFilesService.getRecruitmentDocuments(companyId, employeeId);
+  }
+
   // Endpoint para registrar un nuevo empleado y subir sus documentos en una sola petición
   @UseGuards(JwtAuthGuard)
   @Post('employee')

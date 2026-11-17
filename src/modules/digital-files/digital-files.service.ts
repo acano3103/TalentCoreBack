@@ -96,6 +96,7 @@ export class DigitalFilesService {
   }
 
   async getExpediente(companyId: number, employeeId: number, user: ActiveUserDto) {
+    console.log(employeeId)
     if (!user.idTenant) {
       throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }
@@ -121,7 +122,7 @@ export class DigitalFilesService {
       select: { idPuesto: true, idEstatus: true },
     });
 
-    const idPuesto = expediente?.idPuesto ?? null;
+    const idPuesto = empleado?.idPuesto ?? null;
     const estatusExpediente = expediente?.idEstatus ?? null;
     const [documentosRequeridos, documentosSubidos, infoEmpleado, catalogos, horarioEmpleado] =
       await Promise.all([
@@ -427,6 +428,182 @@ export class DigitalFilesService {
       throw new InternalServerErrorException({ message });
     }
   }
+
+  async getRecruitmentDocuments(companyId: number, employeeId: number) {
+    try {
+      // Normalizar las rutas para enviarlas al frontend.
+      const helperBuildUrl = (ruta: string | null): string | null => {
+        if (!ruta) return null;
+
+        let cleanPath = ruta.replace(/\\/g, '/');
+        cleanPath = cleanPath.replace(/^((\/RR-HH)?\/)?media\//i, '');
+        cleanPath = cleanPath.replace(/^\/+/, '');
+
+        return cleanPath;
+      };
+
+      // Formatear fechas.
+      const formatFecha = (dateInput: any): string | null => {
+        if (!dateInput) return null;
+
+        const d = new Date(dateInput);
+
+        if (isNaN(d.getTime())) return '';
+
+        const pad = (num: number) => String(num).padStart(2, '0');
+
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+
+      // Obtener la ruta de la constancia PDF cuando se almacena un .cer.
+      const helperConstanciaUrl = (ruta: string | null): string | null => {
+        if (!ruta) return null;
+
+        let rutaConstancia = ruta;
+
+        if (rutaConstancia.toLowerCase().endsWith('.cer')) {
+          rutaConstancia = rutaConstancia.replace(/\.cer$/i, '_constancia.pdf');
+        }
+
+        return helperBuildUrl(rutaConstancia);
+      };
+
+      // Construir el objeto NOM151 con estructura uniforme.
+      const helperBuildNom151 = (row: any) => ({
+        certificado: !!row.codigoValidacion,
+        codigoValidacion: row.codigoValidacion || null,
+        hash: row.hash || null,
+        urlConstancia: helperConstanciaUrl(row.rutaConstancia),
+        estatus: row.estatusNOM151
+          || (row.codigoValidacion ? 'COMPLETADO' : null),
+        claveMensaje: row.claveMensaje || null,
+        fechaObtencion: formatFecha(row.fechaObtencion),
+      });
+
+      // 1. Buscar la postulación relacionada con el empleado.
+      const postulacionRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                p.idPostulacion,
+                p.nombre,
+                p.primerApellido,
+                p.segundoApellido,
+                p.correo,
+                p.telefono,
+                p.rutaCV,
+                p.fechaRegistro
+            FROM RelEmpleadosPostulaciones rep
+            INNER JOIN Postulaciones p
+                ON p.idPostulacion = rep.idPostulacion
+            WHERE rep.idEmpleado = ${employeeId}
+            LIMIT 1;
+        `;
+
+      // El expediente de selección es opcional.
+      if (postulacionRows.length === 0) {
+        return {
+          documentos: [],
+        };
+      }
+
+      const postulacion = postulacionRows[0];
+
+      // 2. Agregar el CV de la postulación.
+      const documentos: any[] = [];
+
+      if (postulacion.rutaCV) {
+        documentos.push({
+          id: 0,
+          nombre: 'Currículum vitae',
+          ruta: helperBuildUrl(postulacion.rutaCV) || '',
+          requereFirma: false,
+          firmado: false,
+          rutaFirmado: null,
+          fechaEnvio: formatFecha(postulacion.fechaRegistro) || '',
+          fechaFirmado: null,
+          tipo: 'CV',
+          nom151: {
+            certificado: false,
+            codigoValidacion: null,
+            hash: null,
+            urlConstancia: null,
+            estatus: null,
+            claveMensaje: null,
+            fechaObtencion: null,
+          },
+        });
+      }
+
+      // 3. Obtener documentos generados durante el proceso de selección.
+      // Se relacionan mediante el idPostulacion guardado en idCandidato.
+      const documentosGeneradosRows = await this.prisma.$queryRaw<any[]>`
+            SELECT
+                dg.id,
+                dg.archivoGenerado AS rutaOriginal,
+                dg.firmado,
+                dg.fechaGeneracion,
+                dg.codigoValidacionNOM151 AS codigoValidacion,
+                dg.hashNOM151 AS hash,
+                dg.archivoNom151 AS rutaConstancia,
+                dg.fechaSellado AS fechaObtencion
+            FROM DocumentosGenerados dg
+            WHERE dg.idCandidato = ${postulacion.idPostulacion}
+                AND dg.archivoGenerado IS NOT NULL
+            ORDER BY dg.fechaGeneracion DESC;
+        `;
+
+      // 4. Formatear documentos generados.
+      const documentosGenerados = documentosGeneradosRows.map((row) => {
+        const rutaOriginal = helperBuildUrl(row.rutaOriginal) || '';
+
+        const nombreArchivo = rutaOriginal
+          ? rutaOriginal.split('/').pop() || 'Documento generado'
+          : 'Documento generado';
+
+        return {
+          id: -row.id,
+          idDocumentoGenerado: row.id,
+          nombre: nombreArchivo,
+          ruta: rutaOriginal,
+          requereFirma: true,
+          firmado: !!row.firmado,
+          rutaFirmado: null,
+          fechaEnvio: formatFecha(row.fechaGeneracion) || '',
+          fechaFirmado: null,
+          tipo: 'DOCUMENTO_GENERADO',
+          nom151: helperBuildNom151(row),
+        };
+      });
+
+      documentos.push(...documentosGenerados);
+
+      // 5. Ordenar todos los documentos por fecha.
+      documentos.sort((a, b) => {
+        const fechaA = a.fechaEnvio
+          ? new Date(a.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        const fechaB = b.fechaEnvio
+          ? new Date(b.fechaEnvio.replace(' ', 'T')).getTime()
+          : 0;
+
+        return fechaB - fechaA;
+      });
+
+      return {
+        documentos,
+      };
+
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Error interno del servidor al obtener documentos del proceso de selección';
+
+      this.logger.error(message);
+
+      throw new InternalServerErrorException({ message });
+    }
+  }
+
 
   private async getEmployeeSchedule(employeeId: number) {
     const horarios = await this.prisma.$queryRaw<
