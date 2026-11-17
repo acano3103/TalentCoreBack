@@ -62,7 +62,7 @@ export const envValidationSchema = Joi.object({
     GUPSHUP_APP_NAME: Joi.string().required(),
     IVR_API_KEY: Joi.string().required(),
     ARTEMIS_API_KEY: Joi.string().required(),
-    ZKBIO_BASE_URL: Joi.string().uri().optional(),
+    ZKBIO_BASE_URL: Joi.string().uri().required(),
     ATTENDANCE_ENGINE_ENABLED: Joi.string().valid('true', 'false').default('true'),
     ATTENDANCE_JOBS_ENABLED: Joi.string().valid('true', 'false').default('true'),
     GOOGLE_MAPS_API_KEY: Joi.string().required(),
