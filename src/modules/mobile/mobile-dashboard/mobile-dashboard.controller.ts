@@ -14,8 +14,11 @@ export class MobileDashboardController {
 
     @Get()
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Obtain summary data of the dashboard.', description: 'Validate the mobile Bearer Token and return sample data of the active user and database.', })
-    @ApiResponse({ status: 200, description: 'Dashboard summary loaded successfully', })
+    @ApiOperation({
+        summary: 'Resumen del inicio',
+        description: 'Incluye comunicacion: porConfirmar, primeroPorConfirmar, avisosHoy (máximo 3) y notificacionesSinLeer.',
+    })
+    @ApiResponse({ status: 200, description: 'Resumen del día, con el bloque comunicacion.' })
     @ApiResponse({ status: 401, description: 'Invalid or expired token', })
     async getSummary(
         @GetActiveUser() activeUser: ActiveUserDto,

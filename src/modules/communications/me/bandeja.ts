@@ -50,6 +50,39 @@ export function diaLocal(ahora: Date, zona: string): string {
     }).format(ahora);
 }
 
+/** Inicio inclusive y fin exclusivo del día civil en esa zona. */
+export function rangoDiaLocal(ahora: Date, zona: string): { inicio: Date; fin: Date } {
+    const usada = zonaValida(zona);
+    const [anio, mes, dia] = diaLocal(ahora, usada).split('-').map(Number);
+    const ancla = new Date(Date.UTC(anio, mes - 1, dia, 6, 0, 0));
+    const inicio = new Date(Date.UTC(anio, mes - 1, dia, 0, 0, 0) - offsetZona(ancla, usada));
+    return { inicio, fin: new Date(inicio.getTime() + 24 * 60 * 60 * 1000) };
+}
+
+function offsetZona(instante: Date, zona: string): number {
+    const partes = new Intl.DateTimeFormat('en-US', {
+        timeZone: zona,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    }).formatToParts(instante);
+    const mapa = new Map(partes.filter((parte) => parte.type !== 'literal').map((parte) => [parte.type, parte.value]));
+    const hora = Number(mapa.get('hour')) % 24;
+    const pared = Date.UTC(
+        Number(mapa.get('year')),
+        Number(mapa.get('month')) - 1,
+        Number(mapa.get('day')),
+        hora,
+        Number(mapa.get('minute')),
+        Number(mapa.get('second')),
+    );
+    return pared - instante.getTime();
+}
+
 function zonaValida(zona: string): string {
     try {
         Intl.DateTimeFormat('en-CA', { timeZone: zona }).format(new Date());

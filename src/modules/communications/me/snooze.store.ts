@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
 
 const PREFIJO = 'comms:snooze:';
+const TIMEOUT_REDIS_MS = 2_000;
 export const TTL_SNOOZE_SEGUNDOS = 36 * 60 * 60;
 
 export function claveSnooze(idEmpleado: number, dia: string): string {
@@ -40,38 +41,60 @@ export class MemorySnoozeStore extends SnoozeStore {
     }
 }
 
-export class RedisSnoozeStore extends SnoozeStore implements OnModuleDestroy {
+export class RedisSnoozeStore extends SnoozeStore implements OnModuleInit, OnModuleDestroy {
+    private readonly logger = new Logger(RedisSnoozeStore.name);
     private readonly redis: Redis;
+    private readonly destino: string;
 
     constructor(url: string) {
         super();
+        this.destino = destinoRedis(url);
         this.redis = new Redis(url, {
             lazyConnect: true,
             maxRetriesPerRequest: 1,
-            enableOfflineQueue: false,
+            connectTimeout: TIMEOUT_REDIS_MS,
+            commandTimeout: TIMEOUT_REDIS_MS,
+            enableOfflineQueue: true,
         });
+        this.redis.on('error', () => undefined);
+    }
+
+    async onModuleInit(): Promise<void> {
+        try {
+            await this.listo();
+        } catch {
+            this.logger.warn(
+                `Redis no responde en ${this.destino}. Recordarme más tarde no podrá guardarse hasta que la cola esté disponible.`,
+            );
+        }
     }
 
     async ocultar(idEmpleado: number, dia: string, idComunicado: number): Promise<void> {
-        const cliente = await this.cliente();
+        await this.listo();
         const clave = claveSnooze(idEmpleado, dia);
-        const previos = parsearIds(await cliente.get(clave));
+        const previos = parsearIds(await this.redis.get(clave));
         previos.add(idComunicado);
-        await cliente.set(clave, JSON.stringify([...previos]), 'EX', TTL_SNOOZE_SEGUNDOS);
+        await this.redis.set(clave, JSON.stringify([...previos]), 'EX', TTL_SNOOZE_SEGUNDOS);
     }
 
     async ids(idEmpleado: number, dia: string): Promise<number[]> {
-        const cliente = await this.cliente();
-        return [...parsearIds(await cliente.get(claveSnooze(idEmpleado, dia)))];
+        await this.listo();
+        return [...parsearIds(await this.redis.get(claveSnooze(idEmpleado, dia)))];
     }
 
     async onModuleDestroy(): Promise<void> {
         await this.redis.quit().catch(() => undefined);
     }
 
-    private async cliente(): Promise<Redis> {
-        if (this.redis.status === 'wait') await this.redis.connect();
-        return this.redis;
+    private async listo(): Promise<void> {
+        if (this.redis.status !== 'wait' && this.redis.status !== 'end') return;
+        try {
+            await this.redis.connect();
+        } catch (error) {
+            const mensaje = error instanceof Error ? error.message : '';
+            if (mensaje.includes('already connecting')) return;
+            throw error;
+        }
     }
 }
 
@@ -81,6 +104,15 @@ export function crearSnoozeStore(redisUrl: string | undefined): SnoozeStore {
         return new MemorySnoozeStore();
     }
     return new RedisSnoozeStore(redisUrl);
+}
+
+function destinoRedis(url: string): string {
+    try {
+        const parsed = new URL(url);
+        return `${parsed.hostname}:${parsed.port || '6379'}`;
+    } catch {
+        return 'la URL configurada';
+    }
 }
 
 function parsearIds(crudo: string | null): Set<number> {

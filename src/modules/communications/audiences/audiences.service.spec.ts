@@ -2,7 +2,7 @@ jest.mock('src/prisma/prisma.service', () => ({
     PrismaService: class PrismaService {},
 }));
 
-import { HttpException } from '@nestjs/common';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -24,6 +24,7 @@ const usuario = {
 
 describe('AudiencesService', () => {
     let service: AudiencesService;
+    let modulo: TestingModule;
     const resolver = { resolve: jest.fn(), enAlcance: jest.fn() };
     const canales = { forEmployees: jest.fn() };
     const capabilities = { contexto: jest.fn() };
@@ -73,7 +74,7 @@ describe('AudiencesService', () => {
         );
         prisma.waPrecios.findFirst.mockResolvedValue({ PrecioBase: { toString: () => '2.0000' } });
 
-        const module: TestingModule = await Test.createTestingModule({
+        modulo = await Test.createTestingModule({
             providers: [
                 AudiencesService,
                 { provide: PrismaService, useValue: prisma },
@@ -84,17 +85,19 @@ describe('AudiencesService', () => {
                 { provide: AudienceOptionsService, useValue: opciones },
             ],
         }).compile();
-        service = module.get(AudiencesService);
+        service = modulo.get(AudiencesService);
     });
 
     it('el total de la vista previa y la lista paginada son el mismo conjunto', async () => {
         resolver.resolve.mockResolvedValue({ ids: [1, 2, 3, 4, 5], fueraDeAlcance: [9] });
 
         const previa = await service.preview(usuario, 10, { ubicaciones: [1] });
+        const previewId = previa.previewId;
+        if (!previewId) throw new Error('La vista previa no trajo id.');
         const paginas = await Promise.all([
-            service.destinatarios(usuario, 10, previa.previewId, 1, 2),
-            service.destinatarios(usuario, 10, previa.previewId, 2, 2),
-            service.destinatarios(usuario, 10, previa.previewId, 3, 2),
+            service.destinatarios(usuario, 10, previewId, 1, 2),
+            service.destinatarios(usuario, 10, previewId, 2, 2),
+            service.destinatarios(usuario, 10, previewId, 3, 2),
         ]);
 
         expect(previa.total).toBe(5);
@@ -103,6 +106,23 @@ describe('AudiencesService', () => {
         expect(previa.muestra.map((persona) => persona.idEmpleado)).toEqual([1, 2, 3, 4, 5]);
         expect(paginas.flatMap((pagina) => pagina.items.map((persona) => persona.idEmpleado))).toEqual([1, 2, 3, 4, 5]);
         expect(paginas.every((pagina) => pagina.total === previa.total)).toBe(true);
+    });
+
+    it('si no se guarda la vista previa, responde 200 y el listado pide calcularla otra vez', async () => {
+        const store = modulo.get(AudiencePreviewStore);
+        jest.spyOn(store, 'guardar').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+        jest.spyOn(store, 'leer').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+        resolver.resolve.mockResolvedValue({ ids: [1, 2], fueraDeAlcance: [] });
+
+        const previa = await service.preview(usuario, 10, { ubicaciones: [1] });
+
+        expect(previa.total).toBe(2);
+        expect(previa.muestra.map((persona) => persona.idEmpleado)).toEqual([1, 2]);
+        expect(previa.previewId).toBeUndefined();
+        await expect(service.destinatarios(usuario, 10, 'ausente', 1, 20)).rejects.toMatchObject({
+            status: HttpStatus.GONE,
+            response: { code: 'PREVIEW_EXPIRADA' },
+        });
     });
 
     it('no guarda una audiencia si hay ids fuera del alcance', async () => {

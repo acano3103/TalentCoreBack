@@ -26,7 +26,7 @@ export class MeNotificationsController {
     @Get('notifications')
     @ApiOperation({
         summary: 'Centro de notificaciones',
-        description: 'Agrupa por Hoy, Esta semana y Anteriores en la zona de la ubicación. Los repetidos con la misma clave se cuentan juntos.',
+        description: 'Agrupa por Hoy, Esta semana y Anteriores en la zona de la ubicación. categoria filtra COMUNICADO, AVISO, RECORDATORIO, APROBACION o SISTEMA.',
     })
     @ApiResponse({ status: 200, description: 'Página de grupos.' })
     listar(

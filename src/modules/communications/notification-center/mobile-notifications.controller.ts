@@ -22,7 +22,10 @@ export class MobileNotificationsController {
     }
 
     @Get('notifications')
-    @ApiOperation({ summary: 'Centro de notificaciones en la app', description: 'Misma agrupación que la web.' })
+    @ApiOperation({
+        summary: 'Centro de notificaciones en la app',
+        description: 'Misma agrupación que la web. categoria filtra COMUNICADO, AVISO, RECORDATORIO, APROBACION o SISTEMA.',
+    })
     @ApiResponse({ status: 200, description: 'Página de grupos.' })
     listar(
         @GetActiveUser() activeUser: ActiveUserDto,

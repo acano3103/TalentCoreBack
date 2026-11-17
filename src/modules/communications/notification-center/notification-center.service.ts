@@ -45,7 +45,7 @@ export class NotificationCenterService {
                 companyId,
                 idTenant: activeUser.idTenant,
                 tab,
-                categoria: query.category,
+                categoria: query.categoria ?? query.category,
                 ahora,
             }),
             orderBy: { created_at: 'desc' },

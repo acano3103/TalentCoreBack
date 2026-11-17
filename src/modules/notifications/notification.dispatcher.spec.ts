@@ -16,7 +16,7 @@ import { WhatsappProvider } from './providers/whatsapp/whatsapp.provider';
 
 describe('NotificationDispatcher.dispatchComms', () => {
     const prisma = {
-        notificaciones: { create: jest.fn() },
+        notificaciones: { create: jest.fn(), count: jest.fn() },
         notificacionesEntregas: { create: jest.fn(), update: jest.fn() },
         catCanalesNotificaciones: { findUnique: jest.fn() },
         pushTokens: { findMany: jest.fn(), updateMany: jest.fn() },
@@ -32,6 +32,7 @@ describe('NotificationDispatcher.dispatchComms', () => {
     beforeEach(async () => {
         jest.clearAllMocks();
         prisma.notificaciones.create.mockResolvedValue({ id: 'notif-1' });
+        prisma.notificaciones.count.mockResolvedValue(3);
         prisma.notificacionesEntregas.create.mockResolvedValue({ id: 'entrega-1' });
         prisma.notificacionesEntregas.update.mockResolvedValue({});
         prisma.preferenciasNotificacionesUsuario.findFirst.mockResolvedValue(null);
@@ -145,6 +146,11 @@ describe('NotificationDispatcher.dispatchComms', () => {
         expect(push.enviar).toHaveBeenCalledWith([
             expect.objectContaining({
                 data: { destino: JSON.stringify({ tipo: 'MI_COMUNICADO', id: 9 }) },
+                prioridad: 'IMPORTANTE',
+                categoria: 'COMUNICADO',
+                idNotificacion: 'notif-1',
+                badge: 3,
+                destino: JSON.stringify({ tipo: 'MI_COMUNICADO', id: 9 }),
             }),
         ]);
         expect(campana.publicar).toHaveBeenCalledWith(

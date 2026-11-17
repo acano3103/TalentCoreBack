@@ -1,4 +1,4 @@
-import { diaLocal, esVigente, filtroComunicado, filtroEstadoDestinatario, filtroTipo } from './bandeja';
+import { diaLocal, esVigente, filtroComunicado, filtroEstadoDestinatario, filtroTipo, rangoDiaLocal } from './bandeja';
 
 const ahora = new Date('2026-11-14T18:00:00.000Z');
 
@@ -33,5 +33,13 @@ describe('bandeja del empleado', () => {
     it('el día local usa la zona de la ubicación', () => {
         expect(diaLocal(ahora, 'America/Mexico_City')).toBe('2026-11-14');
         expect(diaLocal(new Date('2026-11-15T05:30:00.000Z'), 'America/Mexico_City')).toBe('2026-11-14');
+    });
+
+    it('el rango del día local cabe en 24 horas de esa zona', () => {
+        const rango = rangoDiaLocal(ahora, 'America/Mexico_City');
+        expect(rango.inicio.toISOString()).toBe('2026-11-14T06:00:00.000Z');
+        expect(rango.fin.toISOString()).toBe('2026-11-15T06:00:00.000Z');
+        expect(rango.inicio.getTime()).toBeLessThanOrEqual(ahora.getTime());
+        expect(rango.fin.getTime()).toBeGreaterThan(ahora.getTime());
     });
 });

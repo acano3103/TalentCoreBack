@@ -10,6 +10,8 @@ import { AttendanceEngineService } from 'src/modules/attendance/engine/attendanc
 import { ResultadoCheck } from 'src/modules/attendance/engine/interfaces/canonical-check.interface';
 import { TipoChecada } from 'src/modules/attendance/engine/state-machine';
 import { AttendanceTrackingConfigService } from 'src/modules/config/attendance-config/attendance-config.service';
+import { normalizarCanales } from 'src/modules/communications/channels/canales';
+import { visibleEnKiosco } from 'src/modules/communications/kiosk-comms/metodo-kiosco';
 import { MIME_SELFIE, TAMANIO_MAX_SELFIE } from 'src/modules/mobile/mobile-attendance/selfie.constants';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SesionKiosco } from '../kiosk-auth/kiosco-actual';
@@ -357,7 +359,7 @@ export class KioskDeviceService {
         dto: ChecadaKioscoDto,
         enSync: boolean,
     ): Promise<ResultadoChecadaKiosco> {
-        const ya = await this.resultadoSiYaExiste(dto.uuidCliente);
+        const ya = await this.resultadoSiYaExiste(kiosco, dto.uuidCliente);
         if (ya) return ya;
 
         const politicas = await this.cargarPoliticas(kiosco);
@@ -439,7 +441,7 @@ export class KioskDeviceService {
      * Un uuid ya guardado devuelve el resultado original como DUPLICADO.
      * Uno que quedó RECHAZADO no se presenta como checada registrada.
      */
-    private async resultadoSiYaExiste(uuidCliente: string): Promise<ResultadoChecadaKiosco | null> {
+    private async resultadoSiYaExiste(kiosco: SesionKiosco, uuidCliente: string): Promise<ResultadoChecadaKiosco | null> {
         const registro = await this.prisma.registrosAsistencia.findUnique({
             where: { uuidCliente },
             select: {
@@ -449,7 +451,7 @@ export class KioskDeviceService {
                 requiereRevision: true,
                 numeroEmpleadoCapturado: true,
                 Empleados: {
-                    select: { numeroEmpleado: true, nombre: true, primerApellido: true },
+                    select: { idEmpleado: true, numeroEmpleado: true, nombre: true, primerApellido: true },
                 },
             },
         });
@@ -471,6 +473,7 @@ export class KioskDeviceService {
                 requiereRevision: registro.requiereRevision,
                 advertencias: [],
                 mensaje: MENSAJES_CHECADA[tipo],
+                avisosPendientes: await this.contarAvisos(kiosco, registro.Empleados?.idEmpleado ?? null),
             };
         }
 
@@ -489,7 +492,34 @@ export class KioskDeviceService {
             requiereRevision: false,
             advertencias: [],
             mensaje: MENSAJE_INCIDENCIA,
+            avisosPendientes: 0,
         };
+    }
+
+    private async contarAvisos(kiosco: SesionKiosco, idEmpleado: number | null): Promise<number> {
+        if (!idEmpleado) return 0;
+        if (!this.prisma.comDestinatarios?.findMany) return 0;
+        const ahora = new Date();
+        const filas = await this.prisma.comDestinatarios.findMany({
+            where: {
+                idEmpleado,
+                ComComunicados: {
+                    idEmpresa: kiosco.idEmpresa,
+                    idTenant: kiosco.idTenant,
+                    Estado: 'ENVIADO',
+                    OR: [{ VigenteHasta: null }, { VigenteHasta: { gt: ahora } }],
+                },
+            },
+            include: { ComComunicados: { include: { ComTiposComunicado: true } } },
+        });
+        return filas.filter((fila) =>
+            visibleEnKiosco({
+                canales: normalizarCanales(fila.CanalesEfectivos),
+                esCorto: fila.ComComunicados.ComTiposComunicado.EsCorto,
+                acuseModo: fila.ComComunicados.AcuseModo,
+                estadoDestinatario: fila.Estado,
+            }),
+        ).length;
     }
 
     private async cargarPoliticas(kiosco: SesionKiosco): Promise<PoliticasKiosco> {
@@ -646,7 +676,7 @@ export class KioskDeviceService {
             }, TX_KIOSCO);
         } catch (error) {
             if (esP2002(error)) {
-                const ya = await this.resultadoSiYaExiste(dto.uuidCliente);
+                const ya = await this.resultadoSiYaExiste(kiosco, dto.uuidCliente);
                 if (ya) return ya;
             }
             throw error;
@@ -660,6 +690,7 @@ export class KioskDeviceService {
             requiereRevision: false,
             advertencias: [],
             mensaje: MENSAJE_INCIDENCIA,
+            avisosPendientes: 0,
         };
     }
 
@@ -707,12 +738,13 @@ export class KioskDeviceService {
             });
         } catch (error) {
             if (esP2002(error)) {
-                const ya = await this.resultadoSiYaExiste(dto.uuidCliente);
+                const ya = await this.resultadoSiYaExiste(kiosco, dto.uuidCliente);
                 if (ya) return ya;
             }
             traducirErrorMotor(error, boton, ultimoTipo);
         }
-        return this.mapearResultadoMotor(resultado, empleado, boton, ultimoTipo);
+        const respuesta = this.mapearResultadoMotor(resultado, empleado, boton, ultimoTipo);
+        return { ...respuesta, avisosPendientes: await this.contarAvisos(kiosco, empleado.idEmpleado) };
     }
 
     private mapearResultadoMotor(
@@ -742,6 +774,7 @@ export class KioskDeviceService {
             requiereRevision: resultado.requiereRevision,
             advertencias: resultado.advertencias,
             mensaje: resultado.tipo === 'FIN_COMIDA' ? MENSAJE_REGRESO_COMIDA : MENSAJES_CHECADA[tipo],
+            avisosPendientes: 0,
         };
     }
 

@@ -100,6 +100,7 @@ export class MeCommsController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Ocultar el modal por hoy', description: 'El snooze dura el día local de la ubicación del empleado.' })
     @ApiResponse({ status: 200, description: 'Día en que permanece oculto.' })
+    @ApiResponse({ status: 503, description: 'COLA_NO_DISPONIBLE: no se pudo guardar el snooze.' })
     posponer(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,

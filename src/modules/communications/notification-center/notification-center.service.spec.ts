@@ -2,10 +2,13 @@ jest.mock('src/prisma/prisma.service', () => ({ PrismaService: class PrismaServi
 jest.mock('src/modules/notifications/campana-realtime.service', () => ({ CampanaRealtimeService: class CampanaRealtimeService {} }));
 
 import { HttpException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { Test } from '@nestjs/testing';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { CampanaRealtimeService } from 'src/modules/notifications/campana-realtime.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ListarNotificacionesQuery } from './dto/notificaciones.dto';
 import { NotificationCenterService } from './notification-center.service';
 
 const usuario = {
@@ -196,6 +199,30 @@ describe('NotificationCenterService', () => {
         });
         expect(dispositivo).toEqual(expect.objectContaining({ id: 9, token: 'ExponentPushToken[abc]', plataforma: 'android' }));
         expect(prisma.pushTokens.create).not.toHaveBeenCalled();
+    });
+
+    it('filtra el listado por categoria y conserva el alias category', async () => {
+        prisma.notificaciones.findMany.mockResolvedValue([]);
+        await service.listar(usuario, 10, { categoria: 'AVISO', category: 'SISTEMA' });
+        expect(prisma.notificaciones.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ AND: expect.arrayContaining([{ Categoria: 'AVISO' }]) }),
+            }),
+        );
+        await service.listar(usuario, 10, { category: 'RECORDATORIO' });
+        expect(prisma.notificaciones.findMany).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ AND: expect.arrayContaining([{ Categoria: 'RECORDATORIO' }]) }),
+            }),
+        );
+    });
+
+    it('rechaza una categoría que no está en el filtro de la app', async () => {
+        const dto = plainToInstance(ListarNotificacionesQuery, { categoria: 'OTRA' });
+        const errores = await validate(dto);
+        expect(errores.some((error) => error.property === 'categoria')).toBe(true);
+        const valida = plainToInstance(ListarNotificacionesQuery, { categoria: 'COMUNICADO' });
+        await expect(validate(valida)).resolves.toEqual([]);
     });
 });
 

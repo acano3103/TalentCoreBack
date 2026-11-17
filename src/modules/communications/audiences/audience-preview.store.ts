@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
 
 export const TTL_PREVIEW_SEGUNDOS = 15 * 60;
+const TIMEOUT_REDIS_MS = 2_000;
 const PREFIJO = 'comms:preview:';
 
 export interface PreviewGuardado {
@@ -43,23 +44,41 @@ export class MemoryAudiencePreviewStore extends AudiencePreviewStore {
     }
 }
 
-export class RedisAudiencePreviewStore extends AudiencePreviewStore implements OnModuleDestroy {
+export class RedisAudiencePreviewStore extends AudiencePreviewStore implements OnModuleInit, OnModuleDestroy {
+    private readonly logger = new Logger(RedisAudiencePreviewStore.name);
     private readonly redis: Redis;
+    private readonly destino: string;
 
     constructor(url: string) {
         super();
+        this.destino = destinoRedis(url);
         this.redis = new Redis(url, {
             lazyConnect: true,
             maxRetriesPerRequest: 1,
-            enableOfflineQueue: false,
+            connectTimeout: TIMEOUT_REDIS_MS,
+            commandTimeout: TIMEOUT_REDIS_MS,
+            enableOfflineQueue: true,
         });
+        this.redis.on('error', () => undefined);
+    }
+
+    async onModuleInit(): Promise<void> {
+        try {
+            await this.listo();
+        } catch {
+            this.logger.warn(
+                `Redis no responde en ${this.destino}. La vista previa se entregará sin id hasta que la cola esté disponible.`,
+            );
+        }
     }
 
     async guardar(previewId: string, datos: PreviewGuardado): Promise<void> {
+        await this.listo();
         await this.redis.set(`${PREFIJO}${previewId}`, JSON.stringify(datos), 'EX', TTL_PREVIEW_SEGUNDOS);
     }
 
     async leer(previewId: string): Promise<PreviewGuardado | null> {
+        await this.listo();
         const crudo = await this.redis.get(`${PREFIJO}${previewId}`);
         if (!crudo) return null;
         return parsear(crudo);
@@ -67,6 +86,17 @@ export class RedisAudiencePreviewStore extends AudiencePreviewStore implements O
 
     async onModuleDestroy(): Promise<void> {
         await this.redis.quit().catch(() => undefined);
+    }
+
+    private async listo(): Promise<void> {
+        if (this.redis.status !== 'wait' && this.redis.status !== 'end') return;
+        try {
+            await this.redis.connect();
+        } catch (error) {
+            const mensaje = error instanceof Error ? error.message : '';
+            if (mensaje.includes('already connecting')) return;
+            throw error;
+        }
     }
 }
 
@@ -78,6 +108,15 @@ export function crearPreviewStore(redisUrl: string | undefined): AudiencePreview
         return new MemoryAudiencePreviewStore();
     }
     return new RedisAudiencePreviewStore(redisUrl);
+}
+
+function destinoRedis(url: string): string {
+    try {
+        const parsed = new URL(url);
+        return `${parsed.hostname}:${parsed.port || '6379'}`;
+    } catch {
+        return 'la URL configurada';
+    }
 }
 
 function parsear(crudo: string): PreviewGuardado | null {

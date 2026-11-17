@@ -579,4 +579,58 @@ describe('AnnouncementDispatchService', () => {
             }),
         );
     });
+
+    it('el aviso sin plantilla no suma WhatsApp y lo dice', async () => {
+        const prisma = prepararAviso(null);
+        const service = await servicio(prisma);
+        const resultado = await service.enviar(usuario, 10, 9, { whatsappSinApp: true });
+        const canales = canalesCongelados(prisma);
+        expect(canales).toEqual([['APP', 'WEB'], ['WEB']]);
+        expect(resultado.whatsapp).toEqual({ enviados: 0, motivoOmitido: 'PLANTILLA_NO_APROBADA' });
+    });
+
+    it('con plantilla aprobada manda WhatsApp a quien no tiene la app', async () => {
+        const prisma = prepararAviso({ AVISO_EQUIPO: 'tpl-equipo' });
+        const service = await servicio(prisma);
+        const resultado = await service.enviar(usuario, 10, 9, { whatsappSinApp: true });
+        expect(canalesCongelados(prisma)).toEqual([['APP', 'WEB'], ['WEB', 'WHATSAPP']]);
+        expect(resultado.whatsapp).toEqual({ enviados: 1 });
+    });
+
+    function canalesCongelados(prisma: { comDestinatarios: { createMany: jest.Mock } }): string[][] {
+        const data = prisma.comDestinatarios.createMany.mock.calls[0][0].data as { CanalesEfectivos: string[] }[];
+        return data.map((persona) => persona.CanalesEfectivos);
+    }
+
+    function prepararAviso(plantillas: unknown) {
+        const prisma = prismaDe();
+        colaEnvio.add.mockResolvedValue(undefined);
+        prisma.comComunicados.findFirst.mockResolvedValue(
+            fila('BORRADOR', { EnvioPendiente: false, ComTiposComunicado: { Codigo: 'AVISO_EQUIPO', EsCorto: false } }),
+        );
+        prisma.comComunicados.updateMany.mockResolvedValue({ count: 1 });
+        prisma.comComunicados.update.mockResolvedValue({});
+        prisma.comComunicadoVersiones.findUnique.mockResolvedValue(version);
+        prisma.comConfigEmpresa.findUnique.mockResolvedValue({ PoliticaWhatsApp: 'IMPORTANTE_CRITICA', PlantillasWhatsApp: plantillas });
+        resolver.resolve.mockResolvedValue({ ids: [2, 3], fueraDeAlcance: [] });
+        capabilities.contexto.mockResolvedValue({ idTenant: 3, companyId: 10, alcance: 'EQUIPO_DIRECTO' });
+        capabilities.getEffective.mockResolvedValue([]);
+        canales.forEmployees.mockResolvedValue({
+            porEmpleado: [
+                { idEmpleado: 2, canales: ['APP', 'WEB'], sinCanal: false, nivelPerfil: 'DEFAULT' },
+                { idEmpleado: 3, canales: ['WEB'], sinCanal: false, nivelPerfil: 'DEFAULT' },
+            ],
+            resumen: { APP: 1, WEB: 2, WHATSAPP: 0, CORREO: 0, KIOSCO: 0, SIN_CANAL: 0 },
+        });
+        prisma.empleados.findMany.mockResolvedValue([
+            { idEmpleado: 2, idUsuario: 'u2', idSite: 1, idPuesto: 1, idTipoPersonalOverride: null, idJefeInmediato: 8, telefonoMovil: '5500000002', CatPuestos: { idArea: 1, idTipoPersonal: 1 } },
+            { idEmpleado: 3, idUsuario: 'u3', idSite: 1, idPuesto: 1, idTipoPersonalOverride: null, idJefeInmediato: 8, telefonoMovil: '5500000003', CatPuestos: { idArea: 1, idTipoPersonal: 1 } },
+        ]);
+        prisma.comDestinatarios.createMany.mockResolvedValue({ count: 2 });
+        prisma.comDestinatarios.count.mockResolvedValue(2);
+        prisma.comDestinatarios.findMany.mockResolvedValue([{ idDestinatario: 1 }, { idDestinatario: 2 }]);
+        prisma.catEmpresas.findUnique.mockResolvedValue({ nombre_comercial: 'Acme' });
+        prisma.historicoMovimientos.create.mockResolvedValue({});
+        return prisma;
+    }
 });

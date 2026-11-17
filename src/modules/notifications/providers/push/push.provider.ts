@@ -7,6 +7,11 @@ export interface MensajePush {
     title: string;
     body: string;
     data?: Record<string, string>;
+    prioridad?: string;
+    categoria?: string | null;
+    idNotificacion?: string;
+    badge?: number;
+    destino?: string;
 }
 
 export interface TicketPush {
@@ -89,12 +94,41 @@ export class PushProvider {
     }
 }
 
-function aExpo(mensaje: MensajePush): ExpoPushMessage {
-    return {
+export function aExpo(mensaje: MensajePush): ExpoPushMessage {
+    const prioridad = sinAcento(mensaje.prioridad ?? mensaje.data?.prioridad ?? 'NORMAL');
+    const categoria = sinAcento(mensaje.categoria ?? mensaje.data?.categoria ?? '');
+    const data: Record<string, string> = { ...(mensaje.data ?? {}) };
+    const destino = mensaje.destino || data.destino;
+    if (destino) data.destino = destino;
+    if (mensaje.idNotificacion) data.idNotificacion = mensaje.idNotificacion;
+    data.prioridad = prioridad;
+    if (categoria) data.categoria = categoria;
+    const alta = prioridad === 'CRITICA' || prioridad === 'IMPORTANTE';
+    const expo: ExpoPushMessage = {
         to: mensaje.to,
         title: mensaje.title,
         body: mensaje.body,
-        data: mensaje.data,
+        data,
         sound: 'default',
+        channelId: canalPush(prioridad, categoria),
+        priority: alta ? 'high' : 'default',
+        badge: mensaje.badge ?? 0,
     };
+    if (prioridad === 'CRITICA') expo.interruptionLevel = 'time-sensitive';
+    return expo;
+}
+
+function canalPush(prioridad: string, categoria: string): string {
+    if (prioridad === 'CRITICA') return 'criticos';
+    if (categoria === 'COMUNICADO' || categoria === 'AVISO') return 'avisos';
+    if (categoria === 'RECORDATORIO') return 'recordatorios';
+    return 'general';
+}
+
+function sinAcento(valor: string): string {
+    return valor
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
 }

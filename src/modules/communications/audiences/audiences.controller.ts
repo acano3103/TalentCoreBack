@@ -46,7 +46,7 @@ export class AudiencesController {
         description: 'La lista sale de los ids guardados. Sin búsqueda, el total coincide con el de la vista previa.',
     })
     @ApiResponse({ status: 200, description: 'Página de destinatarios.' })
-    @ApiResponse({ status: 404, description: 'La vista previa venció o no existe.' })
+    @ApiResponse({ status: 410, description: 'PREVIEW_EXPIRADA: la vista previa venció o no existe. Hay que calcularla otra vez.' })
     destinatarios(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,

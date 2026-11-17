@@ -170,4 +170,17 @@ describe('MeCommsService', () => {
         ]);
         await expect(service.modalPendiente(usuario, 10)).resolves.toEqual([]);
     });
+
+    it('con Redis caído, recordarme más tarde responde que la cola no está disponible', async () => {
+        prisma.comDestinatarios.findFirst.mockResolvedValue({
+            idDestinatario: 20,
+            ComComunicados: comunicado(),
+        });
+        jest.spyOn(snooze, 'ocultar').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+        await expect(service.posponer(usuario, 10, 9)).rejects.toMatchObject({
+            status: HttpStatus.SERVICE_UNAVAILABLE,
+            response: { code: 'COLA_NO_DISPONIBLE' },
+        });
+    });
 });

@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma } from 'generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -8,7 +8,7 @@ import { CommsCapabilityService } from '../capabilities/comms-capability.service
 import { ResumenCanales } from '../channels/canales';
 import { EffectiveChannelService } from '../channels/effective-channel.service';
 import { AudienceOptionsService, OpcionesAudiencia } from './audience-options.service';
-import { AudiencePreviewStore } from './audience-preview.store';
+import { AudiencePreviewStore, PreviewGuardado } from './audience-preview.store';
 import { AudienceResolverService } from './audience-resolver.service';
 import { CriteriosAudiencia, normalizarCriterios, ResultadoAudiencia } from './criterios';
 import { GuardarAudienciaDto } from './dto/guardar-audiencia.dto';
@@ -35,7 +35,7 @@ export interface VistaPrevia {
     topeWhatsApp: EstadoTope | null;
     muestra: PersonaAudiencia[];
     fueraDeAlcance: number[];
-    previewId: string;
+    previewId?: string;
 }
 
 export interface PaginaDestinatarios {
@@ -65,6 +65,8 @@ interface FilaEmpleado {
 
 @Injectable()
 export class AudiencesService {
+    private readonly logger = new Logger(AudiencesService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly capabilities: CommsCapabilityService,
@@ -84,7 +86,7 @@ export class AudiencesService {
         const muestraIds = resultado.ids.slice(0, MUESTRA);
         const nombres = await this.nombres(muestraIds);
         const previewId = randomUUID();
-        await this.previews.guardar(previewId, {
+        const persistida = await this.guardarPreview(previewId, {
             idTenant: activeUser.idTenant,
             companyId,
             idUsuario: activeUser.id,
@@ -97,7 +99,7 @@ export class AudiencesService {
             topeWhatsApp: this.caps ? await this.caps.estado(activeUser.idTenant, companyId, 'NORMAL') : null,
             muestra: canales.porEmpleado.slice(0, MUESTRA).map((fila) => aPersona(fila, nombres.get(fila.idEmpleado))),
             fueraDeAlcance: resultado.fueraDeAlcance,
-            previewId,
+            ...(persistida ? { previewId } : {}),
         };
     }
 
@@ -109,7 +111,7 @@ export class AudiencesService {
         pageSize = PAGINA,
         search?: string,
     ): Promise<PaginaDestinatarios> {
-        const guardado = await this.previews.leer(previewId);
+        const guardado = await this.leerPreview(previewId);
         if (
             !guardado ||
             guardado.idTenant !== activeUser.idTenant ||
@@ -117,8 +119,8 @@ export class AudiencesService {
             guardado.idUsuario !== activeUser.id
         ) {
             throw errorComms(
-                HttpStatus.NOT_FOUND,
-                'NO_ENCONTRADO',
+                HttpStatus.GONE,
+                'PREVIEW_EXPIRADA',
                 'La vista previa venció o no existe. Calcula la audiencia otra vez.',
             );
         }
@@ -251,6 +253,27 @@ export class AudiencesService {
             });
         }, TRANSACCION);
         return { id: idAudiencia, activo: false };
+    }
+
+    private async guardarPreview(previewId: string, datos: PreviewGuardado): Promise<boolean> {
+        try {
+            await this.previews.guardar(previewId, datos);
+            return true;
+        } catch (error) {
+            const mensaje = error instanceof Error ? error.message : 'error';
+            this.logger.warn(`No se guardó la vista previa: ${mensaje}`);
+            return false;
+        }
+    }
+
+    private async leerPreview(previewId: string): Promise<PreviewGuardado | null> {
+        try {
+            return await this.previews.leer(previewId);
+        } catch (error) {
+            const mensaje = error instanceof Error ? error.message : 'error';
+            this.logger.warn(`No se leyó la vista previa: ${mensaje}`);
+            return null;
+        }
     }
 
     private asegurar(resultado: ResultadoAudiencia, modo: 'preview' | 'guardar'): void {

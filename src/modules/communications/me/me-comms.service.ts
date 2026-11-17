@@ -231,7 +231,17 @@ export class MeCommsService {
         const empleado = await this.empleadoDe(activeUser, companyId);
         await this.destinatario(empleado.idEmpleado, companyId, activeUser.idTenant, id);
         const dia = diaLocal(this.ahora(), await this.zonaDe(empleado.idSite));
-        await this.snooze.ocultar(empleado.idEmpleado, dia, id);
+        try {
+            await this.snooze.ocultar(empleado.idEmpleado, dia, id);
+        } catch (error) {
+            const mensaje = error instanceof Error ? error.message : 'error';
+            this.logger.warn(`No se guardó el snooze del empleado ${empleado.idEmpleado}: ${mensaje}`);
+            throw errorComms(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                'COLA_NO_DISPONIBLE',
+                'No se pudo ocultar el modal; intenta de nuevo en unos minutos.',
+            );
+        }
         return { dia, ttlSegundos: TTL_SNOOZE_SEGUNDOS };
     }
 

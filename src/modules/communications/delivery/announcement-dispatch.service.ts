@@ -14,7 +14,7 @@ import { CommsCapabilityService } from '../capabilities/comms-capability.service
 import { AudienceResolverService } from '../audiences/audience-resolver.service';
 import { CriteriosAudiencia, criteriosVacios, normalizarCriterios } from '../audiences/criterios';
 import { EffectiveChannelService } from '../channels/effective-channel.service';
-import { Canal, normalizarCanales } from '../channels/canales';
+import { Canal, normalizarCanales, politicaPermiteWhatsapp } from '../channels/canales';
 import { faltanContenido } from '../announcements/contenido';
 import { exigirTransicion } from '../announcements/announcement-state';
 import { COLA_ENVIO, COLA_ESCALAMIENTO, LOTE_CONGELAR, LOTE_ENVIO, JobDiferido } from './colas';
@@ -149,7 +149,18 @@ export class AnnouncementDispatchService implements OnModuleInit {
         }
     }
 
-    async enviar(activeUser: ActiveUserDto, companyId: number, id: number) {
+    async enviar(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        id: number,
+        opciones?: { whatsappSinApp?: boolean },
+    ): Promise<{
+        id: number;
+        estado: string;
+        totalDestinatarios: number;
+        idempotente: boolean;
+        whatsapp?: { enviados: number; motivoOmitido?: string };
+    }> {
         const fila = await this.cargar(id, companyId, activeUser.idTenant);
         if (fila.Estado === 'ENVIADO') return this.respuesta(fila, true);
         if (fila.Estado === 'ENVIANDO') {
@@ -158,6 +169,7 @@ export class AnnouncementDispatchService implements OnModuleInit {
         }
         exigirTransicion(fila.Estado as 'BORRADOR', 'ENVIANDO');
         const personas = await this.preparar(activeUser, companyId, fila);
+        const whatsapp = opciones?.whatsappSinApp ? await this.sumarWhatsappSinApp(fila, personas) : undefined;
         const claim = await this.prisma.comComunicados.updateMany({
             where: { idComunicado: id, Estado: { in: ['BORRADOR', 'PROGRAMADO'] } },
             data: { Estado: 'ENVIANDO' },
@@ -174,7 +186,8 @@ export class AnnouncementDispatchService implements OnModuleInit {
         await this.quitarProgramado(id);
         try {
             await this.congelar(id, personas);
-            return await this.publicarEncolado(activeUser, companyId, id);
+            const publicado = await this.publicarEncolado(activeUser, companyId, id);
+            return whatsapp ? { ...publicado, whatsapp } : publicado;
         } catch (error) {
             const cuantos = await this.prisma.comDestinatarios.count({ where: { idComunicado: id } });
             if (cuantos === 0) {
@@ -504,6 +517,45 @@ export class AnnouncementDispatchService implements OnModuleInit {
             }
         }
         return personas;
+    }
+
+    /**
+     * Suma WhatsApp a quien no tiene la app. No pide COM_CRITICO:
+     * el aviso de equipo ya decidió el canal. Si no hay plantilla, política o tope, no lo suma.
+     */
+    private async sumarWhatsappSinApp(
+        fila: FilaComunicado,
+        personas: PersonaCongelada[],
+    ): Promise<{ enviados: number; motivoOmitido?: string }> {
+        const config = await this.prisma.comConfigEmpresa.findUnique({ where: { idEmpresa: fila.idEmpresa } });
+        const plantilla = resolverPlantillaWhatsApp(config?.PlantillasWhatsApp, fila.ComTiposComunicado.Codigo, fila.Prioridad);
+        if (!plantilla) return { enviados: 0, motivoOmitido: 'PLANTILLA_NO_APROBADA' };
+        if (!politicaPermiteWhatsapp(config?.PoliticaWhatsApp)) return { enviados: 0, motivoOmitido: 'POLITICA_WHATSAPP' };
+        if (this.caps && !(await this.caps.canSend(fila.idTenant, fila.idEmpresa, fila.Prioridad, this.ahora()))) {
+            return { enviados: 0, motivoOmitido: 'TOPE_WHATSAPP' };
+        }
+        const candidatos = personas.filter((persona) => !persona.canales.includes('APP')).map((persona) => persona.idEmpleado);
+        const telefonos = await this.telefonosDe(candidatos);
+        let enviados = 0;
+        for (const persona of personas) {
+            if (persona.canales.includes('APP') || persona.canales.includes('WHATSAPP')) {
+                if (persona.canales.includes('WHATSAPP')) enviados += 1;
+                continue;
+            }
+            if (!telefonos.has(persona.idEmpleado)) continue;
+            persona.canales = [...persona.canales, 'WHATSAPP'];
+            enviados += 1;
+        }
+        return { enviados };
+    }
+
+    private async telefonosDe(ids: number[]): Promise<Set<number>> {
+        if (!ids.length) return new Set();
+        const filas = await this.prisma.empleados.findMany({
+            where: { idEmpleado: { in: ids }, activo: true },
+            select: { idEmpleado: true, telefonoMovil: true },
+        });
+        return new Set(filas.filter((fila) => fila.telefonoMovil?.trim()).map((fila) => fila.idEmpleado));
     }
 
     private async armarPersonas(

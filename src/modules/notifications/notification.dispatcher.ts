@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 import { destinoEnPush } from "../communications/notification-center/destino";
+import { whereNoLeidas } from "./campana";
 import { MailProvider } from "./providers/mail/mail.provider";
 import { WhatsappProvider } from "./providers/whatsapp/whatsapp.provider";
 import { NotificationOptions } from "./interfaces/message.interface";
@@ -181,7 +182,7 @@ export class NotificationDispatcher {
                 entregas.push({ id: entrega.id, canal: canal.codigo, status: 'PENDIENTE' });
                 continue;
             }
-            const resultado = await this.enviarCanal(canal.codigo, payload);
+            const resultado = await this.enviarCanal(canal.codigo, payload, notification.id);
             await this.prisma.notificacionesEntregas.update({
                 where: { id: entrega.id },
                 data: {
@@ -226,7 +227,7 @@ export class NotificationDispatcher {
         for (const entrega of entregas) {
             const codigo = await this.codigoCanal(entrega.channel_id);
             if (!codigo || !pedidas.has(codigo) || codigo === 'KIOSCO') continue;
-            const resultado = await this.enviarCanal(codigo, payload);
+            const resultado = await this.enviarCanal(codigo, payload, notification.id);
             await this.prisma.notificacionesEntregas.update({
                 where: { id: entrega.id },
                 data: {
@@ -303,6 +304,7 @@ export class NotificationDispatcher {
     private async enviarCanal(
         codigo: CanalComms['codigo'],
         payload: CommsPayload,
+        idNotificacion: string,
     ): Promise<{ status: string; error?: string; proveedorMsgId?: string; costo?: number }> {
         if (!(await this.canalPermitido(codigo, payload))) {
             return { status: 'OMITIDO', error: 'La persona apagó este canal.' };
@@ -352,7 +354,7 @@ export class NotificationDispatcher {
                 return { status: 'SENT' };
             }
             if (codigo === 'PUSH') {
-                return this.enviarPush(payload);
+                return this.enviarPush(payload, idNotificacion);
             }
             return { status: 'PENDIENTE' };
         } catch (error) {
@@ -361,18 +363,32 @@ export class NotificationDispatcher {
         }
     }
 
-    private async enviarPush(payload: CommsPayload): Promise<{ status: string; error?: string; proveedorMsgId?: string }> {
+    private async enviarPush(payload: CommsPayload, idNotificacion: string): Promise<{ status: string; error?: string; proveedorMsgId?: string }> {
         const tokens = await this.prisma.pushTokens.findMany({
             where: { user_uuid: payload.userUuid, Activo: true, FechaBaja: null },
             select: { Token: true },
         });
         if (!tokens.length) return { status: 'FAILED', error: 'No hay un dispositivo con notificaciones push.' };
+        const badge = await this.prisma.notificaciones.count({
+            where: whereNoLeidas({
+                userUuid: payload.userUuid,
+                companyId: payload.idEmpresa,
+                idTenant: payload.idTenant,
+                ahora: new Date(),
+            }),
+        });
+        const destino = destinoEnPush(payload.destino) ?? undefined;
         const tickets = await this.push.enviar(
             tokens.map((fila) => ({
                 to: fila.Token,
                 title: payload.push?.title ?? payload.titulo,
                 body: payload.push?.body ?? payload.mensaje,
                 data: datosPush(payload),
+                prioridad: payload.prioridad,
+                categoria: payload.categoria,
+                idNotificacion,
+                badge,
+                destino,
             })),
         );
         const ok = tickets.find((ticket) => ticket.ticketId);

@@ -4,6 +4,7 @@ import { ArrayMaxSize, ArrayMinSize, IsBoolean, IsIn, IsInt, IsOptional, IsStrin
 import { CANALES_PREFERENCIA, CATEGORIAS_PREFERENCIA } from '../preferencias-reglas';
 
 export const TABS_CAMPANA = ['unread', 'all', 'done'] as const;
+export const CATEGORIAS_LISTADO = ['COMUNICADO', 'AVISO', 'RECORDATORIO', 'APROBACION', 'SISTEMA'] as const;
 
 export class ListarNotificacionesQuery {
     @ApiPropertyOptional({ enum: TABS_CAMPANA, default: 'unread' })
@@ -11,7 +12,15 @@ export class ListarNotificacionesQuery {
     @IsIn(TABS_CAMPANA, { message: 'La pestaña debe ser unread, all o done.' })
     tab?: (typeof TABS_CAMPANA)[number];
 
-    @ApiPropertyOptional({ description: 'Categoría guardada en la notificación.' })
+    @ApiPropertyOptional({
+        enum: CATEGORIAS_LISTADO,
+        description: 'Filtro de la app y la web. category sigue aceptándose con el mismo valor.',
+    })
+    @IsOptional()
+    @IsIn(CATEGORIAS_LISTADO, { message: 'La categoría debe ser COMUNICADO, AVISO, RECORDATORIO, APROBACION o SISTEMA.' })
+    categoria?: (typeof CATEGORIAS_LISTADO)[number];
+
+    @ApiPropertyOptional({ description: 'Alias anterior de categoria.' })
     @IsOptional()
     @IsString({ message: 'La categoría debe ser texto.' })
     @MaxLength(30, { message: 'La categoría no puede pasar de 30 caracteres.' })
