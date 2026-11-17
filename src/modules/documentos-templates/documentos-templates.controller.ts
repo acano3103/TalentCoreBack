@@ -35,6 +35,7 @@ export class DocumentosTemplatesController {
         return this.service.create(companyId, createPlantillaDto, archivo, activeUser);
     }
 
+    // Devuelve la lista de plantillas paginadas
     @Get()
     @ApiOperation({ summary: 'List document templates', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Templates listed successfully' })
@@ -51,6 +52,7 @@ export class DocumentosTemplatesController {
         return this.service.findAll(companyId, page, status, limit, search || '', idTipoDocumento ? Number(idTipoDocumento) : undefined);
     }
 
+    // Devuelve la lista de campos como catalogos
     @Get('catalog-fields')
     @ApiOperation({ summary: 'List of catalogs fiels', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Catalogs fields obtained successfully.' })
@@ -62,6 +64,7 @@ export class DocumentosTemplatesController {
         return this.service.findCatalogsFiels(companyId);
     }
 
+    // Devuelve todos los documentos generados paginados
     @Get('generated')
     @ApiOperation({ summary: 'List generated documents', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Generated documents listed' })
@@ -72,10 +75,12 @@ export class DocumentosTemplatesController {
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query('search') search?: string,
+        @Query('idVacante', new ParseIntPipe({ optional: true })) idVacante?: number,
     ) {
-        return this.service.findGenerated(companyId, page, limit, search);
+        return this.service.findGenerated(companyId, page, limit, search, idVacante);
     }
 
+    // Devuelve una lista de platillas por tipo de plantilla
     @Get('by-type/:idTipoDocumento')
     @ApiOperation({ summary: 'List active templates by document type', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Templates listed successfully' })
@@ -101,6 +106,7 @@ export class DocumentosTemplatesController {
         return this.service.servePdf(companyId, id, res);
     }
 
+    // Genera el link de desacar de un documento generado
     @Get('generated/:id/download')
     @ApiOperation({ summary: 'Download generated document as PDF', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'PDF downloaded' })
@@ -120,6 +126,7 @@ export class DocumentosTemplatesController {
         }
     }
 
+    // Devuelve la vista previa del documento con los datos que se tienen ya llenados antes de generar el documento
     @Get(':id/generation-data/:employeeId')
     @ApiOperation({ summary: 'Obtener datos para generar una plantilla' })
     async getGenerationData(
@@ -127,10 +134,28 @@ export class DocumentosTemplatesController {
         @Param('companyId', ParseIntPipe) companyId: number,
         @Param('id', ParseIntPipe) id: number,
         @Param('employeeId', ParseIntPipe) employeeId: number,
+        @Query('candidateId', new ParseIntPipe({ optional: true })) candidateId?: number,
     ) {
-        return this.service.getGenerationData(activeUser, companyId, id, employeeId);
+        return this.service.getGenerationData(activeUser, companyId, id, employeeId, candidateId);
     }
 
+    // Devuelve los documentos generados de un candidato específico
+    @Get('generated/candidate/:idCandidato')
+    @ApiOperation({ summary: 'List generated documents by candidate', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Candidate generated documents listed' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    async findGeneratedByCandidate(
+        @GetActiveUser() activeUser: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('idCandidato', ParseIntPipe) idCandidato: number,
+        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+        @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+        @Query('search') search?: string,
+    ) {
+        return this.service.findGeneratedByCandidate(companyId, idCandidato, page, limit, search);
+    }
+
+    // Obtiene un documento generado por su id
     @Get('generated/:id')
     @ApiOperation({ summary: 'Get generated document detail', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Generated document detail' })
@@ -143,6 +168,7 @@ export class DocumentosTemplatesController {
         return this.service.findOneGenerated(companyId, id);
     }
 
+    // Actualiza un documento generado por su id
     @Put('generated/:id')
     @ApiOperation({ summary: 'Update generated document', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Generated document updated' })
@@ -231,6 +257,7 @@ export class DocumentosTemplatesController {
         return this.service.findOne(companyId, id);
     }
 
+    // Actualizamos los datos de una plantilla especifica
     @Put(':id')
     @ApiOperation({ summary: 'Update template metadata', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Template updated' })
@@ -244,6 +271,7 @@ export class DocumentosTemplatesController {
         return this.service.update(companyId, id, data);
     }
 
+    // Desactivamos una plantilla por su id
     @Delete(':id')
     @ApiOperation({ summary: 'Delete template (soft delete)', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Template deactivated' })

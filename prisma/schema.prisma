@@ -768,21 +768,22 @@ model PesoCategoriaPuesto {
 }
 
 model Postulaciones {
-  idPostulacion   Int       @id @default(autoincrement())
-  uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
-  idEstatus       Int?      @default(1)
-  idVacante       Int
-  nombre          String    @db.VarChar(100)
-  primerApellido  String    @db.VarChar(100)
-  segundoApellido String?   @db.VarChar(100)
-  correo          String    @db.VarChar(250)
-  telefono        String    @db.VarChar(10)
-  curp            String?   @db.VarChar(45)
-  utmSource       String?   @db.VarChar(100)
-  rutaCV          String    @db.VarChar(500)
-  fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
-  idCampa_a       Int?      @map("idCampaña")
-  Vacantes        Vacantes  @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+  idPostulacion             Int                        @id @default(autoincrement())
+  uuid                      String                     @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  idEstatus                 Int?                       @default(1)
+  idVacante                 Int
+  nombre                    String                     @db.VarChar(100)
+  primerApellido            String                     @db.VarChar(100)
+  segundoApellido           String?                    @db.VarChar(100)
+  correo                    String                     @db.VarChar(250)
+  telefono                  String                     @db.VarChar(10)
+  curp                      String?                    @db.VarChar(45)
+  utmSource                 String?                    @db.VarChar(100)
+  rutaCV                    String                     @db.VarChar(500)
+  fechaRegistro             DateTime?                  @default(now()) @db.Timestamp(0)
+  idCampa_a                 Int?                       @map("idCampaña")
+  Vacantes                  Vacantes                   @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+  RelEmpleadosPostulaciones RelEmpleadosPostulaciones?
 
   @@index([idVacante], map: "fk_postulacion_vacante")
 }
@@ -1165,6 +1166,7 @@ model Empleados {
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados")
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados  RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados")
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados   RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados")
+  RelEmpleadosPostulaciones                                                                  RelEmpleadosPostulaciones[]
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados       RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados")
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados     RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados")
   RolePlayAsignaciones                                                                       RolePlayAsignaciones[]
@@ -1244,6 +1246,7 @@ model Vacantes {
   comentarios                                        String?              @db.Text
   fechaCreacion                                      DateTime?            @default(now()) @db.Timestamp(0)
   fechaActualizacion                                 DateTime?            @default(now()) @db.Timestamp(0)
+  fechaCierre                                        DateTime?            @db.DateTime(0)
   Entrevistas                                        Entrevistas[]
   Postulaciones                                      Postulaciones[]
   CatEmpresas                                        CatEmpresas          @relation(fields: [idEmpresa], references: [idEmpresa], map: "fk_vacante_empresa")
@@ -2857,6 +2860,17 @@ model CatCamposPlantilla {
 
   @@index([activo], map: "idx_cat_campos_plantilla_activo")
   @@index([grupo], map: "idx_cat_campos_plantilla_grupo")
+}
+
+model RelEmpleadosPostulaciones {
+  idRelacion    Int           @id @default(autoincrement())
+  idEmpleado    Int
+  idPostulacion Int           @unique(map: "UK_RelEmpleadosPostulaciones_Postulacion")
+  fechaRegistro DateTime?     @default(now()) @db.Timestamp(0)
+  Empleados     Empleados     @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_RelEmpPost_Empleado")
+  Postulaciones Postulaciones @relation(fields: [idPostulacion], references: [idPostulacion], map: "FK_RelEmpPost_Postulacion")
+
+  @@index([idEmpleado], map: "IDX_RelEmpleadosPostulaciones_Empleado")
 }
 
 enum Entrevistas_interview_type {

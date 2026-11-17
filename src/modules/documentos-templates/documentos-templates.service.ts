@@ -525,8 +525,7 @@ export class DocumentosTemplatesService {
         }));
     }
 
-
-    async getGenerationData(user: ActiveUserDto, companyId: number, id: number, employeeId: number) {
+    async getGenerationData(user: ActiveUserDto, companyId: number, id: number, employeeId: number, candidateId?: number) {
         const plantilla = await this.prisma.plantillasDocumentos.findFirst({
             where: {
                 id,
@@ -547,46 +546,109 @@ export class DocumentosTemplatesService {
             throw new NotFoundException('Plantilla no encontrada');
         }
 
-        const empleado = await this.prisma.empleados.findFirst({
-            where: {
-                idEmpleado: employeeId,
-                idEmpresa: companyId,
-                idTenant: user.idTenant,
-                activo: true,
-            },
-        });
+        const identificadores = plantilla.campos.map(campo => campo.identificador);
+        const necesitaEmpleado = identificadores.some(campo => campo.startsWith('empleado.'));
+        const necesitaCandidato = identificadores.some(campo => campo.startsWith('candidato.'));
 
-        if (!empleado) {
+        if (necesitaCandidato && !candidateId) {
+            throw new BadRequestException('Se requiere el ID de la postulación para obtener los datos del candidato');
+        }
+
+        if (necesitaEmpleado && (!employeeId || employeeId <= 0)) {
+            throw new BadRequestException('Se requiere el ID del empleado para obtener sus datos');
+        }
+
+        const empleado = necesitaEmpleado
+            ? await this.prisma.empleados.findFirst({
+                where: {
+                    idEmpleado: employeeId,
+                    idEmpresa: companyId,
+                    idTenant: user.idTenant,
+                    activo: true,
+                },
+            })
+            : null;
+
+        if (necesitaEmpleado && !empleado) {
             throw new NotFoundException('Empleado no encontrado');
         }
 
+        const candidato = necesitaCandidato
+            ? await this.prisma.postulaciones.findFirst({
+                where: {
+                    idPostulacion: candidateId,
+                },
+            })
+            : null;
+
+        if (necesitaCandidato && !candidato) {
+            throw new NotFoundException('Postulación no encontrada');
+        }
+
+        let vacante: any = null;
+        let puestoCandidato: any = null;
+        let areaCandidato: any = null;
+        let siteCandidato: any = null;
+
+        if (candidato) {
+            vacante = await this.prisma.vacantes.findFirst({
+                where: {
+                    idVacante: candidato.idVacante,
+                    idEmpresa: companyId,
+                },
+            });
+
+            if (!vacante) {
+                throw new NotFoundException('La vacante asociada a la postulación no existe o no pertenece a esta empresa');
+            }
+
+            [puestoCandidato, siteCandidato] = await Promise.all([
+                this.prisma.catPuestos.findUnique({
+                    where: { idPuesto: vacante.idPuesto },
+                }),
+                this.prisma.catSites.findUnique({
+                    where: { idSite: vacante.idSite },
+                }),
+            ]);
+
+            areaCandidato = puestoCandidato?.idArea
+                ? await this.prisma.catAreas.findUnique({
+                    where: { idArea: puestoCandidato.idArea },
+                })
+                : null;
+        }
+
         const [puesto, estadoCivil, salario, datosBancarios, empresa] = await Promise.all([
-            empleado.idPuesto
+            empleado?.idPuesto
                 ? this.prisma.catPuestos.findUnique({
                     where: { idPuesto: empleado.idPuesto },
                 })
                 : null,
-            empleado.idEstadoCivil
+            empleado?.idEstadoCivil
                 ? this.prisma.catEstadoCivil.findUnique({
                     where: { idEstadoCivil: empleado.idEstadoCivil },
                 })
                 : null,
-            this.prisma.historialSalarios.findFirst({
-                where: {
-                    idEmpleado: employeeId,
-                    actual: true,
-                },
-                orderBy: { fechaInicio: 'desc' },
-            }),
-            this.prisma.datosBancarios.findFirst({
-                where: { idEmpleado: employeeId },
-            }),
+            empleado
+                ? this.prisma.historialSalarios.findFirst({
+                    where: {
+                        idEmpleado: employeeId,
+                        actual: true,
+                    },
+                    orderBy: { fechaInicio: 'desc' },
+                })
+                : null,
+            empleado
+                ? this.prisma.datosBancarios.findFirst({
+                    where: { idEmpleado: employeeId },
+                })
+                : null,
             this.prisma.catEmpresas.findFirst({
                 where: { idEmpresa: companyId },
             }),
         ]);
 
-        const [area, domicilioEmpresa, domicilioEmpleado] = await Promise.all([
+        const [area, domicilioEmpresa, domicilioEmpleado, siteEmpleado] = await Promise.all([
             puesto?.idArea
                 ? this.prisma.catAreas.findUnique({
                     where: { idArea: puesto.idArea },
@@ -596,16 +658,33 @@ export class DocumentosTemplatesService {
                 where: { idEmpresa: companyId },
                 orderBy: { idDomicilioEmpresa: 'desc' },
             }),
-            this.prisma.domicilioEmpleado.findFirst({
-                where: { idEmpleado: employeeId },
-            }),
+            empleado
+                ? this.prisma.domicilioEmpleado.findFirst({
+                    where: { idEmpleado: employeeId },
+                })
+                : null,
+            empleado?.idSite
+                ? this.prisma.catSites.findUnique({
+                    where: { idSite: empleado.idSite },
+                })
+                : null,
         ]);
 
-        const nombreCompleto = [
-            empleado.nombre,
-            empleado.primerApellido,
-            empleado.segundoApellido,
-        ].filter(Boolean).join(' ');
+        const nombreCompleto = empleado
+            ? [
+                empleado.nombre,
+                empleado.primerApellido,
+                empleado.segundoApellido,
+            ].filter(Boolean).join(' ')
+            : '';
+
+        const nombreCompletoCandidato = candidato
+            ? [
+                candidato.nombre,
+                candidato.primerApellido,
+                candidato.segundoApellido,
+            ].filter(Boolean).join(' ')
+            : '';
 
         const direccionEmpleado = domicilioEmpleado
             ? [
@@ -631,29 +710,71 @@ export class DocumentosTemplatesService {
             ].filter(Boolean).join(', ')
             : '';
 
+        const direccionSiteEmpleado = siteEmpleado
+            ? [
+                siteEmpleado.Calle,
+                siteEmpleado.NoExterior,
+                siteEmpleado.NoInterior,
+                siteEmpleado.Colonia,
+                siteEmpleado.MunicipioDelegacion,
+                siteEmpleado.Estado,
+                siteEmpleado.CodigoPostal,
+                siteEmpleado.Pais,
+            ].filter(Boolean).join(', ')
+            : '';
+
+        const direccionSiteCandidato = siteCandidato
+            ? [
+                siteCandidato.Calle,
+                siteCandidato.NoExterior,
+                siteCandidato.NoInterior,
+                siteCandidato.Colonia,
+                siteCandidato.MunicipioDelegacion,
+                siteCandidato.Estado,
+                siteCandidato.CodigoPostal,
+                siteCandidato.Pais,
+            ].filter(Boolean).join(', ')
+            : '';
+
         const valoresDisponibles: Record<string, string> = {
+            // DATOS DEL EMPLEADO
             'empleado.nombre': nombreCompleto,
-            'empleado.nombres': empleado.nombre || '',
-            'empleado.apellido_paterno': empleado.primerApellido || '',
-            'empleado.apellido_materno': empleado.segundoApellido || '',
-            'empleado.curp': empleado.curp || '',
-            'empleado.rfc': empleado.rfc || '',
-            'empleado.nss': empleado.numeroSeguroSocial || '',
-            'empleado.fecha_nacimiento': empleado.fechaNacimiento
+            'empleado.nombres': empleado?.nombre || '',
+            'empleado.apellido_paterno': empleado?.primerApellido || '',
+            'empleado.apellido_materno': empleado?.segundoApellido || '',
+            'empleado.curp': empleado?.curp || '',
+            'empleado.rfc': empleado?.rfc || '',
+            'empleado.nss': empleado?.numeroSeguroSocial || '',
+            'empleado.fecha_nacimiento': empleado?.fechaNacimiento
                 ? new Date(empleado.fechaNacimiento).toISOString().slice(0, 10)
                 : '',
-            'empleado.telefono': empleado.telefonoMovil || empleado.telefonoLocal || '',
-            'empleado.correo': empleado.correo || '',
+            'empleado.telefono': empleado?.telefonoMovil || empleado?.telefonoLocal || '',
+            'empleado.correo': empleado?.correo || '',
             'empleado.direccion': direccionEmpleado,
             'empleado.estado_civil': estadoCivil?.Descripcion || '',
             'empleado.puesto': puesto?.NombrePuesto || '',
             'empleado.area': area?.Descripcion || '',
-            'empleado.fecha_ingreso': empleado.fechaIngreso
+            'empleado.ubicacion': siteEmpleado?.Descripcion || direccionSiteEmpleado,
+            'empleado.fecha_ingreso': empleado?.fechaIngreso
                 ? new Date(empleado.fechaIngreso).toISOString().slice(0, 10)
                 : '',
             'empleado.salarioBruto': salario?.salarioBruto?.toString() || '',
             'empleado.salarioNeto': salario?.salarioNeto?.toString() || '',
             'empleado.cuenta_bancaria': datosBancarios?.cuentaBancaria || '',
+
+            // DATOS DEL CANDIDATO
+            'candidato.nombre': nombreCompletoCandidato,
+            'candidato.nombres': candidato?.nombre || '',
+            'candidato.apellido_paterno': candidato?.primerApellido || '',
+            'candidato.apellido_materno': candidato?.segundoApellido || '',
+            'candidato.correo': candidato?.correo || '',
+            'candidato.telefono': candidato?.telefono || '',
+            'candidato.curp': candidato?.curp || '',
+            'candidato.puesto': puestoCandidato?.NombrePuesto || '',
+            'candidato.area': areaCandidato?.Descripcion || '',
+            'candidato.ubicacion': siteCandidato?.Descripcion || direccionSiteCandidato,
+
+            // DATOS DE LA EMPRESA
             'empresa.nombre': empresa?.nombre_comercial || '',
             'empresa.razon_social': empresa?.razon_social || '',
             'empresa.rfc': empresa?.rfc || '',
@@ -672,16 +793,31 @@ export class DocumentosTemplatesService {
 
         return {
             plantilla,
-            empleado: {
-                ...empleado,
-                nombreCompleto,
-                nombrePuesto: puesto?.NombrePuesto || '',
-                nombreArea: area?.Descripcion || '',
-                salarioBruto: salario?.salarioBruto?.toString() || '',
-                salarioNeto: salario?.salarioNeto?.toString() || '',
-                nombreEmpresa: empresa?.nombre_comercial || '',
-                direccion: direccionEmpleado,
-            },
+            empleado: empleado
+                ? {
+                    ...empleado,
+                    nombreCompleto,
+                    nombrePuesto: puesto?.NombrePuesto || '',
+                    nombreArea: area?.Descripcion || '',
+                    nombreUbicacion: siteEmpleado?.Descripcion || '',
+                    direccionUbicacion: direccionSiteEmpleado,
+                    salarioBruto: salario?.salarioBruto?.toString() || '',
+                    salarioNeto: salario?.salarioNeto?.toString() || '',
+                    nombreEmpresa: empresa?.nombre_comercial || '',
+                    direccion: direccionEmpleado,
+                }
+                : null,
+            candidato: candidato
+                ? {
+                    ...candidato,
+                    nombreCompleto: nombreCompletoCandidato,
+                    nombrePuesto: puestoCandidato?.NombrePuesto || '',
+                    nombreArea: areaCandidato?.Descripcion || '',
+                    nombreUbicacion: siteCandidato?.Descripcion || '',
+                    direccionUbicacion: direccionSiteCandidato,
+                    nombreEmpresa: empresa?.nombre_comercial || '',
+                }
+                : null,
             valoresIniciales,
         };
     }
@@ -959,53 +1095,42 @@ export class DocumentosTemplatesService {
         page: number,
         limit: number,
         search?: string,
+        idVacante?: number,
     ) {
         const skip = (page - 1) * limit;
         const term = search?.trim();
 
+        // Buscar candidatos que coincidan con el texto
+        const candidatosCoincidentes = term
+            ? await this.prisma.postulaciones.findMany({
+                where: {
+                    OR: [
+                        { nombre: { contains: term } },
+                        { primerApellido: { contains: term } },
+                        { segundoApellido: { contains: term } },
+                    ],
+                },
+                select: {
+                    idPostulacion: true,
+                },
+            })
+            : [];
+
+        const idsCandidatosCoincidentes = candidatosCoincidentes.map(
+            (candidato) => candidato.idPostulacion,
+        );
+
         const where: Prisma.DocumentosGeneradosWhereInput = {
-            plantilla: {
-                idEmpresa: companyId,
-            },
+            plantilla: { idEmpresa: companyId },
+            ...(idVacante !== undefined && { idVacante }),
             ...(term && {
                 OR: [
-                    {
-                        plantilla: {
-                            nombre: {
-                                contains: term,
-                            },
-                        },
-                    },
-                    {
-                        plantilla: {
-                            TiposDocumento: {
-                                nombre: {
-                                    contains: term,
-                                },
-                            },
-                        },
-                    },
-                    {
-                        Empleados: {
-                            nombre: {
-                                contains: term,
-                            },
-                        },
-                    },
-                    {
-                        Empleados: {
-                            primerApellido: {
-                                contains: term,
-                            },
-                        },
-                    },
-                    {
-                        Empleados: {
-                            segundoApellido: {
-                                contains: term,
-                            },
-                        },
-                    },
+                    { plantilla: { nombre: { contains: term } } },
+                    { plantilla: { TiposDocumento: { nombre: { contains: term } } } },
+                    { Empleados: { nombre: { contains: term } } },
+                    { Empleados: { primerApellido: { contains: term } } },
+                    { Empleados: { segundoApellido: { contains: term } } },
+                    { idCandidato: { in: idsCandidatosCoincidentes } },
                 ],
             }),
         };
@@ -1015,9 +1140,7 @@ export class DocumentosTemplatesService {
                 where,
                 skip,
                 take: limit,
-                orderBy: {
-                    fechaGeneracion: 'desc',
-                },
+                orderBy: { fechaGeneracion: 'desc' },
                 include: {
                     plantilla: {
                         select: {
@@ -1044,14 +1167,173 @@ export class DocumentosTemplatesService {
             this.prisma.documentosGenerados.count({ where }),
         ]);
 
+        // Obtener los candidatos asociados a los documentos encontrados
+        const idsCandidatos = [
+            ...new Set(
+                data
+                    .map((documento) => documento.idCandidato)
+                    .filter((id): id is number => id !== null),
+            ),
+        ];
+
+        const candidatos = idsCandidatos.length
+            ? await this.prisma.postulaciones.findMany({
+                where: {
+                    idPostulacion: { in: idsCandidatos },
+                },
+                select: {
+                    idPostulacion: true,
+                    nombre: true,
+                    primerApellido: true,
+                    segundoApellido: true,
+                },
+            })
+            : [];
+
+        const candidatosMap = new Map(
+            candidatos.map((candidato) => [
+                candidato.idPostulacion,
+                candidato,
+            ]),
+        );
+
+        // Mantener la estructura Empleados que utiliza el frontend
+        const formattedData = data.map((documento) => {
+            const candidato = documento.idCandidato
+                ? candidatosMap.get(documento.idCandidato)
+                : null;
+
+            return {
+                ...documento,
+                Empleados: documento.Empleados ?? (
+                    candidato
+                        ? {
+                            idEmpleado: candidato.idPostulacion,
+                            nombre: candidato.nombre,
+                            primerApellido: candidato.primerApellido,
+                            segundoApellido: candidato.segundoApellido,
+                        }
+                        : null
+                ),
+            };
+        });
+
         return {
-            data,
+            data: formattedData,
             total,
             currentPage: page,
             totalPages: Math.ceil(total / limit),
         };
     }
 
+    async findGeneratedByCandidate(
+        companyId: number,
+        idCandidato: number,
+        page: number,
+        limit: number,
+        search?: string,
+    ) {
+        const skip = (page - 1) * limit;
+        const term = search?.trim();
+
+        // Obtener los datos del candidato
+        const candidato = await this.prisma.postulaciones.findUnique({
+            where: { idPostulacion: idCandidato },
+            select: {
+                idPostulacion: true,
+                nombre: true,
+                primerApellido: true,
+                segundoApellido: true,
+            },
+        });
+
+        if (!candidato) {
+            return {
+                data: [],
+                total: 0,
+                currentPage: page,
+                totalPages: 0,
+            };
+        }
+
+        // Comprobar si la búsqueda coincide con el nombre del candidato
+        const nombreCandidato = [
+            candidato.nombre,
+            candidato.primerApellido,
+            candidato.segundoApellido,
+        ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+        const searchMatchesCandidate = term
+            ? nombreCandidato.includes(term.toLowerCase())
+            : false;
+
+        const where: Prisma.DocumentosGeneradosWhereInput = {
+            plantilla: { idEmpresa: companyId },
+            idCandidato,
+            ...(term && !searchMatchesCandidate && {
+                OR: [
+                    { plantilla: { nombre: { contains: term } } },
+                    { plantilla: { TiposDocumento: { nombre: { contains: term } } } },
+                    { Empleados: { nombre: { contains: term } } },
+                    { Empleados: { primerApellido: { contains: term } } },
+                    { Empleados: { segundoApellido: { contains: term } } },
+                ],
+            }),
+        };
+
+        const [data, total] = await Promise.all([
+            this.prisma.documentosGenerados.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { fechaGeneracion: 'desc' },
+                include: {
+                    plantilla: {
+                        select: {
+                            id: true,
+                            nombre: true,
+                            TiposDocumento: {
+                                select: {
+                                    id: true,
+                                    nombre: true,
+                                },
+                            },
+                        },
+                    },
+                    Empleados: {
+                        select: {
+                            idEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                        },
+                    },
+                },
+            }),
+            this.prisma.documentosGenerados.count({ where }),
+        ]);
+
+        // Mantener la estructura Empleados que utiliza el frontend
+        const formattedData = data.map((documento) => ({
+            ...documento,
+            Empleados: documento.Empleados ?? {
+                idEmpleado: candidato.idPostulacion,
+                nombre: candidato.nombre,
+                primerApellido: candidato.primerApellido,
+                segundoApellido: candidato.segundoApellido,
+            },
+        }));
+
+        return {
+            data: formattedData,
+            total,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
 
     async servePdf(
         companyId: number,
@@ -1427,6 +1709,7 @@ export class DocumentosTemplatesService {
         return { token: documento.tokenFirma, url: `/firmar/${documento.tokenFirma}` };
     }
 
+
     async requestSignatureOtp(token: string) {
         const documento = await this.prisma.documentosGenerados.findFirst({
             where: {
@@ -1458,36 +1741,99 @@ export class DocumentosTemplatesService {
             throw new BadRequestException('El documento ya fue firmado');
         }
 
-        // Si existe contrato, conservamos el empleado asociado al contrato.
-        // Si no existe, utilizamos el idEmpleado del documento generado.
-        let empleado = documento.contrato?.Empleados ?? null;
+        let destinatario: {
+            idEmpleado?: number;
+            nombre: string;
+            primerApellido: string;
+            correo: string;
+            telefono: string;
+            idUsuario?: string | null;
+        } | null = null;
 
-        if (!empleado && documento.idEmpleado) {
-            empleado = await this.prisma.empleados.findFirst({
+        // ESCENARIO 1: Documento asociado a un empleado.
+        if (documento.idEmpleado) {
+            // Conservamos la prioridad del empleado asociado al contrato.
+            let empleado = documento.contrato?.Empleados ?? null;
+
+            // Si no hay empleado en el contrato, buscamos por idEmpleado.
+            if (!empleado) {
+                empleado = await this.prisma.empleados.findFirst({
+                    where: {
+                        idEmpleado: documento.idEmpleado,
+                        activo: true,
+                    },
+                    select: {
+                        idEmpleado: true,
+                        nombre: true,
+                        primerApellido: true,
+                        correo: true,
+                        telefonoMovil: true,
+                        idUsuario: true,
+                    },
+                });
+            }
+
+            if (!empleado) {
+                throw new BadRequestException(
+                    'No se encontró un empleado asociado al documento de firma',
+                );
+            }
+
+            if (!empleado.telefonoMovil) {
+                throw new BadRequestException(
+                    'El empleado no tiene un teléfono registrado',
+                );
+            }
+
+            destinatario = {
+                idEmpleado: empleado.idEmpleado,
+                nombre: empleado.nombre || "",
+                primerApellido: empleado.primerApellido || "",
+                correo: empleado.correo || "",
+                telefono: empleado.telefonoMovil,
+                idUsuario: empleado.idUsuario,
+            };
+        }
+
+        // ESCENARIO 2: Documento asociado a un candidato.
+        else if (documento.idCandidato) {
+            const candidato = await this.prisma.postulaciones.findUnique({
                 where: {
-                    idEmpleado: documento.idEmpleado,
-                    activo: true,
+                    idPostulacion: documento.idCandidato,
                 },
                 select: {
-                    idEmpleado: true,
+                    idPostulacion: true,
                     nombre: true,
                     primerApellido: true,
                     correo: true,
-                    telefonoMovil: true,
-                    idUsuario: true,
+                    telefono: true,
                 },
             });
+
+            if (!candidato) {
+                throw new BadRequestException(
+                    'No se encontró un candidato asociado al documento de firma',
+                );
+            }
+
+            if (!candidato.telefono) {
+                throw new BadRequestException(
+                    'El candidato no tiene un teléfono registrado',
+                );
+            }
+
+            destinatario = {
+                nombre: candidato.nombre,
+                primerApellido: candidato.primerApellido,
+                correo: candidato.correo,
+                telefono: candidato.telefono,
+            };
         }
 
-        if (!empleado) {
+        // Si no tiene ninguno de los dos identificadores.
+        else {
             throw new BadRequestException(
-                'No se encontró un empleado asociado al documento de firma',
-            );
-        }
-
-        if (!empleado.telefonoMovil) {
-            throw new BadRequestException(
-                'El empleado no tiene un teléfono registrado',
+                'El documento no está asociado a un empleado ni a un candidato',
             );
         }
 
@@ -1521,33 +1867,38 @@ export class DocumentosTemplatesService {
         });
 
         const nombreCompleto = [
-            empleado.nombre,
-            empleado.primerApellido,
+            destinatario.nombre,
+            destinatario.primerApellido,
         ]
             .filter(Boolean)
             .join(' ');
 
-        const userUuid =
-            empleado.idUsuario || `empleado-${empleado.idEmpleado}`;
+        // El UUID del empleado se conserva para el flujo anterior.
+        // Para candidatos usamos un identificador propio.
+        const userUuid = destinatario.idEmpleado
+            ? destinatario.idUsuario || `empleado-${destinatario.idEmpleado}`
+            : `candidato-${documento.idCandidato}`;
 
         await this.notifications.notify({
             userUuid,
             notificationTypeCode: 'CONTRACT_SIGN_TOKEN',
-            to: empleado.correo || undefined,
-            phone: empleado.telefonoMovil,
+            to: destinatario.correo || undefined,
+            phone: destinatario.telefono,
             subject: 'Código de Validación',
-            context: { otp },
+            context: {
+                otp,
+            },
         });
 
         this.logger.log(
-            documento.contrato
-                ? `OTP de firma enviado a ${empleado.telefonoMovil} para contrato ${documento.contrato.idContrato}`
-                : `OTP de firma enviado a ${empleado.telefonoMovil} para documento generado ${documento.id}`,
+            documento.idEmpleado
+                ? `OTP de firma enviado a ${destinatario.telefono} para empleado ${documento.idEmpleado}, documento ${documento.id}`
+                : `OTP de firma enviado a ${destinatario.telefono} para candidato ${documento.idCandidato}, documento ${documento.id}`,
         );
 
         return {
             sent: true,
-            phone: `***${empleado.telefonoMovil.slice(-4)}`,
+            phone: `***${destinatario.telefono.slice(-4)}`,
         };
     }
 
