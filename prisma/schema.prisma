@@ -1147,6 +1147,7 @@ model Empleados {
   CursoSesiones                                                                              CursoSesiones[]
   DispositivosAsistencia                                                                     DispositivosAsistencia[]
   DocumentosGenerados                                                                        DocumentosGenerados[]
+  EmpleadoIdentificadoresExternos                                                            EmpleadoIdentificadoresExternos[]
   CatPuestos                                                                                 CatPuestos?                        @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
   Empleados                                                                                  Empleados?                         @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                                                            Empleados[]                        @relation("EmpleadosToEmpleados")
@@ -2871,6 +2872,23 @@ model RelEmpleadosPostulaciones {
   Postulaciones Postulaciones @relation(fields: [idPostulacion], references: [idPostulacion], map: "FK_RelEmpPost_Postulacion")
 
   @@index([idEmpleado], map: "IDX_RelEmpleadosPostulaciones_Empleado")
+}
+
+model EmpleadoIdentificadoresExternos {
+  idIdentificadorExterno Int       @id @default(autoincrement())
+  idTenant               Int
+  idEmpleado             Int
+  sistemaOrigen          String    @default("NOMINA") @db.VarChar(100)
+  empresaOrigen          String    @db.VarChar(150)
+  tipoIdentificador      String    @default("NUMERO_EMPLEADO") @db.VarChar(100)
+  identificador          String    @db.VarChar(100)
+  activo                 Boolean   @default(true)
+  fechaRegistro          DateTime? @default(now()) @db.Timestamp(0)
+  Empleados              Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "FK_Identificadores_Empleados")
+
+  @@unique([idEmpleado, sistemaOrigen, empresaOrigen, tipoIdentificador], map: "UK_Empleado_Sistema_Externo")
+  @@unique([idTenant, sistemaOrigen, empresaOrigen, tipoIdentificador, identificador], map: "UK_Identificador_Externo")
+  @@index([idEmpleado], map: "IDX_Identificadores_Empleado")
 }
 
 enum Entrevistas_interview_type {

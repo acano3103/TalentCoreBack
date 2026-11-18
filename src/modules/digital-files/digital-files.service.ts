@@ -2326,6 +2326,1336 @@ export class DigitalFilesService {
     };
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // GENERAR PLANTILLA EXCEL PARA ACTUALIZACIÓN MASIVA DE EXPEDIENTES
+  // ─────────────────────────────────────────────────────────────
+
+  async generateBulkUpdateTemplate(
+    companyId: number,
+    user: ActiveUserDto
+  ): Promise<Buffer> {
+
+    if (!user.idTenant) {
+      throw new InternalServerErrorException(
+        'El usuario no tiene un tenant asignado.'
+      );
+    }
+
+    // ── 1. Obtener empleados activos de la empresa ──
+
+    const empleados = await this.prisma.empleados.findMany({
+      where: {
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        activo: true,
+      },
+      select: {
+        idEmpleado: true,
+        numeroEmpleado: true,
+        idPuesto: true,
+        idSite: true,
+        nombre: true,
+        primerApellido: true,
+        segundoApellido: true,
+        numeroSeguroSocial: true,
+        idEstadoCivil: true,
+        fechaNacimiento: true,
+        fechaIngreso: true,
+        curp: true,
+        rfc: true,
+        correo: true,
+        telefonoMovil: true,
+        telefonoLocal: true,
+        idNivelEstudios: true,
+        idGenero: true,
+      },
+      orderBy: [
+        { primerApellido: 'asc' },
+        { segundoApellido: 'asc' },
+        { nombre: 'asc' },
+      ],
+    });
+
+    if (!empleados.length) {
+      throw new BadRequestException(
+        'No hay empleados activos registrados para esta empresa.'
+      );
+    }
+
+    const empleadoIds = empleados.map(e => e.idEmpleado);
+
+    // ── 2. Obtener información complementaria y catálogos ──
+
+    const [
+      domicilios,
+      datosBancarios,
+      lugaresNacimiento,
+      generos,
+      estadosCiviles,
+      escolaridades,
+      puestos,
+      sites,
+      identificadoresExternos,
+    ] = await Promise.all([
+
+      this.prisma.domicilioEmpleado.findMany({
+        where: {
+          idEmpleado: { in: empleadoIds },
+        },
+      }),
+
+      this.prisma.datosBancarios.findMany({
+        where: {
+          idEmpleado: { in: empleadoIds },
+        },
+      }),
+
+      this.prisma.lugarNacimiento.findMany({
+        where: {
+          idEmpleado: { in: empleadoIds },
+        },
+      }),
+
+      // Catálogo de género
+      this.prisma.catGenero.findMany({
+        where: {
+          Activo: true,
+        },
+        orderBy: {
+          Descripcion: 'asc',
+        },
+      }),
+
+      // Catálogo de estado civil
+      this.prisma.catEstadoCivil.findMany({
+        where: {
+          Activo: true,
+        },
+        orderBy: {
+          Descripcion: 'asc',
+        },
+      }),
+
+      // Catálogo de escolaridad
+      this.prisma.catEscolaridad.findMany({
+        where: {
+          Activo: true,
+        },
+        orderBy: {
+          Descripcion: 'asc',
+        },
+      }),
+
+      // Catálogo completo de puestos de la empresa
+      this.prisma.catPuestos.findMany({
+        where: {
+          idEmpresa: companyId,
+          idTenant: user.idTenant,
+          Activo: true,
+          aprobada: true,
+          pendiente: false,
+        },
+        select: {
+          idPuesto: true,
+          NombrePuesto: true,
+        },
+        orderBy: {
+          NombrePuesto: 'asc',
+        },
+      }),
+
+      // Catálogo completo de ubicaciones de la empresa
+      this.prisma.catSites.findMany({
+        where: {
+          idEmpresa: companyId,
+          idTenant: user.idTenant,
+          Activo: true,
+        },
+        select: {
+          idSite: true,
+          Descripcion: true,
+        },
+        orderBy: {
+          Descripcion: 'asc',
+        },
+      }),
+
+      // Identificadores externos de los empleados
+      this.prisma.empleadoIdentificadoresExternos.findMany({
+        where: {
+          idTenant: user.idTenant,
+          idEmpleado: {
+            in: empleadoIds,
+          },
+          activo: true,
+        },
+        select: {
+          idIdentificadorExterno: true,
+          idEmpleado: true,
+          sistemaOrigen: true,
+          empresaOrigen: true,
+          tipoIdentificador: true,
+          identificador: true,
+        },
+        orderBy: {
+          idIdentificadorExterno: 'asc',
+        },
+      }),
+    ]);
+
+    // ── 3. Crear mapas para relacionar información ──
+
+    const domicilioMap = new Map(
+      domicilios.map(d => [d.idEmpleado, d])
+    );
+
+    const bancarioMap = new Map(
+      datosBancarios.map(d => [d.idEmpleado, d])
+    );
+
+    const nacimientoMap = new Map(
+      lugaresNacimiento.map(d => [d.idEmpleado, d])
+    );
+
+    const generoMap = new Map(
+      generos.map(g => [g.idGenero, g.Descripcion])
+    );
+
+    const estadoCivilMap = new Map(
+      estadosCiviles.map(e => [e.idEstadoCivil, e.Descripcion])
+    );
+
+    const escolaridadMap = new Map(
+      escolaridades.map(e => [e.idNivelEstudios, e.Descripcion])
+    );
+
+    const puestoMap = new Map(
+      puestos.map(p => [p.idPuesto, p.NombrePuesto])
+    );
+
+    const siteMap = new Map(
+      sites.map(s => [s.idSite, s.Descripcion])
+    );
+
+    // Relacionar identificadores externos por empleado.
+    // Se conserva el primer registro activo de cada empleado.
+    const identificadorExternoMap = new Map(
+      identificadoresExternos.map(identificador => [
+        identificador.idEmpleado,
+        identificador,
+      ])
+    );
+
+    // ── 4. Crear workbook ──
+    const workbook = new ExcelJS.Workbook();
+
+    workbook.creator = 'Talent Core';
+    workbook.created = new Date();
+
+    // ── 5. Hoja de instrucciones ──
+    const instructionsSheet = workbook.addWorksheet('Instrucciones');
+
+    instructionsSheet.columns = [{ width: 115 }];
+
+    instructionsSheet.addRow([
+      'ACTUALIZACIÓN MASIVA DE EXPEDIENTES'
+    ]);
+
+    instructionsSheet.addRow([]);
+    instructionsSheet.addRow([
+      '1. Este archivo contiene empleados existentes de la empresa seleccionada.'
+    ]);
+    instructionsSheet.addRow([
+      '2. Completa únicamente los campos que se encuentren pendientes de información.'
+    ]);
+    instructionsSheet.addRow([
+      '3. No modifiques los datos de identificación de los empleados.'
+    ]);
+    instructionsSheet.addRow([
+      '4. No elimines ni agregues filas.'
+    ]);
+    instructionsSheet.addRow([
+      '5. Las celdas vacías se considerarán campos sin información y no deberán sobrescribir datos existentes.'
+    ]);
+    instructionsSheet.addRow([
+      '6. Las fechas deben conservar el formato YYYY-MM-DD.'
+    ]);
+    instructionsSheet.addRow([
+      '7. El identificador interno del empleado se encuentra en una columna oculta.'
+    ]);
+    instructionsSheet.addRow([
+      '8. Los campos Género, Estado Civil, Escolaridad, Puesto y Ubicación deben seleccionarse de las listas desplegables.'
+    ]);
+    instructionsSheet.addRow([
+      '9. No escribas manualmente valores en los campos que tienen listas desplegables.'
+    ]);
+    instructionsSheet.addRow([
+      '10. Los campos Sistema de Origen, Empresa de Origen e Identificador corresponden al identificador del empleado en el sistema de nómina.'
+    ]);
+
+    instructionsSheet.getRow(1).font = {
+      bold: true,
+      size: 16,
+      color: { argb: 'FF1E293B' },
+    };
+
+    instructionsSheet.getColumn(1).alignment = {
+      vertical: 'middle',
+      wrapText: true,
+    };
+
+    instructionsSheet.getRow(1).height = 30;
+
+    // ── 6. Hoja de catálogos ──
+
+    const catalogsSheet = workbook.addWorksheet('Catalogos');
+
+    catalogsSheet.columns = [
+      { header: 'Género', key: 'genero', width: 25 },
+      { header: 'Estado Civil', key: 'estadoCivil', width: 25 },
+      { header: 'Escolaridad', key: 'escolaridad', width: 30 },
+      { header: 'Puesto', key: 'puesto', width: 40 },
+      { header: 'Ubicación', key: 'site', width: 35 },
+    ];
+
+    const catalogsHeader = catalogsSheet.getRow(1);
+
+    catalogsHeader.height = 30;
+
+    catalogsHeader.eachCell(cell => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1E293B' },
+      };
+
+      cell.font = {
+        bold: true,
+        color: { argb: 'FFFFFFFF' },
+      };
+
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+      };
+    });
+
+    // Agregar opciones de los catálogos
+    const catalogLists = [
+      {
+        column: 1,
+        name: 'ListaGenero',
+        values: generos.map(g => g.Descripcion),
+      },
+      {
+        column: 2,
+        name: 'ListaEstadoCivil',
+        values: estadosCiviles.map(e => e.Descripcion),
+      },
+      {
+        column: 3,
+        name: 'ListaEscolaridad',
+        values: escolaridades.map(e => e.Descripcion),
+      },
+      {
+        column: 4,
+        name: 'ListaPuestos',
+        values: puestos.map(p => p.NombrePuesto),
+      },
+      {
+        column: 5,
+        name: 'ListaSites',
+        values: sites.map(s => s.Descripcion),
+      },
+    ];
+
+    catalogLists.forEach(catalog => {
+      catalog.values.forEach((value, index) => {
+        catalogsSheet.getCell(index + 2, catalog.column).value = value;
+      });
+
+      if (catalog.values.length > 0) {
+        const lastRow = catalog.values.length + 1;
+        const columnLetter = String.fromCharCode(64 + catalog.column);
+
+        workbook.definedNames.add(
+          `'Catalogos'!$${columnLetter}$2:$${columnLetter}$${lastRow}`,
+          catalog.name
+        );
+      }
+    });
+
+    catalogsSheet.views = [
+      {
+        state: 'frozen',
+        ySplit: 1,
+      },
+    ];
+
+    catalogsSheet.autoFilter = {
+      from: 'A1',
+      to: {
+        row: Math.max(
+          1,
+          ...catalogLists.map(c => c.values.length + 1)
+        ),
+        column: 5,
+      },
+    };
+
+    // ── 7. Hoja principal de expedientes ──
+
+    const mainSheet = workbook.addWorksheet('Expedientes');
+
+    mainSheet.views = [
+      {
+        state: 'frozen',
+        ySplit: 1,
+        xSplit: 1,
+      },
+    ];
+
+    mainSheet.columns = [
+      // Identificador interno oculto
+      { header: 'ID Empleado', key: 'idEmpleado', width: 15, hidden: true },
+
+      // Identificación del empleado
+      { header: 'Número de Empleado (Solo lectura)', key: 'numeroEmpleado', width: 30 },
+      { header: 'Nombre', key: 'nombre', width: 22 },
+      { header: 'Primer Apellido', key: 'primerApellido', width: 22 },
+      { header: 'Segundo Apellido', key: 'segundoApellido', width: 22 },
+      { header: 'CURP', key: 'curp', width: 24 },
+      { header: 'RFC', key: 'rfc', width: 20 },
+      { header: 'NSS', key: 'numeroSeguroSocial', width: 20 },
+
+      // Información personal
+      { header: 'Fecha de Nacimiento', key: 'fechaNacimiento', width: 22 },
+      { header: 'Género', key: 'genero', width: 20 },
+      { header: 'Estado Civil', key: 'estadoCivil', width: 22 },
+      { header: 'Escolaridad', key: 'escolaridad', width: 25 },
+      { header: 'Fecha de Ingreso', key: 'fechaIngreso', width: 22 },
+
+      // Información laboral
+      { header: 'Correo Electrónico', key: 'correo', width: 32 },
+      { header: 'Teléfono Móvil', key: 'telefonoMovil', width: 22 },
+      { header: 'Teléfono Local', key: 'telefonoLocal', width: 22 },
+      { header: 'Puesto', key: 'puesto', width: 30 },
+      { header: 'Ubicación / Site', key: 'site', width: 25 },
+
+      // Domicilio
+      { header: 'Código Postal', key: 'codigoPostal', width: 18 },
+      { header: 'Calle', key: 'calle', width: 30 },
+      { header: 'Número Exterior', key: 'numeroExterior', width: 20 },
+      { header: 'Número Interior', key: 'numeroInterior', width: 20 },
+      { header: 'Colonia', key: 'colonia', width: 30 },
+      { header: 'Municipio', key: 'municipio', width: 25 },
+      { header: 'Estado', key: 'estadoDomicilio', width: 25 },
+
+      // Datos bancarios
+      { header: 'Banco', key: 'banco', width: 25 },
+      { header: 'Cuenta Bancaria', key: 'cuentaBancaria', width: 28 },
+
+      // Lugar de nacimiento
+      { header: 'Lugar de Nacimiento', key: 'lugarNacimiento', width: 28 },
+      { header: 'País de Nacimiento', key: 'pais', width: 25 },
+      { header: 'Nacionalidad', key: 'nacionalidad', width: 25 },
+      { header: 'Estado de Nacimiento', key: 'estadoNacimiento', width: 25 },
+
+      // Identificadores externos de nómina (al final)
+      { header: 'Sistema de Origen', key: 'sistemaOrigen', width: 25 },
+      { header: 'Empresa de Origen', key: 'empresaOrigen', width: 30 },
+      { header: 'Identificador Externo', key: 'identificadorExterno', width: 25 },
+    ];
+
+    // ── 8. Estilizar encabezados ──
+
+    const headerRow = mainSheet.getRow(1);
+
+    headerRow.height = 35;
+
+    headerRow.eachCell((cell, colNumber) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: {
+          argb: colNumber === 1 ? 'FF475569' : 'FF1E293B',
+        },
+      };
+
+      cell.font = {
+        name: 'Calibri',
+        size: 10,
+        bold: true,
+        color: { argb: 'FFFFFFFF' },
+      };
+
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: true,
+      };
+    });
+
+    // ── 9. Agregar empleados existentes ──
+
+    empleados.forEach(empleado => {
+
+      const domicilio = domicilioMap.get(empleado.idEmpleado);
+      const bancario = bancarioMap.get(empleado.idEmpleado);
+      const nacimiento = nacimientoMap.get(empleado.idEmpleado);
+      const identificadorExterno = identificadorExternoMap.get(
+        empleado.idEmpleado
+      );
+
+      const row = mainSheet.addRow({
+        idEmpleado: empleado.idEmpleado,
+        numeroEmpleado: empleado.numeroEmpleado ?? '',
+        nombre: empleado.nombre ?? '',
+        primerApellido: empleado.primerApellido ?? '',
+        segundoApellido: empleado.segundoApellido ?? '',
+        curp: empleado.curp ?? '',
+        rfc: empleado.rfc ?? '',
+        numeroSeguroSocial: empleado.numeroSeguroSocial ?? '',
+        fechaNacimiento: empleado.fechaNacimiento ?? null,
+        genero: empleado.idGenero ? generoMap.get(empleado.idGenero) ?? '' : '',
+        estadoCivil: empleado.idEstadoCivil
+          ? estadoCivilMap.get(empleado.idEstadoCivil) ?? ''
+          : '',
+        escolaridad: empleado.idNivelEstudios
+          ? escolaridadMap.get(empleado.idNivelEstudios) ?? ''
+          : '',
+        fechaIngreso: empleado.fechaIngreso ?? null,
+        correo: empleado.correo ?? '',
+        telefonoMovil: empleado.telefonoMovil ?? '',
+        telefonoLocal: empleado.telefonoLocal ?? '',
+        puesto: empleado.idPuesto
+          ? puestoMap.get(empleado.idPuesto) ?? ''
+          : '',
+        site: empleado.idSite
+          ? siteMap.get(empleado.idSite) ?? ''
+          : '',
+        codigoPostal: domicilio?.codigoPostal ?? '',
+        calle: domicilio?.calle ?? '',
+        numeroExterior: domicilio?.numeroExterior ?? '',
+        numeroInterior: domicilio?.numeroInterior ?? '',
+        colonia: domicilio?.colonia ?? '',
+        municipio: domicilio?.municipio ?? '',
+        estadoDomicilio: domicilio?.estado ?? '',
+        banco: bancario?.banco ?? '',
+        cuentaBancaria: bancario?.cuentaBancaria ?? '',
+        lugarNacimiento: nacimiento?.lugar ?? '',
+        pais: nacimiento?.pais ?? '',
+        nacionalidad: nacimiento?.nacionalidad ?? '',
+        estadoNacimiento: nacimiento?.estado ?? '',
+        // Identificadores externos
+        sistemaOrigen: identificadorExterno?.sistemaOrigen ?? '',
+        empresaOrigen: identificadorExterno?.empresaOrigen ?? '',
+        identificadorExterno: identificadorExterno?.identificador ?? '',
+      });
+
+      // Formato de fechas
+      row.getCell(9).numFmt = 'yyyy-mm-dd';
+      row.getCell(13).numFmt = 'yyyy-mm-dd';
+
+      // Diferenciar visualmente el número de empleado
+      row.getCell(2).font = {
+        color: { argb: 'FF64748B' },
+        italic: true,
+      };
+    });
+
+    // ── 10. Configurar listas desplegables ──
+    const dropdownColumns = [
+      {
+        column: 10,
+        catalogName: 'ListaGenero',
+        error: 'Selecciona un género disponible en el catálogo.',
+      },
+      {
+        column: 11,
+        catalogName: 'ListaEstadoCivil',
+        error: 'Selecciona un estado civil disponible en el catálogo.',
+      },
+      {
+        column: 12,
+        catalogName: 'ListaEscolaridad',
+        error: 'Selecciona una escolaridad disponible en el catálogo.',
+      },
+      {
+        column: 17,
+        catalogName: 'ListaPuestos',
+        error: 'Selecciona un puesto disponible en el catálogo.',
+      },
+      {
+        column: 18,
+        catalogName: 'ListaSites',
+        error: 'Selecciona una ubicación disponible en el catálogo.',
+      },
+    ];
+
+    dropdownColumns.forEach(dropdown => {
+      const catalog = catalogLists.find(
+        c => c.name === dropdown.catalogName
+      );
+      if (!catalog || catalog.values.length === 0) {
+        return;
+      }
+
+      for (let rowNumber = 2; rowNumber <= mainSheet.rowCount; rowNumber++) {
+
+        mainSheet.getCell(rowNumber, dropdown.column).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: [`=${dropdown.catalogName}`],
+          showInputMessage: true,
+          promptTitle: 'Selecciona una opción',
+          prompt: 'Utiliza la lista desplegable para seleccionar un valor.',
+          showErrorMessage: true,
+          errorStyle: 'stop',
+          errorTitle: 'Valor no permitido',
+          error: dropdown.error,
+        };
+      }
+    });
+
+    // ── 11. Filtros y formato de la hoja ──
+    mainSheet.autoFilter = {
+      from: 'B1',
+      to: {
+        row: 1,
+        column: mainSheet.columnCount,
+      },
+    };
+
+    mainSheet.eachRow((row, rowNumber) => {
+
+      if (rowNumber > 1) {
+
+        row.alignment = {
+          vertical: 'middle',
+        };
+
+        if (rowNumber % 2 === 0) {
+
+          row.eachCell(cell => {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFF1F5F9' },
+            };
+          });
+        }
+      }
+    });
+
+    // ── 12. Generar archivo ──
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    return Buffer.from(buffer);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ACTUALIZACIÓN MASIVA DE EXPEDIENTES
+  // ─────────────────────────────────────────────────────────────
+  async updateBulkExpedientes(
+    companyId: number,
+    user: ActiveUserDto,
+    file: Express.Multer.File
+  ) {
+    if (!user.idTenant) {
+      throw new InternalServerErrorException(
+        'El usuario no tiene un tenant asignado.'
+      );
+    }
+
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Debes proporcionar un archivo Excel.');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+
+    try {
+      await workbook.xlsx.load(file.buffer as any);
+    } catch {
+      throw new BadRequestException(
+        'No fue posible leer el archivo. Verifica que sea un Excel .xlsx válido.'
+      );
+    }
+
+    const sheet = workbook.getWorksheet('Expedientes');
+
+    if (!sheet || sheet.rowCount < 2) {
+      throw new BadRequestException(
+        'El archivo no contiene la hoja Expedientes o no tiene registros.'
+      );
+    }
+
+    // ── 1. Leer filas del Excel ──
+    const filas: Array<{
+      numeroFila: number;
+      idEmpleado: number;
+      valores: Record<string, any>;
+    }> = [];
+
+    for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber++) {
+      const row = sheet.getRow(rowNumber);
+
+      const idEmpleado = Number(row.getCell(1).value);
+
+      // Ignorar filas completamente vacías
+      if (!row.getCell(1).value) {
+        continue;
+      }
+
+      if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+        filas.push({
+          numeroFila: rowNumber,
+          idEmpleado: 0,
+          valores: {},
+        });
+        continue;
+      }
+
+      filas.push({
+        numeroFila: rowNumber,
+        idEmpleado,
+        valores: {
+          nombre: this.getExcelString(row.getCell(3).value),
+          primerApellido: this.getExcelString(row.getCell(4).value),
+          segundoApellido: this.getExcelString(row.getCell(5).value),
+          curp: this.getExcelString(row.getCell(6).value)?.toUpperCase(),
+          rfc: this.getExcelString(row.getCell(7).value),
+          numeroSeguroSocial: this.getExcelString(row.getCell(8).value),
+          fechaNacimiento: row.getCell(9).value,
+          genero: this.getExcelString(row.getCell(10).value),
+          estadoCivil: this.getExcelString(row.getCell(11).value),
+          escolaridad: this.getExcelString(row.getCell(12).value),
+          fechaIngreso: row.getCell(13).value,
+          correo: this.getExcelString(row.getCell(14).value),
+          telefonoMovil: this.getExcelString(row.getCell(15).value),
+          telefonoLocal: this.getExcelString(row.getCell(16).value),
+          puesto: this.getExcelString(row.getCell(17).value),
+          site: this.getExcelString(row.getCell(18).value),
+
+          codigoPostal: this.getExcelString(row.getCell(19).value),
+          calle: this.getExcelString(row.getCell(20).value),
+          numeroExterior: this.getExcelString(row.getCell(21).value),
+          numeroInterior: this.getExcelString(row.getCell(22).value),
+          colonia: this.getExcelString(row.getCell(23).value),
+          municipio: this.getExcelString(row.getCell(24).value),
+          estadoDomicilio: this.getExcelString(row.getCell(25).value),
+
+          banco: this.getExcelString(row.getCell(26).value),
+          cuentaBancaria: this.getExcelString(row.getCell(27).value),
+
+          lugarNacimiento: this.getExcelString(row.getCell(28).value),
+          pais: this.getExcelString(row.getCell(29).value),
+          nacionalidad: this.getExcelString(row.getCell(30).value),
+          estadoNacimiento: this.getExcelString(row.getCell(31).value),
+
+          sistemaOrigen: this.getExcelString(row.getCell(32).value),
+          empresaOrigen: this.getExcelString(row.getCell(33).value),
+          identificadorExterno: this.getExcelString(row.getCell(34).value),
+        },
+      });
+    }
+
+    if (!filas.length) {
+      throw new BadRequestException(
+        'El archivo no contiene empleados para actualizar.'
+      );
+    }
+
+    // ── 2. Obtener empleados pertenecientes a la empresa ──
+
+    const idsEmpleados = filas
+      .filter(f => f.idEmpleado > 0)
+      .map(f => f.idEmpleado);
+
+    const empleados = await this.prisma.empleados.findMany({
+      where: {
+        idEmpleado: { in: idsEmpleados },
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        activo: true,
+      },
+      select: {
+        idEmpleado: true,
+        curp: true,
+        activo: true,
+      },
+    });
+
+    const empleadosMap = new Map(
+      empleados.map(e => [e.idEmpleado, e])
+    );
+
+    // ── 3. Obtener empleados activos para validar CURP ──
+
+    const empleadosActivos = await this.prisma.empleados.findMany({
+      where: {
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        activo: true,
+        curp: {
+          not: null,
+        },
+      },
+      select: {
+        idEmpleado: true,
+        curp: true,
+      },
+    });
+
+    // CURP -> IDs de empleados que la utilizan actualmente
+    const curpMap = new Map<string, Set<number>>();
+
+    empleadosActivos.forEach(empleado => {
+      const curp = this.normalizeCurp(empleado.curp);
+
+      if (!curp) return;
+
+      if (!curpMap.has(curp)) {
+        curpMap.set(curp, new Set<number>());
+      }
+
+      curpMap.get(curp)!.add(empleado.idEmpleado);
+    });
+
+    // ── 4. Obtener catálogos ──
+
+    const [
+      generos,
+      estadosCiviles,
+      escolaridades,
+      puestos,
+      sites,
+    ] = await Promise.all([
+
+      this.prisma.catGenero.findMany({
+        where: { Activo: true },
+      }),
+
+      this.prisma.catEstadoCivil.findMany({
+        where: { Activo: true },
+      }),
+
+      this.prisma.catEscolaridad.findMany({
+        where: { Activo: true },
+      }),
+
+      this.prisma.catPuestos.findMany({
+        where: {
+          idEmpresa: companyId,
+          idTenant: user.idTenant,
+          Activo: true,
+          aprobada: true,
+          pendiente: false,
+        },
+        select: {
+          idPuesto: true,
+          NombrePuesto: true,
+        },
+      }),
+
+      this.prisma.catSites.findMany({
+        where: {
+          idEmpresa: companyId,
+          idTenant: user.idTenant,
+          Activo: true,
+        },
+        select: {
+          idSite: true,
+          Descripcion: true,
+        },
+      }),
+    ]);
+
+    const generoMap = new Map(
+      generos.map(g => [
+        this.normalizeCatalogValue(g.Descripcion),
+        g.idGenero,
+      ])
+    );
+
+    const estadoCivilMap = new Map(
+      estadosCiviles.map(e => [
+        this.normalizeCatalogValue(e.Descripcion),
+        e.idEstadoCivil,
+      ])
+    );
+
+    const escolaridadMap = new Map(
+      escolaridades.map(e => [
+        this.normalizeCatalogValue(e.Descripcion),
+        e.idNivelEstudios,
+      ])
+    );
+
+    const puestoMap = new Map(
+      puestos.map(p => [
+        this.normalizeCatalogValue(p.NombrePuesto),
+        p.idPuesto,
+      ])
+    );
+
+    const siteMap = new Map(
+      sites.map(s => [
+        this.normalizeCatalogValue(s.Descripcion),
+        s.idSite,
+      ])
+    );
+
+    // ── 5. Procesar empleados individualmente ──
+
+    const errores: Array<{
+      fila: number;
+      idEmpleado: number | null;
+      mensaje: string;
+    }> = [];
+
+    let actualizados = 0;
+    let omitidos = 0;
+
+    for (const fila of filas) {
+      const { numeroFila, idEmpleado, valores } = fila;
+
+      try {
+        if (!idEmpleado) {
+          throw new Error('El ID interno del empleado no es válido.');
+        }
+
+        const empleadoActual = empleadosMap.get(idEmpleado);
+
+        if (!empleadoActual) {
+          throw new Error(
+            'El empleado no existe, no pertenece a esta empresa o está inactivo.'
+          );
+        }
+
+        // ── 5.1 Validar CURP duplicada ──
+
+        const nuevaCurp = this.normalizeCurp(valores.curp);
+        const curpActual = this.normalizeCurp(empleadoActual.curp);
+
+        if (nuevaCurp && nuevaCurp !== curpActual) {
+          const propietarios = curpMap.get(nuevaCurp);
+
+          const duplicado = propietarios
+            ? [...propietarios].some(id => id !== idEmpleado)
+            : false;
+
+          if (duplicado) {
+            throw new Error(
+              `La CURP ${nuevaCurp} ya pertenece a otro empleado activo de esta empresa.`
+            );
+          }
+        }
+
+        // ── 5.2 Preparar actualización del empleado ──
+
+        const empleadoData: Record<string, any> = {};
+
+        const camposEmpleado = [
+          'nombre',
+          'primerApellido',
+          'segundoApellido',
+          'curp',
+          'rfc',
+          'numeroSeguroSocial',
+          'correo',
+          'telefonoMovil',
+          'telefonoLocal',
+        ];
+
+        camposEmpleado.forEach(campo => {
+          const valor = valores[campo];
+
+          if (valor !== undefined && valor !== null && valor !== '') {
+            empleadoData[campo] = valor;
+          }
+        });
+
+        // Fechas
+        if (valores.fechaNacimiento !== null &&
+          valores.fechaNacimiento !== undefined &&
+          valores.fechaNacimiento !== '') {
+          empleadoData.fechaNacimiento =
+            this.parseExcelDate(valores.fechaNacimiento);
+        }
+
+        if (valores.fechaIngreso !== null &&
+          valores.fechaIngreso !== undefined &&
+          valores.fechaIngreso !== '') {
+          empleadoData.fechaIngreso =
+            this.parseExcelDate(valores.fechaIngreso);
+        }
+
+        // Catálogos
+        const catalogFields = [
+          {
+            excelField: 'genero',
+            dbField: 'idGenero',
+            catalog: generoMap,
+            label: 'Género',
+          },
+          {
+            excelField: 'estadoCivil',
+            dbField: 'idEstadoCivil',
+            catalog: estadoCivilMap,
+            label: 'Estado civil',
+          },
+          {
+            excelField: 'escolaridad',
+            dbField: 'idNivelEstudios',
+            catalog: escolaridadMap,
+            label: 'Escolaridad',
+          },
+          {
+            excelField: 'puesto',
+            dbField: 'idPuesto',
+            catalog: puestoMap,
+            label: 'Puesto',
+          },
+          {
+            excelField: 'site',
+            dbField: 'idSite',
+            catalog: siteMap,
+            label: 'Ubicación',
+          },
+        ];
+
+        for (const field of catalogFields) {
+          const value = valores[field.excelField];
+
+          if (!value) continue;
+
+          const id = field.catalog.get(
+            this.normalizeCatalogValue(value)
+          );
+
+          if (!id) {
+            throw new Error(
+              `${field.label}: "${value}" no existe en el catálogo activo de esta empresa.`
+            );
+          }
+
+          empleadoData[field.dbField] = id;
+        }
+
+        // ── 5.3 Preparar domicilio ──
+
+        const domicilioData: Record<string, any> = {};
+
+        const domicilioFields = {
+          codigoPostal: 'codigoPostal',
+          calle: 'calle',
+          numeroExterior: 'numeroExterior',
+          numeroInterior: 'numeroInterior',
+          colonia: 'colonia',
+          municipio: 'municipio',
+          estadoDomicilio: 'estado',
+        };
+
+        Object.entries(domicilioFields).forEach(([excelField, dbField]) => {
+          const value = valores[excelField];
+
+          if (value !== undefined && value !== null && value !== '') {
+            domicilioData[dbField] = value;
+          }
+        });
+
+        // ── 5.4 Preparar datos bancarios ──
+
+        const bancarioData: Record<string, any> = {};
+
+        if (valores.banco) {
+          bancarioData.banco = valores.banco;
+        }
+
+        if (valores.cuentaBancaria) {
+          bancarioData.cuentaBancaria = valores.cuentaBancaria;
+        }
+
+        // ── 5.5 Preparar lugar de nacimiento ──
+
+        const nacimientoData: Record<string, any> = {};
+
+        const nacimientoFields = {
+          lugarNacimiento: 'lugar',
+          pais: 'pais',
+          nacionalidad: 'nacionalidad',
+          estadoNacimiento: 'estado',
+        };
+
+        Object.entries(nacimientoFields).forEach(([excelField, dbField]) => {
+          const value = valores[excelField];
+
+          if (value !== undefined && value !== null && value !== '') {
+            nacimientoData[dbField] = value;
+          }
+        });
+
+        // ── 5.6 Validar identificador externo ──
+
+        const sistemaOrigen = valores.sistemaOrigen;
+        const empresaOrigen = valores.empresaOrigen;
+        const identificadorExterno = valores.identificadorExterno;
+
+        const tieneDatosExternos = Boolean(
+          sistemaOrigen || empresaOrigen || identificadorExterno
+        );
+
+        if (
+          tieneDatosExternos &&
+          (!sistemaOrigen || !empresaOrigen || !identificadorExterno)
+        ) {
+          throw new Error(
+            'Para guardar el identificador externo debes completar Sistema de Origen, Empresa de Origen e Identificador Externo.'
+          );
+        }
+
+        // Si no hay ningún dato para actualizar, no se genera una escritura.
+        const tieneActualizacion =
+          Object.keys(empleadoData).length > 0 ||
+          Object.keys(domicilioData).length > 0 ||
+          Object.keys(bancarioData).length > 0 ||
+          Object.keys(nacimientoData).length > 0 ||
+          tieneDatosExternos;
+
+        if (!tieneActualizacion) {
+          omitidos++;
+          continue;
+        }
+
+        // ── 5.7 Guardar todo en una transacción por empleado ──
+
+        await this.prisma.$transaction(async tx => {
+
+          // Empleados
+          if (Object.keys(empleadoData).length > 0) {
+            await tx.empleados.update({
+              where: {
+                idEmpleado,
+              },
+              data: empleadoData,
+            });
+          }
+
+          // DomicilioEmpleado
+          if (Object.keys(domicilioData).length > 0) {
+            await tx.domicilioEmpleado.upsert({
+              where: {
+                idEmpleado,
+              },
+              create: {
+                idEmpleado,
+                ...domicilioData,
+              },
+              update: domicilioData,
+            });
+          }
+
+          // DatosBancarios
+          if (Object.keys(bancarioData).length > 0) {
+            await tx.datosBancarios.upsert({
+              where: {
+                idEmpleado,
+              },
+              create: {
+                idEmpleado,
+                ...bancarioData,
+              },
+              update: bancarioData,
+            });
+          }
+
+          // LugarNacimiento
+          if (Object.keys(nacimientoData).length > 0) {
+            await tx.lugarNacimiento.upsert({
+              where: {
+                idEmpleado,
+              },
+              create: {
+                idEmpleado,
+                ...nacimientoData,
+              },
+              update: nacimientoData,
+            });
+          }
+
+          // EmpleadoIdentificadoresExternos
+          if (tieneDatosExternos) {
+            const identificadorExistente =
+              await tx.empleadoIdentificadoresExternos.findFirst({
+                where: {
+                  idTenant: user.idTenant,
+                  idEmpleado,
+                  sistemaOrigen,
+                  empresaOrigen,
+                  tipoIdentificador: 'NUMERO_EMPLEADO',
+                },
+                select: {
+                  idIdentificadorExterno: true,
+                },
+              });
+
+            if (identificadorExistente) {
+              await tx.empleadoIdentificadoresExternos.update({
+                where: {
+                  idIdentificadorExterno:
+                    identificadorExistente.idIdentificadorExterno,
+                },
+                data: {
+                  identificador: identificadorExterno,
+                  activo: true,
+                },
+              });
+            } else {
+              await tx.empleadoIdentificadoresExternos.create({
+                data: {
+                  idTenant: user.idTenant,
+                  idEmpleado,
+                  sistemaOrigen,
+                  empresaOrigen,
+                  identificador: identificadorExterno,
+                  activo: true,
+                  // tipoIdentificador usa el default de la BD/Prisma
+                },
+              });
+            }
+          }
+        });
+
+        // ── 5.8 Actualizar mapa de CURP después de guardar ──
+
+        if (nuevaCurp && nuevaCurp !== curpActual) {
+
+          if (curpActual) {
+            const anteriores = curpMap.get(curpActual);
+
+            anteriores?.delete(idEmpleado);
+
+            if (anteriores?.size === 0) {
+              curpMap.delete(curpActual);
+            }
+          }
+
+          if (!curpMap.has(nuevaCurp)) {
+            curpMap.set(nuevaCurp, new Set<number>());
+          }
+
+          curpMap.get(nuevaCurp)!.add(idEmpleado);
+        }
+
+        actualizados++;
+
+      } catch (error: any) {
+        errores.push({
+          fila: numeroFila,
+          idEmpleado: idEmpleado || null,
+          mensaje: error?.message || 'Error desconocido al actualizar el empleado.',
+        });
+      }
+    }
+
+    // ── 6. Respuesta final ──
+
+    return {
+      mensaje: 'Proceso de actualización masiva finalizado.',
+      totalFilas: filas.length,
+      actualizados,
+      omitidos,
+      rechazados: errores.length,
+      errores,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // HELPERS
+  // ─────────────────────────────────────────────────────────────
+
+  private getExcelString(value: any): string | undefined {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+
+    if (typeof value === 'object') {
+      if (value.text !== undefined) {
+        return String(value.text).trim() || undefined;
+      }
+
+      if (Array.isArray(value.richText)) {
+        return value.richText
+          .map((item: any) => item.text)
+          .join('')
+          .trim() || undefined;
+      }
+
+      return undefined;
+    }
+
+    const result = String(value).trim();
+
+    return result || undefined;
+  }
+
+  private normalizeCatalogValue(value: string | null | undefined): string {
+    return (value ?? '').trim().toLocaleUpperCase('es-MX');
+  }
+
+  private normalizeCurp(value: string | null | undefined): string {
+    return (value ?? '').trim().toUpperCase();
+  }
+
+  private parseExcelDate(value: any): Date {
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      return value;
+    }
+
+    // Excel almacena fechas como números seriales.
+    if (typeof value === 'number') {
+      const date = new Date(
+        Date.UTC(1899, 11, 30) + value * 86400000
+      );
+
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim();
+
+      // Evitar diferencias de zona horaria para YYYY-MM-DD.
+      const isoMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+      if (isoMatch) {
+        const year = Number(isoMatch[1]);
+        const month = Number(isoMatch[2]);
+        const day = Number(isoMatch[3]);
+
+        const date = new Date(Date.UTC(year, month - 1, day));
+
+        if (
+          date.getUTCFullYear() === year &&
+          date.getUTCMonth() === month - 1 &&
+          date.getUTCDate() === day
+        ) {
+          return date;
+        }
+      }
+
+      const parsed = new Date(normalized);
+
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+
+    throw new Error(`La fecha "${value}" no tiene un formato válido. Utiliza YYYY-MM-DD.`);
+  }
+
 }
 
 /**

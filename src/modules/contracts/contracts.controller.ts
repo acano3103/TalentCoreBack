@@ -1,11 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, DefaultValuePipe, ParseIntPipe, Res, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { ContractsService } from './contracts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -31,6 +33,27 @@ export class ContractsController {
     return this.contractsService.getReadyToHire(companyId, page, limit, search || '');
   }
 
+  // Endpoint para generar la plantilla de actualización de salarios
+  @Get('bulk/salaries/template')
+  @ApiOperation({ summary: 'Download salary update template Excel', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'Template downloaded successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async downloadSalaryTemplate(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.contractsService.generateSalaryUpdateTemplate(companyId);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=Plantilla_Actualizacion_Salarios_${companyId}.xlsx`,
+    );
+    res.send(buffer);
+  }
+
   @Post(':employeeId')
   @ApiOperation({ summary: 'Create a contract for an employee', description: SWAGGER_AUTH_DESCRIPTION })
   @ApiResponse({ status: 201, description: 'Contract created successfully' })
@@ -43,6 +66,20 @@ export class ContractsController {
     @GetActiveUser() activeUser: ActiveUserDto,
   ) {
     return this.contractsService.create(companyId, employeeId, dto, activeUser);
+  }
+
+  @Post('bulk/salaries/update')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Process bulk salary update from Excel file', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Salaries updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid file or data' })
+  async uploadBulkSalaries(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return await this.contractsService.processBulkSalariesUpdate(companyId, file, activeUser);
   }
 
   @Patch(':contractId/status')

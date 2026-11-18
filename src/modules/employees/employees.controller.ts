@@ -10,6 +10,7 @@ import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 import { UpdateImmediateBossDto } from './dto/update-immediate-boss.dto';
 import { UpdateEmployeeGeneralDataDto } from './dto/update-employee-general-data.dto';
+import { UpdateEmployeeExternalIdentifiersDto } from './dto/update-employee-external-identifiers.dto';
 
 @ApiTags('Employees')
 @ApiBearerAuth()
@@ -137,6 +138,20 @@ export class EmployeesController {
     @GetActiveUser() activeUser: ActiveUserDto,
   ) {
     return this.employeesService.updateEmployee(activeUser, companyId, employeeId, employeeData);
+  }
+
+  @Patch(':employeeId/external-identifiers')
+  @ApiOperation({ summary: 'Update employee external identifiers.', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'External identifiers updated successfully' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  updateExternalIdentifiers(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() dto: UpdateEmployeeExternalIdentifiersDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return this.employeesService.updateExternalIdentifiers(activeUser, companyId, employeeId, dto);
   }
 
   // Endpoint para actualizar el horario laboral y modalidad del empleado
