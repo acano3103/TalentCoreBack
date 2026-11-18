@@ -56,6 +56,7 @@ export class CatalogsSeedService implements OnModuleInit {
             { id: 6, code: 'CLAUDE', name: 'Claude', type: 'ai', isActive: true },
             { id: 7, code: 'ARTEMIS', name: 'Artemis', type: 'workforce', isActive: true },
             { id: 8, code: 'ZKBIO', name: 'Biométricos ZKBio', type: 'workforce', isActive: true },
+            { id: 9, code: 'ELEVENLABS', name: 'ElevenLabs', type: 'ai', isActive: true },
         ];
 
         for (const medio of medios) {
