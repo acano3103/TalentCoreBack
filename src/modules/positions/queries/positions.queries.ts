@@ -1,53 +1,82 @@
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'generated/prisma/client';
+import { PositionFilters } from '../interfaces/positions.interface';
 
 export class PositionQueries {
-  static async findAll(prisma: PrismaService, idTenant: number, companyId: number, search: string, page: number, limit: number, aprobada: number) {
+  static async findAll(
+    prisma: PrismaService,
+    idTenant: number,
+    companyId: number,
+    search: string,
+    page: number,
+    limit: number,
+    aprobada: number,
+    filters: PositionFilters = {},
+  ) {
     const skip = (page - 1) * limit;
     const searchQuery = search ? `%${search}%` : '%';
 
+    // Filtros opcionales: Prisma.sql parametriza los valores, nunca se concatena texto
+    const activoFilter = filters.activo !== undefined
+      ? Prisma.sql`AND p.Activo = ${filters.activo}`
+      : Prisma.empty;
+
+    const areaFilter = filters.idArea !== undefined
+      ? Prisma.sql`AND p.idArea = ${filters.idArea}`
+      : Prisma.empty;
+
+    const tipoPuestoFilter = filters.idTipoPuesto !== undefined
+      ? Prisma.sql`AND p.idTipoPuesto = ${filters.idTipoPuesto}`
+      : Prisma.empty;
+
     const [data, [{ total }]] = await Promise.all([
       prisma.$queryRaw`
-        SELECT 
-          p.idPuesto,
-          p.NombrePuesto,
-          p.DescripcionPuesto,
-          a.Descripcion AS Area,
-          tp.Descripcion AS TipoPuesto,
-          tc.Descripcion AS TipoContratacion,
-          m.Descripcion AS Modalidad,
-          e.Descripcion AS Escolaridad,
-          p.DisponibilidadViajar,
-          ns.NombreNivel AS NivelSalario,
-          ns.SalarioMinimo,
-          ns.SalarioMaximo,
-          p.Activo,
-          p.aprobada as Aprovada,
-          p.pendiente as Pendiente
-        FROM CatPuestos p
-        LEFT JOIN CatAreas a ON a.idArea = p.idArea
-        LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
-        LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
-        LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
-        LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
-        LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
-        WHERE a.idEmpresa = ${companyId}
-          AND p.idTenant = ${idTenant}
-          AND p.aprobada = ${aprobada}
-          AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
-        ORDER BY p.idPuesto DESC
-        LIMIT ${limit} OFFSET ${skip};
-      ` as Promise<any[]>,
+      SELECT 
+        p.idPuesto,
+        p.NombrePuesto,
+        p.DescripcionPuesto,
+        a.Descripcion AS Area,
+        tp.Descripcion AS TipoPuesto,
+        tc.Descripcion AS TipoContratacion,
+        m.Descripcion AS Modalidad,
+        e.Descripcion AS Escolaridad,
+        p.DisponibilidadViajar,
+        ns.NombreNivel AS NivelSalario,
+        ns.SalarioMinimo,
+        ns.SalarioMaximo,
+        p.Activo,
+        p.aprobada as Aprovada,
+        p.pendiente as Pendiente
+      FROM CatPuestos p
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      LEFT JOIN CatTipoPuesto tp ON tp.idTipoPuesto = p.idTipoPuesto
+      LEFT JOIN CatTipoContratacion tc ON tc.idTipoContratacion = p.idTipoContratacion
+      LEFT JOIN CatModalidad m ON m.idModalidad = p.idModalidad
+      LEFT JOIN CatEscolaridad e ON e.idNivelEstudios = p.idNivelEstudios
+      LEFT JOIN CatNivelesSalario ns ON ns.IdNivelSalario = p.IdNivelSalario
+      WHERE a.idEmpresa = ${companyId}
+        AND p.idTenant = ${idTenant}
+        AND p.aprobada = ${aprobada}
+        AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
+        ${activoFilter}
+        ${areaFilter}
+        ${tipoPuestoFilter}
+      ORDER BY p.idPuesto DESC
+      LIMIT ${limit} OFFSET ${skip};
+    ` as Promise<any[]>,
 
       prisma.$queryRaw`
-        SELECT COUNT(*) AS total
-        FROM CatPuestos p
-        LEFT JOIN CatAreas a ON a.idArea = p.idArea
-        WHERE a.idEmpresa = ${companyId}
-          AND p.idTenant = ${idTenant}
-          AND p.aprobada = ${aprobada}
-          AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery});
-      ` as Promise<[{ total: bigint | number }]>
+      SELECT COUNT(*) AS total
+      FROM CatPuestos p
+      LEFT JOIN CatAreas a ON a.idArea = p.idArea
+      WHERE a.idEmpresa = ${companyId}
+        AND p.idTenant = ${idTenant}
+        AND p.aprobada = ${aprobada}
+        AND (p.NombrePuesto LIKE ${searchQuery} OR p.DescripcionPuesto LIKE ${searchQuery})
+        ${activoFilter}
+        ${areaFilter}
+        ${tipoPuestoFilter};
+    ` as Promise<[{ total: bigint | number }]>
     ]);
 
     return {
@@ -67,7 +96,7 @@ export class PositionQueries {
     companyId: number,
     search: string,
     aprobada: number,
-        filters: { activo?: string; fechaDesde?: string; fechaHasta?: string; pendiente?: string } = {},
+    filters: { activo?: string; fechaDesde?: string; fechaHasta?: string; pendiente?: string } = {},
   ) {
     const searchQuery = search ? `%${search}%` : '%';
     const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);

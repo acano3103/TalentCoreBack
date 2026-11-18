@@ -590,7 +590,7 @@ export class EmployeesService {
     limit: number,
     withoutManager: boolean = false,
     idSite?: string,
-    idUnidadOperativa?: string,
+    idPuesto?: string,
     idArea?: string,
   ) {
     const skip = (page - 1) * limit;
@@ -598,12 +598,12 @@ export class EmployeesService {
     // Condición opcional para búsqueda por nombre, apellidos, correo o puesto
     const searchCondition = search?.trim()
       ? Prisma.sql`AND (
-        ep.nombre LIKE ${`%${search}%`} OR
-        ep.primerApellido LIKE ${`%${search}%`} OR
-        ep.segundoApellido LIKE ${`%${search}%`} OR
-        ep.correo LIKE ${`%${search}%`} OR
-        p.nombrePuesto LIKE ${`%${search}%`}
-      )`
+      ep.nombre LIKE ${`%${search}%`} OR
+      ep.primerApellido LIKE ${`%${search}%`} OR
+      ep.segundoApellido LIKE ${`%${search}%`} OR
+      ep.correo LIKE ${`%${search}%`} OR
+      p.nombrePuesto LIKE ${`%${search}%`}
+    )`
       : Prisma.empty;
 
     // Condición opcional para empleados sin jefe inmediato asignado
@@ -611,14 +611,14 @@ export class EmployeesService {
       ? Prisma.sql`AND (ep.idJefeInmediato IS NULL OR ep.idJefeInmediato = 0)`
       : Prisma.empty;
 
-    // Condición opcional para filtrar por ubicción
+    // Condición opcional para filtrar por ubicación
     const siteCondition = idSite?.trim()
       ? Prisma.sql`AND ep.idSite = ${Number(idSite)}`
       : Prisma.empty;
 
-    // Condición opcional para filtrar por unidad operativa 
-    const operationalUnitCondition = idUnidadOperativa?.trim()
-      ? Prisma.sql`AND s.idUnidadOperativa = ${Number(idUnidadOperativa)}`
+    // Condición opcional para filtrar por puesto
+    const positionCondition = idPuesto?.trim()
+      ? Prisma.sql`AND ep.idPuesto = ${Number(idPuesto)}`
       : Prisma.empty;
 
     // Condición opcional para filtrar por área
@@ -627,70 +627,77 @@ export class EmployeesService {
       : Prisma.empty;
 
     // 1. Obtener registros paginados
-    const employeesPromise = this.prisma.$queryRaw`
-      SELECT 
-        ep.idEmpleado,
-        ep.numeroEmpleado,
-        ep.nombre,
-        ep.primerApellido,
-        ep.segundoApellido,
-        ep.correo,
-        ep.telefonoMovil,
-        p.idPuesto,
-        p.nombrePuesto,
-        a.idArea,
-        a.Descripcion AS area,
-        s.idSite,
-        s.Descripcion AS site,
-        ex.idEstatus,
-        ex.fechaActualizacion AS fechaExpedienteCompleto,
-        ep.artemisUserId, 
-        ep.artemisSyncedAt, 
-        ep.idJefeInmediato
-      FROM Empleados ep
-      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-      LEFT JOIN CatAreas a ON a.idArea = p.idArea
-      LEFT JOIN CatSites s ON s.idSite = ep.idSite
-      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-      WHERE ep.idEmpresa = ${companyId}
-        AND ep.idTenant = ${activeUser.idTenant}
-        AND ep.activo = 1
-        -- AND ex.idEstatus = 4
-        ${searchCondition}
-        ${withoutManagerCondition}
-        ${siteCondition}
-        ${operationalUnitCondition}
-        ${areaCondition}
-      ORDER BY ep.nombre ASC
-      LIMIT ${limit} OFFSET ${skip};
-    `;
+    const employeesPromise = this.prisma.$queryRaw<any[]>`
+    SELECT 
+      ep.idEmpleado,
+      ep.numeroEmpleado,
+      ep.nombre,
+      ep.primerApellido,
+      ep.segundoApellido,
+      ep.correo,
+      ep.telefonoMovil,
+      p.idPuesto,
+      p.nombrePuesto,
+      p.Activo AS puestoActivo,
+      p.pendiente AS puestoPendiente,
+      CASE
+        WHEN p.idPuesto IS NULL THEN 'SIN_PUESTO'
+        WHEN p.Activo = 1 THEN 'ACTIVO'
+        WHEN p.pendiente = 1 THEN 'PENDIENTE'
+        ELSE 'INACTIVO'
+      END AS puestoEstatus,
+      a.idArea,
+      a.Descripcion AS area,
+      s.idSite,
+      s.Descripcion AS site,
+      ex.idEstatus,
+      ex.fechaActualizacion AS fechaExpedienteCompleto,
+      ep.artemisUserId, 
+      ep.artemisSyncedAt, 
+      ep.idJefeInmediato
+    FROM Empleados ep
+    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+    LEFT JOIN CatAreas a ON a.idArea = p.idArea
+    LEFT JOIN CatSites s ON s.idSite = ep.idSite
+    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+    WHERE ep.idEmpresa = ${companyId}
+      AND ep.idTenant = ${activeUser.idTenant}
+      AND ep.activo = 1
+      -- AND ex.idEstatus = 4
+      ${searchCondition}
+      ${withoutManagerCondition}
+      ${siteCondition}
+      ${positionCondition}
+      ${areaCondition}
+    ORDER BY ep.nombre ASC
+    LIMIT ${limit} OFFSET ${skip};
+  `;
 
     // 2. Obtener el total y los no sincronizados en la misma consulta
     const metricsPromise = this.prisma.$queryRaw<{ total: number | bigint; unassignedSync: number | bigint }[]>`
-      SELECT 
-        COUNT(ep.idEmpleado) AS total,
-        SUM(
-          CASE 
-            WHEN (ep.artemisUserId IS NULL OR ep.artemisUserId = '') 
-              OR ep.artemisSyncedAt IS NULL 
-            THEN 1 
-            ELSE 0 
-          END
-        ) AS unassignedSync
-      FROM Empleados ep
-      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-      LEFT JOIN CatSites s ON s.idSite = ep.idSite
-      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-      WHERE ep.idEmpresa = ${companyId}
-        AND ep.idTenant = ${activeUser.idTenant}
-        AND ep.activo = 1
-        -- AND ex.idEstatus = 4
-        ${searchCondition}
-        ${withoutManagerCondition}
-        ${siteCondition}
-        ${operationalUnitCondition}
-        ${areaCondition}
-    `;
+    SELECT 
+      COUNT(ep.idEmpleado) AS total,
+      SUM(
+        CASE 
+          WHEN (ep.artemisUserId IS NULL OR ep.artemisUserId = '') 
+            OR ep.artemisSyncedAt IS NULL 
+          THEN 1 
+          ELSE 0 
+        END
+      ) AS unassignedSync
+    FROM Empleados ep
+    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+    WHERE ep.idEmpresa = ${companyId}
+      AND ep.idTenant = ${activeUser.idTenant}
+      AND ep.activo = 1
+      -- AND ex.idEstatus = 4
+      ${searchCondition}
+      ${withoutManagerCondition}
+      ${siteCondition}
+      ${positionCondition}
+      ${areaCondition}
+  `;
 
     // Ejecución paralela
     const [employees, metricsResult] = await Promise.all([
@@ -698,12 +705,19 @@ export class EmployeesService {
       metricsPromise,
     ]);
 
+    // MySQL devuelve tinyint como número: lo convertimos a booleano para el front
+    const data = employees.map((employee) => ({
+      ...employee,
+      puestoActivo: employee.idPuesto ? Boolean(employee.puestoActivo) : null,
+      puestoPendiente: employee.idPuesto ? Boolean(employee.puestoPendiente) : null,
+    }));
+
     const total = Number(metricsResult[0]?.total ?? 0);
     const pendingSyncCount = Number(metricsResult[0]?.unassignedSync ?? 0);
     const totalPages = Math.ceil(total / limit) || 1;
 
     return {
-      data: employees,
+      data,
       total,
       currentPage: page,
       totalPages,

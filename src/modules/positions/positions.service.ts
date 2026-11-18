@@ -20,6 +20,7 @@ import { ValidatePositionRequestDto } from './dto/approve-reject-reques.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import * as ExcelJS from 'exceljs';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
+import { PositionFilters } from './interfaces/positions.interface';
 
 @Injectable()
 export class PositionsService {
@@ -33,8 +34,25 @@ export class PositionsService {
 
     private readonly logger = new Logger(PositionsService.name);
 
-    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number, aprobada: number) {
-        const { positions, total } = await PositionQueries.findAll(this.prisma, activeUser.idTenant, companyId, search, page, limit, aprobada);
+    async findAll(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        page: number,
+        search: string,
+        limit: number,
+        aprobada: number,
+        filters: PositionFilters = {},
+    ) {
+        const { positions, total } = await PositionQueries.findAll(
+            this.prisma,
+            activeUser.idTenant,
+            companyId,
+            search,
+            page,
+            limit,
+            aprobada,
+            filters,
+        );
 
         if ((!positions || positions.length === 0) && page === 1 && !search) {
             return {

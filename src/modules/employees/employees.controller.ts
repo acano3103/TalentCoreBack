@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe, Put, ParseBoolPipe } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { SaveSalaryDto } from './dto/save-salary.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
@@ -31,6 +31,9 @@ export class EmployeesController {
   // Endpoint que obtiene a todos los empleados que ya tienen su expediente completo
   @Get('/hired')
   @ApiOperation({ summary: 'Get all employees with complete expediente', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiQuery({ name: 'idSite', required: false, description: 'Filtra por ubicación' })
+  @ApiQuery({ name: 'idPuesto', required: false, description: 'Filtra por puesto' })
+  @ApiQuery({ name: 'idArea', required: false, description: 'Filtra por área del puesto' })
   @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   findAllWithCompleteFile(
@@ -41,11 +44,11 @@ export class EmployeesController {
     @Query('search') search?: string,
     @Query('without_manager', new DefaultValuePipe(false), ParseBoolPipe) withoutManager?: boolean,
     @Query('idSite') idSite?: string,
-    @Query('idUnidadOperativa') idUnidadOperativa?: string,
+    @Query('idPuesto') idPuesto?: string,
     @Query('idArea') idArea?: string,
   ) {
     const querySearch = search || '';
-    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager, idSite, idUnidadOperativa, idArea);
+    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager, idSite, idPuesto, idArea);
   }
 
   // Endpoint que obtiene a todos los subordinados de un empleado

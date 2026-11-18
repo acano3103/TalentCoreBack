@@ -20,7 +20,9 @@ export type CatalogKey =
   | 'cursos'
   | 'tipos-cursos'
   | 'unidades-operativas'
-  | 'modulos-flujo';
+  | 'modulos-flujo'
+  | 'tipos-puestos'
+  | 'puestos';
 
 @Injectable()
 export class CatalogsService {
@@ -224,6 +226,16 @@ export class CatalogsService {
         return this.prisma.catModuloFlujo.findMany({
           orderBy: { codigo: 'asc' },
         });
+
+      case 'tipos-puestos':
+        return this.prisma.catTipoPuesto.findMany({
+          where: { Activo: true }
+        })
+
+      case 'puestos':
+        return this.prisma.catPuestos.findMany({
+          where: { Activo: true, idEmpresa: companyId }
+        })
 
       default:
         throw new BadRequestException(
