@@ -68,15 +68,89 @@ export class DigitalFilesService {
     ]);
 
     const idsEmpleado = empleados.map((e) => e.idEmpleado);
-    const expedientes = idsEmpleado.length
-      ? await this.prisma.expedientes.findMany({
+
+    if (idsEmpleado.length === 0) {
+      return {
+        data: [],
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit) || 1,
+      };
+    }
+
+    // Obtener en lote expedientes, puestos de empleados y documentos subidos
+    const [expedientes, documentosEmpleados, documentosPuestoList, documentosAdicionalesList] = await Promise.all([
+      this.prisma.expedientes.findMany({
         where: { idEmpleado: { in: idsEmpleado }, idTenant: user.idTenant },
-      })
-      : [];
+      }),
+      this.prisma.documentosEmpleado.findMany({
+        where: { idEmpleado: { in: idsEmpleado }, idTenant: user.idTenant },
+        select: { idEmpleado: true, IdDocumento: true },
+      }),
+      // Obtener los documentos requeridos por los puestos de estos empleados
+      this.prisma.documentosPuesto.findMany({
+        where: { idPuesto: { in: empleados.map(e => e.idPuesto).filter((id): id is number => id !== null) } },
+        select: { idPuesto: true, idDocumento: true },
+      }),
+      // Obtener documentos adicionales específicos de estos empleados usando raw query similar a getDocumentsByPosition
+      this.prisma.$queryRaw<{ idEmpleado: number; idDocumento: number }[]>`
+        SELECT idEmpleado, idDocumento FROM DocumentosAdicionalesEmpleado WHERE idEmpleado IN (${idsEmpleado.join(',')});
+      `.catch(() => [] as { idEmpleado: number; idDocumento: number }[]) // Fallback seguro por si la tabla cambia
+    ]);
+
     const expedienteMap = new Map(expedientes.map((e) => [e.idEmpleado, e]));
+
+    // Agrupar documentos subidos únicos por empleado (cuenta cuántos tipos de documentos distintos ha subido)
+    const documentosSubidosMap = new Map<number, Set<number>>();
+    for (const doc of documentosEmpleados) {
+      if (doc.IdDocumento == null) continue;
+      if (!documentosSubidosMap.has(doc.idEmpleado || 0)) {
+        documentosSubidosMap.set(doc.idEmpleado || 0, new Set());
+      }
+      documentosSubidosMap.get(doc.idEmpleado || 0)!.add(doc.IdDocumento);
+    }
+
+    // Mapear documentos por puesto
+    const docsPuestoMap = new Map<number, Set<number>>();
+    for (const dp of documentosPuestoList) {
+      if (!docsPuestoMap.has(dp.idPuesto)) {
+        docsPuestoMap.set(dp.idPuesto, new Set());
+      }
+      docsPuestoMap.get(dp.idPuesto)!.add(dp.idDocumento);
+    }
+
+    // Mapear documentos adicionales por empleado
+    const docsAdicionalesMap = new Map<number, Set<number>>();
+    // Nota: Si $queryRaw con IN en string da problemas según el conector, manejamos de forma segura los adicionales:
+    const adicionalesSeguros = Array.isArray(documentosAdicionalesList) ? documentosAdicionalesList : [];
+    for (const da of adicionalesSeguros) {
+      if (!docsAdicionalesMap.has(da.idEmpleado)) {
+        docsAdicionalesMap.set(da.idEmpleado, new Set());
+      }
+      docsAdicionalesMap.get(da.idEmpleado)!.add(da.idDocumento);
+    }
 
     const data = empleados.map((e) => {
       const expediente = expedienteMap.get(e.idEmpleado);
+
+      // Calcular total de documentos requeridos para este empleado
+      const reqPuesto = e.idPuesto ? docsPuestoMap.get(e.idPuesto) || new Set() : new Set();
+      const reqAdicionales = docsAdicionalesMap.get(e.idEmpleado) || new Set();
+
+      // Combinar conjunto único de documentos requeridos (puesto + adicionales)
+      const totalRequeridosSet = new Set([...reqPuesto, ...reqAdicionales]);
+      const totalRequeridos = totalRequeridosSet.size;
+
+      // Calcular cuántos de esos requeridos ya fueron subidos por el empleado
+      const subidosSet: any = documentosSubidosMap.get(e.idEmpleado) || new Set();
+      let subidosRequeridosCount = 0;
+
+      for (const docId of totalRequeridosSet) {
+        if (subidosSet.has(docId)) {
+          subidosRequeridosCount++;
+        }
+      }
+
       return {
         idEmpleado: e.idEmpleado,
         nombreCompleto: [e.nombre, e.primerApellido, e.segundoApellido].filter(Boolean).join(' '),
@@ -84,6 +158,11 @@ export class DigitalFilesService {
         idPuesto: e.idPuesto,
         puesto: e.CatPuestos?.NombrePuesto ?? null,
         estatusExpediente: expediente?.idEstatus ?? null,
+        documentosProgreso: {
+          subidos: subidosRequeridosCount,
+          total: totalRequeridos,
+          texto: `${subidosRequeridosCount} de ${totalRequeridos}`,
+        },
       };
     });
 
@@ -96,7 +175,6 @@ export class DigitalFilesService {
   }
 
   async getExpediente(companyId: number, employeeId: number, user: ActiveUserDto) {
-    console.log(employeeId)
     if (!user.idTenant) {
       throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
     }

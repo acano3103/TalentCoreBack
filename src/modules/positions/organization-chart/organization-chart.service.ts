@@ -124,11 +124,13 @@ export class OrganizationChartService {
             name: emp.nombreCompleto.toUpperCase(),
             title: emp.NombrePuesto,
             dept: `${emp.Area}`,
+            telefono: emp.telefonoMovil || null,
+            correo: emp.correo || null,
             parent: emp.parentUid || '',
             status: 'OCUPADO',
             color: mapaColoresAreas[emp.idArea] || '#64748b',
-            EMAIL: false,
-            PHONE: false,
+            EMAIL: Boolean(emp.correo),
+            PHONE: Boolean(emp.telefonoMovil),
         }));
 
         const nodosVacantes = vacancies.map((vac) => ({
@@ -136,6 +138,8 @@ export class OrganizationChartService {
             name: 'VACANTE',
             title: vac.NombrePuesto,
             dept: `${vac.Area}`,
+            telefono: null,
+            correo: null,
             parent: vac.parentUid,
             status: 'VACANTE',
             color: mapaColoresAreas[vac.idArea] || '#64748b',
