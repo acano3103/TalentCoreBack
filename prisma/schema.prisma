@@ -2521,6 +2521,7 @@ model SolicitudesIncidencias {
   fechaRespuesta                                                      DateTime?                        @db.DateTime(0)
   motivoRechazo                                                       String?                          @db.Text
   comentarios                                                         String?                          @db.Text
+  esForzada                                                           Boolean                          @default(false)
   fechaRegistro                                                       DateTime                         @default(now()) @db.Timestamp(0)
   PasosAprobacionIncidencia                                           PasosAprobacionIncidencia[]
   SolicitudesIncapacidadesDetalle                                     SolicitudesIncapacidadesDetalle?
