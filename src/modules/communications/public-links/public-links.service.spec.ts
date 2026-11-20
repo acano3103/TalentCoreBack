@@ -80,7 +80,7 @@ describe('PublicLinksService', () => {
                 { provide: PrismaService, useValue: prisma },
                 { provide: JwtService, useValue: jwt },
                 { provide: CommsAckService, useValue: ack },
-                { provide: CommsStorageService, useValue: { signedUrl: jest.fn(() => '/firmado') } },
+                { provide: CommsStorageService, useValue: { enlaceArchivo: jest.fn(() => ({ url: 'https://api.ejemplo.com/api/v2/public/comms/files/firma', ruta: 'public/comms/files/firma' })) } },
             ],
         }).compile();
         service = module.get(PublicLinksService);
@@ -127,6 +127,30 @@ describe('PublicLinksService', () => {
         const cuerpo = await service.contenido('token', 'Bearer jwt-corto');
         expect(cuerpo.cuerpoTexto).toBe('Texto');
         expect(cuerpo).not.toHaveProperty('fechaNacimiento');
+        expect(cuerpo.portadaUrl).toBeNull();
+        expect(cuerpo.portadaRuta).toBeNull();
+    });
+
+    it('con base pública la url del adjunto es absoluta y la ruta sigue relativa', async () => {
+        prisma.comComunicadoVersiones.findUnique.mockResolvedValue({
+            idVersion: 4,
+            NumVersion: 1,
+            Titulo: 'Política',
+            Resumen: 'Léela',
+            CuerpoHtml: '<p>Texto</p>',
+            PortadaRuta: '3/10/comms/9/portada/foto.png',
+        });
+        prisma.comComunicadoAdjuntos.findMany.mockResolvedValue([
+            { idAdjunto: 3, Nombre: 'Implementación.pdf', Ruta: '3/10/comms/9/adjuntos/a.pdf', Mime: 'application/pdf', TamanoBytes: 20 },
+        ]);
+        const cuerpo = await service.contenido('token', 'Bearer jwt-corto');
+        expect(cuerpo.portadaUrl).toBe('https://api.ejemplo.com/api/v2/public/comms/files/firma');
+        expect(cuerpo.portadaRuta).toBe('public/comms/files/firma');
+        expect(cuerpo.adjuntos[0]).toMatchObject({
+            nombre: 'Implementación.pdf',
+            url: 'https://api.ejemplo.com/api/v2/public/comms/files/firma',
+            ruta: 'public/comms/files/firma',
+        });
     });
 
     it('el acuse del enlace usa ENLACE_FECHA_NAC cuando pidió identidad', async () => {

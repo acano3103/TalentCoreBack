@@ -9,7 +9,8 @@ import { AudienceResolverService } from '../audiences/audience-resolver.service'
 import { EffectiveChannelService } from '../channels/effective-channel.service';
 import { resumirCanales } from '../channels/canales';
 import { errorComms } from '../comms-http';
-import { cabeOtroAdjunto, nombreVisible, validarAdjunto, validarPortada } from './adjuntos';
+import { presentarAdjunto, presentarPortada } from './archivo-publico';
+import { cabeOtroAdjunto, nombreRecibido, nombreVisible, validarAdjunto, validarPortada } from './adjuntos';
 import { EstadoComunicado, esEstadoComunicado, estadoTrasProgramar, exigirEditable, exigirEnviado, exigirTransicion } from './announcement-state';
 import { CommsStorageService, nombreAlmacenado } from './comms-storage.service';
 import {
@@ -224,7 +225,8 @@ export class AnnouncementsService {
             throw errorComms(HttpStatus.BAD_REQUEST, 'ADJUNTO_INVALIDO', 'Adjunta un archivo.');
         }
         const tipo = await this.tipoDe(activeUser.idTenant, actual.idTipo);
-        const mime = validarAdjunto({ buffer: archivo.buffer, mime: archivo.mimetype, nombre: archivo.originalname }, tipo.EsCorto);
+        const nombre = nombreRecibido(archivo.originalname);
+        const mime = validarAdjunto({ buffer: archivo.buffer, mime: archivo.mimetype, nombre }, tipo.EsCorto);
         const version = await this.versionVigente(id, actual.VersionActual);
         const cantidad = await this.prisma.comComunicadoAdjuntos.count({ where: { idVersion: version.idVersion } });
         cabeOtroAdjunto(cantidad);
@@ -232,7 +234,7 @@ export class AnnouncementsService {
             tenant: activeUser.idTenant,
             empresa: companyId,
             carpeta: `${id}/adjuntos`,
-            nombre: nombreAlmacenado(archivo.originalname),
+            nombre: nombreAlmacenado(nombre),
             mime,
         });
         try {
@@ -240,7 +242,7 @@ export class AnnouncementsService {
                 await tx.comComunicadoAdjuntos.create({
                     data: {
                         idVersion: version.idVersion,
-                        Nombre: nombreVisible(archivo.originalname),
+                        Nombre: nombreVisible(nombre),
                         Ruta: ruta,
                         Mime: mime,
                         TamanoBytes: archivo.buffer.length,
@@ -285,14 +287,15 @@ export class AnnouncementsService {
         if (!archivo?.buffer?.length) {
             throw errorComms(HttpStatus.BAD_REQUEST, 'ADJUNTO_INVALIDO', 'Adjunta la imagen de portada.');
         }
-        const mime = validarPortada({ buffer: archivo.buffer, mime: archivo.mimetype, nombre: archivo.originalname });
+        const nombre = nombreRecibido(archivo.originalname);
+        const mime = validarPortada({ buffer: archivo.buffer, mime: archivo.mimetype, nombre });
         const version = await this.versionVigente(id, actual.VersionActual);
         const anterior = version.PortadaRuta;
         const ruta = await this.storage.put(archivo.buffer, {
             tenant: activeUser.idTenant,
             empresa: companyId,
             carpeta: `${id}/portada`,
-            nombre: nombreAlmacenado(archivo.originalname),
+            nombre: nombreAlmacenado(nombre),
             mime,
         });
         try {
@@ -664,14 +667,8 @@ export class AnnouncementsService {
             resumen: version.Resumen,
             cuerpoHtml: version.CuerpoHtml,
             esCorreccionMenor: version.EsCorreccionMenor,
-            portadaUrl: version.PortadaRuta ? this.storage.signedUrl(version.PortadaRuta, TTL_ARCHIVO, mimeDeRuta(version.PortadaRuta)) : null,
-            adjuntos: version.ComComunicadoAdjuntos.map((adjunto) => ({
-                id: adjunto.idAdjunto,
-                nombre: adjunto.Nombre,
-                mime: adjunto.Mime,
-                tamanoBytes: adjunto.TamanoBytes,
-                url: this.storage.signedUrl(adjunto.Ruta, TTL_ARCHIVO, adjunto.Mime),
-            })),
+            ...presentarPortada(this.storage, version.PortadaRuta, TTL_ARCHIVO),
+            adjuntos: version.ComComunicadoAdjuntos.map((adjunto) => presentarAdjunto(this.storage, adjunto, TTL_ARCHIVO)),
             creadoPor: autores.get(version.CreadoPor) ?? version.CreadoPor,
             fechaRegistro: version.FechaRegistro,
         }));
@@ -708,14 +705,8 @@ export class AnnouncementsService {
                 resumen: version.Resumen,
                 cuerpoHtml: version.CuerpoHtml,
                 esCorreccionMenor: version.EsCorreccionMenor,
-                portadaUrl: version.PortadaRuta ? this.storage.signedUrl(version.PortadaRuta, TTL_ARCHIVO, mimeDeRuta(version.PortadaRuta)) : null,
-                adjuntos: adjuntos.map((adjunto) => ({
-                    id: adjunto.idAdjunto,
-                    nombre: adjunto.Nombre,
-                    mime: adjunto.Mime,
-                    tamanoBytes: adjunto.TamanoBytes,
-                    url: this.storage.signedUrl(adjunto.Ruta, TTL_ARCHIVO, adjunto.Mime),
-                })),
+                ...presentarPortada(this.storage, version.PortadaRuta, TTL_ARCHIVO),
+                adjuntos: adjuntos.map((adjunto) => presentarAdjunto(this.storage, adjunto, TTL_ARCHIVO)),
             },
             opciones: {
                 prioridad: fila.Prioridad,
@@ -1012,11 +1003,3 @@ function rangoMes(mes: string): { desde: Date; hasta: Date } {
     return { desde: new Date(Date.UTC(anio, numero - 1, 1)), hasta: new Date(Date.UTC(anio, numero, 1)) };
 }
 
-function mimeDeRuta(ruta: string): string {
-    const extension = ruta.split('.').pop()?.toLowerCase();
-    if (extension === 'png') return 'image/png';
-    if (extension === 'webp') return 'image/webp';
-    if (extension === 'gif') return 'image/gif';
-    if (extension === 'pdf') return 'application/pdf';
-    return 'image/jpeg';
-}

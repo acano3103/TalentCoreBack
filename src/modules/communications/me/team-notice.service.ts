@@ -10,6 +10,7 @@ import { politicaPermiteWhatsapp } from '../channels/canales';
 import { EffectiveChannelService } from '../channels/effective-channel.service';
 import { errorComms } from '../comms-http';
 import { AnnouncementDispatchService } from '../delivery/announcement-dispatch.service';
+import { resolverPlantillaWhatsApp } from '../delivery/plantilla-wa';
 import { WhatsAppCapService } from '../whatsapp-usage/whatsapp-cap.service';
 import { rangoDiaLocal } from './bandeja';
 import { CrearAvisoEquipoDto } from './dto/team-notice.dto';
@@ -27,6 +28,7 @@ export interface VistaEquipo {
     porWhatsApp: number;
     sinCanal: number;
     costoWhatsAppEstimado: number | null;
+    plantillaDisponible: boolean;
 }
 
 export interface AvisoEnviado {
@@ -74,6 +76,7 @@ export class TeamNoticeService {
         return {
             ...plan,
             costoWhatsAppEstimado: precio ? redondear(precio.precio * plan.porWhatsApp) : null,
+            plantillaDisponible: resolverPlantillaWhatsApp(config?.PlantillasWhatsApp, TIPO, 'NORMAL') != null,
         };
     }
 

@@ -25,7 +25,7 @@ export class MobileCommsController {
         summary: 'Vista previa del aviso a mi equipo',
         description: 'Cuenta el equipo directo del jefe. whatsappSinApp=true suma WhatsApp a quien no tiene la app.',
     })
-    @ApiResponse({ status: 200, description: 'total, conApp, soloWeb, porWhatsApp, sinCanal y costoWhatsAppEstimado.' })
+    @ApiResponse({ status: 200, description: 'total, conApp, soloWeb, porWhatsApp, sinCanal, costoWhatsAppEstimado y plantillaDisponible.' })
     @ApiResponse({ status: 403, description: 'SIN_CAPACIDAD o TIPO_NO_PERMITIDO.' })
     vistaEquipo(
         @GetActiveUser() activeUser: ActiveUserDto,
@@ -61,7 +61,7 @@ export class MobileCommsController {
 
     @Get('pending-modal')
     @ApiOperation({ summary: 'Modal de comunicados en la app', description: 'Misma regla que la web. El acuse queda en el canal APP.' })
-    @ApiResponse({ status: 200, description: 'Comunicados vigentes sin posponer hoy.' })
+    @ApiResponse({ status: 200, description: 'Comunicados vigentes sin posponer hoy, con requiereIdentidad y totalAdjuntos.' })
     modal(@GetActiveUser() activeUser: ActiveUserDto, @Param('companyId', ParseIntPipe) companyId: number) {
         return this.service.modalPendiente(activeUser, companyId);
     }

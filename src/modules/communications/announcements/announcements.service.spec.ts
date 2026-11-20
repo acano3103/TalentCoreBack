@@ -86,7 +86,7 @@ const version = {
 describe('AnnouncementsService versiones', () => {
     const tx = {
         comComunicadoVersiones: { update: jest.fn(), create: jest.fn() },
-        comComunicadoAdjuntos: { findMany: jest.fn(), createMany: jest.fn() },
+        comComunicadoAdjuntos: { findMany: jest.fn(), createMany: jest.fn(), create: jest.fn() },
         comComunicados: { update: jest.fn() },
         comDestinatarios: { updateMany: jest.fn() },
         historicoMovimientos: { create: jest.fn() },
@@ -96,12 +96,19 @@ describe('AnnouncementsService versiones', () => {
         comTiposComunicado: { findFirst: jest.fn() },
         comComunicados: { findFirst: jest.fn() },
         comComunicadoVersiones: { findUnique: jest.fn() },
-        comComunicadoAdjuntos: { findMany: jest.fn() },
+        comComunicadoAdjuntos: { findMany: jest.fn(), count: jest.fn() },
         empleados: { findMany: jest.fn() },
         auth_user: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const capabilities = { contexto: jest.fn(), getEffective: jest.fn() };
     const envio = { notificarActualizacion: jest.fn(), quitarProgramado: jest.fn() };
+    const storage = {
+        signedUrl: jest.fn(() => '/firmado'),
+        enlaceArchivo: jest.fn(() => ({ url: '/api/v2/public/comms/files/firma', ruta: 'public/comms/files/firma' })),
+        get: jest.fn(),
+        put: jest.fn(),
+        delete: jest.fn(),
+    };
     let service: AnnouncementsService;
 
     beforeEach(async () => {
@@ -116,6 +123,8 @@ describe('AnnouncementsService versiones', () => {
         prisma.comTiposComunicado.findFirst.mockResolvedValue(tipo);
         prisma.comComunicadoVersiones.findUnique.mockResolvedValue(version);
         prisma.comComunicadoAdjuntos.findMany.mockResolvedValue([]);
+        prisma.comComunicadoAdjuntos.count.mockResolvedValue(0);
+        storage.put.mockResolvedValue('3/10/comms/9/adjuntos/archivo.pdf');
         tx.comComunicadoAdjuntos.findMany.mockResolvedValue([{ idAdjunto: 1, Nombre: 'a.pdf', Ruta: '3/10/comms/9/adjuntos/a.pdf', Mime: 'application/pdf', TamanoBytes: 10 }]);
         tx.comComunicadoVersiones.create.mockResolvedValue({ idVersion: 8 });
         tx.comComunicadoVersiones.update.mockResolvedValue(version);
@@ -130,7 +139,7 @@ describe('AnnouncementsService versiones', () => {
                 { provide: CommsCapabilityService, useValue: capabilities },
                 { provide: AudienceResolverService, useValue: { resolve: jest.fn() } },
                 { provide: EffectiveChannelService, useValue: { forEmployees: jest.fn() } },
-                { provide: CommsStorageService, useValue: { signedUrl: jest.fn(() => '/firmado'), get: jest.fn(), put: jest.fn(), delete: jest.fn() } },
+                { provide: CommsStorageService, useValue: storage },
                 { provide: AnnouncementDispatchService, useValue: envio },
             ],
         }).compile();
@@ -174,4 +183,45 @@ describe('AnnouncementsService versiones', () => {
         prisma.comComunicados.findFirst.mockResolvedValue(comunicado('LEI_ENTENDI', 'BORRADOR'));
         await expect(service.nuevaVersion(usuario, 10, 9, { correccionMenor: false })).rejects.toBeInstanceOf(HttpException);
     });
+
+    it('guarda el nombre visible en UTF-8 aunque Multer lo entregue en latin1', async () => {
+        prisma.comComunicados.findFirst.mockResolvedValue(comunicado('NINGUNO', 'BORRADOR'));
+        const pdf = Buffer.from('%PDF-1.4 contenido');
+        for (const visible of ['Módulos.pdf', 'Implementación.pdf', 'Año.pdf']) {
+            storage.put.mockClear();
+            tx.comComunicadoAdjuntos.create.mockClear();
+            await service.agregarAdjunto(usuario, 10, 9, archivo(pdf, 'application/pdf', comoMulter(visible)));
+            expect(tx.comComunicadoAdjuntos.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ Nombre: visible, Mime: 'application/pdf' }),
+            });
+            expect(storage.put.mock.calls[0][1].nombre as string).not.toContain('Ã');
+        }
+    });
+
+    it('la portada también recupera el nombre con acentos', async () => {
+        prisma.comComunicados.findFirst.mockResolvedValue(comunicado('NINGUNO', 'BORRADOR'));
+        const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('png')]);
+        await service.portada(usuario, 10, 9, archivo(png, 'image/png', comoMulter('Implementación.png')));
+        expect(storage.put.mock.calls[0][1].nombre as string).toMatch(/-Implementaci_n\.png$/);
+    });
+
+    it('el detalle incluye la ruta relativa de la portada y del adjunto', async () => {
+        prisma.comComunicados.findFirst.mockResolvedValue(comunicado('NINGUNO', 'BORRADOR'));
+        prisma.comComunicadoVersiones.findUnique.mockResolvedValue({ ...version, PortadaRuta: '3/10/comms/9/portada/foto.png' });
+        prisma.comComunicadoAdjuntos.findMany.mockResolvedValue([
+            { idAdjunto: 1, Nombre: 'Módulos.pdf', Ruta: '3/10/comms/9/adjuntos/a.pdf', Mime: 'application/pdf', TamanoBytes: 10 },
+        ]);
+        const detalle = await service.detalle(usuario, 10, 9);
+        expect(detalle.version.portadaRuta).toBe('public/comms/files/firma');
+        expect(detalle.version.portadaUrl).toBe('/api/v2/public/comms/files/firma');
+        expect(detalle.version.adjuntos[0]).toMatchObject({ nombre: 'Módulos.pdf', ruta: 'public/comms/files/firma' });
+    });
 });
+
+function comoMulter(nombre: string): string {
+    return Buffer.from(nombre, 'utf8').toString('latin1');
+}
+
+function archivo(buffer: Buffer, mimetype: string, originalname: string): Express.Multer.File {
+    return { buffer, mimetype, originalname, size: buffer.length } as Express.Multer.File;
+}

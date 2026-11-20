@@ -126,6 +126,7 @@ describe('TeamNoticeService', () => {
             porWhatsApp: 1,
             sinCanal: 1,
             costoWhatsAppEstimado: 0.8,
+            plantillaDisponible: false,
         });
     });
 

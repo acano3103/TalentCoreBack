@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrar:evidencias": "ts-node --transpile-only --project scripts/tsconfig.json scripts/migrar-evidencias.ts",
     "seed:comunicacion": "ts-node --transpile-only --project scripts/tsconfig.json scripts/seed-comunicacion.ts",
-    "backfill:comunicacion-modulos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/backfill-comunicacion-modulos.ts"
+    "backfill:comunicacion-modulos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/backfill-comunicacion-modulos.ts",
+    "fix:comunicacion-nombres-adjuntos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/fix-comunicacion-nombres-adjuntos.ts"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.68.0",

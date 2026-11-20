@@ -133,7 +133,11 @@ export class AnnouncementsController {
     }
 
     @Get('announcements/:id')
-    @ApiOperation({ summary: 'Detalle de un comunicado', description: 'Versión vigente, adjuntos con URL firmada y opciones.' })
+    @ApiOperation({
+        summary: 'Detalle de un comunicado',
+        description:
+            'Versión vigente y opciones. portadaUrl y url son absolutas si COMMS_PUBLIC_BASE_URL está definida; portadaRuta y ruta son relativas a api/v2.',
+    })
     @ApiResponse({ status: 200, description: 'Comunicado.' })
     @ApiResponse({ status: 404, description: 'No existe o está fuera de tu alcance.' })
     detalle(
@@ -220,7 +224,8 @@ export class AnnouncementsController {
     @Get('announcements/:id/versions')
     @ApiOperation({
         summary: 'Historial de versiones',
-        description: 'Número, fecha, autor y si fue una corrección menor. La primera es la versión vigente.',
+        description:
+            'Número, fecha, autor y si fue una corrección menor. La primera es la versión vigente. Cada archivo trae url y ruta relativa a api/v2.',
     })
     @ApiResponse({ status: 200, description: 'Versiones del comunicado.' })
     @ApiResponse({ status: 404, description: 'No existe o está fuera de tu alcance.' })

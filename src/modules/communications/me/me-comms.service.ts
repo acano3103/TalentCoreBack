@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
+import { presentarAdjunto, presentarPortada } from '../announcements/archivo-publico';
 import { aTextoPlano } from '../announcements/sanitize-cuerpo';
 import { CommsStorageService } from '../announcements/comms-storage.service';
 import { errorComms } from '../comms-http';
@@ -119,14 +120,8 @@ export class MeCommsService {
                 resumen: version.Resumen,
                 cuerpoHtml: version.CuerpoHtml,
                 cuerpoTexto: aTextoPlano(version.CuerpoHtml),
-                portadaUrl: version.PortadaRuta ? this.storage.signedUrl(version.PortadaRuta, TTL_ARCHIVO, mimeDeRuta(version.PortadaRuta)) : null,
-                adjuntos: adjuntos.map((adjunto) => ({
-                    id: adjunto.idAdjunto,
-                    nombre: adjunto.Nombre,
-                    mime: adjunto.Mime,
-                    tamanoBytes: adjunto.TamanoBytes,
-                    url: this.storage.signedUrl(adjunto.Ruta, TTL_ARCHIVO, adjunto.Mime),
-                })),
+                ...presentarPortada(this.storage, version.PortadaRuta, TTL_ARCHIVO),
+                adjuntos: adjuntos.map((adjunto) => presentarAdjunto(this.storage, adjunto, TTL_ARCHIVO)),
             },
         };
     }
@@ -209,6 +204,16 @@ export class MeCommsService {
             .sort((a, b) => (b.ComComunicados.EnviadoEn?.getTime() ?? 0) - (a.ComComunicados.EnviadoEn?.getTime() ?? 0))
             .slice(0, MAX_MODAL);
         const versiones = await this.versionesDe(elegidas.map((fila) => ({ id: fila.idComunicado, num: fila.ComComunicados.VersionActual })));
+        const idsVersion = [...versiones.values()].map((version) => version.idVersion);
+        const conteos = new Map<number, number>();
+        if (idsVersion.length > 0) {
+            const grupos = await this.prisma.comComunicadoAdjuntos.groupBy({
+                by: ['idVersion'],
+                where: { idVersion: { in: idsVersion } },
+                _count: { _all: true },
+            });
+            for (const grupo of grupos) conteos.set(grupo.idVersion, grupo._count._all);
+        }
         return elegidas.flatMap((fila) => {
             const version = versiones.get(claveVersion(fila.idComunicado, fila.ComComunicados.VersionActual));
             if (!version) return [];
@@ -222,6 +227,8 @@ export class MeCommsService {
                     tipo: tipoDe(fila.ComComunicados.ComTiposComunicado),
                     enviadoEn: fila.ComComunicados.EnviadoEn,
                     vigenteHasta: fila.ComComunicados.VigenteHasta,
+                    requiereIdentidad: fila.ComComunicados.RequiereIdentidad,
+                    totalAdjuntos: conteos.get(version.idVersion) ?? 0,
                 },
             ];
         });
@@ -280,11 +287,11 @@ export class MeCommsService {
     }
 
     private async versionesDe(pares: { id: number; num: number }[]) {
-        const mapa = new Map<string, { Titulo: string; Resumen: string }>();
+        const mapa = new Map<string, { idVersion: number; Titulo: string; Resumen: string }>();
         if (!pares.length) return mapa;
         const filas = await this.prisma.comComunicadoVersiones.findMany({
             where: { OR: pares.map((par) => ({ idComunicado: par.id, NumVersion: par.num })) },
-            select: { idComunicado: true, NumVersion: true, Titulo: true, Resumen: true },
+            select: { idVersion: true, idComunicado: true, NumVersion: true, Titulo: true, Resumen: true },
         });
         for (const fila of filas) mapa.set(claveVersion(fila.idComunicado, fila.NumVersion), fila);
         return mapa;
@@ -401,11 +408,3 @@ function tarjeta(
     };
 }
 
-function mimeDeRuta(ruta: string): string {
-    const extension = ruta.split('.').pop()?.toLowerCase();
-    if (extension === 'png') return 'image/png';
-    if (extension === 'webp') return 'image/webp';
-    if (extension === 'gif') return 'image/gif';
-    if (extension === 'pdf') return 'application/pdf';
-    return 'image/jpeg';
-}

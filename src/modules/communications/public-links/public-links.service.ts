@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { presentarAdjunto, presentarPortada } from '../announcements/archivo-publico';
 import { aTextoPlano } from '../announcements/sanitize-cuerpo';
 import { CommsStorageService } from '../announcements/comms-storage.service';
 import { errorComms } from '../comms-http';
@@ -96,16 +97,8 @@ export class PublicLinksService {
             empresa: enlace.empresa,
             expiraEn: enlace.expiraEn,
             yaConfirmado: enlace.yaConfirmado,
-            portadaUrl: enlace.version.PortadaRuta
-                ? this.storage.signedUrl(enlace.version.PortadaRuta, TTL_ARCHIVO, 'image/jpeg')
-                : null,
-            adjuntos: adjuntos.map((adjunto) => ({
-                id: adjunto.idAdjunto,
-                nombre: adjunto.Nombre,
-                mime: adjunto.Mime,
-                tamanoBytes: adjunto.TamanoBytes,
-                url: this.storage.signedUrl(adjunto.Ruta, TTL_ARCHIVO, adjunto.Mime),
-            })),
+            ...presentarPortada(this.storage, enlace.version.PortadaRuta, TTL_ARCHIVO),
+            adjuntos: adjuntos.map((adjunto) => presentarAdjunto(this.storage, adjunto, TTL_ARCHIVO)),
         };
     }
 

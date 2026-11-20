@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SesionKiosco } from 'src/modules/kiosks/kiosk-auth/kiosco-actual';
+import { presentarAdjunto, presentarPortada } from '../announcements/archivo-publico';
+import { CommsStorageService } from '../announcements/comms-storage.service';
 import { aTextoPlano } from '../announcements/sanitize-cuerpo';
 import { normalizarCanales } from '../channels/canales';
 import { errorComms } from '../comms-http';
@@ -11,6 +13,7 @@ import { metodoDeChecada, visibleEnKiosco } from './metodo-kiosco';
 const VENTANA_MS = 5 * 60 * 1000;
 const ZONA_DEFAULT = 'America/Mexico_City';
 const MAX_AVISOS = 3;
+const TTL_ARCHIVO = 60 * 60;
 const MENSAJE_CHECADA = 'Para confirmar, necesitas haber checado en este kiosco en los últimos 5 minutos.';
 
 @Injectable()
@@ -20,6 +23,7 @@ export class KioskCommsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly ack: CommsAckService,
+        private readonly storage: CommsStorageService,
     ) {}
 
     async pendientes(kiosco: SesionKiosco, idEmpleado: number) {
@@ -56,6 +60,19 @@ export class KioskCommsService {
             },
         });
         const porClave = new Map(versiones.map((fila) => [`${fila.idComunicado}:${fila.NumVersion}`, fila]));
+        const idsVersion = [...new Set(versiones.map((fila) => fila.idVersion).filter((id) => typeof id === 'number'))];
+        const adjuntos = idsVersion.length
+            ? await this.prisma.comComunicadoAdjuntos.findMany({
+                  where: { idVersion: { in: idsVersion } },
+                  orderBy: { idAdjunto: 'asc' },
+              })
+            : [];
+        const adjuntosPorVersion = new Map<number, typeof adjuntos>();
+        for (const adjunto of adjuntos) {
+            const lista = adjuntosPorVersion.get(adjunto.idVersion) ?? [];
+            lista.push(adjunto);
+            adjuntosPorVersion.set(adjunto.idVersion, lista);
+        }
         return elegidas.flatMap((fila) => {
             const version = porClave.get(`${fila.idComunicado}:${fila.ComComunicados.VersionActual}`);
             if (!version) return [];
@@ -70,6 +87,10 @@ export class KioskCommsService {
                     prioridad: fila.ComComunicados.Prioridad,
                     requiereAcuse: fila.ComComunicados.AcuseModo !== 'NINGUNO' && fila.Estado !== 'CONFIRMADO',
                     enviadoEn: fila.ComComunicados.EnviadoEn,
+                    ...presentarPortada(this.storage, version.PortadaRuta, TTL_ARCHIVO),
+                    adjuntos: (adjuntosPorVersion.get(version.idVersion) ?? []).map((adjunto) =>
+                        presentarAdjunto(this.storage, adjunto, TTL_ARCHIVO),
+                    ),
                 },
             ];
         });

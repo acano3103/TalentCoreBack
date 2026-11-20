@@ -91,6 +91,9 @@ export const EJEMPLO_CONTENIDO_ENLACE = {
     cuerpoTexto: 'A partir del lunes la caja abre a las 9.',
     acuseModo: 'LEI_ENTENDI',
     yaConfirmado: false,
+    portadaUrl: null,
+    portadaRuta: null,
+    adjuntos: [],
 };
 
 export const EJEMPLO_KIOSCO = [
@@ -101,6 +104,9 @@ export const EJEMPLO_KIOSCO = [
         cuerpoTexto: 'A partir del lunes la caja abre a las 9.',
         esAviso: false,
         acuseModo: 'LEI_ENTENDI',
+        portadaUrl: null,
+        portadaRuta: null,
+        adjuntos: [],
     },
 ];
 

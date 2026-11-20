@@ -48,7 +48,7 @@ describe('MeCommsService', () => {
         empleados: { findFirst: jest.fn() },
         comDestinatarios: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
         comComunicadoVersiones: { findMany: jest.fn(), findUnique: jest.fn() },
-        comComunicadoAdjuntos: { findMany: jest.fn() },
+        comComunicadoAdjuntos: { findMany: jest.fn(), groupBy: jest.fn() },
         comPreguntas: { count: jest.fn(), create: jest.fn() },
         notificaciones: { findMany: jest.fn(), updateMany: jest.fn() },
         notificacionesEntregas: { updateMany: jest.fn() },
@@ -73,6 +73,7 @@ describe('MeCommsService', () => {
             PortadaRuta: null,
         });
         prisma.comComunicadoAdjuntos.findMany.mockResolvedValue([]);
+        prisma.comComunicadoAdjuntos.groupBy.mockResolvedValue([]);
         prisma.notificaciones.findMany.mockResolvedValue([{ id: 'n1' }]);
         prisma.catCanalesNotificaciones.findUnique.mockResolvedValue({ id: 8 });
         prisma.catSites.findUnique.mockResolvedValue({ zonaHoraria: 'America/Mexico_City' });
@@ -82,7 +83,7 @@ describe('MeCommsService', () => {
                 MeCommsService,
                 { provide: PrismaService, useValue: prisma },
                 { provide: CommsAckService, useValue: ack },
-                { provide: CommsStorageService, useValue: { signedUrl: jest.fn(() => '/firmado') } },
+                { provide: CommsStorageService, useValue: { enlaceArchivo: jest.fn(() => ({ url: '/api/v2/public/comms/files/firma', ruta: 'public/comms/files/firma' })) } },
                 { provide: SnoozeStore, useValue: snooze },
             ],
         }).compile();
@@ -131,6 +132,33 @@ describe('MeCommsService', () => {
         expect(detalle.miEstado).toBe('CONFIRMADO');
     });
 
+    it('el detalle trae la ruta relativa de la portada y del adjunto', async () => {
+        prisma.comDestinatarios.findFirst.mockResolvedValue({
+            idDestinatario: 20,
+            idComunicado: 9,
+            Estado: 'LEIDO',
+            LeidoEn: ahora,
+            ConfirmadoEn: null,
+            VersionConfirmada: null,
+            ComComunicados: comunicado('LEI_ENTENDI'),
+        });
+        prisma.comComunicadoVersiones.findUnique.mockResolvedValue({
+            idVersion: 4,
+            NumVersion: 1,
+            Titulo: 'Política',
+            Resumen: 'Léela',
+            CuerpoHtml: '<p>Texto</p>',
+            PortadaRuta: '3/10/comms/9/portada/foto.png',
+        });
+        prisma.comComunicadoAdjuntos.findMany.mockResolvedValue([
+            { idAdjunto: 3, Nombre: 'Año.pdf', Ruta: '3/10/comms/9/adjuntos/a.pdf', Mime: 'application/pdf', TamanoBytes: 20 },
+        ]);
+        const detalle = await service.detalle(usuario, 10, 9, { canal: 'APP', ip: null, userAgent: null, dispositivo: null });
+        expect(detalle.version.portadaRuta).toBe('public/comms/files/firma');
+        expect(detalle.version.portadaUrl).toBe('/api/v2/public/comms/files/firma');
+        expect(detalle.version.adjuntos[0]).toMatchObject({ nombre: 'Año.pdf', ruta: 'public/comms/files/firma' });
+    });
+
     it('un acuse de leí y entendí no se crea solo con abrir', async () => {
         prisma.comDestinatarios.findFirst.mockResolvedValue({
             idDestinatario: 20,
@@ -152,6 +180,31 @@ describe('MeCommsService', () => {
         prisma.comPreguntas.count.mockResolvedValue(3);
         await expect(service.preguntar(usuario, 10, 9, '¿Dónde firmo?')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
         expect(prisma.comPreguntas.create).not.toHaveBeenCalled();
+    });
+
+    it('el modal dice si pide identidad y cuántos adjuntos tiene', async () => {
+        prisma.comDestinatarios.findMany.mockResolvedValue([
+            {
+                idComunicado: 9,
+                LeidoEn: null,
+                Estado: 'PENDIENTE',
+                ComComunicados: { ...comunicado(), RequiereIdentidad: true },
+            },
+        ]);
+        prisma.comComunicadoVersiones.findMany.mockResolvedValue([
+            { idVersion: 4, idComunicado: 9, NumVersion: 1, Titulo: 'Política', Resumen: 'Léela' },
+        ]);
+        prisma.comComunicadoAdjuntos.groupBy.mockResolvedValue([{ idVersion: 4, _count: { _all: 2 } }]);
+
+        await expect(service.modalPendiente(usuario, 10)).resolves.toEqual([
+            expect.objectContaining({
+                id: 9,
+                titulo: 'Política',
+                resumen: 'Léela',
+                requiereIdentidad: true,
+                totalAdjuntos: 2,
+            }),
+        ]);
     });
 
     it('el snooze esconde el modal el resto del día', async () => {

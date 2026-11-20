@@ -1,5 +1,8 @@
 import { HttpStatus } from '@nestjs/common';
 import { errorComms } from '../comms-http';
+import { nombreRecibido } from './nombre-recibido';
+
+export { nombreRecibido } from './nombre-recibido';
 
 export const MAX_ADJUNTOS = 5;
 export const MAX_ADJUNTO_BYTES = 20 * 1024 * 1024;
@@ -26,7 +29,8 @@ export function validarPortada(archivo: ArchivoEntrante): MimeAdjunto {
 }
 
 export function nombreVisible(nombre: string): string {
-    const base = (nombre.split(/[/\\]/).pop() ?? 'archivo').replace(/[\u0000-\u001f]/g, '').trim();
+    const recibido = nombreRecibido(nombre);
+    const base = (recibido.split(/[/\\]/).pop() ?? 'archivo').replace(/[\u0000-\u001f]/g, '').trim();
     return (base || 'archivo').slice(0, 255);
 }
 

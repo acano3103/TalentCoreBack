@@ -4,6 +4,8 @@ import {
     MAX_ADJUNTO_BYTES,
     MAX_PORTADA_BYTES,
     cabeOtroAdjunto,
+    nombreRecibido,
+    nombreVisible,
     validarAdjunto,
     validarPortada,
 } from './adjuntos';
@@ -43,6 +45,17 @@ describe('adjuntos', () => {
         expect(codigo(capturar(() => validarAdjunto({ buffer: aviso, mime: 'application/pdf', nombre: 'a.pdf' }, true)))).toBe(
             'ADJUNTO_INVALIDO',
         );
+    });
+
+    it('recupera Módulos, Implementación y Año cuando Multer entrega latin1', () => {
+        for (const visible of ['Módulos.pdf', 'Implementación.pdf', 'Año.pdf']) {
+            const recibido = Buffer.from(visible, 'utf8').toString('latin1');
+            expect(recibido).not.toBe(visible);
+            expect(nombreRecibido(recibido)).toBe(visible);
+            expect(nombreVisible(recibido)).toBe(visible);
+        }
+        expect(nombreRecibido('Módulos.pdf')).toBe('Módulos.pdf');
+        expect(nombreVisible('nota.pdf')).toBe('nota.pdf');
     });
 
     it('no deja pasar del quinto adjunto', () => {

@@ -5,6 +5,7 @@ import { HttpStatus } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SesionKiosco } from 'src/modules/kiosks/kiosk-auth/kiosco-actual';
+import { CommsStorageService } from '../announcements/comms-storage.service';
 import { CommsAckService } from '../me/comms-ack.service';
 import { KioskCommsService } from './kiosk-comms.service';
 import { metodoDeChecada } from './metodo-kiosco';
@@ -42,6 +43,7 @@ describe('KioskCommsService', () => {
         empleados: { findFirst: jest.fn() },
         comDestinatarios: { findMany: jest.fn() },
         comComunicadoVersiones: { findMany: jest.fn() },
+        comComunicadoAdjuntos: { findMany: jest.fn() },
         registrosAsistencia: { findFirst: jest.fn() },
     };
     const ack = { confirmar: jest.fn() };
@@ -50,12 +52,18 @@ describe('KioskCommsService', () => {
     beforeEach(async () => {
         jest.clearAllMocks();
         prisma.empleados.findFirst.mockResolvedValue({ idEmpleado: 5 });
+        prisma.comComunicadoVersiones.findMany.mockResolvedValue([]);
+        prisma.comComunicadoAdjuntos.findMany.mockResolvedValue([]);
         ack.confirmar.mockResolvedValue({ confirmadoEn: ahora, version: 1, canal: 'KIOSCO' });
         const module = await Test.createTestingModule({
             providers: [
                 KioskCommsService,
                 { provide: PrismaService, useValue: prisma },
                 { provide: CommsAckService, useValue: ack },
+                {
+                    provide: CommsStorageService,
+                    useValue: { enlaceArchivo: jest.fn(() => ({ url: '/api/v2/public/comms/files/firma', ruta: 'public/comms/files/firma' })) },
+                },
             ],
         }).compile();
         service = module.get(KioskCommsService);
@@ -84,6 +92,28 @@ describe('KioskCommsService', () => {
         expect(lista.map((item) => item.id)).toEqual([4, 5, 3]);
         expect(lista[2].esAviso).toBe(true);
         expect(lista[2].cuerpoTexto).toBe('Aviso');
+    });
+
+    it('incluye la ruta relativa de la portada y de los adjuntos', async () => {
+        prisma.comDestinatarios.findMany.mockResolvedValue([fila(4, 5, {})]);
+        prisma.comComunicadoVersiones.findMany.mockResolvedValue([
+            {
+                idVersion: 8,
+                idComunicado: 4,
+                NumVersion: 1,
+                Titulo: 'T4',
+                Resumen: 'r',
+                CuerpoHtml: '<p>Aviso</p>',
+                PortadaRuta: '3/10/comms/4/portada/a.png',
+            },
+        ]);
+        prisma.comComunicadoAdjuntos.findMany.mockResolvedValue([
+            { idAdjunto: 1, idVersion: 8, Nombre: 'Módulos.pdf', Ruta: '3/10/comms/4/adjuntos/a.pdf', Mime: 'application/pdf', TamanoBytes: 12 },
+        ]);
+        const [aviso] = await service.pendientes(kiosco, 5);
+        expect(aviso.portadaRuta).toBe('public/comms/files/firma');
+        expect(aviso.portadaUrl).toBe('/api/v2/public/comms/files/firma');
+        expect(aviso.adjuntos[0]).toMatchObject({ nombre: 'Módulos.pdf', ruta: 'public/comms/files/firma' });
     });
 
     it('solo acepta el acuse si la checada de ese empleado es de este kiosco y de los últimos 5 minutos', async () => {
