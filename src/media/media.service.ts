@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, StreamableFile } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException, StreamableFile } from '@nestjs/common';
 import { createReadStream, existsSync, statSync } from 'fs';
-import { resolve, join, extname, relative } from 'path';
+import { resolve, join, extname, relative, sep } from 'path';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -9,13 +9,20 @@ import { PrismaService } from 'src/prisma/prisma.service';
 @Injectable()
 export class MediaService {
     private readonly ALLOWED_ROOT: string;
+    private readonly SEARCH_ROOTS: string[];
+    private readonly logger = new Logger(MediaService.name);
 
     constructor(
         private readonly configService: ConfigService,
         private readonly prisma: PrismaService,
     ) {
         const mediaRootPath = this.configService.get<string>('MEDIA_ROOT_PATH');
-        this.ALLOWED_ROOT = resolve(mediaRootPath || join(process.cwd(), 'media'));
+        const fallbackRoot = resolve(join(process.cwd(), 'media'));
+
+        this.ALLOWED_ROOT = resolve(mediaRootPath || fallbackRoot);
+
+        // 1) Variable de entorno (prioridad)  2) carpeta media en la raíz del proyecto
+        this.SEARCH_ROOTS = Array.from(new Set([this.ALLOWED_ROOT, fallbackRoot]));
     }
 
     async getPrivateFileGeneric(
@@ -33,41 +40,62 @@ export class MediaService {
             await this.exigirEvidenciaAsistencia(asistencia[1], Number(asistencia[2]), user);
         }
 
-        const safePath = resolve(join(this.ALLOWED_ROOT, fileRelativePath));
+        const segmentoKiosco = normalizado.includes('/attendance/kiosk/') ? 'kiosk/' : '';
+        const esperado = asistencia
+            ? `${asistencia[1]}/attendance/${segmentoKiosco}${asistencia[2]}/`
+            : null;
 
-        if (!safePath.startsWith(this.ALLOWED_ROOT)) {
-            throw new ForbiddenException('Acceso denegado.');
-        }
-
-        if (asistencia) {
-            const relativo = relative(this.ALLOWED_ROOT, safePath).replace(/\\/g, '/');
-            const segmentoKiosco = normalizado.includes('/attendance/kiosk/') ? 'kiosk/' : '';
-            const esperado = `${asistencia[1]}/attendance/${segmentoKiosco}${asistencia[2]}/`;
-            if (!relativo.startsWith(esperado)) {
-                throw new NotFoundException('El recurso solicitado no fue encontrado.');
-            }
-        }
-
-        if (!existsSync(safePath)) {
+        const safePath = this.buscarArchivo(fileRelativePath, esperado);
+        if (!safePath) {
             throw new NotFoundException('El recurso solicitado no fue encontrado.');
         }
 
-        // 2. Calculamos las estadísticas físicas del archivo
+        // Estadísticas físicas del archivo
         const fileStat = statSync(safePath);
         const contentType = this.getMimeType(safePath);
         const fileName = safePath.split(/[\/\\]/).pop();
 
-        // 3. Cabeceras estándar para streaming de archivos binarios seguros
+        // Cabeceras estándar para streaming de archivos binarios seguros
         res.set({
             'Content-Type': contentType,
-            'Content-Length': fileStat.size, 
+            'Content-Length': fileStat.size,
             'Content-Disposition': `inline; filename="${fileName}"`,
             'Accept-Ranges': 'bytes', // Permite scroll rápido y navegación por páginas en PDFs largos
-            'Cache-Control': 'no-store, no-cache, must-revalidate, private', // Evita fugas de caché en local
+            'Cache-Control': 'no-store, no-cache, must-revalidate, private', // Evita fugas de caché
         });
 
-        const fileStream = createReadStream(safePath);
-        return new StreamableFile(fileStream);
+        return new StreamableFile(createReadStream(safePath));
+    }
+
+    /**
+     * Busca el archivo en cada raíz permitida, en orden.
+     * Devuelve la ruta absoluta del primero que exista, o null si no está en ninguna.
+     */
+    private buscarArchivo(fileRelativePath: string, prefijoEsperado: string | null): string | null {
+        for (const root of this.SEARCH_ROOTS) {
+            const safePath = resolve(join(root, fileRelativePath));
+
+            // Protección contra Path Traversal (con separador, para evitar /media vs /media-otro)
+            if (safePath !== root && !safePath.startsWith(root + sep)) {
+                throw new ForbiddenException('Acceso denegado.');
+            }
+
+            // Validación de evidencia de asistencia, relativa a esta raíz
+            if (prefijoEsperado) {
+                const relativo = relative(root, safePath).replace(/\\/g, '/');
+                if (!relativo.startsWith(prefijoEsperado)) {
+                    continue;
+                }
+            }
+
+            if (existsSync(safePath) && statSync(safePath).isFile()) {
+                if (root !== this.ALLOWED_ROOT) {
+                    this.logger.warn(`Archivo servido desde la carpeta de respaldo: ${safePath}`);
+                }
+                return safePath;
+            }
+        }
+        return null;
     }
 
     private getMimeType(filePath: string): string {

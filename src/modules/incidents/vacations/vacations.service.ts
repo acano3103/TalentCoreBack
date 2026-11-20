@@ -196,6 +196,7 @@ export class VacationsService {
     // 3. Validar consistencia de fechas
     const startDate = new Date(dto.fechaInicio);
     const endDate = new Date(dto.fechaFin);
+    const esForzada = Boolean(dto.esForzada);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       throw new BadRequestException('Formato de fecha inválido.');
@@ -207,13 +208,11 @@ export class VacationsService {
       );
     }
 
-    // 4. Validar días de anticipación mínima
-    const earliestAllowed = new Date(constraints.fechaMinimaPermitida);
-    // Comparación solo fecha (YYYY-MM-DD)
+    // 4. Validar días de anticipación mínima (se omite si la solicitud es forzada)
     const startDateOnly = dto.fechaInicio.split('T')[0];
     const earliestAllowedOnly = constraints.fechaMinimaPermitida.split('T')[0];
 
-    if (startDateOnly < earliestAllowedOnly) {
+    if (!esForzada && startDateOnly < earliestAllowedOnly) {
       throw new BadRequestException(
         `La solicitud no cumple con los ${constraints.diasAnticipacionMinima} días de anticipación mínima requeridos. Fecha más próxima: ${earliestAllowedOnly}.`,
       );
@@ -276,6 +275,7 @@ export class VacationsService {
           totalDiasLaborales: dto.totalDiasLaborales,
           estatus: SolicitudesIncidencias_estatus.PENDIENTE,
           comentarios: dto.comentarios || null,
+          esForzada: esForzada,
         },
       });
 

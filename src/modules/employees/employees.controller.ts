@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe, Query, DefaultValuePipe, Put, ParseBoolPipe } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { SaveSalaryDto } from './dto/save-salary.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
@@ -10,6 +10,7 @@ import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 import { UpdateImmediateBossDto } from './dto/update-immediate-boss.dto';
 import { UpdateEmployeeGeneralDataDto } from './dto/update-employee-general-data.dto';
+import { UpdateEmployeeExternalIdentifiersDto } from './dto/update-employee-external-identifiers.dto';
 
 @ApiTags('Employees')
 @ApiBearerAuth()
@@ -30,6 +31,9 @@ export class EmployeesController {
   // Endpoint que obtiene a todos los empleados que ya tienen su expediente completo
   @Get('/hired')
   @ApiOperation({ summary: 'Get all employees with complete expediente', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiQuery({ name: 'idSite', required: false, description: 'Filtra por ubicación' })
+  @ApiQuery({ name: 'idPuesto', required: false, description: 'Filtra por puesto' })
+  @ApiQuery({ name: 'idArea', required: false, description: 'Filtra por área del puesto' })
   @ApiResponse({ status: 200, description: 'Employees retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
   findAllWithCompleteFile(
@@ -40,10 +44,11 @@ export class EmployeesController {
     @Query('search') search?: string,
     @Query('without_manager', new DefaultValuePipe(false), ParseBoolPipe) withoutManager?: boolean,
     @Query('idSite') idSite?: string,
-    @Query('idUnidadOperativa') idUnidadOperativa?: string,
+    @Query('idPuesto') idPuesto?: string,
+    @Query('idArea') idArea?: string,
   ) {
     const querySearch = search || '';
-    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager, idSite, idUnidadOperativa);
+    return this.employeesService.findAllWithCompleteFile(activeUser, companyId, page, querySearch, limit, withoutManager, idSite, idPuesto, idArea);
   }
 
   // Endpoint que obtiene a todos los subordinados de un empleado
@@ -136,6 +141,20 @@ export class EmployeesController {
     @GetActiveUser() activeUser: ActiveUserDto,
   ) {
     return this.employeesService.updateEmployee(activeUser, companyId, employeeId, employeeData);
+  }
+
+  @Patch(':employeeId/external-identifiers')
+  @ApiOperation({ summary: 'Update employee external identifiers.', description: SWAGGER_AUTH_DESCRIPTION })
+  @ApiResponse({ status: 200, description: 'External identifiers updated successfully' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+  updateExternalIdentifiers(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() dto: UpdateEmployeeExternalIdentifiersDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return this.employeesService.updateExternalIdentifiers(activeUser, companyId, employeeId, dto);
   }
 
   // Endpoint para actualizar el horario laboral y modalidad del empleado

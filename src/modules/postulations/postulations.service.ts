@@ -16,9 +16,10 @@ import { calculatePercentage } from '../vacancies/utils/formatters.util';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { MediaPathService } from 'src/common/services/media-path.service';
 import { TenantsService } from '../super-admin/tenants/tenants.service';
 import { EmployeesService } from '../employees/employees.service';
+import { NotifyRecruitmentDocumentDto, RecruitmentDocumentAction } from './dto/notify-recruitment-document.dto';
+import { randomUUID } from 'crypto';
 
 
 @Injectable()
@@ -137,7 +138,7 @@ export class PostulationsService {
       ]);
 
       // 4. Transacción en base de datos
-      const [postulation, log] = await this.prisma.$transaction(async (tx) => {
+      const [postulation] = await this.prisma.$transaction(async (tx) => {
         const newPostulation = await tx.postulaciones.create({
           data: {
             idEstatus: 1,
@@ -154,9 +155,9 @@ export class PostulationsService {
           }
         });
 
-        const newLog = await tx.historicoMovimientos.create({
+        await tx.historicoMovimientos.create({
           data: {
-            idUsuario: 1,
+            idUsuario: null,
             idEmpresa: companyId,
             accion: 'CREAR',
             tablaOrigen: 'Postulaciones',
@@ -166,7 +167,7 @@ export class PostulationsService {
           }
         });
 
-        return [newPostulation, newLog];
+        return [newPostulation];
       });
 
       // 5. Disparo asíncrono para análisis de IA
@@ -206,6 +207,158 @@ export class PostulationsService {
 
       this.logger.error('Error en CandidatesService:', error);
       throw new BadRequestException(error.message);
+    }
+  }
+
+  async notifyRecruitmentDocument(
+    activeUser: ActiveUserDto,
+    companyId: number,
+    postulationId: number,
+    documentId: number,
+    dto: NotifyRecruitmentDocumentDto,
+  ) {
+    // Obtener candidato y validar que pertenezca a la empresa.
+    const candidato = await this.prisma.postulaciones.findFirst({
+      where: {
+        idPostulacion: postulationId,
+        Vacantes: { idEmpresa: companyId },
+      },
+      select: {
+        idPostulacion: true,
+        nombre: true,
+        primerApellido: true,
+        segundoApellido: true,
+        correo: true,
+        telefono: true,
+        idVacante: true,
+      },
+    });
+
+    if (!candidato) {
+      throw new NotFoundException('El candidato no existe o no pertenece a esta empresa.');
+    }
+
+    // Obtener documento generado.
+    const documento = await this.prisma.documentosGenerados.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!documento) {
+      throw new NotFoundException('El documento generado no existe.');
+    }
+
+    // Verificar que el documento no esté asociado a otra empresa o candidato.
+    const documentoPlantilla = await this.prisma.plantillasDocumentos.findFirst({
+      where: {
+        id: documento.idPlantilla,
+        idEmpresa: companyId,
+      },
+      select: { id: true },
+    });
+
+    if (!documentoPlantilla) {
+      throw new NotFoundException('El documento generado no pertenece a esta empresa.');
+    }
+
+    // Generar token de acceso si todavía no existe.
+    let tokenFirma = documento.tokenFirma;
+
+    if (!tokenFirma) {
+      tokenFirma = randomUUID();
+
+      await this.prisma.documentosGenerados.update({
+        where: { id: documentId },
+        data: { tokenFirma },
+      });
+    }
+
+    // Obtener empresa.
+    const empresa = await this.prisma.catEmpresas.findFirst({
+      where: { idEmpresa: companyId },
+      select: { nombre_comercial: true },
+    });
+
+    const frontendUrl = this.configService.getOrThrow<string>('FRONT_URL');
+    const linkDocumento = `${frontendUrl}firmar/${tokenFirma}`;
+
+    const nombreCompleto = [
+      candidato.nombre,
+      candidato.primerApellido,
+      candidato.segundoApellido,
+    ].filter(Boolean).join(' ').trim();
+
+    // Determinar el tipo de notificación.
+    const esFirma = dto.action === RecruitmentDocumentAction.FIRMA;
+    const notificationTypeCode = esFirma ? 'RECRUITMENT_DOCUMENT_SIGN' : 'RECRUITMENT_DOCUMENT_READ';
+    const subject = esFirma
+      ? '✍️ Tienes un documento pendiente de firma'
+      : '📄 Tienes un documento disponible para consultar';
+
+    try {
+      // Enviar notificación al candidato.
+      await this.notifications.notify({
+        userUuid: `candidato-${candidato.idPostulacion}`,
+        notificationTypeCode,
+        to: candidato.correo || undefined,
+        phone: candidato.telefono || undefined,
+        subject,
+        context: {
+          nombre: nombreCompleto,
+          empresa: empresa?.nombre_comercial || 'Empresa',
+          linkDocumento,
+          linkFirma: linkDocumento,
+          tipoAccion: dto.action,
+        },
+      });
+
+      // Asociar el documento generado con la vacante y el candidato.
+      await this.prisma.documentosGenerados.update({
+        where: { id: documentId },
+        data: {
+          idVacante: candidato.idVacante,
+          idCandidato: candidato.idPostulacion,
+        },
+      });
+
+      // Registrar movimiento en el histórico.
+      await this.prisma.historicoMovimientos.create({
+        data: {
+          idUsuario: activeUser.id,
+          idEmpresa: companyId,
+          accion: 'UPDATE',
+          tablaOrigen: 'DocumentosGenerados',
+          idRegistro: String(documento.id),
+          descripcion: esFirma
+            ? `Documento enviado al candidato ${nombreCompleto} para su firma por ${activeUser.first_name} ${activeUser.last_name}`
+            : `Documento enviado al candidato ${nombreCompleto} para su lectura por ${activeUser.first_name} ${activeUser.last_name}`,
+          fechaCreacion: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `Notificación de ${dto.action.toLowerCase()} enviada para el documento ${documentId}, candidato ${postulationId}, vacante ${candidato.idVacante}.`,
+      );
+
+      return {
+        success: true,
+        message: esFirma
+          ? 'La notificación para firmar el documento fue enviada correctamente.'
+          : 'La notificación para consultar el documento fue enviada correctamente.',
+        documentId,
+        postulationId,
+        vacancyId: candidato.idVacante,
+        action: dto.action,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error enviando notificación del documento ${documentId} al candidato ${postulationId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      throw new BadRequestException(
+        esFirma
+          ? 'No se pudo enviar la notificación para firmar el documento.'
+          : 'No se pudo enviar la notificación para consultar el documento.',
+      );
     }
   }
 
@@ -338,6 +491,8 @@ export class PostulationsService {
         throw new BadRequestException(`No se puede cambiar de ${currentStatusName} a ${nextStatusName}. Estado actual: ${currentStatusName}, Estados permitidos: ${allowedNames.join(', ')}`);
       }
 
+      let idEmpleadoGenerado: number | null = null;
+
       // Si el nuevo estatus es contratado/reclutado
       if (dto.statusId === 6) {
         const vacancy = await this.prisma.vacantes.findFirst({
@@ -370,7 +525,7 @@ export class PostulationsService {
           : [];
 
         // Creamos el registro de empleado y el link para que pueda subir su info y documentación
-        const alta = await generateEmployeeAndLink(
+        const result = await generateEmployeeAndLink(
           {
             jwtService: this.jwtService,
             frontUrl: this.configService.get<string>('FRONT_URL') || '',
@@ -400,22 +555,36 @@ export class PostulationsService {
           this.notifications.notify.bind(this.notifications)
         );
 
+        const { idEmpleado } = result;
+        idEmpleadoGenerado = idEmpleado;
+
+        await this.employeeService.syncAllPendingToArtemis(user, companyId)
+
         emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
           tipo: 'ALTA',
           idTenant: user.idTenant,
           idEmpresa: companyId,
-          idEmpleado: alta.idEmpleado,
+          idEmpleado: idEmpleado,
         });
       }
 
-      await this.employeeService.syncAllPendingToArtemis(user, companyId)
-
       await this.prisma.$transaction(async (tx) => {
+        // Si se generó un empleado por esta postulación, guardamos su relación de origen.
+        if (dto.statusId === 6 && idEmpleadoGenerado) {
+          await tx.relEmpleadosPostulaciones.create({
+            data: {
+              idEmpleado: idEmpleadoGenerado,
+              idPostulacion: postulationId,
+            },
+          });
+        }
+
         // Actualizamos el status en la db
         const updatedPostulation = tx.postulaciones.update({
           where: { idPostulacion: postulationId },
           data: { idEstatus: dto.statusId }
         });
+
         // Registramos el movimiento en el historico
         const log = tx.historicoMovimientos.create({
           data: {

@@ -22,6 +22,7 @@ import * as ExcelJS from 'exceljs';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 import { reemplazarEtiquetas, tipoPersonalDesdeClasificacion } from '../communications/staff-classification/clasificacion-puesto';
 import { presentarEtiquetas, presentarPuesto, presentarTipoPersonal } from './position-classification';
+import { PositionFilters } from './interfaces/positions.interface';
 
 @Injectable()
 export class PositionsService {
@@ -35,8 +36,25 @@ export class PositionsService {
 
     private readonly logger = new Logger(PositionsService.name);
 
-    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number, aprobada: number, idTipoPuesto?: number) {
-        const { positions, total } = await PositionQueries.findAll(this.prisma, activeUser.idTenant, companyId, search, page, limit, aprobada, idTipoPuesto);
+    async findAll(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        page: number,
+        search: string,
+        limit: number,
+        aprobada: number,
+        filters: PositionFilters = {},
+    ) {
+        const { positions, total } = await PositionQueries.findAll(
+            this.prisma,
+            activeUser.idTenant,
+            companyId,
+            search,
+            page,
+            limit,
+            aprobada,
+            filters,
+        );
 
         if ((!positions || positions.length === 0) && page === 1 && !search) {
             return {

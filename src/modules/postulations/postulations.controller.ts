@@ -7,6 +7,7 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { CreatePostulationDto } from './dto/create-postulation.dto';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import { NotifyRecruitmentDocumentDto } from './dto/notify-recruitment-document.dto';
 
 @ApiTags('Postulations')
 @ApiBearerAuth()
@@ -27,6 +28,24 @@ export class PostulationsController {
         @UploadedFile() file: Express.Multer.File
     ) {
         return await this.service.createPostulation(companyId, body, file);
+    }
+
+    // Envía al candidato una notificación para firmar o consultar un documento generado durante el proceso de reclutamiento.
+    @UseGuards(JwtAuthGuard)
+    @Post(':postulationId/documents/:documentId/notify')
+    @ApiOperation({ summary: 'Notify candidate about a recruitment document', description: 'Sends a notification to the candidate to sign or read a document generated during the recruitment process.' })
+    @ApiResponse({ status: 200, description: 'Document notification sent successfully.' })
+    @ApiResponse({ status: 400, description: 'Invalid document or candidate data.' })
+    @ApiResponse({ status: 404, description: 'Generated document, candidate or vacancy not found.' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+    async notifyRecruitmentDocument(
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('postulationId', ParseIntPipe) postulationId: number,
+        @Param('documentId', ParseIntPipe) documentId: number,
+        @Body() dto: NotifyRecruitmentDocumentDto,
+        @GetActiveUser() activeUser: ActiveUserDto,
+    ) {
+        return this.service.notifyRecruitmentDocument(activeUser, companyId, postulationId, documentId, dto);
     }
 
     // Endpoint para obtener el catalogo de estatus de las postulaciones

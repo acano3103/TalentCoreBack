@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 import * as fs from 'fs';
 import { calculatePercentage, getScoreTrafficLight } from './utils/formatters.util';
+import { VacancyStatus } from './interfaces/vacancies.interface';
 
 @Injectable()
 export class VacanciesService {
@@ -21,35 +22,56 @@ export class VacanciesService {
 
     private readonly logger = new Logger(VacanciesService.name);
 
-    // Obtener todas las vacantes activas por empresa
-    async findAll(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number) {
+    // Obtener vacantes paginadas por empresa con filtros.
+    async findAll(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        page: number,
+        search: string,
+        limit: number,
+        siteId?: string,
+        areaId?: string,
+        status: string = 'ACTIVA',
+    ) {
         try {
             const skip = (page - 1) * limit;
+
             let recruiterEmployeeId: number | null = null;
 
-            // 1. Verificar si el usuario tiene el rol de reclutador
+            // 1. Verificar si el usuario tiene el rol de reclutador.
             const userRoles = await this.prisma.$queryRaw<{ idRol: number }[]>`
-                SELECT idRol FROM RelUsuarioRol 
-                WHERE idUsuario = ${activeUser.id} AND activo = 1;
+                SELECT idRol
+                FROM RelUsuarioRol
+                WHERE idUsuario = ${activeUser.id}
+                    AND activo = 1;
             `;
 
-            const isReclutador = userRoles.some(r => r.idRol === 4);
+            const isReclutador = userRoles.some((role) => Number(role.idRol) === 4);
 
-            // 2. Si es reclutador, obtenemos su idEmpleado cruzando con auth_user por su ID de usuario histórico
+            // 2. Si es reclutador, obtener su idEmpleado.
             if (isReclutador) {
-                const empleado = await this.prisma.$queryRaw<{ idEmpleado: number }[]>`
-                SELECT e.idEmpleado 
-                FROM Empleados e
-                INNER JOIN auth_user u ON e.idUsuario = u.uuid
-                WHERE u.id = ${activeUser.id} AND e.activo = 1
-                LIMIT 1;
-            `;
-                if (empleado.length > 0) {
-                    recruiterEmployeeId = empleado[0].idEmpleado;
-                }
+                const empleado = await this.prisma.$queryRaw<{ idEmpleado: number; }[]>`
+                    SELECT e.idEmpleado
+                    FROM Empleados e
+                    INNER JOIN auth_user u
+                        ON e.idUsuario = u.uuid
+                    WHERE u.id = ${activeUser.id}
+                        AND e.activo = 1
+                    LIMIT 1;
+                `;
+
+                if (empleado.length > 0) recruiterEmployeeId = Number(empleado[0].idEmpleado);
             }
 
-            // Ejecución en paralelo pasando el filtro opcional de reclutador
+            // 3. Validar los filtros numéricos.
+            const parsedSiteId = siteId && /^\d+$/.test(siteId) ? Number(siteId) : null;
+            const parsedAreaId = areaId && /^\d+$/.test(areaId) ? Number(areaId) : null;
+
+            // 4. Validar el estatus recibido.
+            const validStatuses: VacancyStatus[] = ['ACTIVA', 'CERRADA', 'CANCELADA', 'TODAS'];
+            const normalizedStatus = validStatuses.includes(status as VacancyStatus) ? status : 'ACTIVA';
+
+            // 5. Ejecutar consulta y conteo con exactamente los mismos filtros.
             const [rows, total] = await Promise.all([
                 VacanciesQueries.getPaginatedActiveVacancies(
                     this.prisma,
@@ -58,48 +80,52 @@ export class VacanciesService {
                     skip,
                     limit,
                     search,
-                    recruiterEmployeeId
+                    recruiterEmployeeId,
+                    parsedSiteId,
+                    parsedAreaId,
+                    normalizedStatus,
                 ),
                 VacanciesQueries.countActiveVacancies(
                     this.prisma,
                     activeUser.idTenant,
                     companyId,
                     search,
-                    recruiterEmployeeId
-                )
+                    recruiterEmployeeId,
+                    parsedSiteId,
+                    parsedAreaId,
+                    normalizedStatus,
+                ),
             ]);
 
-            // Mapeo y limpieza de datos para el cliente frontend
-            const vacantesActivas = rows.map((v) => {
-                return {
-                    idVacante: typeof v.idVacante === 'bigint' ? Number(v.idVacante) : v.idVacante,
-                    idPuesto: typeof v.idPuesto === 'bigint' ? Number(v.idPuesto) : v.idPuesto,
-                    NombrePuesto: v.NombrePuesto,
-                    DescripcionPuesto: v.DescripcionPuesto,
-                    NumeroVacantes: v.numeroVacantes ? Number(v.numeroVacantes) : 1,
-                    SalarioMinimo: v.SalarioMinimo ? String(v.SalarioMinimo) : null,
-                    SalarioMaximo: v.SalarioMaximo ? String(v.SalarioMaximo) : null,
-                    Area: v.Area,
-                    TipoPuesto: v.TipoPuesto,
-                    TipoContratacion: v.TipoContratacion,
-                    Site: v.Site,
-                    idReclutadorAsignado: v.idReclutadorAsignado ? Number(v.idReclutadorAsignado) : null,
-                    reclutadorAsignado: v.reclutadorAsignado || null,
-                    TotalCVs: v.TotalCVs ? Number(v.TotalCVs) : 0,
-                    TotalAprobados: v.TotalAprobados ? Number(v.TotalAprobados) : 0,
-                    TotalRechazados: v.TotalRechazados ? Number(v.TotalRechazados) : 0,
-                };
-            });
+            // 6. Mapear resultados para el frontend.
+            const vacantes = rows.map((v) => ({
+                idVacante: typeof v.idVacante === 'bigint' ? Number(v.idVacante) : v.idVacante,
+                idEstatusVacante: Number(v.idEstatusVacante),
+                idPuesto: typeof v.idPuesto === 'bigint' ? Number(v.idPuesto) : v.idPuesto,
+                NombrePuesto: v.NombrePuesto,
+                DescripcionPuesto: v.DescripcionPuesto,
+                NumeroVacantes: v.numeroVacantes ? Number(v.numeroVacantes) : 1,
+                SalarioMinimo: v.SalarioMinimo ? String(v.SalarioMinimo) : null,
+                SalarioMaximo: v.SalarioMaximo ? String(v.SalarioMaximo) : null,
+                Area: v.Area,
+                TipoPuesto: v.TipoPuesto,
+                TipoContratacion: v.TipoContratacion,
+                Site: v.Site,
+                idReclutadorAsignado: v.idReclutadorAsignado ? Number(v.idReclutadorAsignado) : null,
+                reclutadorAsignado: v.reclutadorAsignado || null,
+                TotalCVs: v.TotalCVs ? Number(v.TotalCVs) : 0,
+                TotalAprobados: v.TotalAprobados ? Number(v.TotalAprobados) : 0,
+                TotalRechazados: v.TotalRechazado ? Number(v.TotalRechazados) : 0,
+            }));
 
             return {
-                data: vacantesActivas,
+                data: vacantes,
                 total,
                 currentPage: page,
-                totalPages: Math.ceil(total / limit)
+                totalPages: Math.ceil(total / limit),
             };
-
         } catch (error) {
-            this.logger.error('Error al obtener vacantes activas paginadas:', error);
+            this.logger.error('Error al obtener vacantes paginadas:', error);
             throw new InternalServerErrorException('Error al procesar las vacantes');
         }
     }
@@ -292,6 +318,8 @@ export class VacanciesService {
 
             if (!vacancy) throw new NotFoundException('Vacante no encontrada');
 
+            const fechaCierre = new Date();
+
             await this.prisma.$transaction(async (tx) => {
                 await Promise.all([
                     // Actualizamos el estatus de la vacante
@@ -299,6 +327,7 @@ export class VacanciesService {
                         where: { idVacante: vacancyId },
                         data: {
                             idEstatusVacante: status === "CERRADA" ? 7 : 8,
+                            fechaCierre,
                             fechaActualizacion: new Date()
                         }
                     }),
@@ -399,15 +428,47 @@ export class VacanciesService {
         return { data: serialized };
     }
 
-    async findAllRequisitions(activeUser: ActiveUserDto, companyId: number, page: number, search: string, limit: number) {
-        const userRole = await this.prisma.relUsuarioRol.findFirst({
-            where: {
-                idUsuario: activeUser.id,
-                activo: true
-            }
-        });
+    async findAllRequisitions(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        page: number,
+        search: string,
+        limit: number
+    ) {
 
-        if (!userRole) throw new NotFoundException('El usuario no cuenta con un rol asignado en el sistema.');
+        // Obtener todos los roles activos del usuario
+        // correspondientes a su tenant.
+        const userRoles = await this.prisma.$queryRaw<{ descripcion: string }[]>`
+        SELECT cr.descripcion
+        FROM RelUsuarioRol rur
+        INNER JOIN CatRoles cr
+            ON cr.idRol = rur.idRol
+        WHERE
+            rur.idUsuario = ${activeUser.id}
+            AND rur.activo = 1
+            AND cr.activo = 1
+            AND cr.idTenant = ${activeUser.idTenant}
+    `;
+
+        if (!userRoles.length) {
+            throw new NotFoundException(
+                'El usuario no cuenta con un rol asignado en el sistema.'
+            );
+        }
+
+        const normalizedRoles = userRoles.map(role =>
+            role.descripcion.trim().toLowerCase()
+        );
+
+        // Prioridad de permisos:
+        // RH > Manager > cualquier otro rol.
+        let roleName: string | null = null;
+
+        if (normalizedRoles.includes('rh')) {
+            roleName = 'RH';
+        } else if (normalizedRoles.includes('manager')) {
+            roleName = 'Manager';
+        }
 
         const skip = (page - 1) * limit;
 
@@ -417,17 +478,18 @@ export class VacanciesService {
                 activeUser.idTenant,
                 companyId,
                 activeUser.id,
-                userRole.idRol,
+                roleName,
                 skip,
                 limit,
                 search
             ),
+
             VacanciesQueries.countRequisitions(
                 this.prisma,
                 activeUser.idTenant,
                 companyId,
                 activeUser.id,
-                userRole.idRol,
+                roleName,
                 search
             )
         ]);
@@ -440,7 +502,12 @@ export class VacanciesService {
         };
     }
 
-    async findRequisitionById(activeUser: ActiveUserDto, companyId: number, requisitionId: number) {
+
+    async findRequisitionById(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        requisitionId: number
+    ) {
         // Obtener la requisición / vacante
         const requisition = await this.prisma.vacantes.findUnique({
             where: {
@@ -450,80 +517,132 @@ export class VacanciesService {
             }
         });
 
-        if (!requisition) throw new NotFoundException('La requisición no existe o no pertenece a tu empresa');
+        if (!requisition) {
+            throw new NotFoundException(
+                'La requisición no existe o no pertenece a tu empresa'
+            );
+        }
 
-        // Obtener el rol del usuario conectado en la plataforma
-        const userRole = await this.prisma.relUsuarioRol.findFirst({
+        // Identificador del rol de Recursos Humanos
+        const ID_ROL_RECURSOS_HUMANOS = 2;
+
+        // Obtener todos los roles activos del usuario
+        const userRoles = await this.prisma.relUsuarioRol.findMany({
             where: {
                 idUsuario: activeUser.id,
                 activo: true
+            },
+            select: {
+                idRol: true
             }
         });
 
-        if (!userRole) throw new NotFoundException('Rol de usuario no encontrado o inactivo');
+        if (!userRoles.length) {
+            throw new NotFoundException(
+                'Rol de usuario no encontrado o inactivo'
+            );
+        }
+
+        // Comprobar si el usuario tiene el rol de Recursos Humanos
+        const isHumanResources = userRoles.some(
+            role => role.idRol === ID_ROL_RECURSOS_HUMANOS
+        );
 
         let canApproveOrReject = false;
-        let userContextRole = 'VIEWER'; // 'JEFE_INMEDIATO', 'RECURSOS_HUMANOS', 'CREADOR', 'VIEWER'
+        let userContextRole = 'VIEWER';
 
         const status = requisition.idEstatusVacante;
 
         // --- ESCENARIO 1: Pendiente de Manager (Estatus 1) ---
         if (status === 1) {
-            // Obtenemos el creador de la vacante a través de auth_user para jalar su uuid
-            const creadorUser = await this.prisma.auth_user.findUnique({
-                where: { id: requisition.idUsuarioCreador }
-            });
 
-            if (creadorUser) {
-                // Buscamos mediante queryRaw quién es el jefe inmediato real de la persona que CREÓ la vacante
-                const bossResult = await this.prisma.$queryRaw<any[]>`
+            // PRIORIDAD 1: Recursos Humanos puede aprobar como emergencia
+            if (isHumanResources) {
+                canApproveOrReject = true;
+                userContextRole = 'RECURSOS_HUMANOS';
+
+            } else {
+
+                // Obtenemos el creador de la vacante
+                const creadorUser = await this.prisma.auth_user.findUnique({
+                    where: {
+                        id: requisition.idUsuarioCreador
+                    }
+                });
+
+                if (creadorUser) {
+
+                    // Buscamos quién es el jefe inmediato del creador
+                    const bossResult = await this.prisma.$queryRaw<any[]>`
                     SELECT u.uuid
                     FROM Empleados creador
-                    JOIN Empleados jefe ON creador.idJefeInmediato = jefe.idEmpleado
-                    JOIN auth_user u ON jefe.idUsuario = u.uuid
+                    JOIN Empleados jefe
+                        ON creador.idJefeInmediato = jefe.idEmpleado
+                    JOIN auth_user u
+                        ON jefe.idUsuario = u.uuid
                     WHERE creador.idUsuario = ${creadorUser.uuid}
                         AND creador.idEmpresa = ${companyId}
                         AND jefe.activo = 1
                         AND u.is_active = 1
                 `;
 
-                // Si el usuario logueado (activeUser.uuid) coincide con el jefe del creador
-                if (bossResult && bossResult.length > 0 && bossResult[0].uuid === activeUser.uuid) {
-                    canApproveOrReject = true;
-                    userContextRole = 'JEFE_INMEDIATO';
-                }
-                // Si no es su jefe, pero es el usuario que levantó físicamente la requisición
-                else if (requisition.idUsuarioCreador === activeUser.id) {
-                    userContextRole = 'CREADOR';
+                    // Si el usuario conectado es el jefe inmediato
+                    if (
+                        bossResult &&
+                        bossResult.length > 0 &&
+                        bossResult[0].uuid === activeUser.uuid
+                    ) {
+                        canApproveOrReject = true;
+                        userContextRole = 'JEFE_INMEDIATO';
+                    }
+
+                    // Si es el creador de la requisición
+                    else if (
+                        requisition.idUsuarioCreador === activeUser.id
+                    ) {
+                        userContextRole = 'CREADOR';
+                    }
                 }
             }
         }
 
-        // --- ESCENARIO 2: Aprobado Manager (Estatus 2) ---
+        // --- ESCENARIO 2: Aprobado por Manager (Estatus 2) ---
         else if (status === 2) {
-            // Validar el rol corporativo de Recursos Humanos
-            const ID_ROL_RECURSOS_HUMANOS = 2;
 
-            if (userRole.idRol === ID_ROL_RECURSOS_HUMANOS) {
+            // Recursos Humanos es el responsable de la siguiente aprobación
+            if (isHumanResources) {
                 canApproveOrReject = true;
                 userContextRole = 'RECURSOS_HUMANOS';
             }
         }
 
-        const recluiters = await this.prisma.$queryRaw<any[]> `
-            SELECT e.idEmpleado, CONCAT(e.nombre,' ', e.primerApellido,' ', e.segundoApellido) AS nombre, cp.NombrePuesto
-            FROM Empleados e
-            JOIN auth_user u ON e.idUsuario = u.uuid
-            JOIN RelUsuarioRol rur ON u.id = rur.idUsuario
-            JOIN CatPuestos cp ON cp.idPuesto = e.idPuesto
-            WHERE e.activo = 1
+        // Obtener reclutadores disponibles de la empresa
+        const recluiters = await this.prisma.$queryRaw<any[]>`
+        SELECT
+            e.idEmpleado,
+            CONCAT(
+                e.nombre,
+                ' ',
+                e.primerApellido,
+                ' ',
+                e.segundoApellido
+            ) AS nombre,
+            cp.NombrePuesto
+        FROM Empleados e
+        JOIN auth_user u
+            ON e.idUsuario = u.uuid
+        JOIN RelUsuarioRol rur
+            ON u.id = rur.idUsuario
+        JOIN CatPuestos cp
+            ON cp.idPuesto = e.idPuesto
+        WHERE e.activo = 1
             AND u.is_active = 1
             AND rur.activo = 1
             AND cp.aprobada = true
             AND cp.pendiente = false
             AND rur.idRol = 4
             AND e.idEmpresa = ${companyId}
-        `;
+    `;
 
         return {
             requisition,
@@ -531,7 +650,7 @@ export class VacanciesService {
                 canApproveOrReject,
                 userContextRole
             },
-            recluiters: recluiters
+            recluiters
         };
     }
 
@@ -863,89 +982,195 @@ export class VacanciesService {
         });
     }
 
-    async evaluateRequisition(activeUser: ActiveUserDto, companyId: number, requisitionId: number, action: 'aprobar' | 'rechazar', recruiterId: number | undefined) {
 
-        const { requisition, permissions } = await this.findRequisitionById(activeUser, companyId, requisitionId);
-
-        if (!permissions.canApproveOrReject) {
-            throw new ForbiddenException('No tienes privilegios para dictaminar esta requisición en su estatus actual.');
-        }
+    async evaluateRequisition(
+        activeUser: ActiveUserDto,
+        companyId: number,
+        requisitionId: number,
+        action: 'aprobar' | 'rechazar',
+        recruiterId: number | undefined
+    ) {
+        const { requisition, permissions } = await this.findRequisitionById(
+            activeUser,
+            companyId,
+            requisitionId
+        );
 
         const currentStatus = requisition.idEstatusVacante;
 
-        // Manejo de Rechazo Común
-        if (action === 'rechazar') {
-            if (permissions.userContextRole == 'JEFE_INMEDIATO') {
-                await this.prisma.vacantes.update({
-                    where: { idVacante: requisitionId, idTenant: activeUser.idTenant, idEmpresa: companyId },
-                    data: { idEstatusVacante: 3 }
-                });
-            } else if (currentStatus === 2 && permissions.userContextRole === 'RECURSOS_HUMANOS') {
-                await this.prisma.vacantes.update({
-                    where: { idVacante: requisitionId, idTenant: activeUser.idTenant, idEmpresa: companyId },
-                    data: { idEstatusVacante: 6 }
-                });
-            }
-            await this.prisma.historicoMovimientos.create({
-                data: {
-                    idUsuario: activeUser.id,
-                    idEmpresa: companyId,
-                    accion: 'RECHAZAR',
-                    tablaOrigen: 'Vacantes',
-                    idRegistro: String(requisitionId),
-                    descripcion: `Requisición rechazada por ${activeUser.first_name} ${activeUser.last_name}`,
-                    fechaCreacion: new Date()
-                }
-            });
-            return { message: 'Requisición rechazada exitosamente.' };
+        // Obtener los roles activos del usuario por nombre y tenant.
+        const userRoles = await this.prisma.$queryRaw<Array<{ descripcion: string }>>`
+        SELECT cr.descripcion
+        FROM RelUsuarioRol rur
+        INNER JOIN CatRoles cr
+            ON cr.idRol = rur.idRol
+        WHERE
+            rur.idUsuario = ${activeUser.id}
+            AND rur.activo = 1
+            AND cr.activo = 1
+            AND cr.idTenant = ${activeUser.idTenant}
+    `;
+
+        const normalizedRoles = userRoles.map(role =>
+            role.descripcion.trim().toLowerCase()
+        );
+
+        const isHumanResources = normalizedRoles.includes('rh');
+
+        // RH tiene autorización especial para aprobar y publicar
+        // incluso cuando la requisición sigue pendiente del Manager.
+        const canEvaluateAsRH =
+            isHumanResources &&
+            (currentStatus === 1 || currentStatus === 2);
+
+        if (!permissions.canApproveOrReject && !canEvaluateAsRH) {
+            throw new ForbiddenException(
+                'No tienes privilegios para dictaminar esta requisición en su estatus actual.'
+            );
         }
 
-        // --- MANEJO DE APROBACIONES SECUENCIALES ---
-        // A. Obtener datos del Creador Original de la Requisición
+        // Determinar el contexto efectivo del usuario.
+        // Si tiene RH, este rol tiene prioridad.
+        const userContextRole = isHumanResources
+            ? 'RECURSOS_HUMANOS'
+            : permissions.userContextRole;
+
+        // Obtener información del creador original.
         const creadorUser = await this.prisma.auth_user.findUnique({
-            where: { id: requisition.idUsuarioCreador },
-            select: { uuid: true, email: true, phone: true, first_name: true, last_name: true }
+            where: {
+                id: requisition.idUsuarioCreador
+            },
+            select: {
+                uuid: true,
+                email: true,
+                phone: true,
+                first_name: true,
+                last_name: true
+            }
         });
 
-        // Aprobación del jefe inmediato
-        if (currentStatus === 1 && permissions.userContextRole === 'JEFE_INMEDIATO') {
-            await this.prisma.vacantes.update({
-                where: { idVacante: requisitionId },
-                data: { idEstatusVacante: 2 }
+        // =========================================================
+        // RECHAZAR REQUISICIÓN
+        // =========================================================
+        if (action === 'rechazar') {
+
+            let rejectionStatus: number;
+
+            if (userContextRole === 'JEFE_INMEDIATO' && currentStatus === 1) {
+                rejectionStatus = 3;
+            } else if (
+                userContextRole === 'RECURSOS_HUMANOS' &&
+                (currentStatus === 1 || currentStatus === 2)
+            ) {
+                rejectionStatus = 6;
+            } else {
+                throw new ForbiddenException(
+                    'No puedes rechazar esta requisición en su estatus actual.'
+                );
+            }
+
+            await this.prisma.$transaction(async (tx) => {
+                await tx.vacantes.update({
+                    where: {
+                        idVacante: requisitionId
+                    },
+                    data: {
+                        idEstatusVacante: rejectionStatus
+                    }
+                });
+
+                await tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: activeUser.id,
+                        idEmpresa: companyId,
+                        accion: 'RECHAZAR',
+                        tablaOrigen: 'Vacantes',
+                        idRegistro: String(requisitionId),
+                        descripcion: `Requisición rechazada por ${userContextRole === 'RECURSOS_HUMANOS'
+                            ? 'Recursos Humanos'
+                            : 'el Jefe Inmediato'
+                            }: ${activeUser.first_name} ${activeUser.last_name}`,
+                        fechaCreacion: new Date()
+                    }
+                });
             });
 
-            await this.prisma.historicoMovimientos.create({
-                data: {
-                    idUsuario: activeUser.id,
-                    idEmpresa: companyId,
-                    accion: 'APROBAR',
-                    tablaOrigen: 'Vacantes',
-                    idRegistro: String(requisitionId),
-                    descripcion: `Requisición aprobada por el Manager: ${activeUser.first_name} ${activeUser.last_name}`,
-                    fechaCreacion: new Date()
-                }
+            return {
+                message: 'Requisición rechazada exitosamente.'
+            };
+        }
+
+        // =========================================================
+        // APROBACIÓN DEL MANAGER
+        // Estatus 1 -> Estatus 2
+        // =========================================================
+        if (
+            currentStatus === 1 &&
+            userContextRole === 'JEFE_INMEDIATO'
+        ) {
+
+            await this.prisma.$transaction(async (tx) => {
+                await tx.vacantes.update({
+                    where: {
+                        idVacante: requisitionId
+                    },
+                    data: {
+                        idEstatusVacante: 2
+                    }
+                });
+
+                await tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: activeUser.id,
+                        idEmpresa: companyId,
+                        accion: 'APROBAR',
+                        tablaOrigen: 'Vacantes',
+                        idRegistro: String(requisitionId),
+                        descripcion: `Requisición aprobada por el Manager: ${activeUser.first_name} ${activeUser.last_name}`,
+                        fechaCreacion: new Date()
+                    }
+                });
             });
 
-            // BLOQUE DE NOTIFICACIONES TRAS APROBACIÓN DEL MANAGER
+            // Consultar usuarios de RH por nombre de rol,
+            // sin depender de un ID fijo.
             try {
-
-                // B. Consultar el pool completo de usuarios asignados al área de RH (idRol = 2)
-                const rhUsers = await this.prisma.$queryRaw<Array<{ uuid: string; email: string; phone: string; first_name: string; last_name: string }>>`
-                SELECT au.uuid, au.email, au.phone, au.first_name, au.last_name
+                const rhUsers = await this.prisma.$queryRaw<
+                    Array<{
+                        uuid: string;
+                        email: string;
+                        phone: string;
+                        first_name: string;
+                        last_name: string;
+                    }>
+                >`
+                SELECT DISTINCT
+                    au.uuid,
+                    au.email,
+                    au.phone,
+                    au.first_name,
+                    au.last_name
                 FROM auth_user au
-                INNER JOIN RelUsuarioEmpresa rue ON au.id = rue.idUsuario
-                INNER JOIN RelUsuarioRol rur ON au.id = rur.idUsuario
-                WHERE rue.idEmpresa = ${companyId}
+                INNER JOIN RelUsuarioEmpresa rue
+                    ON au.id = rue.idUsuario
+                INNER JOIN RelUsuarioRol rur
+                    ON au.id = rur.idUsuario
+                INNER JOIN CatRoles cr
+                    ON cr.idRol = rur.idRol
+                WHERE
+                    rue.idEmpresa = ${companyId}
                     AND rue.activo = 1
-                    AND rur.idRol = 2
                     AND rur.activo = 1
+                    AND cr.activo = 1
+                    AND cr.idTenant = ${activeUser.idTenant}
+                    AND LOWER(TRIM(cr.descripcion)) = 'rh'
+                    AND au.idTenant = ${activeUser.idTenant}
                     AND au.is_active = 1
             `;
 
-                // Ejecución paralela de envío de notificaciones para evitar cuellos de botella
                 const notificationPromises: Promise<any>[] = [];
 
-                // Notificación al Creador Original
+                // Notificar al creador original.
                 if (creadorUser) {
                     notificationPromises.push(
                         this.notifications.notify({
@@ -959,78 +1184,130 @@ export class VacanciesService {
                                 action: 'aprobar',
                                 requestDate: requisition.fechaCreacion?.toLocaleDateString() || ''
                             }
-                        }).catch(err => console.error(`Error notificando al creador original: ${err.message}`))
+                        }).catch(err =>
+                            console.error(
+                                `Error notificando al creador original: ${err.message}`
+                            )
+                        )
                     );
                 }
 
-                // Notificaciones masivas al equipo de Recursos Humanos
-                if (rhUsers && rhUsers.length > 0) {
-                    rhUsers.forEach((rh) => {
-                        notificationPromises.push(
-                            this.notifications.notify({
-                                userUuid: rh.uuid,
-                                notificationTypeCode: 'REQUISITION_APPROVED_BY_MANAGER_TO_RH',
-                                to: rh.email,
-                                phone: rh.phone,
-                                subject: 'Nueva requisición pendiente de publicación',
-                                context: {
-                                    name: `${rh.first_name} ${rh.last_name}`,
-                                    requestId: requisition.idVacante,
-                                    requestDate: requisition.fechaCreacion?.toLocaleDateString() || '',
-                                    shortDescription: `Puesto pendiente de validación final por RH.`
-                                }
-                            }).catch(err => console.error(`Error notificando a RH (${rh.uuid}): ${err.message}`))
-                        );
-                    });
+                // Notificar a los usuarios de RH.
+                for (const rh of rhUsers) {
+                    notificationPromises.push(
+                        this.notifications.notify({
+                            userUuid: rh.uuid,
+                            notificationTypeCode: 'REQUISITION_APPROVED_BY_MANAGER_TO_RH',
+                            to: rh.email,
+                            phone: rh.phone,
+                            subject: 'Nueva requisición pendiente de publicación',
+                            context: {
+                                name: `${rh.first_name} ${rh.last_name}`,
+                                requestId: requisition.idVacante,
+                                requestDate: requisition.fechaCreacion?.toLocaleDateString() || '',
+                                shortDescription: 'Puesto pendiente de validación final por RH.'
+                            }
+                        }).catch(err =>
+                            console.error(
+                                `Error notificando a RH (${rh.uuid}): ${err.message}`
+                            )
+                        )
+                    );
                 }
 
                 await Promise.all(notificationPromises);
 
             } catch (notifError) {
-                console.error('Error procesando las alertas asíncronas de dictamen:', notifError);
+                console.error(
+                    'Error procesando las alertas de aprobación:',
+                    notifError
+                );
             }
 
-            return { message: 'Requisición aprobada por el Manager. Enviada a Recursos Humanos.' };
+            return {
+                message: 'Requisición aprobada por el Manager. Enviada a Recursos Humanos.'
+            };
         }
 
-        // Aprobación de Recursos Humanos
-        else if (currentStatus === 2 && permissions.userContextRole === 'RECURSOS_HUMANOS') {
-            const baseUrl = this.configService.get<string>('FRONT_URL');
-            const publicUiUrl = `${baseUrl}job-board/${requisitionId}`;
+        // =========================================================
+        // APROBACIÓN Y PUBLICACIÓN DE RECURSOS HUMANOS
+        //
+        // Estatus 1 -> Estatus 5 (publicada directamente).
+        // Estatus 2 -> Estatus 5 (publicación normal).
+        // =========================================================
+        if (
+            (currentStatus === 1 || currentStatus === 2) &&
+            userContextRole === 'RECURSOS_HUMANOS'
+        ) {
 
+            const baseUrl = this.configService
+                .get<string>('FRONT_URL')
+                ?.replace(/\/+$/, '');
+
+            if (!baseUrl) {
+                throw new Error(
+                    'No se encuentra configurada la variable FRONT_URL.'
+                );
+            }
+
+            const publicUiUrl = `${baseUrl}/job-board/${requisitionId}`;
+
+            // Enlaces de origen para compartir la vacante.
             const links = {
                 slugLinkedin: `${publicUiUrl}?utm_source=linkedin`,
                 slugFacebook: `${publicUiUrl}?utm_source=facebook`,
-                slugInstagram: `${publicUiUrl}?utm_source=instagram`
-            }
+                slugInstagram: `${publicUiUrl}?utm_source=instagram`,
+                slugTikTok: `${publicUiUrl}?utm_source=tiktok`,
+                slugOCC: `${publicUiUrl}?utm_source=occ`,
+                slugComputrabajo: `${publicUiUrl}?utm_source=computrabajo`,
+                slugIndeed: `${publicUiUrl}?utm_source=indeed`,
+                slugGlassdoor: `${publicUiUrl}?utm_source=glassdoor`,
+                slugTalent: `${publicUiUrl}?utm_source=talent`,
+                slugGoogleJobs: `${publicUiUrl}?utm_source=google_jobs`,
+                slugTwitter: `${publicUiUrl}?utm_source=x`,
+                slugWhatsApp: `${publicUiUrl}?utm_source=whatsapp`,
+                slugTelegram: `${publicUiUrl}?utm_source=telegram`,
+            };
 
             const position = await this.prisma.$transaction(async (tx) => {
-                const [_, __, catPuestoResult] = await Promise.all([
-                    // Cierre definitivo del flujo: Pasa a Publicada
+
+                const [updatedRequisition, catPuestoResult] = await Promise.all([
+
+                    // Publicar definitivamente la requisición.
                     tx.vacantes.update({
-                        where: { idVacante: requisitionId },
-                        data: { idEstatusVacante: 5, links, idReclutadorAsignado: recruiterId }
-                    }),
-                    tx.historicoMovimientos.create({
+                        where: {
+                            idVacante: requisitionId
+                        },
                         data: {
-                            idUsuario: activeUser.id,
-                            idEmpresa: companyId,
-                            accion: 'APROBAR',
-                            tablaOrigen: 'Vacantes',
-                            idRegistro: String(requisitionId),
-                            descripcion: `Requisición aprobada y publicada por Recursos Humanos: ${activeUser.first_name} ${activeUser.last_name}`,
-                            fechaCreacion: new Date()
+                            idEstatusVacante: 5,
+                            links,
+                            idReclutadorAsignado: recruiterId
                         }
                     }),
+
                     tx.catPuestos.findUnique({
-                        where: { idPuesto: requisition.idPuesto }
+                        where: {
+                            idPuesto: requisition.idPuesto
+                        }
                     })
                 ]);
+
+                await tx.historicoMovimientos.create({
+                    data: {
+                        idUsuario: activeUser.id,
+                        idEmpresa: companyId,
+                        accion: 'APROBAR',
+                        tablaOrigen: 'Vacantes',
+                        idRegistro: String(requisitionId),
+                        descripcion: `Requisición aprobada y publicada por Recursos Humanos: ${activeUser.first_name} ${activeUser.last_name}`,
+                        fechaCreacion: new Date()
+                    }
+                });
 
                 return catPuestoResult;
             });
 
-            // Notificación al Creador Original
+            // Notificar al creador original.
             if (creadorUser) {
                 this.notifications.notify({
                     userUuid: creadorUser.uuid,
@@ -1042,13 +1319,20 @@ export class VacanciesService {
                         positionName: position?.NombrePuesto,
                         requestDate: requisition.fechaCreacion?.toLocaleDateString() || ''
                     }
-                }).catch(err => console.error(`Error notificando al creador original: ${err.message}`))
+                }).catch(err =>
+                    console.error(`Error notificando al creador original: ${err.message}`)
+                );
             }
 
             return {
-                message: 'Requisición aprobada y publicada con éxito.',
+                message: currentStatus === 1
+                    ? 'Requisición aprobada y publicada directamente por Recursos Humanos.'
+                    : 'Requisición aprobada y publicada con éxito.',
                 urls: links
             };
         }
+
+        throw new ForbiddenException('No puedes aprobar esta requisición en su estatus actual.');
     }
+
 }

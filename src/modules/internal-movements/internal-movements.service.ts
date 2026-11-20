@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   Optional,
+  Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { COMMS_EVENTO_EMPLEADO, COMMS_EVENTO_ESTATUS, emitirHecho, HechoEmpleado } from 'src/common/events/comms-hechos';
@@ -19,6 +20,9 @@ import { ModuloOrigenEnum } from '../approvals/enums/approval-origin.enum';
 import { GetInternalMovementRequestDetailDto } from './dto/get-internal-movement-request.detail.dto';
 import { CreateStaffReductionMovementDto } from './dto/create-staff-reduction-movement.dto';
 import { MediaPathService } from 'src/common/services/media-path.service';
+import { NotifyStaffReductionDocumentDto } from './dto/notify-staff-reduction-document.dto';
+import { randomUUID } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class InternalMovementsService {
@@ -26,8 +30,12 @@ export class InternalMovementsService {
     private prisma: PrismaService,
     private readonly mediaPathService: MediaPathService,
     private readonly approvalsService: ApprovalsService,
+    private readonly notifications: NotificationDispatcher,
+    private readonly configService: ConfigService,
     @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
+
+  private readonly logger = new Logger(InternalMovementsService.name);
 
   async findAll(
     activeUser: ActiveUserDto,
@@ -436,16 +444,20 @@ export class InternalMovementsService {
     archivos: Express.Multer.File[],
   ) {
     const employeeId = dto.employeeId;
-    const metadata = dto.archivosMetadata ?? [];
     const TIPO_MOVIMIENTO_BAJA = 'Baja de Personal';
 
-    if (!archivos?.length) {
+    const metadata = dto.archivosMetadata ?? [];
+    const documentosGenerados = Object.entries(
+      dto.bajaDocumentosGenerados ?? {},
+    );
+
+    if (!archivos?.length && documentosGenerados.length === 0) {
       throw new BadRequestException(
-        'Debes adjuntar al menos un archivo para solicitar la baja.',
+        'Debes adjuntar al menos un archivo o generar al menos un documento para solicitar la baja.',
       );
     }
 
-    if (!Array.isArray(metadata) || metadata.length !== archivos.length) {
+    if (metadata.length !== (archivos?.length ?? 0)) {
       throw new BadRequestException(
         'La metadata de los archivos no coincide con los documentos recibidos.',
       );
@@ -633,6 +645,36 @@ export class InternalMovementsService {
           });
         }
 
+        // Registrar referencias a documentos generados.
+        for (const [campo, documento] of documentosGenerados) {
+          if (documento.employeeId !== employeeId) {
+            throw new BadRequestException(`El documento generado asociado al campo "${campo}" pertenece a otro empleado.`);
+          }
+
+          const documentGenerated = await this.prisma.documentosGenerados.findFirst({
+            where: { id: documento.id }
+          })
+
+          if (documentGenerated) {
+            await tx.archivosSolicitudes.create({
+              data: {
+                idTenant: activeUser.idTenant,
+                idEmpresa: companyId,
+                idEmpleado: employeeId,
+                moduloSolicitud: 'MOVIMIENTOS_INTERNOS',
+                idSolicitud: nuevaSolicitud.idMovimiento,
+                nombreOriginal: `Documento generado - ${campo}`,
+                nombreAlmacenado: `documento-generado-${documento.id}`,
+                rutaRelativa: "",
+                idDocumentoGenerado: documento.id,
+                mimeType: 'application/pdf',
+                tamanoBytes: BigInt(0),
+                usuarioRegistro: activeUser.uuid,
+              },
+            });
+          }
+        }
+
         await tx.historicoMovimientos.create({
           data: {
             idUsuario: activeUser.id,
@@ -702,6 +744,114 @@ export class InternalMovementsService {
         ? 'Solicitud de baja aprobada automáticamente y aplicada al empleado.'
         : 'Solicitud de baja registrada y enviada al flujo de aprobación.',
     };
+  }
+
+  async notifyStaffReductionDocument(
+    activeUser: ActiveUserDto,
+    companyId: number,
+    documentId: number,
+    dto: NotifyStaffReductionDocumentDto,
+  ) {
+    const empleado = await this.prisma.empleados.findFirst({
+      where: {
+        idEmpleado: dto.employeeId,
+        idEmpresa: companyId,
+        activo: true,
+      },
+      select: {
+        idEmpleado: true,
+        nombre: true,
+        primerApellido: true,
+        segundoApellido: true,
+        correo: true,
+        telefonoMovil: true,
+        idUsuario: true,
+        idEmpresa: true,
+      },
+    });
+
+    if (!empleado) {
+      throw new NotFoundException('El empleado no existe o no pertenece a esta empresa.');
+    }
+
+    const documento = await this.prisma.documentosGenerados.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!documento) {
+      throw new NotFoundException('El documento generado no existe.');
+    }
+
+    // Generar token de firma si todavía no existe.
+    let tokenFirma = documento.tokenFirma;
+
+    if (!tokenFirma) {
+      tokenFirma = randomUUID();
+
+      await this.prisma.documentosGenerados.update({
+        where: { id: documentId },
+        data: { tokenFirma },
+      });
+    }
+
+    const empresa = await this.prisma.catEmpresas.findFirst({
+      where: {
+        idEmpresa: companyId,
+      },
+      select: {
+        nombre_comercial: true,
+      },
+    });
+
+    const frontendUrl = this.configService.getOrThrow<string>('FRONT_URL');
+    const linkFirma = `${frontendUrl}firmar/${tokenFirma}`;
+
+    const nombreCompleto = [
+      empleado.nombre,
+      empleado.primerApellido,
+      empleado.segundoApellido,
+    ].filter(Boolean).join(' ').trim();
+
+    const userUuid = empleado.idUsuario || `empleado-${empleado.idEmpleado}`;
+
+    try {
+      await this.notifications.notify({
+        userUuid,
+        notificationTypeCode: 'STAFF_REDUCTION_DOCUMENT_SIGN',
+        to: empleado.correo || undefined,
+        phone: empleado.telefonoMovil || undefined,
+        subject: '✍️ Firma de documento pendiente',
+        context: {
+          nombre: nombreCompleto,
+          empresa: empresa?.nombre_comercial || 'Empresa',
+          linkFirma,
+        },
+      });
+
+      await this.prisma.historicoMovimientos.create({
+        data: {
+          idUsuario: activeUser.id,
+          idEmpresa: companyId,
+          accion: 'UPDATE',
+          tablaOrigen: 'DocumentosGenerados',
+          idRegistro: String(documento.id),
+          descripcion: `Documento de baja enviado para su firma por ${activeUser.first_name} ${activeUser.last_name}`,
+          fechaCreacion: new Date()
+        }
+      })
+
+      this.logger.log(`Notificación de firma enviada para el documento ${documentId}, empleado ${empleado.idEmpleado}.`);
+
+      return {
+        success: true,
+        message: 'La notificación de firma fue enviada correctamente.',
+        documentId,
+        employeeId: empleado.idEmpleado,
+      };
+    } catch (error) {
+      this.logger.error(`Error enviando notificación de firma para el documento ${documentId}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new BadRequestException('No se pudo enviar la notificación de firma.');
+    }
   }
 
   async aplicarMovimientoAEmpleado(
@@ -1262,6 +1412,7 @@ export class InternalMovementsService {
         nombreOriginal: true,
         nombreAlmacenado: true,
         rutaRelativa: true,
+        idDocumentoGenerado: true,
         mimeType: true,
         tamanoBytes: true,
         usuarioRegistro: true,
@@ -1271,6 +1422,33 @@ export class InternalMovementsService {
         fechaRegistro: 'asc',
       },
     });
+
+    const archivosConRuta = await Promise.all(
+      archivos.map(async (archivo) => {
+        let rutaRelativa = archivo.rutaRelativa;
+
+        // Si no tiene ruta física, pero tiene un documento generado,
+        // recuperamos la ruta actual desde DocumentosGenerados.
+        if (!rutaRelativa && archivo.idDocumentoGenerado) {
+          const documentoGenerado =
+            await this.prisma.documentosGenerados.findFirst({
+              where: {
+                id: archivo.idDocumentoGenerado,
+              },
+              select: {
+                archivoGenerado: true,
+              },
+            });
+
+          rutaRelativa = documentoGenerado?.archivoGenerado ?? null;
+        }
+
+        return {
+          ...archivo,
+          rutaRelativa,
+        };
+      }),
+    );
 
     const empleado = movimiento.Empleados;
     const nombreCompleto = [empleado?.nombre, empleado?.primerApellido, empleado?.segundoApellido].filter(Boolean).join(' ');
@@ -1338,7 +1516,7 @@ export class InternalMovementsService {
               fechaRegistro: movimiento.DetalleBajasPersonal.fechaRegistro,
             }
             : null,
-          archivos: archivos.map((archivo) => ({
+          archivos: archivosConRuta.map((archivo) => ({
             idArchivoSolicitud: archivo.idArchivoSolicitud,
             idEmpleado: archivo.idEmpleado,
             moduloSolicitud: archivo.moduloSolicitud,

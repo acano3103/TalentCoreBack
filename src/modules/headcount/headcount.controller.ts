@@ -14,7 +14,7 @@ import { ExcelExportService } from 'src/common/services/excel-export.service';
 @ApiBearerAuth()
 @Controller('companies/:companyId/headcount')
 export class HeadcountController {
-        constructor(
+    constructor(
         private readonly headcountService: HeadcountService,
         private readonly excelExportService: ExcelExportService,
     ) { }
@@ -35,6 +35,7 @@ export class HeadcountController {
         const querySearch = search || '';
         return this.headcountService.findAll(companyId, page, querySearch, limit, locationId);
     }
+
     // Exporta a Excel la matriz completa de plazas (sin paginar)
     @Get('export')
     @ApiOperation({ summary: 'Export headcount to Excel', description: SWAGGER_AUTH_DESCRIPTION })
@@ -50,7 +51,7 @@ export class HeadcountController {
         const buffer = await this.headcountService.exportHeadcount(companyId, search?.trim() || '', locationId);
         this.excelExportService.send(res, buffer, 'Plazas_Operativas');
     }
-    
+
     // Actualiza las plazas autorizadas para roles
     @Patch()
     @ApiOperation({ summary: 'Update authorized headcount plazas for specific roles', description: SWAGGER_AUTH_DESCRIPTION })

@@ -1,4 +1,4 @@
-import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe, Post, Delete, Put, Res, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Patch, Get, Param, Body, UseGuards, Query, ParseIntPipe, DefaultValuePipe, Post, Delete, Put, Res, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { PositionsService } from './positions.service';
 import { ValidatePositionDto } from './dto/approve-reject.dto';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -103,10 +103,13 @@ export class PositionsController {
     // ENDPOINTS: Subservicio de puestos
     // ==========================================
 
-    // Obtener todos los puestos páginados
+    // Obtener todos los puestos paginados
     @Get()
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get all positions', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiQuery({ name: 'activo', required: false, description: '1 = activos, 0 = inactivos, sin enviar = todos' })
+    @ApiQuery({ name: 'idArea', required: false, description: 'Filtra por el área del puesto' })
+    @ApiQuery({ name: 'idTipoPuesto', required: false, description: 'Filtra por el tipo de puesto' })
     @ApiResponse({ status: 200, description: 'Positions obtained successfully' })
     @ApiResponse({ status: 404, description: 'Positions not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
@@ -116,13 +119,14 @@ export class PositionsController {
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query('aprobada', new DefaultValuePipe(1), ParseIntPipe) aprobada: number,
+        @Query('activo', new ParseIntPipe({ optional: true })) activo?: number,
+        @Query('idArea', new ParseIntPipe({ optional: true })) idArea?: number,
+        @Query('idTipoPuesto', new ParseIntPipe({ optional: true })) idTipoPuesto?: number,
         @Query('search') search?: string,
-        @Query('idTipoPuesto') idTipoPuesto?: string,
     ) {
+        if (activo !== undefined && activo !== 0 && activo !== 1) throw new BadRequestException('El parámetro activo solo acepta 0 o 1.');
         const querySearch = search || '';
-        const clasificacion = Number(idTipoPuesto);
-        const filtroClasificacion = Number.isInteger(clasificacion) && clasificacion > 0 ? clasificacion : undefined;
-        return this.service.findAll(activeUser, companyId, page, querySearch, limit, aprobada, filtroClasificacion);
+        return this.service.findAll(activeUser, companyId, page, querySearch, limit, aprobada, { activo, idArea, idTipoPuesto });
     }
 
     // Exporta a Excel todos los puestos que cumplan los filtros (sin paginar)

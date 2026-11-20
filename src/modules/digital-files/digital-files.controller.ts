@@ -98,6 +98,26 @@ export class DigitalFilesController {
     return this.digitalFilesService.initExpediente(token);
   }
 
+  // GET — Descarga la plantilla Excel para actualización masiva.
+  @UseGuards(JwtAuthGuard)
+  @Get('bulk/update/template')
+  @ApiOperation({ summary: 'Download bulk update Excel template', description: 'Generates and downloads an Excel file containing existing employees and their current digital-file information.' })
+  @ApiResponse({ status: 200, description: 'Update template generated and downloaded successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  async downloadBulkUpdateTemplate(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.digitalFilesService.generateBulkUpdateTemplate(companyId, activeUser);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="Plantilla_Actualizacion_Expedientes_${companyId}.xlsx"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  }
+
   // Endpoint publico para obtener los documentos de un empleado
   @Get('documents/:employeeId/public')
   @ApiOperation({
@@ -109,6 +129,20 @@ export class DigitalFilesController {
   @ApiResponse({ status: 404, description: 'Employee not found' })
   getDocumentosEmpleado(@Param('employeeId', ParseIntPipe) employeeId: number) {
     return this.digitalFilesService.getCompanyDocuments(employeeId);
+  }
+
+  // Endpoint para obtener los documentos del proceso de selección
+  @UseGuards(JwtAuthGuard)
+  @Get('documents/:employeeId/recruitment')
+  @ApiOperation({ summary: 'Get employee recruitment documents', description: 'Get the documents generated during the employee recruitment process' })
+  @ApiOkResponse({ description: 'Recruitment documents obtained successfully', type: [DocumentoRequeridoDto] })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  getRecruitmentDocuments(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+  ) {
+    return this.digitalFilesService.getRecruitmentDocuments(companyId, employeeId);
   }
 
   // Endpoint para registrar un nuevo empleado y subir sus documentos en una sola petición
@@ -158,13 +192,7 @@ export class DigitalFilesController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-          description: 'Archivo Excel (.xlsx, .xls) con el formato de la plantilla',
-        },
-      },
+      properties: { file: { type: 'string', format: 'binary', description: 'Archivo Excel (.xlsx, .xls) con el formato de la plantilla' } },
     },
   })
   @ApiResponse({ status: 200, description: 'Bulk file processed successfully' })
@@ -176,6 +204,29 @@ export class DigitalFilesController {
     @GetActiveUser() activeUser: ActiveUserDto,
   ) {
     return await this.digitalFilesService.processBulkExpedientes(activeUser, companyId, file);
+  }
+
+  // POST — Actualización masiva de expedientes
+  @UseGuards(JwtAuthGuard)
+  @Post('bulk/update')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiOperation({ summary: 'Actualización masiva de expedientes', description: 'Actualiza información de empleados existentes mediante un archivo Excel.' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Proceso de actualización masiva finalizado.' })
+  @ApiResponse({ status: 400, description: 'Archivo inválido o datos incorrectos.' })
+  async uploadBulkUpdate(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @GetActiveUser() activeUser: ActiveUserDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return await this.digitalFilesService.updateBulkExpedientes(companyId, activeUser, file);
   }
 
   // Endpoint público para que el candidato guarde su información y documentos (sin sesión, valida el token)

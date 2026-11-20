@@ -1,22 +1,24 @@
 import { Controller, Get, Post, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
-import { DocumentosTemplatesService } from './documentos-templates.service';
+import { DocumentosTemplatesService } from '../documentos-templates.service';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
-import { GetActiveUser } from '../auth/decorators/active-user.decorator';
-import { ActiveUserDto } from '../auth/dto/active-user.dto';
-import { CreateTipoDocumentoDto } from './dto/create-tipo-documento.dto';
+import { GetActiveUser } from '../../auth/decorators/active-user.decorator';
+import { ActiveUserDto } from '../../auth/dto/active-user.dto';
+import { CreateTipoDocumentoDto } from '../dto/create-tipo-documento.dto';
 
 @ApiTags('Documentos Templates')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
-@Controller('companies/:companyId/documentos/tipos')
+@Controller('companies/:companyId/documents/types')
 export class TiposDocumentoController {
     constructor(private readonly service: DocumentosTemplatesService) { }
 
+    // Obtiene todos los tipos de documentos como catalogos
     @Get()
     @ApiOperation({ summary: 'List document types for a company', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Document types listed' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     async findAll(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
@@ -24,10 +26,12 @@ export class TiposDocumentoController {
         return this.service.findTiposDocumento(companyId);
     }
 
+    // Crea un nuevo tipo de documento como catalogo
     @Post()
     @ApiOperation({ summary: 'Create a new document type', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 201, description: 'Document type created' })
     @ApiResponse({ status: 400, description: 'Duplicate name' })
+    @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
     async create(
         @GetActiveUser() activeUser: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
