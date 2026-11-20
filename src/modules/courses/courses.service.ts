@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_CURSO, emitirHecho } from 'src/common/events/comms-hechos';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -18,6 +20,7 @@ export class CoursesService {
     private prismaService: PrismaService,
     private readonly configService: ConfigService,
     private readonly cryptoService: EncryptionService,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   // Esta función crea un nuevo curso en el catálogo de la empresa
@@ -665,7 +668,7 @@ export class CoursesService {
     }
 
     // 2. Transacción para sincronizar inscritos
-    return await this.prismaService.$transaction(async (tx) => {
+    const { respuesta, nuevos } = await this.prismaService.$transaction(async (tx) => {
       // A. Obtenemos participantes actualmente registrados
       const currentParticipants = await tx.cursoParticipantes.findMany({
         where: { idSesion: sessionId },
@@ -713,10 +716,37 @@ export class CoursesService {
       });
 
       return {
-        message: 'Participantes guardados exitosamente',
-        totalInscritos: empleadosIds.length,
+        respuesta: {
+          message: 'Participantes guardados exitosamente',
+          totalInscritos: empleadosIds.length,
+        },
+        nuevos: idsToInsert,
       };
     });
+
+    try {
+      const curso = session.CatCursos?.Descripcion?.trim() || 'curso';
+      const fechaLimite = session.fechaFinPeriodo ? session.fechaFinPeriodo.toISOString() : null;
+      for (const idEmpleado of nuevos) {
+        const base = {
+          idTenant: user.idTenant,
+          idEmpresa: companyId,
+          idEmpleado,
+          idSesion: sessionId,
+          curso,
+          fechaLimite,
+        };
+        emitirHecho(this.eventos, COMMS_EVENTO_CURSO, { ...base, tipo: 'ASIGNADO' });
+        if (session.fechaFinPeriodo && session.fechaFinPeriodo.getTime() < Date.now()) {
+          emitirHecho(this.eventos, COMMS_EVENTO_CURSO, { ...base, tipo: 'ATRASADO' });
+        } else if (session.fechaFinPeriodo) {
+          emitirHecho(this.eventos, COMMS_EVENTO_CURSO, { ...base, tipo: 'POR_VENCER' });
+        }
+      }
+    } catch {
+      // La inscripción ya quedó guardada.
+    }
+    return respuesta;
   }
 
   async generateQrTokenByClassId(companyId: number, classId: number) {

@@ -1,4 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_EMPLEADO, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeeQueryResult, EmployeeSchedule, SubordinateResponse } from './interfaces/employee.interface';
 import { SaveSalaryDto } from './dto/save-salary.dto';
@@ -8,6 +10,8 @@ import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 import { UpdateEmployeeGeneralDataDto } from './dto/update-employee-general-data.dto';
+import { condicionBusquedaColaborador } from './busqueda-colaborador';
+import { UpdateEmployeeExternalIdentifiersDto } from './dto/update-employee-external-identifiers.dto';
 
 @Injectable()
 export class EmployeesService {
@@ -16,10 +20,15 @@ export class EmployeesService {
   constructor(
     private prisma: PrismaService,
     private integrationFactory: IntegrationsFactory,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
-  // Método que obtiene un empleado por su id con horarios, sedes autorizadas y DIDs
-  async findOne(companyId: number, employeeId: number): Promise<EmployeeQueryResult> {
+  // OBTENER EMPLEADO POR ID CON HORARIOS, SEDES, DIDS E IDENTIFICADORES EXTERNOS
+  async findOne(
+    companyId: number,
+    employeeId: number
+  ): Promise<EmployeeQueryResult> {
+
     const employeePromise = this.prisma.$queryRaw<EmployeeQueryResult[]>`
     SELECT 
       ep.idEmpleado,
@@ -89,6 +98,7 @@ export class EmployeesService {
       AND ep.activo = true;
   `;
 
+    // HORARIOS DEL EMPLEADO
     const schedulesPromise = this.prisma.$queryRaw<EmployeeSchedule[]>`
     SELECT 
       idHorario,
@@ -99,11 +109,22 @@ export class EmployeesService {
     FROM HorariosEmpleado
     WHERE idEmpleado = ${employeeId}
     ORDER BY 
-      FIELD(DiaSemana, 'Lunes', 'Martes', 'Miércoles', 'Miercoles', 'Jueves', 'Viernes', 'Sábado', 'Sabado', 'Domingo'),
+      FIELD(
+        DiaSemana,
+        'Lunes',
+        'Martes',
+        'Miércoles',
+        'Miercoles',
+        'Jueves',
+        'Viernes',
+        'Sábado',
+        'Sabado',
+        'Domingo'
+      ),
       HoraEntrada ASC;
   `;
 
-    // Sedes autorizadas para este empleado (RelEmpleadosSites)
+    // SEDES AUTORIZADAS (RelEmpleadosSites)
     const allowedSitesPromise = this.prisma.$queryRaw<any[]>`
     SELECT 
       res.idEmpleadoSite,
@@ -120,7 +141,7 @@ export class EmployeesService {
       AND res.Activo = 1;
   `;
 
-    // DIDs autorizados (Catálogo de sedes con IVR + Excepciones BLOQUEADO / EXTRA)
+    // DIDS AUTORIZADOS
     const didsPromise = this.prisma.$queryRaw<any[]>`
     SELECT 
       d.Did,
@@ -145,11 +166,19 @@ export class EmployeesService {
         NULL as motivo
       FROM RelEmpleadosSites res
       JOIN CatSites s ON s.idSite = res.idSite
-      JOIN CatSitesDids sd ON sd.idSite = s.idSite AND sd.Activo = 1
+      JOIN CatSitesDids sd
+        ON sd.idSite = s.idSite
+        AND sd.Activo = 1
       WHERE res.idEmpleado = ${employeeId} 
         AND res.idEmpresa = ${companyId}
         AND res.Activo = 1
-        AND (res.MetodoAsistencia = 'IVR' OR (res.MetodoAsistencia IS NULL AND s.TipoAsistencia = 'IVR'))
+        AND (
+          res.MetodoAsistencia = 'IVR'
+          OR (
+            res.MetodoAsistencia IS NULL
+            AND s.TipoAsistencia = 'IVR'
+          )
+        )
 
       UNION ALL
 
@@ -168,62 +197,83 @@ export class EmployeesService {
     ) d
     LEFT JOIN RelEmpleadosDidsExcepciones exc 
       ON exc.idEmpleado = ${employeeId} 
-     AND exc.idEmpresa = ${companyId}
-     AND exc.Did = d.Did 
-     AND exc.TipoExcepcion = 'BLOQUEADO'
-     AND exc.Activo = 1
+      AND exc.idEmpresa = ${companyId}
+      AND exc.Did = d.Did 
+      AND exc.TipoExcepcion = 'BLOQUEADO'
+      AND exc.Activo = 1
     ORDER BY d.nombreUbicacion ASC, d.Did ASC;
   `;
 
-    const [[rawEmployee], schedules, rawSites, rawDids] = await Promise.all([
+    // IDENTIFICADORES EXTERNOS DEL EMPLEADO
+    const externalIdentifiersPromise = this.prisma.$queryRaw<any[]>`
+    SELECT
+      ie.idIdentificadorExterno,
+      ie.sistemaOrigen,
+      ie.empresaOrigen,
+      ie.tipoIdentificador,
+      ie.identificador
+    FROM EmpleadoIdentificadoresExternos ie
+    INNER JOIN Empleados ep
+      ON ep.idEmpleado = ie.idEmpleado
+    WHERE ie.idEmpleado = ${employeeId}
+      AND ep.idEmpresa = ${companyId}
+      AND ep.activo = 1
+      AND ie.activo = 1
+    ORDER BY ie.idIdentificadorExterno ASC;
+  `;
+
+    // EJECUTAR CONSULTAS EN PARALELO
+    const [
+      [rawEmployee],
+      schedules,
+      rawSites,
+      rawDids,
+      rawExternalIdentifiers
+    ] = await Promise.all([
       employeePromise,
       schedulesPromise,
       allowedSitesPromise,
       didsPromise,
+      externalIdentifiersPromise,
     ]);
 
     if (!rawEmployee) {
       throw new NotFoundException(`Empleado con id ${employeeId} no encontrado`);
     }
 
-    // Conversión recursiva de BigInt a Number manteniendo arreglos nativos
+    // CONVERSIÓN RECURSIVA DE BIGINT A NUMBER
     const sanitizeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj;
       if (typeof obj === 'bigint') return Number(obj);
-
-      if (Array.isArray(obj)) {
-        return obj.map(item => sanitizeBigInt(item));
-      }
-
+      if (Array.isArray(obj)) return obj.map(item => sanitizeBigInt(item));
       if (obj instanceof Date) return obj;
 
-      // Detecta objetos Decimal de Prisma/decimal.js (tienen método toNumber)
-      if (typeof obj === 'object' && typeof obj.toNumber === 'function') {
-        return obj.toNumber();
-      }
+      // Detecta objetos Decimal de Prisma / decimal.js
+      if (typeof obj === 'object' && typeof obj.toNumber === 'function') return obj.toNumber();
 
       if (typeof obj === 'object') {
         const result: any = {};
-        for (const [key, value] of Object.entries(obj)) {
-          result[key] = sanitizeBigInt(value);
-        }
+        for (const [key, value] of Object.entries(obj)) result[key] = sanitizeBigInt(value);
         return result;
       }
 
       return obj;
     };
 
+    // SANITIZAR RESULTADOS
     const employee = sanitizeBigInt(rawEmployee);
     const horarios = sanitizeBigInt(schedules || []);
     const sedesAsignadas = sanitizeBigInt(rawSites || []);
     const didsAutorizados = sanitizeBigInt(rawDids || []);
-
+    const identificadoresExternos = sanitizeBigInt(rawExternalIdentifiers || []);
     const tieneSedesConfiguradas = sedesAsignadas.length > 0;
 
+    // RESPUESTA
     return {
       ...employee,
       tieneUsuarioActivo: Boolean(employee.tieneUsuarioActivo),
       horarios,
+      identificadoresExternos,
       asistencia: {
         activa: tieneSedesConfiguradas,
         ubicacionPrincipal: {
@@ -338,6 +388,17 @@ export class EmployeesService {
         data,
       });
 
+      const movioPuesto = employeeData.idPuesto !== undefined && employeeData.idPuesto !== employee.idPuesto;
+      const movioSite = employeeData.idSite !== undefined && employeeData.idSite !== employee.idSite;
+      if ((movioPuesto || movioSite) && employee.idTenant) {
+        emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+          tipo: 'MOVIMIENTO',
+          idTenant: employee.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: employeeId,
+        });
+      }
+
       this.logger.log(`Employee ${employeeId} general information updated by user ${activeUser?.id ?? 'unknown'}`);
 
       return {
@@ -355,6 +416,126 @@ export class EmployeesService {
       }
 
       this.logger.error(`Error updating employee ${employeeId}`, error?.stack || error);
+      throw error;
+    }
+  }
+
+  async updateExternalIdentifiers(
+    activeUser: ActiveUserDto,
+    companyId: number,
+    employeeId: number,
+    dto: UpdateEmployeeExternalIdentifiersDto,
+  ) {
+    try {
+      // 1. Verificar que el empleado exista y pertenezca a la empresa seleccionada.
+      const employee = await this.prisma.empleados.findFirst({
+        where: { idEmpleado: employeeId, idEmpresa: companyId },
+      });
+
+      if (!employee) {
+        throw new NotFoundException('Employee not found in the selected company.');
+      }
+
+      const tenantId = employee.idTenant ?? activeUser?.idTenant ?? 1;
+      const incomingItems = dto.identificadores || [];
+
+      // 2. Transacción para sincronizar los identificadores externos de forma segura
+      const result = await this.prisma.$transaction(async (prisma) => {
+        // Si el arreglo viene vacío, eliminamos TODOS los identificadores del empleado
+        if (incomingItems.length === 0) {
+          await prisma.empleadoIdentificadoresExternos.deleteMany({
+            where: { idEmpleado: employeeId },
+          });
+          return [];
+        }
+
+        // Obtener los registros actuales en la base de datos
+        const existingIdentifiers = await prisma.empleadoIdentificadoresExternos.findMany({
+          where: { idEmpleado: employeeId },
+        });
+
+        // IDs que vienen en el payload con ID existente
+        const incomingIds = incomingItems
+          .map((item) => item.idIdentificadorExterno)
+          .filter((id): id is number => id !== undefined && id !== null);
+
+        // Identificadores que estaban guardados pero ya no vienen en la petición (para eliminarlos)
+        const idsToDelete = existingIdentifiers
+          .filter((ex) => !incomingIds.includes(ex.idIdentificadorExterno))
+          .map((ex) => ex.idIdentificadorExterno);
+
+        if (idsToDelete.length > 0) {
+          await prisma.empleadoIdentificadoresExternos.deleteMany({
+            where: {
+              idIdentificadorExterno: { in: idsToDelete },
+              idEmpleado: employeeId,
+            },
+          });
+        }
+
+        const processedIdentifiers: any = [];
+
+        for (const item of incomingItems) {
+          if (item.idIdentificadorExterno) {
+            // Actualizar si ya cuenta con ID
+            const updated = await prisma.empleadoIdentificadoresExternos.update({
+              where: { idIdentificadorExterno: Number(item.idIdentificadorExterno) },
+              data: {
+                sistemaOrigen: item.sistemaOrigen,
+                empresaOrigen: item.empresaOrigen,
+                tipoIdentificador: item.tipoIdentificador,
+                identificador: item.identificador,
+              },
+            });
+            processedIdentifiers.push(updated);
+          } else {
+            // Crear o realizar upsert basado en la llave única compuesta
+            const upserted = await prisma.empleadoIdentificadoresExternos.upsert({
+              where: {
+                idEmpleado_sistemaOrigen_empresaOrigen_tipoIdentificador: {
+                  idEmpleado: employeeId,
+                  sistemaOrigen: item.sistemaOrigen,
+                  empresaOrigen: item.empresaOrigen,
+                  tipoIdentificador: item.tipoIdentificador,
+                },
+              },
+              update: {
+                identificador: item.identificador,
+                activo: true,
+              },
+              create: {
+                idEmpleado: employeeId,
+                idTenant: tenantId,
+                sistemaOrigen: item.sistemaOrigen,
+                empresaOrigen: item.empresaOrigen,
+                tipoIdentificador: item.tipoIdentificador,
+                identificador: item.identificador,
+                activo: true,
+              },
+            });
+            processedIdentifiers.push(upserted);
+          }
+        }
+
+        return processedIdentifiers;
+      });
+
+      this.logger.log(`External identifiers updated for employee ${employeeId} by user ${activeUser?.id ?? 'unknown'}`);
+
+      return {
+        message: 'Identificadores externos actualizados correctamente.',
+        identificadoresExternos: result,
+      };
+
+    } catch (error: any) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) throw error;
+
+      if (error?.code === 'P2002') {
+        this.logger.warn(`Duplicate external identifier conflict for employee ${employeeId}`);
+        throw new ConflictException('Ya existe un identificador externo con la misma combinación de sistema, empresa y tipo.');
+      }
+
+      this.logger.error(`Error updating external identifiers for employee ${employeeId}`, error?.stack || error);
       throw error;
     }
   }
@@ -424,35 +605,26 @@ export class EmployeesService {
     limit: number,
     withoutManager: boolean = false,
     idSite?: string,
-    idUnidadOperativa?: string,
+    idPuesto?: string,
     idArea?: string,
   ) {
     const skip = (page - 1) * limit;
 
-    // Condición opcional para búsqueda por nombre, apellidos, correo o puesto
-    const searchCondition = search?.trim()
-      ? Prisma.sql`AND (
-        ep.nombre LIKE ${`%${search}%`} OR
-        ep.primerApellido LIKE ${`%${search}%`} OR
-        ep.segundoApellido LIKE ${`%${search}%`} OR
-        ep.correo LIKE ${`%${search}%`} OR
-        p.nombrePuesto LIKE ${`%${search}%`}
-      )`
-      : Prisma.empty;
+    const searchCondition = condicionBusquedaColaborador(search ?? '');
 
     // Condición opcional para empleados sin jefe inmediato asignado
     const withoutManagerCondition = withoutManager
       ? Prisma.sql`AND (ep.idJefeInmediato IS NULL OR ep.idJefeInmediato = 0)`
       : Prisma.empty;
 
-    // Condición opcional para filtrar por ubicción
+    // Condición opcional para filtrar por ubicación
     const siteCondition = idSite?.trim()
       ? Prisma.sql`AND ep.idSite = ${Number(idSite)}`
       : Prisma.empty;
 
-    // Condición opcional para filtrar por unidad operativa 
-    const operationalUnitCondition = idUnidadOperativa?.trim()
-      ? Prisma.sql`AND s.idUnidadOperativa = ${Number(idUnidadOperativa)}`
+    // Condición opcional para filtrar por puesto
+    const positionCondition = idPuesto?.trim()
+      ? Prisma.sql`AND ep.idPuesto = ${Number(idPuesto)}`
       : Prisma.empty;
 
     // Condición opcional para filtrar por área
@@ -461,70 +633,77 @@ export class EmployeesService {
       : Prisma.empty;
 
     // 1. Obtener registros paginados
-    const employeesPromise = this.prisma.$queryRaw`
-      SELECT 
-        ep.idEmpleado,
-        ep.numeroEmpleado,
-        ep.nombre,
-        ep.primerApellido,
-        ep.segundoApellido,
-        ep.correo,
-        ep.telefonoMovil,
-        p.idPuesto,
-        p.nombrePuesto,
-        a.idArea,
-        a.Descripcion AS area,
-        s.idSite,
-        s.Descripcion AS site,
-        ex.idEstatus,
-        ex.fechaActualizacion AS fechaExpedienteCompleto,
-        ep.artemisUserId, 
-        ep.artemisSyncedAt, 
-        ep.idJefeInmediato
-      FROM Empleados ep
-      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-      LEFT JOIN CatAreas a ON a.idArea = p.idArea
-      LEFT JOIN CatSites s ON s.idSite = ep.idSite
-      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-      WHERE ep.idEmpresa = ${companyId}
-        AND ep.idTenant = ${activeUser.idTenant}
-        AND ep.activo = 1
-        -- AND ex.idEstatus = 4
-        ${searchCondition}
-        ${withoutManagerCondition}
-        ${siteCondition}
-        ${operationalUnitCondition}
-        ${areaCondition}
-      ORDER BY ep.nombre ASC
-      LIMIT ${limit} OFFSET ${skip};
-    `;
+    const employeesPromise = this.prisma.$queryRaw<any[]>`
+    SELECT 
+      ep.idEmpleado,
+      ep.numeroEmpleado,
+      ep.nombre,
+      ep.primerApellido,
+      ep.segundoApellido,
+      ep.correo,
+      ep.telefonoMovil,
+      p.idPuesto,
+      p.nombrePuesto,
+      p.Activo AS puestoActivo,
+      p.pendiente AS puestoPendiente,
+      CASE
+        WHEN p.idPuesto IS NULL THEN 'SIN_PUESTO'
+        WHEN p.Activo = 1 THEN 'ACTIVO'
+        WHEN p.pendiente = 1 THEN 'PENDIENTE'
+        ELSE 'INACTIVO'
+      END AS puestoEstatus,
+      a.idArea,
+      a.Descripcion AS area,
+      s.idSite,
+      s.Descripcion AS site,
+      ex.idEstatus,
+      ex.fechaActualizacion AS fechaExpedienteCompleto,
+      ep.artemisUserId, 
+      ep.artemisSyncedAt, 
+      ep.idJefeInmediato
+    FROM Empleados ep
+    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+    LEFT JOIN CatAreas a ON a.idArea = p.idArea
+    LEFT JOIN CatSites s ON s.idSite = ep.idSite
+    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+    WHERE ep.idEmpresa = ${companyId}
+      AND ep.idTenant = ${activeUser.idTenant}
+      AND ep.activo = 1
+      -- AND ex.idEstatus = 4
+      ${searchCondition}
+      ${withoutManagerCondition}
+      ${siteCondition}
+      ${positionCondition}
+      ${areaCondition}
+    ORDER BY ep.nombre ASC
+    LIMIT ${limit} OFFSET ${skip};
+  `;
 
     // 2. Obtener el total y los no sincronizados en la misma consulta
     const metricsPromise = this.prisma.$queryRaw<{ total: number | bigint; unassignedSync: number | bigint }[]>`
-      SELECT 
-        COUNT(ep.idEmpleado) AS total,
-        SUM(
-          CASE 
-            WHEN (ep.artemisUserId IS NULL OR ep.artemisUserId = '') 
-              OR ep.artemisSyncedAt IS NULL 
-            THEN 1 
-            ELSE 0 
-          END
-        ) AS unassignedSync
-      FROM Empleados ep
-      LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
-      LEFT JOIN CatSites s ON s.idSite = ep.idSite
-      INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
-      WHERE ep.idEmpresa = ${companyId}
-        AND ep.idTenant = ${activeUser.idTenant}
-        AND ep.activo = 1
-        -- AND ex.idEstatus = 4
-        ${searchCondition}
-        ${withoutManagerCondition}
-        ${siteCondition}
-        ${operationalUnitCondition}
-        ${areaCondition}
-    `;
+    SELECT 
+      COUNT(ep.idEmpleado) AS total,
+      SUM(
+        CASE 
+          WHEN (ep.artemisUserId IS NULL OR ep.artemisUserId = '') 
+            OR ep.artemisSyncedAt IS NULL 
+          THEN 1 
+          ELSE 0 
+        END
+      ) AS unassignedSync
+    FROM Empleados ep
+    LEFT JOIN CatPuestos p ON p.idPuesto = ep.idPuesto
+    INNER JOIN Expedientes ex ON ex.idEmpleado = ep.idEmpleado
+    WHERE ep.idEmpresa = ${companyId}
+      AND ep.idTenant = ${activeUser.idTenant}
+      AND ep.activo = 1
+      -- AND ex.idEstatus = 4
+      ${searchCondition}
+      ${withoutManagerCondition}
+      ${siteCondition}
+      ${positionCondition}
+      ${areaCondition}
+  `;
 
     // Ejecución paralela
     const [employees, metricsResult] = await Promise.all([
@@ -532,12 +711,19 @@ export class EmployeesService {
       metricsPromise,
     ]);
 
+    // MySQL devuelve tinyint como número: lo convertimos a booleano para el front
+    const data = employees.map((employee) => ({
+      ...employee,
+      puestoActivo: employee.idPuesto ? Boolean(employee.puestoActivo) : null,
+      puestoPendiente: employee.idPuesto ? Boolean(employee.puestoPendiente) : null,
+    }));
+
     const total = Number(metricsResult[0]?.total ?? 0);
     const pendingSyncCount = Number(metricsResult[0]?.unassignedSync ?? 0);
     const totalPages = Math.ceil(total / limit) || 1;
 
     return {
-      data: employees,
+      data,
       total,
       currentPage: page,
       totalPages,
@@ -965,7 +1151,7 @@ export class EmployeesService {
         idTenant: user.idTenant,
         activo: true,
       },
-      select: { idEmpleado: true, nombre: true, primerApellido: true },
+      select: { idEmpleado: true, nombre: true, primerApellido: true, idJefeInmediato: true },
     });
 
     if (!employee) throw new NotFoundException('Empleado no encontrado.');
@@ -993,6 +1179,15 @@ export class EmployeesService {
         AND idEmpresa = ${companyId}
         AND idTenant = ${user.idTenant};
     `;
+
+    if (employee.idJefeInmediato !== immediateBossId) {
+      emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+        tipo: 'MOVIMIENTO',
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        idEmpleado: employeeId,
+      });
+    }
 
     return {
       success: true,

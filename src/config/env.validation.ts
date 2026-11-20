@@ -62,8 +62,17 @@ export const envValidationSchema = Joi.object({
     GUPSHUP_APP_NAME: Joi.string().required(),
     IVR_API_KEY: Joi.string().required(),
     ARTEMIS_API_KEY: Joi.string().required(),
-    ZKBIO_BASE_URL: Joi.string().uri().optional(),
+    ZKBIO_BASE_URL: Joi.string().uri().required(),
     ATTENDANCE_ENGINE_ENABLED: Joi.string().valid('true', 'false').default('true'),
     ATTENDANCE_JOBS_ENABLED: Joi.string().valid('true', 'false').default('true'),
     GOOGLE_MAPS_API_KEY: Joi.string().required(),
+    // Comunicación interna. Defaults para no frenar el arranque antes de que el módulo envíe.
+    COMMS_MEDIA_BASE_PATH: Joi.string().default('comms-media'),
+    COMMS_PUBLIC_BASE_URL: Joi.string().allow('').default(''),
+    EXPO_ACCESS_TOKEN: Joi.string().optional().allow(''),
+    // Secreto del webhook de estados de Gupshup. Si falta, el callback responde 503.
+    GUPSHUP_WEBHOOK_SECRET: Joi.string().optional().allow(''),
+    // Vista previa de audiencias. Sin valor se guarda en memoria del proceso.
+    REDIS_URL: Joi.string().optional().allow(''),
+    LIBREOFFICE_PATH: Joi.string().required(),
 });

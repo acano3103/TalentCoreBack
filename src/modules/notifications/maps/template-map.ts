@@ -17,7 +17,8 @@ export const TEMPLATE_MAP = {
         'CONTRACT_SIGN': 'link_firmar_contrato',
         'STAFF_REDUCTION_DOCUMENT_SIGN': 'link_firma_documento_baja',
         'RECRUITMENT_DOCUMENT_SIGN': 'reclutamiento_pendiente_firma',
-        'RECRUITMENT_DOCUMENT_READ': 'reclutamiento_pendiente_leer'
+        'RECRUITMENT_DOCUMENT_READ': 'reclutamiento_pendiente_leer',
+        'COMUNICADO': 'comunicado',
     },
     WHATSAPP: {
         'CONTRACT_SIGN': '75d01c5d-7fe9-4709-b838-12bcab8ad68e',

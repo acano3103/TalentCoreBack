@@ -1,6 +1,8 @@
 // src/modules/incidents/vacations/vacations.service.ts
 
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeesService } from 'src/modules/employees/employees.service';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
@@ -20,6 +22,7 @@ export class VacationsService {
     private readonly employeeService: EmployeesService,
     private readonly personnelConfig: PersonnelConfigService,
     private readonly approvalsService: ApprovalsService,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   /**
@@ -193,6 +196,7 @@ export class VacationsService {
     // 3. Validar consistencia de fechas
     const startDate = new Date(dto.fechaInicio);
     const endDate = new Date(dto.fechaFin);
+    const esForzada = Boolean(dto.esForzada);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       throw new BadRequestException('Formato de fecha inválido.');
@@ -204,13 +208,11 @@ export class VacationsService {
       );
     }
 
-    // 4. Validar días de anticipación mínima
-    const earliestAllowed = new Date(constraints.fechaMinimaPermitida);
-    // Comparación solo fecha (YYYY-MM-DD)
+    // 4. Validar días de anticipación mínima (se omite si la solicitud es forzada)
     const startDateOnly = dto.fechaInicio.split('T')[0];
     const earliestAllowedOnly = constraints.fechaMinimaPermitida.split('T')[0];
 
-    if (startDateOnly < earliestAllowedOnly) {
+    if (!esForzada && startDateOnly < earliestAllowedOnly) {
       throw new BadRequestException(
         `La solicitud no cumple con los ${constraints.diasAnticipacionMinima} días de anticipación mínima requeridos. Fecha más próxima: ${earliestAllowedOnly}.`,
       );
@@ -273,6 +275,7 @@ export class VacationsService {
           totalDiasLaborales: dto.totalDiasLaborales,
           estatus: SolicitudesIncidencias_estatus.PENDIENTE,
           comentarios: dto.comentarios || null,
+          esForzada: esForzada,
         },
       });
 
@@ -294,6 +297,26 @@ export class VacationsService {
       vacationTipoMovimiento.idTipoMovimiento,
       newRequest.idSolicitud,
     );
+
+    try {
+      const vigente = await this.prisma.solicitudesIncidencias.findUnique({
+        where: { idSolicitud: newRequest.idSolicitud },
+        select: { estatus: true },
+      });
+      if (vigente?.estatus && vigente.estatus !== 'PENDIENTE' && activeUser.idTenant) {
+        emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+          origen: 'VACACION',
+          idTenant: activeUser.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: dto.idEmpleado,
+          idSolicitud: newRequest.idSolicitud,
+          estatus: vigente.estatus,
+          solicitud: 'vacaciones',
+        });
+      }
+    } catch {
+      // La solicitud ya quedó registrada.
+    }
 
     return {
       message: 'Solicitud de vacaciones registrada con éxito.',

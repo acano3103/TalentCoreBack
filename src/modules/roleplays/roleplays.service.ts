@@ -10,6 +10,8 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateRoleplayDto } from './dto/create-roleplay.dto';
 import { UpdateRoleplayDto } from './dto/update-roleplay.dto';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
+import { Prisma } from 'generated/prisma/client';
+import { FindAllRoleplaysParams } from './interfaces/roleplays.interfaces';
 
 @Injectable()
 export class RoleplaysService {
@@ -17,26 +19,59 @@ export class RoleplaysService {
 
     constructor(private readonly prisma: PrismaService) { }
 
-    async findAll(companyId: number, user: ActiveUserDto, isActive?: boolean) {
+    async findAll(
+        companyId: number,
+        user: ActiveUserDto,
+        params: FindAllRoleplaysParams = {},
+    ) {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
-        const whereCondition: any = {
+        const page = Math.max(1, params.page ?? 1);
+        const limit = Math.max(1, params.limit ?? 10);
+        const search = params.search?.trim() ?? '';
+        const isActive = params.isActive;
+
+        const whereCondition: Prisma.RolePlaysWhereInput = {
             idEmpresa: companyId,
             idTenant: user.idTenant,
             ...(isActive !== undefined ? { Activo: isActive } : {}),
+            ...(search
+                ? {
+                    OR: [
+                        {
+                            Titulo: { contains: search, },
+                        },
+                        {
+                            Descripcion: { contains: search, },
+                        },
+                    ],
+                }
+                : {}),
         };
 
-        const rolePlays = await this.prisma.rolePlays.findMany({
-            where: whereCondition,
-            include: {
-                EvaluationCriteria: { orderBy: { Orden: 'asc' } },
-            },
-            orderBy: { FechaRegistro: 'desc' },
-        });
+        const [rolePlays, total] = await Promise.all([
+            this.prisma.rolePlays.findMany({
+                where: whereCondition,
+                include: {
+                    EvaluationCriteria: {
+                        orderBy: { Orden: 'asc' },
+                    },
+                },
+                orderBy: { FechaRegistro: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            this.prisma.rolePlays.count({
+                where: whereCondition,
+            }),
+        ]);
 
-        return rolePlays;
+        return {
+            data: rolePlays,
+            total,
+        };
     }
 
     async findOne(companyId: number, roleplayId: number, user: ActiveUserDto) {

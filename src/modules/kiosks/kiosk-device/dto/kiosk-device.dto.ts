@@ -121,6 +121,8 @@ export interface ResultadoChecadaKiosco {
     requiereRevision: boolean;
     advertencias: string[];
     mensaje: string;
+    /** Comunicados que el kiosco puede mostrar. 0 evita pedir kiosk/comms/pending. */
+    avisosPendientes: number;
 }
 
 export interface ResultadoSyncKiosco {

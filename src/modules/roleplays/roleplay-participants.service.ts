@@ -3,15 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { AssignRoleplayParticipantsDto } from './dto/assign-roleplay-participants.dto';
 import { UpdateRoleplayParticipantDto } from './dto/update-roleplay-participant.dto';
-
-export type EstatusRoleplay = 'pendiente' | 'en_progreso' | 'aprobado' | 'vencido' | 'sin_intentos';
-
-interface Intento {
-    idLlamada: number;
-    fecha: Date | null;
-    registro: Date | null;
-    porcentaje: number | null;
-}
+import { EstatusRoleplay, resumirIntentos } from './roleplay-progress.util';
 
 @Injectable()
 export class RoleplayParticipantsService {
@@ -45,33 +37,15 @@ export class RoleplayParticipantsService {
                     idLlamada: true, idUsuario: true, FechaInicio: true, FechaRegistro: true,
                     RolePlayEvaluaciones: { select: { ScoreGlobal: true } },
                 },
-                orderBy: { idLlamada: 'asc' },
             })
             : [];
-
-        const intentosPorUsuario = new Map<number, Intento[]>();
-        for (const l of llamadas) {
-            const ev = l.RolePlayEvaluaciones;
-            // ScoreGlobal ya viene en porcentaje (0-100)
-            const intento: Intento = {
-                idLlamada: l.idLlamada,
-                fecha: l.FechaInicio ?? l.FechaRegistro,
-                registro: l.FechaRegistro,
-                porcentaje: ev ? Math.min(100, Math.round(Number(ev.ScoreGlobal) * 10) / 10) : null,
-            };
-            intentosPorUsuario.set(l.idUsuario, [...(intentosPorUsuario.get(l.idUsuario) ?? []), intento]);
-        }
 
         const ahora = new Date();
         const participantes = asignaciones
             .map((a) => {
                 const e = a.Empleados;
-                // Solo cuentan los intentos hechos desde que se asignó
-                const intentos = ((e.auth_user && intentosPorUsuario.get(e.auth_user.id)) || [])
-                    .filter((i) => !a.FechaRegistro || !i.registro || i.registro >= a.FechaRegistro);
-                const evaluados = intentos.filter((i) => i.porcentaje !== null);
-                const mejor = evaluados.reduce<Intento | null>((m, i) => (!m || i.porcentaje! > m.porcentaje! ? i : m), null);
-                const ultimo = evaluados[evaluados.length - 1] ?? null;
+                const propias = e.auth_user ? llamadas.filter((l) => l.idUsuario === e.auth_user!.id) : [];
+                const r = resumirIntentos(propias, a, minima, ahora);
                 return {
                     idAsignacion: a.idAsignacion,
                     idEmpleado: e.idEmpleado,
@@ -82,13 +56,13 @@ export class RoleplayParticipantsService {
                     fechaAsignacion: a.FechaRegistro,
                     fechaLimite: a.FechaLimite,
                     intentosMaximos: a.IntentosMaximos,
-                    intentos: intentos.length,
-                    mejorCalificacion: mejor?.porcentaje ?? null,
-                    idLlamadaMejor: mejor?.idLlamada ?? null,
-                    ultimaCalificacion: ultimo?.porcentaje ?? null,
-                    idLlamadaUltima: ultimo?.idLlamada ?? null,
-                    ultimoIntento: intentos[intentos.length - 1]?.fecha ?? null,
-                    estatus: this.estatusDe(a.FechaLimite, a.IntentosMaximos, intentos.length, mejor?.porcentaje ?? null, minima, ahora),
+                    intentos: r.intentos,
+                    mejorCalificacion: r.mejorCalificacion,
+                    idLlamadaMejor: r.idLlamadaMejor,
+                    ultimaCalificacion: r.ultimaCalificacion,
+                    idLlamadaUltima: r.idLlamadaUltima,
+                    ultimoIntento: r.ultimoIntento,
+                    estatus: r.estatus,
                 };
             })
             .sort((x, y) => x.empleado.localeCompare(y.empleado, 'es'));
@@ -210,14 +184,6 @@ export class RoleplayParticipantsService {
             throw new InternalServerErrorException('Error interno al quitar el participante.');
         }
         return { success: true, message: 'Participante quitado correctamente.' };
-    }
-
-    // Aprobado gana a todo; luego vencido y sin intentos bloquean
-    private estatusDe(fechaLimite: Date | null, intentosMax: number | null, intentos: number, mejor: number | null, minima: number | null, ahora: Date): EstatusRoleplay {
-        if (mejor !== null && (minima === null || mejor >= minima)) return 'aprobado';
-        if (fechaLimite && ahora > fechaLimite) return 'vencido';
-        if (intentosMax !== null && intentos >= intentosMax) return 'sin_intentos';
-        return intentos > 0 ? 'en_progreso' : 'pendiente';
     }
 
     // "YYYY-MM-DD" se toma hasta el final de ese día

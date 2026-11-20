@@ -5,6 +5,8 @@ import { NotificationDispatcher } from '../notifications/notification.dispatcher
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
+import * as ExcelJS from 'exceljs';
+import { UploadErrorDetail } from './interfaces/contracts.interfaces';
 
 @Injectable()
 export class ContractsService {
@@ -15,6 +17,292 @@ export class ContractsService {
     private readonly notifications: NotificationDispatcher,
     private readonly configService: ConfigService,
   ) { }
+
+  async generateSalaryUpdateTemplate(companyId: number): Promise<Buffer> {
+    // 1. Obtener empleados activos de la empresa junto con su historial de salarios actual
+    const empleados = await this.prisma.empleados.findMany({
+      where: {
+        idEmpresa: companyId,
+        activo: true,
+      },
+      select: {
+        numeroEmpleado: true,
+        nombre: true,
+        primerApellido: true,
+        segundoApellido: true,
+        HistorialSalarios: {
+          where: { actual: true },
+          include: {
+            CatTiposMoneda: true,
+            CatPeriodicidadesPago: true,
+          },
+          take: 1,
+        },
+      },
+      orderBy: { numeroEmpleado: 'asc' },
+    });
+
+    // 2. Obtener los catálogos activos para las listas desplegables
+    const tiposMoneda = await this.prisma.catTiposMoneda.findMany({
+      where: { activo: true },
+      select: { codigo: true }, // O descripción, según prefieras mostrar en el dropdown
+      orderBy: { idTipoMoneda: 'asc' },
+    });
+
+    const periodicidades = await this.prisma.catPeriodicidadesPago.findMany({
+      where: { activo: true },
+      select: { descripcion: true },
+      orderBy: { idPeriodicidadPago: 'asc' },
+    });
+
+    const monedaList = tiposMoneda.map((m) => m.codigo);
+    const periodicidadList = periodicidades.map((p) => p.descripcion);
+
+    // 3. Crear el libro de Excel con ExcelJS
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Actualización de Salarios');
+
+    // Definir columnas principales
+    sheet.columns = [
+      { header: 'Número de Empleado', key: 'numeroEmpleado', width: 22 },
+      { header: 'Nombre Completo', key: 'nombreCompleto', width: 35 },
+      { header: 'Salario Bruto Actual', key: 'salarioBruto', width: 22 },
+      { header: 'Salario Neto Actual', key: 'salarioNeto', width: 22 },
+      { header: 'Tipo de Moneda', key: 'tipoMoneda', width: 20 },
+      { header: 'Periodicidad de Pago', key: 'periodicidadPago', width: 25 },
+    ];
+
+    // Estilos de cabecera
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: '1F4E78' }, // Color azul institucional
+    };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.height = 25;
+
+    // 4. Rellenar los datos de cada empleado
+    empleados.forEach((emp) => {
+      const nombreCompleto = `${emp.nombre || ''} ${emp.primerApellido || ''} ${emp.segundoApellido || ''}`.trim();
+      const salarioActual = emp.HistorialSalarios?.[0];
+
+      sheet.addRow({
+        numeroEmpleado: emp.numeroEmpleado || 'S/N',
+        nombreCompleto: nombreCompleto,
+        salarioBruto: salarioActual ? Number(salarioActual.salarioBruto) : 0,
+        salarioNeto: salarioActual ? Number(salarioActual.salarioNeto) : 0,
+        tipoMoneda: salarioActual?.CatTiposMoneda?.codigo || 'MXN',
+        periodicidadPago: salarioActual?.CatPeriodicidadesPago?.descripcion || 'Mensual',
+      });
+    });
+
+    // 5. Aplicar formato, alineaciones, moneda y validaciones de datos (Listas desplegables)
+    const totalRows = empleados.length > 0 ? empleados.length + 1 : 100; // Rango dinámico o hasta la fila 100 por defecto
+
+    for (let rowNumber = 2; rowNumber <= totalRows; rowNumber++) {
+      const row = sheet.getRow(rowNumber);
+
+      // Alinear celdas de texto / códigos
+      row.getCell('numeroEmpleado').alignment = { horizontal: 'center' };
+      row.getCell('tipoMoneda').alignment = { horizontal: 'center' };
+      row.getCell('periodicidadPago').alignment = { horizontal: 'center' };
+
+      // Formato de moneda para salarios
+      const brutoCell = row.getCell('salarioBruto');
+      brutoCell.numFmt = '"$"#,##0.00';
+
+      const netoCell = row.getCell('salarioNeto');
+      netoCell.numFmt = '"$"#,##0.00';
+
+      // Validación para Tipo de Moneda (Lista desplegable basada en el catálogo de BD)
+      if (monedaList.length > 0) {
+        row.getCell('tipoMoneda').dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`"${monedaList.join(',')}"`],
+          showErrorMessage: true,
+          errorStyle: 'stop',
+          errorTitle: 'Valor inválido',
+          error: 'Por favor, selecciona un tipo de moneda válido de la lista.',
+        };
+      }
+
+      // Validación para Periodicidad de Pago (Lista desplegable basada en el catálogo de BD)
+      if (periodicidadList.length > 0) {
+        row.getCell('periodicidadPago').dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`"${periodicidadList.join(',')}"`],
+          showErrorMessage: true,
+          errorStyle: 'stop',
+          errorTitle: 'Valor inválido',
+          error: 'Por favor, selecciona una periodicidad de pago válida de la lista.',
+        };
+      }
+    }
+
+    // 6. Generar el buffer de salida
+    const buffer = (await workbook.xlsx.writeBuffer()) as any;
+    return buffer;
+  }
+
+  async processBulkSalariesUpdate(
+    companyId: number,
+    file: Express.Multer.File,
+    activeUser: ActiveUserDto,
+  ) {
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(file.buffer as any);
+    } catch {
+      throw new BadRequestException('El archivo Excel está dañado o no tiene un formato válido.');
+    }
+
+    const sheet = workbook.worksheets[0];
+    if (!sheet) {
+      throw new BadRequestException('El archivo Excel no contiene hojas de trabajo.');
+    }
+
+    // Cargar catálogos activos en memoria
+    const tiposMoneda = await this.prisma.catTiposMoneda.findMany({ where: { activo: true } });
+    const periodicidades = await this.prisma.catPeriodicidadesPago.findMany({ where: { activo: true } });
+
+    const errores: UploadErrorDetail[] = [];
+    let successCount = 0;
+
+    const rows: { rowNumber: number; values: any }[] = [];
+
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Omitir cabecera
+      rows.push({ rowNumber, values: row.values });
+    });
+
+    if (rows.length === 0) {
+      throw new BadRequestException('El archivo Excel se encuentra vacío.');
+    }
+
+    // Procesar cada fila del Excel
+    for (const item of rows) {
+      const rowNumber = item.rowNumber;
+      const rowValues = item.values;
+
+      const numeroEmpleado = rowValues[1] ? String(rowValues[1]).trim() : null;
+      const salarioBruto = rowValues[3] !== undefined && rowValues[3] !== null ? Number(rowValues[3]) : 0;
+      const salarioNeto = rowValues[4] !== undefined && rowValues[4] !== null ? Number(rowValues[4]) : 0;
+      const monedaCodigo = rowValues[5] ? String(rowValues[5]).trim() : null;
+      const periodicidadDesc = rowValues[6] ? String(rowValues[6]).trim() : null;
+
+      if (!numeroEmpleado) {
+        errores.push({ row: rowNumber, error: 'El número de empleado es obligatorio.' });
+        continue;
+      }
+
+      // VALIDACIÓN 1: Si el salario bruto y neto son 0, se ignoran por completo
+      if (salarioBruto === 0 && salarioNeto === 0) {
+        continue;
+      }
+
+      if (isNaN(salarioBruto) || salarioBruto < 0) {
+        errores.push({ row: rowNumber, error: `El salario bruto no es un número válido.` });
+        continue;
+      }
+
+      if (isNaN(salarioNeto) || salarioNeto < 0) {
+        errores.push({ row: rowNumber, error: `El salario neto no es un número válido.` });
+        continue;
+      }
+
+      // Validar Tipo de Moneda en catálogo
+      const monedaObj = tiposMoneda.find(
+        (m) => m.codigo.toLowerCase() === monedaCodigo?.toLowerCase()
+      );
+      if (!monedaObj) {
+        errores.push({ row: rowNumber, error: `El tipo de moneda '${monedaCodigo}' no existe o no es válido.` });
+        continue;
+      }
+
+      // Validar Periodicidad de Pago en catálogo
+      const periodicidadObj = periodicidades.find(
+        (p) => p.descripcion.toLowerCase() === periodicidadDesc?.toLowerCase()
+      );
+      if (!periodicidadObj) {
+        errores.push({ row: rowNumber, error: `La periodicidad de pago '${periodicidadDesc}' no existe o no es válida.` });
+        continue;
+      }
+
+      // Buscar al empleado dentro de la empresa
+      const empleado = await this.prisma.empleados.findFirst({
+        where: {
+          numeroEmpleado: numeroEmpleado,
+          idEmpresa: companyId,
+        },
+      });
+
+      if (!empleado) {
+        errores.push({ row: rowNumber, error: `No se encontró ningún empleado con el número '${numeroEmpleado}'.` });
+        continue;
+      }
+
+      // Obtener el salario actual registrado en el historial para este empleado
+      const salarioActual = await this.prisma.historialSalarios.findFirst({
+        where: {
+          idEmpleado: empleado.idEmpleado,
+          actual: true,
+        },
+      });
+
+      // VALIDACIÓN 2: Verificar si el salario del Excel es idéntico al que ya tiene registrado como actual
+      const esIgual =
+        salarioActual &&
+        Number(salarioActual.salarioBruto) === Number(salarioBruto) &&
+        Number(salarioActual.salarioNeto) === Number(salarioNeto) &&
+        salarioActual.idTipoMoneda === monedaObj.idTipoMoneda &&
+        salarioActual.idPeriodicidadPago === periodicidadObj.idPeriodicidadPago;
+
+      if (esIgual) {
+        // No hubo cambios, se omite para no duplicar registros
+        continue;
+      }
+
+      try {
+        // Realizar la transacción: desactiva el anterior e inserta el nuevo
+        await this.prisma.$transaction(async (prisma) => {
+          if (salarioActual) {
+            await prisma.historialSalarios.update({
+              where: { idHistorialSalario: salarioActual.idHistorialSalario },
+              data: { actual: false },
+            });
+          }
+
+          await prisma.historialSalarios.create({
+            data: {
+              idEmpleado: empleado.idEmpleado,
+              idTipoMoneda: monedaObj.idTipoMoneda,
+              idPeriodicidadPago: periodicidadObj.idPeriodicidadPago,
+              salarioBruto: salarioBruto,
+              salarioNeto: salarioNeto,
+              fechaInicio: new Date(),
+              actual: true,
+              usuarioRegistro: `${activeUser?.first_name || 'Admin'} ${activeUser?.last_name || ''}`.trim(),
+            },
+          });
+        });
+
+        successCount++;
+      } catch (dbError: any) {
+        errores.push({ row: rowNumber, error: `Error al guardar en base de datos: ${dbError.message}` });
+      }
+    }
+
+    return {
+      message: 'Proceso de actualización masiva de salarios finalizado.',
+      updatedCount: successCount,
+      errorsCount: errores.length,
+      errors: errores,
+    };
+  }
 
   async create(companyId: number, employeeId: number, dto: CreateContractDto, activeUser: ActiveUserDto) {
     const userId = activeUser.id;

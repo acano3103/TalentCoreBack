@@ -26,6 +26,7 @@ import { UpdateRoleplayDto } from './dto/update-roleplay.dto';
 import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 
 @ApiTags('Roleplays')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/roleplays')
 export class RoleplaysController {
@@ -33,18 +34,25 @@ export class RoleplaysController {
 
     // Obtiene todos los role plays de una empresa
     @Get()
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Get all role plays', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Role plays obtained successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
+    @ApiQuery({ name: 'page', type: Number, required: false, example: 1 })
+    @ApiQuery({ name: 'limit', type: Number, required: false, example: 10 })
+    @ApiQuery({ name: 'search', type: String, required: false })
     @ApiQuery({ name: 'isActive', type: Boolean, required: false })
     findAll(
         @GetActiveUser() user: ActiveUserDto,
         @Param('companyId', ParseIntPipe) companyId: number,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+        @Query('search') search?: string,
         @Query('isActive') isActive?: string,
     ) {
+        const parsedPage = Math.max(1, Number(page) || 1);
+        const parsedLimit = Math.max(1, Math.min(100, Number(limit) || 10));
         const activeFilter = isActive === undefined ? undefined : isActive === 'true' || isActive === '1';
-        return this.roleplaysService.findAll(companyId, user, activeFilter);
+        return this.roleplaysService.findAll(companyId, user, { page: parsedPage, limit: parsedLimit, search: search?.trim() || '', isActive: activeFilter, });
     }
 
     // Obtiene un role play por id
@@ -64,7 +72,6 @@ export class RoleplaysController {
 
     // Crea un nuevo role play
     @Post()
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Create a new role play', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 201, description: 'Role play created successfully' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
@@ -79,7 +86,6 @@ export class RoleplaysController {
 
     // Actualiza un role play por ID
     @Put(':roleplayId')
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Update role play by ID', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Role play updated successfully' })
     @ApiResponse({ status: 404, description: 'Role play not found' })
@@ -96,7 +102,6 @@ export class RoleplaysController {
 
     // Desactiva un role play
     @Patch(':roleplayId/deactivate')
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Deactivate role play', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Role play deactivated successfully' })
     @ApiResponse({ status: 404, description: 'Role play not found' })
@@ -111,7 +116,6 @@ export class RoleplaysController {
 
     // Reactiva un role play
     @Patch(':roleplayId/reactivate')
-    @ApiBearerAuth()
     @ApiOperation({ summary: 'Reactivate role play', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 200, description: 'Role play reactivated successfully' })
     @ApiResponse({ status: 404, description: 'Role play not found' })

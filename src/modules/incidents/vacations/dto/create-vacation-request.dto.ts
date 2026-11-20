@@ -45,4 +45,9 @@ export class CreateVacationRequestDto {
     @IsString()
     @MaxLength(500)
     comentarios?: string;
+
+    @ApiPropertyOptional({ description: 'Indica si la solicitud fuerza la regla de días de anticipación mínima', example: false, default: false })
+    @IsOptional()
+    @IsBoolean()
+    esForzada?: boolean;
 }
