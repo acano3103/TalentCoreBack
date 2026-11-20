@@ -1,0 +1,12 @@
+# El índice guarda texto en LF. En Windows, core.autocrlf lo entrega como CRLF
+# y normaliza al agregar, para que un cambio de finales de línea no infle el diff.
+* text=auto
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary

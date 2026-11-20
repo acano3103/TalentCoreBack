@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsOptional, IsString, IsBoolean, IsNumber, IsArray, ValidateNested } from "class-validator";
+import { ApiPropertyOptional } from "@nestjs/swagger";
+import { IsNotEmpty, IsOptional, IsString, IsBoolean, IsNumber, IsArray, IsInt, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 
 // Sub-DTOs para tipar los arreglos internos del payload
@@ -129,4 +130,23 @@ export class CreatePositionDto {
     courses?: {
         cursosSeleccionados: SelectedCourseDto[];
     };
+
+    @ApiPropertyOptional({
+        deprecated: true,
+        example: 1,
+        description:
+            'Deprecado. Se ignora si llega. El tipo de personal se calcula a partir de la clasificación del puesto (generalInfo.idTipoPuesto): Operativo, Administrativo o Directivo.',
+    })
+    @IsOptional()
+    idTipoPersonal?: number;
+
+    @ApiPropertyOptional({
+        type: [Number],
+        description: 'Ids de etiquetas del tenant. Si se envía el arreglo, reemplaza el set del puesto. Si se omite, las etiquetas no cambian.',
+    })
+    @IsOptional()
+    @IsArray({ message: 'Las etiquetas deben ser un arreglo de identificadores.' })
+    @IsInt({ each: true, message: 'Cada etiqueta debe ser un número.' })
+    @Min(1, { each: true, message: 'Cada etiqueta debe ser un identificador válido.' })
+    etiquetas?: number[];
 }

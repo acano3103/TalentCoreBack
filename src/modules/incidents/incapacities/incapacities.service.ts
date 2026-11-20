@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { CreateIncapacityDto } from './dto/create-incapacity.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -13,6 +15,7 @@ export class IncapacitiesService {
         private readonly mediaPathService: MediaPathService,
         private readonly permissionsService: PermissionsService,
         private approvalsService: ApprovalsService,
+        @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
     ) { }
 
     async createIncapacity(
@@ -346,6 +349,26 @@ export class IncapacitiesService {
             tipoMovimiento.idTipoMovimiento,
             solicitud.idSolicitud,
         );
+
+        try {
+            const vigente = await this.prisma.solicitudesIncidencias.findUnique({
+                where: { idSolicitud: solicitud.idSolicitud },
+                select: { estatus: true },
+            });
+            if (vigente?.estatus && vigente.estatus !== 'PENDIENTE' && activeUser.idTenant) {
+                emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+                    origen: 'INCIDENCIA',
+                    idTenant: activeUser.idTenant,
+                    idEmpresa: companyId,
+                    idEmpleado: dto.idEmpleado,
+                    idSolicitud: solicitud.idSolicitud,
+                    estatus: vigente.estatus,
+                    solicitud: 'incapacidad',
+                });
+            }
+        } catch {
+            // La solicitud ya quedó registrada.
+        }
 
         // 13. Respuesta.
         return {

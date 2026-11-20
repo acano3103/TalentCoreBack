@@ -291,7 +291,37 @@ describe('Checadas del kiosco', () => {
             requiereRevision: false,
             advertencias: [],
             mensaje: 'Entrada registrada',
+            avisosPendientes: 0,
         });
+    });
+
+    it('cuenta los avisos que el kiosco puede mostrar', async () => {
+        empleadoEnPadron();
+        evidenciaValida();
+        const consulta = jest.fn(async () => [
+            {
+                Estado: 'PENDIENTE',
+                CanalesEfectivos: ['KIOSCO'],
+                ComComunicados: {
+                    AcuseModo: 'LEI_ENTENDI',
+                    ComTiposComunicado: { EsCorto: false },
+                },
+            },
+            {
+                Estado: 'CONFIRMADO',
+                CanalesEfectivos: ['KIOSCO'],
+                ComComunicados: {
+                    AcuseModo: 'LEI_ENTENDI',
+                    ComTiposComunicado: { EsCorto: false },
+                },
+            },
+        ]);
+        (prisma as unknown as { comDestinatarios: { findMany: jest.Mock } }).comDestinatarios = { findMany: consulta };
+
+        const result = await service.check(kiosco, checada());
+
+        expect(result.avisosPendientes).toBe(1);
+        expect(consulta).toHaveBeenCalled();
     });
 
     it('registra sin foto cuando el kiosco no la exige', async () => {
@@ -414,6 +444,7 @@ describe('Checadas del kiosco', () => {
             requiereRevision: false,
             advertencias: [],
             mensaje: 'Registro guardado. RH lo revisará.',
+            avisosPendientes: 0,
         });
         expect(prisma.registrosKioscoPorIdentificar.create).toHaveBeenCalledWith({
             data: expect.objectContaining({
@@ -517,6 +548,7 @@ describe('Checadas del kiosco', () => {
             requiereRevision: false,
             advertencias: [],
             mensaje: 'Salida registrada',
+            avisosPendientes: 0,
         });
         expect(engine.registerCheck).not.toHaveBeenCalled();
     });

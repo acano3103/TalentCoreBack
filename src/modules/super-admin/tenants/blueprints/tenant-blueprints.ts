@@ -74,6 +74,14 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     { codigo: 'integrations', descripcion: 'Integraciones', codigoPadre: 'configuration' },
     { codigo: 'document-templates', descripcion: 'Plantillas Documentos', codigoPadre: 'configuration' },
     { codigo: 'settings', descripcion: 'Ajustes', codigoPadre: 'configuration' },
+
+    // Comunicación interna
+    { codigo: 'internal-comms', descripcion: 'Comunicación interna', codigoPadre: null },
+    { codigo: 'comms-my', descripcion: 'Mis comunicados', codigoPadre: 'internal-comms' },
+    { codigo: 'comms-announcements', descripcion: 'Comunicados', codigoPadre: 'internal-comms' },
+    { codigo: 'comms-audiences', descripcion: 'Audiencias', codigoPadre: 'internal-comms' },
+    { codigo: 'comms-reminders', descripcion: 'Recordatorios', codigoPadre: 'internal-comms' },
+    { codigo: 'comms-channels', descripcion: 'Canales y consumo', codigoPadre: 'internal-comms' },
 ];
 
 export const ROLE_NAMES = ['Admin', 'RH', 'Finanzas', 'Reclutador', 'Manager', 'Empleado'];
@@ -145,6 +153,12 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Admin', moduloCodigo: 'integrations', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'document-templates', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'settings', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'internal-comms', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'comms-my', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'comms-announcements', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'comms-audiences', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'comms-reminders', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'comms-channels', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
 
     // =========================================================================
     // ROL: RH
@@ -203,6 +217,12 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'RH', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'document-templates', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'internal-comms', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'comms-my', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'comms-announcements', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'comms-audiences', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'comms-reminders', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'comms-channels', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
 
     // =========================================================================
     // ROL: FINANZAS
@@ -261,6 +281,12 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Finanzas', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'document-templates', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'internal-comms', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'comms-my', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'comms-announcements', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'comms-audiences', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'comms-reminders', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'comms-channels', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 
     // =========================================================================
     // ROL: RECLUTADOR
@@ -319,6 +345,12 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Reclutador', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'document-templates', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'internal-comms', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'comms-my', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'comms-announcements', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'comms-audiences', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'comms-reminders', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'comms-channels', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 
     // =========================================================================
     // ROL: MANAGER
@@ -377,6 +409,12 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Manager', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'document-templates', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'internal-comms', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'comms-my', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'comms-announcements', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'comms-audiences', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'comms-reminders', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'comms-channels', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 
     // =========================================================================
     // ROL: EMPLEADO
@@ -435,4 +473,10 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Empleado', moduloCodigo: 'integrations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'document-templates', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'settings', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'internal-comms', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'comms-my', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'comms-announcements', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'comms-audiences', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'comms-reminders', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'comms-channels', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
 ];

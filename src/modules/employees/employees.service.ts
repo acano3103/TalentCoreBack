@@ -1,4 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_EMPLEADO, emitirHecho } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmployeeQueryResult, EmployeeSchedule, SubordinateResponse } from './interfaces/employee.interface';
 import { SaveSalaryDto } from './dto/save-salary.dto';
@@ -8,6 +10,7 @@ import { IntegrationsFactory } from '../integrations/providers/factory.service';
 import { UpdateEmployeeScheduleDto } from './dto/update-employee-schedule.dto';
 import { UpdateAttendanceConfigDto } from './dto/update-attendance-config.dto';
 import { UpdateEmployeeGeneralDataDto } from './dto/update-employee-general-data.dto';
+import { condicionBusquedaColaborador } from './busqueda-colaborador';
 import { UpdateEmployeeExternalIdentifiersDto } from './dto/update-employee-external-identifiers.dto';
 
 @Injectable()
@@ -17,6 +20,7 @@ export class EmployeesService {
   constructor(
     private prisma: PrismaService,
     private integrationFactory: IntegrationsFactory,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   // OBTENER EMPLEADO POR ID CON HORARIOS, SEDES, DIDS E IDENTIFICADORES EXTERNOS
@@ -384,6 +388,17 @@ export class EmployeesService {
         data,
       });
 
+      const movioPuesto = employeeData.idPuesto !== undefined && employeeData.idPuesto !== employee.idPuesto;
+      const movioSite = employeeData.idSite !== undefined && employeeData.idSite !== employee.idSite;
+      if ((movioPuesto || movioSite) && employee.idTenant) {
+        emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+          tipo: 'MOVIMIENTO',
+          idTenant: employee.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: employeeId,
+        });
+      }
+
       this.logger.log(`Employee ${employeeId} general information updated by user ${activeUser?.id ?? 'unknown'}`);
 
       return {
@@ -595,16 +610,7 @@ export class EmployeesService {
   ) {
     const skip = (page - 1) * limit;
 
-    // Condición opcional para búsqueda por nombre, apellidos, correo o puesto
-    const searchCondition = search?.trim()
-      ? Prisma.sql`AND (
-      ep.nombre LIKE ${`%${search}%`} OR
-      ep.primerApellido LIKE ${`%${search}%`} OR
-      ep.segundoApellido LIKE ${`%${search}%`} OR
-      ep.correo LIKE ${`%${search}%`} OR
-      p.nombrePuesto LIKE ${`%${search}%`}
-    )`
-      : Prisma.empty;
+    const searchCondition = condicionBusquedaColaborador(search ?? '');
 
     // Condición opcional para empleados sin jefe inmediato asignado
     const withoutManagerCondition = withoutManager
@@ -1145,7 +1151,7 @@ export class EmployeesService {
         idTenant: user.idTenant,
         activo: true,
       },
-      select: { idEmpleado: true, nombre: true, primerApellido: true },
+      select: { idEmpleado: true, nombre: true, primerApellido: true, idJefeInmediato: true },
     });
 
     if (!employee) throw new NotFoundException('Empleado no encontrado.');
@@ -1173,6 +1179,15 @@ export class EmployeesService {
         AND idEmpresa = ${companyId}
         AND idTenant = ${user.idTenant};
     `;
+
+    if (employee.idJefeInmediato !== immediateBossId) {
+      emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+        tipo: 'MOVIMIENTO',
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        idEmpleado: employeeId,
+      });
+    }
 
     return {
       success: true,

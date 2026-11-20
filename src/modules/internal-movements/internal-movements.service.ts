@@ -1,9 +1,13 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_EMPLEADO, COMMS_EVENTO_ESTATUS, emitirHecho, HechoEmpleado } from 'src/common/events/comms-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateInternalMovementDto } from './dto/create-internal-movement.dto';
@@ -28,6 +32,7 @@ export class InternalMovementsService {
     private readonly approvalsService: ApprovalsService,
     private readonly notifications: NotificationDispatcher,
     private readonly configService: ConfigService,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   private readonly logger = new Logger(InternalMovementsService.name);
@@ -410,6 +415,18 @@ export class InternalMovementsService {
         },
       });
 
+    if (solicitudActualizada?.estatus && solicitudActualizada.estatus !== 'PENDIENTE' && user.idTenant) {
+      emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+        origen: 'MOVIMIENTO_INTERNO',
+        idTenant: user.idTenant,
+        idEmpresa: companyId,
+        idEmpleado: solicitudActualizada.idEmpleado,
+        idSolicitud: solicitudActualizada.idMovimiento,
+        estatus: solicitudActualizada.estatus,
+        solicitud: 'movimiento interno',
+      });
+    }
+
     return {
       message: resultadoAprobacion == 'Solicitud aprobada automaticamente por falta de flujo de aprobación.'
         ? 'Movimiento aprobado automáticamente y aplicado al empleado.'
@@ -702,6 +719,26 @@ export class InternalMovementsService {
       await this.aplicarMovimientoAEmpleado(movimiento.idMovimiento, activeUser);
     }
 
+    try {
+      const vigente = await this.prisma.movimientosInternos.findUnique({
+        where: { idMovimiento: movimiento.idMovimiento },
+        select: { estatus: true, idEmpleado: true },
+      });
+      if (vigente?.estatus && vigente.estatus !== 'PENDIENTE' && activeUser.idTenant) {
+        emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+          origen: 'MOVIMIENTO_INTERNO',
+          idTenant: activeUser.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: vigente.idEmpleado,
+          idSolicitud: movimiento.idMovimiento,
+          estatus: vigente.estatus,
+          solicitud: 'baja de personal',
+        });
+      }
+    } catch {
+      // La solicitud ya quedó registrada.
+    }
+
     return {
       message: aprobadaAutomaticamente
         ? 'Solicitud de baja aprobada automáticamente y aplicada al empleado.'
@@ -821,7 +858,8 @@ export class InternalMovementsService {
     idMovimiento: number,
     user?: ActiveUserDto,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    let hecho: HechoEmpleado | null = null;
+    const resultado = await this.prisma.$transaction(async (tx) => {
       // 1. Recuperar la solicitud del movimiento.
       const movimiento = await tx.movimientosInternos.findUnique({
         where: { idMovimiento },
@@ -872,6 +910,13 @@ export class InternalMovementsService {
             activo: false,
           },
         });
+
+        hecho = {
+          tipo: 'BAJA',
+          idTenant: movimiento.idTenant,
+          idEmpresa: movimiento.idEmpresa,
+          idEmpleado: movimiento.idEmpleado,
+        };
 
         await tx.historicoMovimientos.create({
           data: {
@@ -1003,6 +1048,20 @@ export class InternalMovementsService {
         });
       }
 
+      if (
+        movimiento.idPuestoNuevo != null ||
+        movimiento.idJefeNuevo != null ||
+        movimiento.idEmpresaNueva != null ||
+        movimiento.idSiteNuevo != null
+      ) {
+        hecho = {
+          tipo: 'MOVIMIENTO',
+          idTenant: movimiento.idTenant,
+          idEmpresa: movimiento.idEmpresaNueva ?? movimiento.idEmpresa,
+          idEmpleado: movimiento.idEmpleado,
+        };
+      }
+
       return {
         message: 'Movimiento aplicado correctamente al empleado.',
         data: {
@@ -1011,6 +1070,8 @@ export class InternalMovementsService {
         },
       };
     });
+    if (hecho) emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, hecho);
+    return resultado;
   }
 
   // ----------------------------------------------------------

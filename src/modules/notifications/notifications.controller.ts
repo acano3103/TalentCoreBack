@@ -13,7 +13,11 @@ export class NotificationsController {
 
     @Get('user/:userUuid')
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Get user notifications', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiOperation({
+        summary: 'Get user notifications',
+        deprecated: true,
+        description: `${SWAGGER_AUTH_DESCRIPTION} Obsoleto: usa GET companies/{companyId}/me/notifications.`,
+    })
     @ApiResponse({ status: 200, description: 'Notifications obtained successfully' })
     @ApiResponse({ status: 404, description: 'Notifications not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })
@@ -39,7 +43,11 @@ export class NotificationsController {
 
     @Patch('user/:userUuid/read-all')
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Mark all notifications as read', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiOperation({
+        summary: 'Mark all notifications as read',
+        deprecated: true,
+        description: `${SWAGGER_AUTH_DESCRIPTION} Obsoleto: usa PATCH companies/{companyId}/me/notifications/read-all.`,
+    })
     @ApiResponse({ status: 200, description: 'All notifications marked as read successfully' })
     @ApiResponse({ status: 404, description: 'Notifications not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized: Token is missing or invalid' })

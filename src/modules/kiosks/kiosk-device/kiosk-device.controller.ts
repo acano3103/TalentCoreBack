@@ -138,10 +138,10 @@ export class KioskDeviceController {
     @ApiOperation({
         summary: 'Registrar una checada',
         description:
-            'Resuelve al empleado, aplica las políticas del equipo y delega al motor. Duplicado y por identificar responden 200.',
+            'Resuelve al empleado, aplica las políticas del equipo y delega al motor. Duplicado y por identificar responden 200. avisosPendientes dice si hay que pedir kiosk/comms/pending.',
     })
     @ApiBody({ type: ChecadaKioscoDto })
-    @ApiResponse({ status: 200, description: 'REGISTRADO, DUPLICADO o POR_IDENTIFICAR.' })
+    @ApiResponse({ status: 200, description: 'REGISTRADO, DUPLICADO o POR_IDENTIFICAR, con avisosPendientes.' })
     @ApiResponse({ status: 400, description: 'EVIDENCIA_REQUERIDA, SIN_ROSTRO u OFFLINE_NO_PERMITIDO.' })
     @ApiResponse({ status: 404, description: 'EMPLEADO_NO_ENCONTRADO, si el kiosco no acepta incidencias.' })
     @ApiResponse({ status: 409, description: 'EMPLEADO_NO_ASIGNADO, EMPLEADO_INACTIVO o TRANSICION_INVALIDA.' })

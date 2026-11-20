@@ -28,6 +28,8 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CoursesModule } from './modules/courses/courses.module';
 import { RoleplaysModule } from './modules/roleplays/roleplays.module';
 import { CareerPlanModule } from './modules/career-plan/career-plan.module';
@@ -50,6 +52,7 @@ import { IncidentsModule } from './modules/incidents/incidents.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { TimeClockModule } from './modules/time-clock/time-clock.module';
 import { KiosksModule } from './modules/kiosks/kiosks.module';
+import { CommunicationsModule } from './modules/communications/communications.module';
 
 // Determina dinámicamente la ruta correcta de public
 const publicDistPath = join(process.cwd(), 'dist', 'public');
@@ -63,6 +66,11 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
       validationSchema: envValidationSchema,
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 20 }],
+      errorMessage: 'Demasiadas solicitudes. Espera un momento e intenta de nuevo.',
+    }),
+    EventEmitterModule.forRoot({ ignoreErrors: true }),
     ServeStaticModule.forRoot(
       {
         rootPath: staticPublicPath,
@@ -98,6 +106,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     CostCenterModule,
     EventsModule,
     HeadcountModule,
+    // Antes que Roles: GET /roles/comms-capabilities no debe caer en GET /roles/:id.
+    CommunicationsModule,
     RolesModule,
     VacanciesModule,
     ActivityLogsModule,
@@ -125,7 +135,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     IncidentsModule,
     ApprovalsModule,
     TimeClockModule,
-    KiosksModule
+    KiosksModule,
   ],
   controllers: [],
   providers: [GeofencesService],

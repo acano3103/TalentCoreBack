@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_EMPLEADO, emitirHecho } from 'src/common/events/comms-hechos';
 import { UpdatePostulationStatusDto } from './dto/update-status.dto';
 import { generateEmployeeAndLink } from './services/credentials.service';
 import { ALLOWED_STATUS_TRANSITIONS } from './utils/allowed-transitions';
@@ -29,7 +31,8 @@ export class PostulationsService {
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly tenantsService: TenantsService,
-    private readonly employeeService: EmployeesService
+    private readonly employeeService: EmployeesService,
+    @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
   ) { }
 
   private readonly logger = new Logger(PostulationsService.name);
@@ -556,6 +559,13 @@ export class PostulationsService {
         idEmpleadoGenerado = idEmpleado;
 
         await this.employeeService.syncAllPendingToArtemis(user, companyId)
+
+        emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, {
+          tipo: 'ALTA',
+          idTenant: user.idTenant,
+          idEmpresa: companyId,
+          idEmpleado: idEmpleado,
+        });
       }
 
       await this.prisma.$transaction(async (tx) => {
