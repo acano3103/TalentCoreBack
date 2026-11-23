@@ -12,7 +12,7 @@ import {
   PLAN_CARRERA_TIPO_CURSO,
   CALIFICACION_APROBATORIA,
 } from './career-plan.constants';
-import type { CursoParticipantes } from 'generated/prisma/client';
+import { evaluarCursos, resolverUmbralAprobatorio } from './career-plan.avance';
 import type { PlanCarreraEstatus } from 'generated/prisma/enums';
 
 @Injectable()
@@ -253,7 +253,7 @@ export class CareerPlanService {
     };
   }
 
-  // Umbral aprobatorio dinamico por empresa (ConfiguracionEmpresa), default 8
+  // Umbral en escala 0-100. Sin configurar es 70; un valor <= 10 se lee como escala 0-10.
   private async obtenerUmbralAprobatorio(companyId: number): Promise<number> {
     const config = await this.prismaService.configuracionEmpresa.findUnique({
       where: {
@@ -263,52 +263,26 @@ export class CareerPlanService {
         },
       },
     });
-    const valor = Number(config?.valor ?? 8);
-    return Number.isFinite(valor) ? valor : 8;
+    return resolverUmbralAprobatorio(config?.valor, companyId, this.logger);
   }
 
-  // Evalua el avance de una postulacion contra la malla del puesto objetivo
-  // y deriva automaticamente el estatus listo_para_ascenso al alcanzar el 100%
-  private async evaluarAvance(
-    companyId: number,
-    plan: {
-      idPlanCarrera: number;
-      idEmpleado: number;
-      idPuestoObjetivo: number;
-      estatus: string;
-    },
-    participantes: CursoParticipantes[],
-    sesionCursoMap: Map<number, number>,
-    mallaPorPuesto: Map<number, number[]>,
-  ) {
-    const umbral = await this.obtenerUmbralAprobatorio(companyId);
-    const malla = mallaPorPuesto.get(plan.idPuestoObjetivo) || [];
-    const total = malla.length;
-
-    let aprobados = 0;
-    for (const part of participantes) {
-      if (part.idEmpleado !== plan.idEmpleado) continue;
-      const cursoId = sesionCursoMap.get(part.idSesion);
-      if (cursoId === undefined || !malla.includes(cursoId)) continue;
-      const aprobado =
-        part.estatusAsignacion === 'completado' &&
-        (part.calificacionFinal === null ||
-          Number(part.calificacionFinal) >= umbral);
-      if (aprobado) aprobados++;
-    }
-
-    const porcentaje = total === 0 ? 0 : Math.round((aprobados / total) * 100);
-
-    let estatus = plan.estatus;
-    if (plan.estatus === 'en_preparacion' && total > 0 && porcentaje >= 100) {
-      estatus = 'listo_para_ascenso';
+  // Al 100 % un plan en preparación pasa a listo para ascenso. No revierte un estatus posterior.
+  private async cerrarSiCompleto(
+    plan: { idPlanCarrera: number; estatus: string },
+    avance: { total: number; porcentaje: number },
+  ): Promise<string> {
+    if (
+      plan.estatus === 'en_preparacion' &&
+      avance.total > 0 &&
+      avance.porcentaje >= 100
+    ) {
       await this.prismaService.planCarreraColaborador.update({
         where: { idPlanCarrera: plan.idPlanCarrera },
-        data: { estatus: estatus as PlanCarreraEstatus },
+        data: { estatus: 'listo_para_ascenso' as PlanCarreraEstatus },
       });
+      return 'listo_para_ascenso';
     }
-
-    return { total, aprobados, porcentaje, estatus };
+    return plan.estatus;
   }
 
   // Obtiene las postulaciones con % de avance calculado contra la malla del puesto objetivo
@@ -341,7 +315,108 @@ export class CareerPlanService {
       },
     });
     const empMap = new Map(empleados.map((e) => [e.idEmpleado, e]));
+    const avances = await this.evaluarPostulaciones(companyId, postulaciones);
 
+    return avances.map((avance) => {
+      const p = avance.plan;
+      const emp = empMap.get(p.idEmpleado);
+      return {
+        idPlanCarrera: p.idPlanCarrera,
+        idEmpleado: p.idEmpleado,
+        nombreEmpleado: emp
+          ? `${emp.nombre ?? ''} ${emp.primerApellido ?? ''} ${emp.segundoApellido ?? ''}`.trim()
+          : null,
+        correo: emp?.correo ?? null,
+        idRuta: p.idRuta,
+        idPuestoActual: p.idPuestoActual,
+        idPuestoObjetivo: p.idPuestoObjetivo,
+        puestoActual: avance.puestoActual,
+        puestoObjetivo: avance.puestoObjetivo,
+        estatus: avance.estatus,
+        totalCursos: avance.total,
+        cursosAprobados: avance.aprobados,
+        porcentajeAvance: avance.porcentaje,
+        fechaInscripcion: p.fechaInscripcion,
+        fechaPromocion: p.fechaPromocion,
+      };
+    });
+  }
+
+  // Planes del empleado logueado. La app solo consulta: no crea postulaciones.
+  async findPlanesEmpleado(companyId: number, idEmpleado: number) {
+    const postulaciones = await this.planesDe(companyId, idEmpleado);
+    if (postulaciones.length === 0) return { planes: [] };
+
+    const avances = await this.evaluarPostulaciones(companyId, postulaciones);
+    return {
+      planes: avances.map((avance) => ({
+        idPlanCarrera: avance.plan.idPlanCarrera,
+        estatus: avance.estatus as
+          'en_preparacion' | 'listo_para_ascenso' | 'promovido',
+        puestoActual: avance.puestoActual || '',
+        puestoObjetivo: avance.puestoObjetivo || '',
+        fechaInscripcion: aIso(avance.plan.fechaInscripcion),
+        fechaPromocion: aIso(avance.plan.fechaPromocion),
+        porcentaje: avance.porcentaje,
+        aprobados: avance.aprobados,
+        total: avance.total,
+        cursos: avance.cursos.map((curso) => ({
+          idCurso: curso.idCurso,
+          nombre: curso.nombre || '',
+          estatus: curso.estatus,
+          calificacion: curso.calificacion,
+          idSesion: curso.idSesion,
+        })),
+      })),
+    };
+  }
+
+  // Tarjeta del summary: el plan en curso, o el único que tenga.
+  async resumenEmpleado(companyId: number, idEmpleado: number) {
+    const { planes } = await this.findPlanesEmpleado(companyId, idEmpleado);
+    const elegido =
+      planes.find((plan) => plan.estatus !== 'promovido') ?? planes[0];
+    if (!elegido) return null;
+    return {
+      puestoObjetivo: elegido.puestoObjetivo,
+      porcentaje: elegido.porcentaje,
+      estatus: elegido.estatus,
+    };
+  }
+
+  async contarRutasCompletas(
+    companyId: number,
+    idEmpleado: number,
+  ): Promise<number> {
+    const { planes } = await this.findPlanesEmpleado(companyId, idEmpleado);
+    return planes.filter((plan) => plan.porcentaje >= 100).length;
+  }
+
+  private async planesDe(companyId: number, idEmpleado: number) {
+    const routes = await this.prismaService.relPuestoRuta.findMany({
+      where: { idEmpresa: companyId },
+      select: { idRuta: true },
+    });
+    if (routes.length === 0) return [];
+    return this.prismaService.planCarreraColaborador.findMany({
+      where: { idEmpleado, idRuta: { in: routes.map((r) => r.idRuta) } },
+      orderBy: { fechaInscripcion: 'asc' },
+    });
+  }
+
+  private async evaluarPostulaciones<
+    T extends {
+      idPlanCarrera: number;
+      idEmpleado: number;
+      idRuta: number;
+      idPuestoActual: number;
+      idPuestoObjetivo: number;
+      estatus: string;
+      fechaInscripcion: Date | null;
+      fechaPromocion: Date | null;
+    },
+  >(companyId: number, postulaciones: T[]) {
+    const umbral = await this.obtenerUmbralAprobatorio(companyId);
     const puestoIds = [
       ...new Set(
         postulaciones.flatMap((p) => [p.idPuestoActual, p.idPuestoObjetivo]),
@@ -364,23 +439,30 @@ export class CareerPlanService {
       },
     });
     const mallaPorPuesto = new Map<number, number[]>();
-    for (const r of rel) {
-      if (!mallaPorPuesto.has(r.idPuesto)) mallaPorPuesto.set(r.idPuesto, []);
-      mallaPorPuesto.get(r.idPuesto)!.push(r.idCurso);
+    for (const fila of rel) {
+      const lista = mallaPorPuesto.get(fila.idPuesto) ?? [];
+      lista.push(fila.idCurso);
+      mallaPorPuesto.set(fila.idPuesto, lista);
     }
 
-    const mallaCursoIds = [...new Set(rel.map((r) => r.idCurso))];
+    const mallaCursoIds = [...new Set(rel.map((fila) => fila.idCurso))];
+    const cursos = mallaCursoIds.length
+      ? await this.prismaService.catCursos.findMany({
+          where: { idCursos: { in: mallaCursoIds } },
+          select: { idCursos: true, Descripcion: true },
+        })
+      : [];
+    const cursoMap = new Map(
+      cursos.map((curso) => [curso.idCursos, curso.Descripcion]),
+    );
     const sesiones = mallaCursoIds.length
       ? await this.prismaService.cursoSesiones.findMany({
           where: { idCurso: { in: mallaCursoIds } },
-          select: { idSesion: true, idCurso: true },
+          select: { idSesion: true, idCurso: true, fechaInicioPeriodo: true },
         })
       : [];
-    const sesionCursoMap = new Map(
-      sesiones.map((s) => [s.idSesion, s.idCurso]),
-    );
-    const sesionIds = sesiones.map((s) => s.idSesion);
-
+    const sesionIds = sesiones.map((sesion) => sesion.idSesion);
+    const empleadoIds = [...new Set(postulaciones.map((p) => p.idEmpleado))];
     const participantes = sesionIds.length
       ? await this.prismaService.cursoParticipantes.findMany({
           where: {
@@ -390,37 +472,31 @@ export class CareerPlanService {
         })
       : [];
 
-    const resultados = postulaciones.map(async (p) => {
-      const emp = empMap.get(p.idEmpleado);
-      const avance = await this.evaluarAvance(
-        companyId,
-        p,
-        participantes,
-        sesionCursoMap,
-        mallaPorPuesto,
-      );
-      return {
-        idPlanCarrera: p.idPlanCarrera,
-        idEmpleado: p.idEmpleado,
-        nombreEmpleado: emp
-          ? `${emp.nombre ?? ''} ${emp.primerApellido ?? ''} ${emp.segundoApellido ?? ''}`.trim()
-          : null,
-        correo: emp?.correo ?? null,
-        idRuta: p.idRuta,
-        idPuestoActual: p.idPuestoActual,
-        idPuestoObjetivo: p.idPuestoObjetivo,
-        puestoActual: puestoMap.get(p.idPuestoActual) || null,
-        puestoObjetivo: puestoMap.get(p.idPuestoObjetivo) || null,
-        estatus: avance.estatus,
-        totalCursos: avance.total,
-        cursosAprobados: avance.aprobados,
-        porcentajeAvance: avance.porcentaje,
-        fechaInscripcion: p.fechaInscripcion,
-        fechaPromocion: p.fechaPromocion,
-      };
-    });
-
-    return Promise.all(resultados);
+    return Promise.all(
+      postulaciones.map(async (plan) => {
+        const avance = evaluarCursos(
+          plan.idEmpleado,
+          mallaPorPuesto.get(plan.idPuestoObjetivo) ?? [],
+          sesiones,
+          participantes,
+          umbral,
+        );
+        const estatus = await this.cerrarSiCompleto(plan, avance);
+        return {
+          plan,
+          estatus,
+          total: avance.total,
+          aprobados: avance.aprobados,
+          porcentaje: avance.porcentaje,
+          puestoActual: puestoMap.get(plan.idPuestoActual) || null,
+          puestoObjetivo: puestoMap.get(plan.idPuestoObjetivo) || null,
+          cursos: avance.cursos.map((curso) => ({
+            ...curso,
+            nombre: cursoMap.get(curso.idCurso) ?? null,
+          })),
+        };
+      }),
+    );
   }
 
   // Postula a un colaborador a una ruta con snapshots de puestos
@@ -539,12 +615,9 @@ export class CareerPlanService {
     const sesiones = cursoIds.length
       ? await this.prismaService.cursoSesiones.findMany({
           where: { idCurso: { in: cursoIds } },
-          select: { idSesion: true, idCurso: true },
+          select: { idSesion: true, idCurso: true, fechaInicioPeriodo: true },
         })
       : [];
-    const sesionCursoMap = new Map(
-      sesiones.map((s) => [s.idSesion, s.idCurso]),
-    );
     const sesionIds = sesiones.map((s) => s.idSesion);
 
     const participantes = sesionIds.length
@@ -557,56 +630,26 @@ export class CareerPlanService {
       : [];
 
     const umbral = await this.obtenerUmbralAprobatorio(companyId);
-    const prioridad: Record<string, number> = {
-      inscrito: 0,
-      no_asistio: 0,
-      reprobado: 1,
-      completado: 2,
-    };
-
-    const mejorPorCurso = new Map<
-      number,
-      { part: CursoParticipantes; prioridad: number }
-    >();
-    for (const part of participantes) {
-      const cursoId = sesionCursoMap.get(part.idSesion);
-      if (cursoId === undefined) continue;
-      const prior = prioridad[part.estatusAsignacion ?? 'inscrito'] ?? 0;
-      const actual = mejorPorCurso.get(cursoId);
-      if (!actual || prior > actual.prioridad) {
-        mejorPorCurso.set(cursoId, { part, prioridad: prior });
-      }
-    }
-
-    const cursosDetalle = rel.map((r) => {
-      const curso = cursoMap.get(r.idCurso);
-      const reg = mejorPorCurso.get(r.idCurso);
-      const estatus = !reg
-        ? 'pendiente'
-        : reg.part.estatusAsignacion === 'completado'
-          ? 'completado'
-          : reg.part.estatusAsignacion === 'reprobado'
-            ? 'reprobado'
-            : 'en_curso';
-      const calificacion =
-        reg?.part.calificacionFinal != null
-          ? Number(reg.part.calificacionFinal)
-          : null;
+    const avance = evaluarCursos(
+      postulacion.idEmpleado,
+      cursoIds,
+      sesiones,
+      participantes,
+      umbral,
+    );
+    const estatus = await this.cerrarSiCompleto(postulacion, avance);
+    const cursosDetalle = avance.cursos.map((cursoEval) => {
+      const curso = cursoMap.get(cursoEval.idCurso);
       return {
-        idCurso: r.idCurso,
+        idCurso: cursoEval.idCurso,
         descripcion: curso?.Descripcion || null,
         tipo: curso?.CatTipoCurso?.Descripcion || null,
-        estatus,
-        calificacion,
-        aprobado:
-          estatus === 'completado' &&
-          (calificacion === null || calificacion >= umbral),
+        estatus: cursoEval.estatus,
+        calificacion: cursoEval.calificacion,
+        aprobado: cursoEval.aprobado,
       };
     });
-
-    const aprobados = cursosDetalle.filter((c) => c.aprobado).length;
-    const total = cursosDetalle.length;
-    const porcentaje = total === 0 ? 0 : Math.round((aprobados / total) * 100);
+    const porcentaje = avance.porcentaje;
 
     const puestoActual = await this.prismaService.catPuestos.findUnique({
       where: { idPuesto: postulacion.idPuestoActual },
@@ -627,9 +670,15 @@ export class CareerPlanService {
       idPuestoObjetivo: postulacion.idPuestoObjetivo,
       puestoActual: puestoActual?.NombrePuesto || null,
       puestoObjetivo: puestoObjetivo?.NombrePuesto || null,
-      estatus: postulacion.estatus,
+      estatus,
       porcentajeAvance: porcentaje,
       cursos: cursosDetalle,
     };
   }
+}
+
+function aIso(fecha: Date | null | undefined): string | null {
+  if (!fecha) return null;
+  const valor = new Date(fecha);
+  return Number.isNaN(valor.getTime()) ? null : valor.toISOString();
 }

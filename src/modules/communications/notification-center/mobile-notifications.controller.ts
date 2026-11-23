@@ -24,7 +24,7 @@ export class MobileNotificationsController {
     @Get('notifications')
     @ApiOperation({
         summary: 'Centro de notificaciones en la app',
-        description: 'Misma agrupación que la web. categoria filtra COMUNICADO, AVISO, RECORDATORIO, APROBACION o SISTEMA.',
+        description: 'Misma agrupación que la web. categoria filtra COMUNICADO, AVISO, RECORDATORIO, APROBACION o SISTEMA. destino.tipo incluye MIS_CLASES (id = idFechaClase) y MI_CURSO (id = idSesion). El push repite ese destino en data.destino.',
     })
     @ApiResponse({ status: 200, description: 'Página de grupos.' })
     listar(

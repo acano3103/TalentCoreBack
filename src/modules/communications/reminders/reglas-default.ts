@@ -1,6 +1,6 @@
 import { Canal, CANALES, esCanal } from '../channels/canales';
 
-export const CODIGOS_REGLA = ['R1', 'R2', 'R3', 'R12', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11'] as const;
+export const CODIGOS_REGLA = ['R1', 'R2', 'R3', 'R12', 'R4', 'R5', 'R6', 'R7', 'R8', 'R13', 'R14', 'R9', 'R10', 'R11'] as const;
 
 export type CodigoRegla = (typeof CODIGOS_REGLA)[number];
 
@@ -57,6 +57,8 @@ const HORA_ENTRADA: VariableRegla = { token: '{hora_entrada}', etiqueta: 'Hora d
 const DOCUMENTO: VariableRegla = { token: '{documento}', etiqueta: 'Documento' };
 const FECHA_LIMITE: VariableRegla = { token: '{fecha_limite}', etiqueta: 'Fecha límite' };
 const CURSO: VariableRegla = { token: '{curso}', etiqueta: 'Curso' };
+const HORA: VariableRegla = { token: '{hora}', etiqueta: 'Hora de la clase' };
+const CALIFICACION: VariableRegla = { token: '{calificacion}', etiqueta: 'Calificación' };
 const SOLICITUD: VariableRegla = { token: '{solicitud}', etiqueta: 'Solicitud' };
 const EQUIPO: VariableRegla = { token: '{equipo}', etiqueta: 'Equipo' };
 const TITULO: VariableRegla = { token: '{solicitud}', etiqueta: 'Título' };
@@ -188,6 +190,32 @@ export const REGLAS_DEFAULT: readonly ReglaDefault[] = [
         plantilla: '{nombre}, el curso {curso} tiene fecha límite {fecha_limite}.',
     },
     {
+        codigo: 'R13',
+        nombre: 'Clase por iniciar',
+        descripcion: 'Avisa a cada inscrito cuando una clase no cancelada está por empezar. Un aviso por clase.',
+        destinatario: 'La persona inscrita',
+        seCierraCuando: 'Un aviso por clase, mientras falte menos del tiempo indicado para el inicio.',
+        campos: [minutos('minutosAntes', 'Minutos antes de la clase', 'Minutos antes de la hora de inicio en los que se envía el aviso.', 5, 120)],
+        variables: [NOMBRE, CURSO, HORA],
+        activo: true,
+        parametros: { minutosAntes: 30 },
+        canales: ['APP', 'WEB'],
+        plantilla: '{nombre}, tu clase de {curso} empieza a las {hora}.',
+    },
+    {
+        codigo: 'R14',
+        nombre: 'Curso aprobado',
+        descripcion: 'Avisa una sola vez cuando la persona aprueba el curso. Si hay calificación, el aviso la incluye.',
+        destinatario: 'La persona que lo aprobó',
+        seCierraCuando: 'Un aviso por curso aprobado.',
+        campos: [],
+        variables: [NOMBRE, CURSO, CALIFICACION],
+        activo: true,
+        parametros: {},
+        canales: ['APP', 'WEB'],
+        plantilla: '¡Felicidades, {nombre}! Aprobaste {curso}.',
+    },
+    {
         codigo: 'R9',
         nombre: 'Aprobación pendiente',
         descripcion: 'Recuerda una solicitud que sigue pendiente de aprobación.',
@@ -250,10 +278,11 @@ export function validarParametros(codigo: string, valor: unknown): { ok: true; p
     }
     const crudo = valor as Record<string, unknown>;
     const claves = Object.keys(crudo);
-    if (codigo === 'R10' || codigo === 'R11') {
+    if (codigo === 'R10' || codigo === 'R11' || codigo === 'R14') {
         if (claves.length) return { ok: false, message: 'Esta regla no lleva parámetros.' };
         return { ok: true, parametros: {} };
     }
+    if (codigo === 'R13') return soloEntero(crudo, claves, 'minutosAntes', 5, 120);
     if (codigo === 'R12') return soloEntero(crudo, claves, 'minutosAntes', 1, 180);
     if (codigo === 'R1' || codigo === 'R2') return soloEntero(crudo, claves, 'minutosDespues', 1, 240);
     if (codigo === 'R3') return soloHoraCorte(crudo, claves);

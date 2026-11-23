@@ -41,3 +41,26 @@ function esOle(b: Buffer) {
 }
 
 export const materialesSubfolder = (sessionId: number) => `cursos/sesiones/${sessionId}/materiales`;
+
+export const MIME_POR_EXTENSION: Record<string, string> = {
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+// inline + filename* UTF-8, para que el visor de la app conserve acentos y ñ
+export function disposicionInline(nombre: string): string {
+    const limpio = nombre.replace(/[\r\n]/g, ' ').trim() || 'material';
+    return `inline; filename*=UTF-8''${encodeURIComponent(limpio)}`;
+}

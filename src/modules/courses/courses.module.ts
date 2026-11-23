@@ -22,5 +22,6 @@ import { CourseMaterialsService } from './materials/course-materials.service';
   imports: [IntegrationsModule, MediaPathModule],
   controllers: [CoursesController, CourseContentController, CourseLearningController, CourseTrackingController, CourseNativeContentController, CourseScormController, CourseMaterialsController],
   providers: [CoursesService, CourseContentService, CourseLearningService, CourseTrackingService, CourseNativeContentService, CourseScormService, CourseMaterialsService, ConfigService, EncryptionService],
+  exports: [CourseLearningService, CourseMaterialsService, CourseScormService, EncryptionService],
 })
 export class CoursesModule { }

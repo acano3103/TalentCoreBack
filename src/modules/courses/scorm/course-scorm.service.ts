@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomBytes } from 'crypto';
 import { Response } from 'express';
 import * as fs from 'fs-extra';
@@ -12,8 +13,10 @@ import { CourseContentService } from '../content/course-content.service';
 import { CourseLearningService } from '../learning/course-learning.service';
 import { CourseTrackingService } from '../tracking/course-tracking.service';
 import { CommitScormDto } from './dto/commit-scorm.dto';
-import { joinPackagePath, parseScormManifest, ScormVersion } from './utils/scorm-manifest.util';
+import { parseScormManifest, ScormVersion } from './utils/scorm-manifest.util';
+import { resolvePackageFile, sendPackageFile } from './utils/scorm-package-file.util';
 import { readInteractions, readResult, sanitizeCmi, scormTimeToSeconds, secondsToScormTime } from './utils/scorm-cmi.util';
+import { avisarCursoAprobado } from '../avisar-aprobado';
 
 const CALIFICACION_APROBATORIA_DEFAULT = 70;
 const TAMANO_MAXIMO_ZIP = 200 * 1024 * 1024;
@@ -43,6 +46,15 @@ export interface ArchivoSubido {
     buffer: Buffer;
 }
 
+// Lo que va firmado en el token de lanzamiento de la app. Nunca incluye el JWT móvil.
+export interface ScormPlayClaims {
+    idParticipante: number;
+    idSesion: number;
+    idEmpresa: number;
+    idTenant: number;
+    idEmpleado: number;
+}
+
 // Cursos SCORM (1.2 y 2004): el admin sube el .zip, se descomprime en la carpeta de media del tenant
 // y el empleado lo toma en un iframe. El paquete se registra como 1 módulo con 1 lección para reutilizar
 // el avance, Mis cursos y el seguimiento de los cursos con IA / nativos.
@@ -52,6 +64,8 @@ export class CourseScormService {
     private readonly mediaRoot: string;
     // Carpeta del paquete por sesión, para no consultar la BD en cada archivo que pide el iframe
     private readonly cacheRutas = new Map<string, { ruta: string; expira: number }>();
+    // El WebView pide decenas de archivos; no se vuelve a validar al participante en cada uno.
+    private readonly cacheAccesoPlay = new Map<string, number>();
 
     constructor(
         private readonly prismaService: PrismaService,
@@ -60,6 +74,7 @@ export class CourseScormService {
         private readonly courseContentService: CourseContentService,
         private readonly courseLearningService: CourseLearningService,
         private readonly trackingService: CourseTrackingService,
+        @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
     ) {
         this.mediaRoot = resolve(this.configService.get<string>('MEDIA_ROOT_PATH') || join(process.cwd(), 'media'));
     }
@@ -294,24 +309,25 @@ export class CourseScormService {
 
     async sendFile(companyId: number, sessionId: number, filePath: string, user: ActiveUserDto, res: Response) {
         const idTenant = this.courseContentService.getTenantOrThrow(user);
+        // TODO(seguridad): cualquier usuario autenticado del tenant sigue pudiendo descargar el paquete.
+        // courses.controller.ts y CourseScormController solo usan JwtAuthGuard. ModulesGuard no está
+        // aplicado a cursos (el único uso está comentado en positions) y JwtStrategy no llena user.modulos,
+        // así que no hay una verificación de "administrar cursos" que se pueda reutilizar. Negar a quien no
+        // es participante rompería la vista previa del administrador (ScormPreviewModal). Cuando exista,
+        // permitir el archivo solo al participante de la sesión o a quien administra cursos.
         const carpeta = await this.getPackageFolder(companyId, sessionId, idTenant);
+        await this.deliver(carpeta, filePath, res, 'private, max-age=300');
+    }
 
-        let relativo: string;
-        try {
-            relativo = joinPackagePath(decodeURIComponent(filePath || ''));
-        } catch {
-            throw new NotFoundException('Archivo no encontrado.');
-        }
-        const absoluto = resolve(carpeta, ...relativo.split('/'));
-        if (!absoluto.startsWith(carpeta + sep) || !(await fs.pathExists(absoluto))) {
-            throw new NotFoundException('Archivo no encontrado.');
-        }
+    async sendSessionFile(companyId: number, sessionId: number, idTenant: number, filePath: string, res: Response, cacheControl: string) {
+        const carpeta = await this.getPackageFolder(companyId, sessionId, idTenant);
+        await this.deliver(carpeta, filePath, res, cacheControl);
+    }
 
-        await new Promise<void>((ok, fail) =>
-            res.sendFile(absoluto, { dotfiles: 'deny', headers: { 'Cache-Control': 'private, max-age=300' } }, (err) =>
-                err ? fail(err) : ok(),
-            ),
-        ).catch((err) => {
+    private async deliver(carpeta: string, filePath: string, res: Response, cacheControl: string) {
+        const absoluto = resolvePackageFile(carpeta, filePath);
+        if (!(await fs.pathExists(absoluto))) throw new NotFoundException('Archivo no encontrado.');
+        await sendPackageFile(absoluto, res, cacheControl).catch((err: Error) => {
             if (!res.headersSent) res.status(404).json({ success: false, statusCode: 404, message: 'Archivo no encontrado.' });
             this.logger.warn(`Error enviando ${absoluto}: ${err.message}`);
         });
@@ -340,6 +356,109 @@ export class CourseScormService {
     // Datos para lanzar el paquete y retomar donde se quedó
     async getLaunch(companyId: number, sessionId: number, user: ActiveUserDto) {
         const { participacion, idTenant, paquete, leccion } = await this.getScormParticipation(companyId, sessionId, user);
+        return this.composeLaunch(companyId, sessionId, participacion, idTenant, paquete, leccion, {
+            id: String(participacion.idEmpleado),
+            nombre: `${user.last_name}, ${user.first_name}`,
+        });
+    }
+
+    // El launcher de la app abre el paquete con el token, sin el JWT móvil. Si el participante no es de esta sesión, 401.
+    async openForPlay(claims: ScormPlayClaims) {
+        const participacion = await this.playParticipant(claims);
+        if (!participacion) {
+            throw new UnauthorizedException('La sesión del curso expiró. Vuelve a abrirlo desde la app.');
+        }
+        this.cacheAccesoPlay.set(this.clavePlay(claims), Date.now() + 60_000);
+        const contenido = await this.prismaService.cursoContenidos.findFirst({
+            where: { idSesion: claims.idSesion, idTenant: claims.idTenant, activo: true },
+            include: {
+                CursoPaquetesScorm: true,
+                CursoModulos: { orderBy: { orden: 'asc' }, include: { CursoLecciones: { orderBy: { orden: 'asc' } } } },
+            },
+        });
+        const leccion = contenido?.CursoModulos[0]?.CursoLecciones[0];
+        if (!contenido || contenido.tipoContenido !== 'scorm' || !contenido.CursoPaquetesScorm || !leccion) {
+            throw new NotFoundException('La sesión no tiene un paquete SCORM.');
+        }
+        const launch = await this.composeLaunch(
+            claims.idEmpresa,
+            claims.idSesion,
+            participacion,
+            claims.idTenant,
+            contenido.CursoPaquetesScorm,
+            leccion,
+            this.alumnoDe(participacion),
+        );
+        return { ...launch, archivoInicio: contenido.CursoPaquetesScorm.archivoInicio };
+    }
+
+    async assertPlayAccess(claims: ScormPlayClaims) {
+        const clave = this.clavePlay(claims);
+        const expira = this.cacheAccesoPlay.get(clave);
+        if (expira && expira > Date.now()) return;
+        const participacion = await this.playParticipant(claims);
+        if (!participacion) {
+            throw new UnauthorizedException('La sesión del curso expiró. Vuelve a abrirlo desde la app.');
+        }
+        this.cacheAccesoPlay.set(clave, Date.now() + 60_000);
+    }
+
+    private clavePlay(claims: ScormPlayClaims) {
+        return `${claims.idTenant}:${claims.idEmpresa}:${claims.idSesion}:${claims.idParticipante}:${claims.idEmpleado}`;
+    }
+
+    private sameTenant(cursoTenant: number | null | undefined, idTenant: number) {
+        return cursoTenant == null || cursoTenant === idTenant;
+    }
+
+    private async playParticipant(claims: ScormPlayClaims) {
+        const participacion = await this.prismaService.cursoParticipantes.findFirst({
+            where: {
+                idParticipante: claims.idParticipante,
+                idSesion: claims.idSesion,
+                idEmpleado: claims.idEmpleado,
+                CursoSesiones: { idEmpresa: claims.idEmpresa, modalidad: 'online_asincrono' },
+            },
+            include: {
+                CursoSesiones: {
+                    include: { CatCursos: { select: { idTenant: true, Descripcion: true, calificacionAprobatoria: true } } },
+                },
+                Empleados: {
+                    select: {
+                        nombre: true,
+                        primerApellido: true,
+                        auth_user: { select: { first_name: true, last_name: true } },
+                    },
+                },
+            },
+        });
+        if (!participacion || !this.sameTenant(participacion.CursoSesiones.CatCursos?.idTenant, claims.idTenant)) return null;
+        return participacion;
+    }
+
+    private alumnoDe(participacion: {
+        idEmpleado: number;
+        Empleados?: {
+            nombre: string | null;
+            primerApellido: string | null;
+            auth_user: { first_name: string; last_name: string } | null;
+        } | null;
+    }) {
+        const auth = participacion.Empleados?.auth_user;
+        if (auth) return { id: String(participacion.idEmpleado), nombre: `${auth.last_name}, ${auth.first_name}` };
+        const completo = [participacion.Empleados?.primerApellido, participacion.Empleados?.nombre].filter(Boolean).join(', ');
+        return { id: String(participacion.idEmpleado), nombre: completo || 'Alumno' };
+    }
+
+    private async composeLaunch(
+        companyId: number,
+        sessionId: number,
+        participacion: { idParticipante: number; idEmpleado: number; CursoSesiones: { estatus: string; fechaInicioPeriodo: Date; fechaFinPeriodo: Date | null } },
+        idTenant: number,
+        paquete: { version: string; archivoInicio: string },
+        leccion: { idLeccion: number; titulo: string },
+        alumno: { id: string; nombre: string },
+    ) {
         const { disponible, motivo } = this.courseLearningService.getAvailability(participacion.CursoSesiones);
         const progreso = await this.prismaService.cursoScormProgresos.findUnique({
             where: { idParticipante: participacion.idParticipante },
@@ -355,9 +474,9 @@ export class CourseScormService {
             urlInicio: `companies/${companyId}/courses/sessions/${sessionId}/scorm/files/${archivo}`,
             disponible,
             motivoNoDisponible: motivo,
-            alumno: { id: String(participacion.idEmpleado), nombre: `${user.last_name}, ${user.first_name}` },
+            alumno,
             estado: {
-                entrada: Object.keys(valores).length > 0 ? 'resume' : 'ab-initio',
+                entrada: (Object.keys(valores).length > 0 ? 'resume' : 'ab-initio') as 'resume' | 'ab-initio',
                 tiempoTotal: progreso?.tiempoTotal ?? null,
                 totalIntentos: progreso?.totalIntentos ?? 0,
                 valores,
@@ -367,7 +486,7 @@ export class CourseScormService {
 
     // El paquete guarda su avance (LMSCommit / Commit) y al cerrar (LMSFinish / Terminate) manda terminado = true
     async commit(companyId: number, sessionId: number, dto: CommitScormDto, user: ActiveUserDto) {
-        const { participacion, idTenant, paquete, leccion } = await this.getScormParticipation(companyId, sessionId, user);
+        const { participacion, idTenant, idEmpleado, paquete, leccion } = await this.getScormParticipation(companyId, sessionId, user);
         const sesion = participacion.CursoSesiones;
         const { disponible, motivo } = this.courseLearningService.getAvailability(sesion);
         if (!disponible) return { guardado: false, motivo };
@@ -502,6 +621,21 @@ export class CourseScormService {
             await this.trackingService.registerCourseEnd(tx, participante, ahora, { calificacionFinal, estatusAsignacion });
             return { terminado: true, estatusAsignacion, calificacionFinal };
         }, { timeout: 15000 });
+
+        try {
+            avisarCursoAprobado(this.eventos, {
+                idTenant,
+                idEmpresa: companyId,
+                idEmpleado,
+                idSesion: sessionId,
+                curso: sesion.CatCursos?.Descripcion?.trim() || 'curso',
+                calificacion: resultadoCurso.calificacionFinal,
+                anterior: participacion.estatusAsignacion,
+                nuevo: resultadoCurso.estatusAsignacion,
+            });
+        } catch {
+            // El avance ya quedó guardado.
+        }
 
         return {
             guardado: true,

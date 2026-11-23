@@ -139,6 +139,61 @@ export function evaluarR8(entrada: EntradaCurso & { diasAntes: number; cadaDias:
     return conIntentos({ ...entrada, referencia, links, variables });
 }
 
+/** Un aviso por clase, mientras el inicio cae dentro de los minutos previos. */
+export function evaluarR13(entrada: {
+    companyId: number;
+    idFechaClase: number;
+    curso: string;
+    inicio: Date;
+    cancelada: boolean;
+    minutosAntes: number;
+    zona: string;
+    previos: readonly Previo[];
+    ahora: Date;
+}): ResultadoRegla {
+    const referencia = `clase:${entrada.idFechaClase}`;
+    const links = enlaces(entrada.companyId, `/clases/${entrada.idFechaClase}`, { tipo: 'MIS_CLASES', id: entrada.idFechaClase });
+    const variables = { curso: entrada.curso, hora: horaDe(entrada.inicio, entrada.zona) };
+    if (entrada.cancelada || !Number.isFinite(entrada.inicio.getTime())) return cerrado(referencia, links, variables);
+    const falta = entrada.inicio.getTime() - entrada.ahora.getTime();
+    const dentro = falta > 0 && falta <= entrada.minutosAntes * 60_000;
+    if (!dentro) return omitir(referencia, links, variables);
+    return conIntentos({
+        previos: entrada.previos,
+        referencia,
+        cadaDias: 1,
+        maxIntentos: 1,
+        ahora: entrada.ahora,
+        links,
+        variables,
+    });
+}
+
+/** Un aviso al pasar a aprobado. La calificación viaja aparte si el cierre la dejó. */
+export function evaluarR14(entrada: {
+    companyId: number;
+    idSesion: number;
+    curso: string;
+    calificacion?: number | null;
+    previos: readonly Previo[];
+    ahora: Date;
+}): ResultadoRegla {
+    const referencia = `curso:${entrada.idSesion}:aprobado`;
+    const links = enlaces(entrada.companyId, `/cursos/${entrada.idSesion}`, { tipo: 'MI_CURSO', id: entrada.idSesion });
+    const calificacion = textoCalificacion(entrada.calificacion);
+    const variables: Record<string, string> = { curso: entrada.curso };
+    if (calificacion) variables.calificacion = calificacion;
+    return conIntentos({
+        previos: entrada.previos,
+        referencia,
+        cadaDias: 1,
+        maxIntentos: 1,
+        ahora: entrada.ahora,
+        links,
+        variables,
+    });
+}
+
 export function evaluarR9(entrada: EntradaPaso): ResultadoRegla {
     const referencia = `apr:${entrada.origen}:${entrada.idSolicitud}:paso${entrada.paso}`;
     const links = enlaces(entrada.companyId, '/aprobaciones', { tipo: 'APROBACIONES' });
@@ -410,6 +465,16 @@ function listaEquipo(nombres: readonly string[]): string {
     const limpios = nombres.map((nombre) => nombre.trim()).filter(Boolean);
     if (limpios.length <= 20) return limpios.join(', ');
     return `${limpios.slice(0, 20).join(', ')} y ${limpios.length - 20} más`;
+}
+
+function horaDe(instant: Date, zona: string): string {
+    if (!Number.isFinite(instant.getTime())) return '';
+    return hhmm(relojLocal(instant, zona).minutos);
+}
+
+function textoCalificacion(valor: number | null | undefined): string {
+    if (typeof valor !== 'number' || !Number.isFinite(valor)) return '';
+    return String(Math.round(valor * 100) / 100);
 }
 
 function hhmm(minutos: number): string {

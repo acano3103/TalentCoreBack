@@ -27,6 +27,8 @@ export const envValidationSchema = Joi.object({
     MAIL_PASS: Joi.string().required(),
     MAIL_FROM: Joi.string().required(),
     JWT_SECRET: Joi.string().required(),
+    // Token corto del launcher SCORM en la app. Si falta, se usa JWT_SECRET.
+    SCORM_PLAY_SECRET: Joi.string().optional().allow(''),
     ENCRYPTION_KEY: Joi.string().required(),
     FRONT_URL: Joi.string().required(),
     HUME_API_KEY: Joi.string().required(),

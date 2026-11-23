@@ -13,6 +13,8 @@ import {
     evaluarR9,
     evaluarR10,
     evaluarR11,
+    evaluarR13,
+    evaluarR14,
 } from './evaluar';
 
 const ZONA = 'America/Mexico_City';
@@ -133,6 +135,45 @@ describe('recordatorios R1–R12', () => {
         expect(evaluarR8({ ...base, diasAntes: 3, cadaDias: 1, maxIntentos: 5, diasRestantes: 10 }).accion).toBe('omitir');
         expect(evaluarR8({ ...base, estatus: 'completado', diasAntes: 3, cadaDias: 1, maxIntentos: 5, diasRestantes: 2 }).accion).toBe('cerrado');
         expect(evaluarR8({ ...base, diasAntes: 3, cadaDias: 1, maxIntentos: 5, diasRestantes: -1 }).referencia).toContain('atrasado');
+    });
+
+    it('R13 avisa una clase a 30 minutos, no la repite y omite la cancelada', () => {
+        const inicio = new Date(AHORA.getTime() + 30 * 60_000);
+        const base = {
+            companyId: 10,
+            idFechaClase: 21,
+            curso: 'seguridad',
+            inicio,
+            cancelada: false,
+            minutosAntes: 30,
+            zona: ZONA,
+            previos: [] as const,
+            ahora: AHORA,
+        };
+        const enviado = evaluarR13(base);
+        expect(enviado.accion).toBe('enviar');
+        expect(enviado.destino).toEqual({ tipo: 'MIS_CLASES', id: 21 });
+        expect(enviado.variables.hora).toMatch(/^\d{2}:\d{2}$/);
+        expect(evaluarR13({
+            ...base,
+            previos: [{ referencia: 'clase:21', intento: 1, enviadoEn: AHORA }],
+        }).accion).not.toBe('enviar');
+        expect(evaluarR13({ ...base, cancelada: true }).accion).toBe('cerrado');
+        expect(evaluarR13({ ...base, inicio: new Date(AHORA.getTime() + 31 * 60_000) }).accion).toBe('omitir');
+    });
+
+    it('R14 avisa el aprobado una sola vez y conserva la calificación', () => {
+        const base = { companyId: 10, idSesion: 8, curso: 'inducción', previos: [] as const, ahora: AHORA };
+        const enviado = evaluarR14({ ...base, calificacion: 95 });
+        expect(enviado.accion).toBe('enviar');
+        expect(enviado.destino).toEqual({ tipo: 'MI_CURSO', id: 8 });
+        expect(enviado.variables.calificacion).toBe('95');
+        expect(evaluarR14({
+            ...base,
+            calificacion: 95,
+            previos: [{ referencia: 'curso:8:aprobado', intento: 1, enviadoEn: new Date(AHORA.getTime() - 86_400_000) }],
+        }).accion).toBe('cerrado');
+        expect(evaluarR14(base).variables.calificacion).toBeUndefined();
     });
 
     it('R9 dispara el paso pendiente, se omite si acaba de avisar y se cierra al resolverlo', () => {

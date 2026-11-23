@@ -4,6 +4,7 @@ import { MobileDashboardModule } from './mobile-dashboard/mobile-dashboard.modul
 import { MobileAttendanceModule } from './mobile-attendance/mobile-attendance.module';
 import { MobileDevicesModule } from './mobile-devices/mobile-devices.module';
 import { MobileIncidentsModule } from './mobile-incidents/mobile-incidents.module';
+import { MobileTrainingModule } from './mobile-training/mobile-training.module';
 
 export const MOBILE_SUBMODULES = [
   MobileAuthModule,
@@ -11,6 +12,7 @@ export const MOBILE_SUBMODULES = [
   MobileDevicesModule,
   MobileAttendanceModule,
   MobileIncidentsModule,
+  MobileTrainingModule,
 ];
 
 @Module({
