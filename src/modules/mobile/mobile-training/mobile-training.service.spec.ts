@@ -730,7 +730,7 @@ describe('MobileTrainingService', () => {
             { valores: {}, terminado: true } as any,
             user,
         );
-        expect(cambiado?.gamificacion.nivelAntes).toBe(1);
+        expect((cambiado as unknown as { gamificacion: { nivelAntes: number } }).gamificacion.nivelAntes).toBe(1);
 
         scorm.commit.mockResolvedValue({
             guardado: true,
