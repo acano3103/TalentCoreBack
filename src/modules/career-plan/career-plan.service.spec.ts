@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CareerPlanService } from './career-plan.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { reiniciarAvisosUmbral } from './career-plan.avance';
 
 jest.mock('../../prisma/prisma.service', () => ({
   __esModule: true,
@@ -44,6 +45,19 @@ const activeUser = {
   last_name: 'Lopez',
 };
 
+function participacionCurso(
+  idSesion: number,
+  calificacionFinal: number | null,
+) {
+  return {
+    idParticipante: idSesion,
+    idSesion,
+    idEmpleado: 10,
+    estatusAsignacion: 'completado',
+    calificacionFinal,
+  };
+}
+
 function postulacion(overrides: Record<string, unknown> = {}) {
   return {
     idPlanCarrera: 1,
@@ -64,6 +78,7 @@ describe('CareerPlanService', () => {
   let mocks: ReturnType<typeof buildMockPrisma>['mocks'];
 
   beforeEach(async () => {
+    reiniciarAvisosUmbral();
     const built = buildMockPrisma();
     mocks = built.mocks;
 
@@ -106,9 +121,10 @@ describe('CareerPlanService', () => {
         { idSesion: 2, idCurso: 1001 },
       ]);
       mocks.configuracionEmpresa.findUnique.mockResolvedValue(null);
+      mocks.catCursos.findMany.mockResolvedValue([]);
     });
 
-    it('devuelve avance 0% sin participantes (umbral default 8)', async () => {
+    it('devuelve avance 0% sin participantes (umbral default 70)', async () => {
       mocks.cursoParticipantes.findMany.mockResolvedValue([]);
 
       const [result] = await service.findColaboradores(1);
@@ -128,7 +144,7 @@ describe('CareerPlanService', () => {
           idSesion: 1,
           idEmpleado: 10,
           estatusAsignacion: 'completado',
-          calificacionFinal: 9,
+          calificacionFinal: 90,
         },
       ]);
 
@@ -147,14 +163,14 @@ describe('CareerPlanService', () => {
           idSesion: 1,
           idEmpleado: 10,
           estatusAsignacion: 'completado',
-          calificacionFinal: 9,
+          calificacionFinal: 90,
         },
         {
           idParticipante: 2,
           idSesion: 2,
           idEmpleado: 10,
           estatusAsignacion: 'completado',
-          calificacionFinal: 9.5,
+          calificacionFinal: 95,
         },
       ]);
       mocks.planCarreraColaborador.update.mockResolvedValue({});
@@ -189,6 +205,78 @@ describe('CareerPlanService', () => {
 
       expect(result.cursosAprobados).toBe(0);
       expect(result.porcentajeAvance).toBe(0);
+    });
+
+    it('sin configurar aprueba desde 70 y no avisa', async () => {
+      const warn = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation(() => undefined);
+      mocks.cursoParticipantes.findMany.mockResolvedValue([
+        participacionCurso(1, 69),
+        participacionCurso(2, 70),
+      ]);
+
+      const [result] = await service.findColaboradores(1);
+
+      expect(result.cursosAprobados).toBe(1);
+      expect(result.porcentajeAvance).toBe(50);
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('interpreta un 8 configurado como 80 y avisa una sola vez', async () => {
+      const warn = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation(() => undefined);
+      mocks.configuracionEmpresa.findUnique.mockResolvedValue({
+        idEmpresa: 1,
+        clave: 'calificacion_aprobatoria',
+        valor: '8',
+      });
+      mocks.cursoParticipantes.findMany.mockResolvedValue([
+        participacionCurso(1, 79),
+        participacionCurso(2, 80),
+      ]);
+
+      const [primero] = await service.findColaboradores(1);
+      const [segundo] = await service.findColaboradores(1);
+      const { planes } = await service.findPlanesEmpleado(1, 10);
+
+      expect(primero.cursosAprobados).toBe(1);
+      expect(primero.porcentajeAvance).toBe(50);
+      expect(segundo.porcentajeAvance).toBe(50);
+      expect(planes[0].porcentaje).toBe(primero.porcentajeAvance);
+      expect(planes[0].aprobados).toBe(primero.cursosAprobados);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain(
+        'calificacion_aprobatoria=8',
+      );
+      warn.mockRestore();
+    });
+
+    it('respeta un umbral 85 en escala 0-100', async () => {
+      const warn = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation(() => undefined);
+      mocks.configuracionEmpresa.findUnique.mockResolvedValue({
+        idEmpresa: 1,
+        clave: 'calificacion_aprobatoria',
+        valor: '85',
+      });
+      mocks.cursoParticipantes.findMany.mockResolvedValue([
+        participacionCurso(1, 84),
+        participacionCurso(2, 85),
+      ]);
+
+      const [result] = await service.findColaboradores(1);
+      const { planes } = await service.findPlanesEmpleado(1, 10);
+
+      expect(result.cursosAprobados).toBe(1);
+      expect(result.porcentajeAvance).toBe(50);
+      expect(planes[0].porcentaje).toBe(50);
+      expect(planes[0].aprobados).toBe(1);
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
     });
 
     it('completado sin calificacion cuenta como aprobado', async () => {
@@ -226,14 +314,14 @@ describe('CareerPlanService', () => {
           idSesion: 1,
           idEmpleado: 10,
           estatusAsignacion: 'completado',
-          calificacionFinal: 9,
+          calificacionFinal: 90,
         },
         {
           idParticipante: 2,
           idSesion: 2,
           idEmpleado: 10,
           estatusAsignacion: 'completado',
-          calificacionFinal: 9,
+          calificacionFinal: 90,
         },
       ]);
 
@@ -246,6 +334,96 @@ describe('CareerPlanService', () => {
     it('devuelve [] cuando no hay rutas', async () => {
       mocks.relPuestoRuta.findMany.mockResolvedValue([]);
       await expect(service.findColaboradores(1)).resolves.toEqual([]);
+    });
+  });
+
+  describe('findPlanesEmpleado', () => {
+    it('devuelve planes vacíos cuando el empleado no tiene plan', async () => {
+      mocks.relPuestoRuta.findMany.mockResolvedValue([{ idRuta: 1 }]);
+      mocks.planCarreraColaborador.findMany.mockResolvedValue([]);
+
+      await expect(service.findPlanesEmpleado(1, 10)).resolves.toEqual({
+        planes: [],
+      });
+      await expect(service.resumenEmpleado(1, 10)).resolves.toBeNull();
+      await expect(service.contarRutasCompletas(1, 10)).resolves.toBe(0);
+    });
+
+    it('idSesion apunta a la sesión más reciente del empleado para el curso', async () => {
+      mocks.relPuestoRuta.findMany.mockResolvedValue([{ idRuta: 1 }]);
+      mocks.planCarreraColaborador.findMany.mockResolvedValue([postulacion()]);
+      mocks.planCarreraColaborador.update.mockResolvedValue({});
+      mocks.catPuestos.findMany.mockResolvedValue([
+        { idPuesto: 100, NombrePuesto: 'Analista' },
+        { idPuesto: 200, NombrePuesto: 'Líder' },
+      ]);
+      mocks.relPuestoCurso.findMany.mockResolvedValue([
+        { idPuesto: 200, idCurso: 1000, idTipoCurso: 3, activo: true },
+      ]);
+      mocks.catCursos.findMany.mockResolvedValue([
+        { idCursos: 1000, Descripcion: 'Liderazgo' },
+      ]);
+      mocks.cursoSesiones.findMany.mockResolvedValue([
+        {
+          idSesion: 9,
+          idCurso: 1000,
+          fechaInicioPeriodo: new Date('2026-01-01T00:00:00.000Z'),
+        },
+        {
+          idSesion: 2,
+          idCurso: 1000,
+          fechaInicioPeriodo: new Date('2026-06-01T00:00:00.000Z'),
+        },
+      ]);
+      mocks.cursoParticipantes.findMany.mockResolvedValue([
+        {
+          idParticipante: 1,
+          idSesion: 9,
+          idEmpleado: 10,
+          estatusAsignacion: 'completado',
+          calificacionFinal: 90,
+        },
+        {
+          idParticipante: 2,
+          idSesion: 2,
+          idEmpleado: 10,
+          estatusAsignacion: 'inscrito',
+          calificacionFinal: null,
+        },
+      ]);
+      mocks.configuracionEmpresa.findUnique.mockResolvedValue(null);
+
+      const { planes } = await service.findPlanesEmpleado(1, 10);
+
+      expect(planes).toHaveLength(1);
+      expect(planes[0]).toMatchObject({
+        idPlanCarrera: 1,
+        estatus: 'listo_para_ascenso',
+        puestoActual: 'Analista',
+        puestoObjetivo: 'Líder',
+        fechaInscripcion: '2026-01-01T00:00:00.000Z',
+        fechaPromocion: null,
+        porcentaje: 100,
+        aprobados: 1,
+        total: 1,
+      });
+      expect(planes[0].cursos[0]).toEqual({
+        idCurso: 1000,
+        nombre: 'Liderazgo',
+        estatus: 'completado',
+        calificacion: 90,
+        idSesion: 2,
+      });
+      expect(mocks.planCarreraColaborador.update).toHaveBeenCalledWith({
+        where: { idPlanCarrera: 1 },
+        data: { estatus: 'listo_para_ascenso' },
+      });
+      await expect(service.contarRutasCompletas(1, 10)).resolves.toBe(1);
+      await expect(service.resumenEmpleado(1, 10)).resolves.toEqual({
+        puestoObjetivo: 'Líder',
+        porcentaje: 100,
+        estatus: 'listo_para_ascenso',
+      });
     });
   });
 
@@ -378,7 +556,7 @@ describe('CareerPlanService', () => {
           idSesion: 1,
           idEmpleado: 10,
           estatusAsignacion: 'completado',
-          calificacionFinal: 9,
+          calificacionFinal: 90,
         },
       ]);
       mocks.configuracionEmpresa.findUnique.mockResolvedValue(null);
@@ -392,7 +570,7 @@ describe('CareerPlanService', () => {
         idCurso: 1000,
         descripcion: 'Liderazgo',
         estatus: 'completado',
-        calificacion: 9,
+        calificacion: 90,
         aprobado: true,
       });
       expect(result.cursos[1]).toMatchObject({

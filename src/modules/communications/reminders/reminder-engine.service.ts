@@ -19,11 +19,13 @@ import { SilencioEmpresa, Turno } from '../delivery/silencio';
 import { whatsappBloqueado } from '../delivery/tope-wa';
 import { WhatsAppCapService } from '../whatsapp-usage/whatsapp-cap.service';
 import {
+    COMMS_EVENTO_CURSO,
     COMMS_EVENTO_ESTATUS,
+    HechoCurso,
     HechoEstatus,
 } from 'src/common/events/comms-hechos';
-import { Previo, ResultadoRegla, evaluarR1, evaluarR10, evaluarR11, evaluarR12, evaluarR2, evaluarR3, evaluarR4, evaluarR5, evaluarR6, evaluarR7, evaluarR8, evaluarR9 } from './evaluar';
-import { CandidatoEnvio, aplicarPlantilla, canalesDeRecordatorio, planificarTope } from './entrega';
+import { Previo, ResultadoRegla, evaluarR1, evaluarR10, evaluarR11, evaluarR12, evaluarR13, evaluarR14, evaluarR2, evaluarR3, evaluarR4, evaluarR5, evaluarR6, evaluarR7, evaluarR8, evaluarR9 } from './evaluar';
+import { CandidatoEnvio, canalesDeRecordatorio, mensajeDePlantilla, planificarTope } from './entrega';
 import { CodigoRegla, REGLAS_DEFAULT, ReglaDefault } from './reglas-default';
 import { diasEntreFechas, mismoDia, relojLocal, zonaValida } from './zona-reloj';
 
@@ -113,6 +115,17 @@ export class ReminderEngineService {
         }
     }
 
+    /** R14 no espera al cron: el curso aprobado se evalúa al llegar el evento. */
+    @OnEvent(COMMS_EVENTO_CURSO)
+    async onCurso(hecho: HechoCurso): Promise<void> {
+        try {
+            if (!hechoAprobadoValido(hecho)) return;
+            await this.aprobadoInmediato(hecho);
+        } catch (error) {
+            this.logger.error(`No se pudo evaluar R14: ${mensajeError(error)}`);
+        }
+    }
+
     private async correr(fase: 'MINUTO' | 'HORA'): Promise<void> {
         const empresas = await this.prisma.catEmpresas.findMany({
             where: { activo: true, idTenant: { not: null } },
@@ -135,6 +148,7 @@ export class ReminderEngineService {
         if (fase === 'MINUTO') {
             candidatos.push(...(await this.asistencia(idEmpresa, idTenant, reglas, ['R1', 'R12'])));
             candidatos.push(...(await this.resumenJefes(idEmpresa, idTenant, reglas)));
+            candidatos.push(...(await this.clases(idEmpresa, idTenant, reglas)));
         } else {
             candidatos.push(...(await this.asistencia(idEmpresa, idTenant, reglas, ['R2'])));
             candidatos.push(...(await this.documentos(idEmpresa, idTenant, reglas)));
@@ -166,6 +180,76 @@ export class ReminderEngineService {
         if (!candidato) return;
         const contexto = await this.contextoEmpresa(hecho.idEmpresa);
         await this.entregar(hecho.idEmpresa, hecho.idTenant, [candidato], contexto);
+    }
+
+    private async aprobadoInmediato(hecho: HechoCurso): Promise<void> {
+        const reglas = await this.reglas(hecho.idTenant, hecho.idEmpresa);
+        const regla = reglas.find((item) => item.codigo === 'R14');
+        if (!regla?.activo) return;
+        const personas = await this.personas(hecho.idEmpresa, [hecho.idEmpleado], this.ahora());
+        const persona = personas.get(hecho.idEmpleado);
+        if (!persona || persona.idTenant !== hecho.idTenant || !aplica(regla, persona)) return;
+        const historial = await this.historial(hecho.idEmpresa, [hecho.idEmpleado]);
+        const resultado = evaluarR14({
+            companyId: hecho.idEmpresa,
+            idSesion: hecho.idSesion,
+            curso: hecho.curso,
+            calificacion: hecho.calificacion,
+            previos: previosDe(historial, hecho.idEmpleado, 'R14'),
+            ahora: this.ahora(),
+        });
+        const candidato = this.candidato(persona, regla, resultado);
+        if (!candidato) return;
+        const contexto = await this.contextoEmpresa(hecho.idEmpresa);
+        await this.entregar(hecho.idEmpresa, hecho.idTenant, [candidato], contexto);
+    }
+
+    /** R13: un aviso por inscrito cuando la clase no cancelada empieza dentro de minutosAntes. */
+    private async clases(idEmpresa: number, idTenant: number, reglas: ReglaViva[]): Promise<CandidatoEnvio[]> {
+        const regla = reglas.find((item) => item.codigo === 'R13');
+        if (!regla?.activo) return [];
+        const ahora = this.ahora();
+        const minutosAntes = numero(regla.parametros, 'minutosAntes', 30);
+        const hasta = new Date(ahora.getTime() + minutosAntes * 60_000);
+        const filas = await this.prisma.cursoFechasClase.findMany({
+            where: {
+                fechaHoraInicio: { gt: ahora, lte: hasta },
+                OR: [{ estatus: null }, { estatus: { not: 'cancelada' } }],
+                CursoSesiones: { idEmpresa, estatus: { not: 'cancelado' } },
+            },
+            include: {
+                CursoSesiones: {
+                    select: {
+                        CatCursos: { select: { Descripcion: true } },
+                        CursoParticipantes: { select: { idEmpleado: true } },
+                    },
+                },
+            },
+            take: 1000,
+        });
+        const ids = filas.flatMap((fila) => fila.CursoSesiones.CursoParticipantes.map((participante) => participante.idEmpleado));
+        const personas = await this.personas(idEmpresa, ids, ahora);
+        const historial = await this.historial(idEmpresa, [...personas.keys()]);
+        const salida: CandidatoEnvio[] = [];
+        for (const fila of filas) {
+            const curso = fila.CursoSesiones.CatCursos?.Descripcion?.trim() || 'curso';
+            for (const participante of fila.CursoSesiones.CursoParticipantes) {
+                const persona = personas.get(participante.idEmpleado);
+                if (!persona || persona.idTenant !== idTenant || !aplica(regla, persona)) continue;
+                this.empujar(salida, persona, regla, evaluarR13({
+                    companyId: idEmpresa,
+                    idFechaClase: fila.idFechaClase,
+                    curso,
+                    inicio: fila.fechaHoraInicio,
+                    cancelada: fila.estatus === 'cancelada',
+                    minutosAntes,
+                    zona: persona.zona,
+                    previos: previosDe(historial, persona.idEmpleado, 'R13'),
+                    ahora,
+                }));
+            }
+        }
+        return salida;
     }
 
     private async asistencia(idEmpresa: number, idTenant: number, reglas: ReglaViva[], codigos: CodigoRegla[]): Promise<CandidatoEnvio[]> {
@@ -940,7 +1024,7 @@ export class ReminderEngineService {
             referencia: resultado.referencia,
             intento: resultado.intento,
             titulo: regla.codigo === 'R11' && resultado.variables.solicitud ? resultado.variables.solicitud : regla.nombre,
-            mensaje: aplicarPlantilla(regla.plantilla, { nombre: persona.nombre, ...resultado.variables }),
+            mensaje: mensajeDePlantilla(regla.plantilla, { nombre: persona.nombre, ...resultado.variables }),
             deepLink: resultado.deepLink,
             deepLinkApp: resultado.deepLinkApp,
             destino: resultado.destino,
@@ -950,7 +1034,7 @@ export class ReminderEngineService {
             zona: persona.zona,
             fechaLocal: persona.fechaLocal,
             idDestinatario,
-            inmediato: regla.codigo === 'R1' || regla.codigo === 'R2' || regla.codigo === 'R3' || regla.codigo === 'R12' || regla.codigo === 'R10',
+            inmediato: regla.codigo === 'R1' || regla.codigo === 'R2' || regla.codigo === 'R3' || regla.codigo === 'R12' || regla.codigo === 'R10' || regla.codigo === 'R13' || regla.codigo === 'R14',
         };
     }
 
@@ -1064,6 +1148,13 @@ function listaIds(valor: unknown): number[] | null {
 function minutosHora(valor: Date | null): number | null {
     if (!valor || Number.isNaN(valor.getTime())) return null;
     return valor.getUTCHours() * 60 + valor.getUTCMinutes();
+}
+
+function hechoAprobadoValido(hecho: HechoCurso): boolean {
+    if (!hecho || hecho.tipo !== 'APROBADO') return false;
+    if (![hecho.idEmpresa, hecho.idTenant, hecho.idEmpleado, hecho.idSesion].every((id) => Number.isInteger(id) && id > 0)) return false;
+    if (typeof hecho.curso !== 'string' || !hecho.curso.trim()) return false;
+    return hecho.calificacion == null || (typeof hecho.calificacion === 'number' && Number.isFinite(hecho.calificacion));
 }
 
 function hechoValido(hecho: HechoEstatus): boolean {

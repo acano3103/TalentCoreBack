@@ -20,7 +20,7 @@ export interface HechoEmpleado {
 }
 
 export type TipoDocumento = 'FALTANTE' | 'POR_VENCER' | 'RECHAZADO';
-export type TipoCurso = 'ASIGNADO' | 'POR_VENCER' | 'ATRASADO';
+export type TipoCurso = 'ASIGNADO' | 'POR_VENCER' | 'ATRASADO' | 'APROBADO';
 export type OrigenSolicitud = 'INCIDENCIA' | 'VACACION' | 'PERMISO' | 'MOVIMIENTO_INTERNO';
 
 export interface HechoDocumento {
@@ -41,6 +41,8 @@ export interface HechoCurso {
     idSesion: number;
     curso: string;
     fechaLimite?: string | null;
+    /** Presente en APROBADO cuando el cierre dejó calificación. */
+    calificacion?: number | null;
 }
 
 export interface HechoAprobacion {

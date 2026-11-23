@@ -21,6 +21,7 @@ describe('ReminderEngineService', () => {
         comReglasRecordatorio: { findMany: reglas },
         comConfigEmpresa: { findUnique: config },
         comRecordatoriosEnviados: { findMany: enviados, create: crearEnviado },
+        cursoFechasClase: { findMany: jest.fn().mockResolvedValue([]) },
         $queryRaw: queryRaw,
     };
     const canales = { forEmployees: jest.fn() };
@@ -85,6 +86,55 @@ describe('ReminderEngineService', () => {
             data: expect.objectContaining({ idEmpleado: 1, Codigo: 'R1' }),
         }));
     });
+
+    it('avisa una clase a 30 minutos una sola vez y omite la cancelada', async () => {
+        const guardados: { idEmpleado: number; Codigo: string; Referencia: string; Intento: number; EnviadoEn: Date }[] = [];
+        crearEnviado.mockImplementation(async ({ data }: { data: typeof guardados[number] }) => {
+            guardados.push(data);
+            return {};
+        });
+        enviados.mockImplementation(async () => guardados);
+        const ahora = service.ahora();
+        prisma.cursoFechasClase.findMany.mockResolvedValue([
+            clase(21, new Date(ahora.getTime() + 30 * 60_000), 'programada'),
+            clase(22, new Date(ahora.getTime() + 30 * 60_000), 'cancelada'),
+        ]);
+
+        await service.tickMinuto();
+        await service.tickMinuto();
+
+        const avisos = dispatchComms.mock.calls.filter((llamada) => llamada[1].codigoRegla === 'R13');
+        expect(avisos).toHaveLength(1);
+        expect(avisos[0][1].destino).toEqual({ tipo: 'MIS_CLASES', id: 21 });
+        expect(avisos[0][1].mensaje).toContain('tu clase de Seguridad empieza a las');
+        expect(avisos[0][1].push.data.deepLinkApp).toContain('clases/21');
+    });
+
+    it('aprobar un curso avisa una sola vez aunque el hecho se repita', async () => {
+        const guardados: { idEmpleado: number; Codigo: string; Referencia: string; Intento: number; EnviadoEn: Date }[] = [];
+        crearEnviado.mockImplementation(async ({ data }: { data: typeof guardados[number] }) => {
+            guardados.push(data);
+            return {};
+        });
+        enviados.mockImplementation(async () => guardados);
+        const hecho = {
+            tipo: 'APROBADO' as const,
+            idTenant: 3,
+            idEmpresa: 10,
+            idEmpleado: 1,
+            idSesion: 8,
+            curso: 'Inducción',
+            calificacion: 95,
+        };
+
+        await service.onCurso(hecho);
+        await service.onCurso(hecho);
+
+        const avisos = dispatchComms.mock.calls.filter((llamada) => llamada[1].codigoRegla === 'R14');
+        expect(avisos).toHaveLength(1);
+        expect(avisos[0][1].destino).toEqual({ tipo: 'MI_CURSO', id: 8 });
+        expect(avisos[0][1].mensaje).toBe('¡Felicidades, Ana López! Aprobaste Inducción. Calificación: 95.');
+    });
 });
 
 function persona(idEmpleado: number, idSite: number, idUsuario: string) {
@@ -102,6 +152,18 @@ function persona(idEmpleado: number, idSite: number, idUsuario: string) {
         correo: null,
         idJefeInmediato: null,
         CatPuestos: null,
+    };
+}
+
+function clase(idFechaClase: number, fechaHoraInicio: Date, estatus: string) {
+    return {
+        idFechaClase,
+        fechaHoraInicio,
+        estatus,
+        CursoSesiones: {
+            CatCursos: { Descripcion: 'Seguridad' },
+            CursoParticipantes: [{ idEmpleado: 1 }],
+        },
     };
 }
 

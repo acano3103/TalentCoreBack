@@ -2544,6 +2544,29 @@ model CursoScormProgresos {
   @@index([idTenant], map: "idx_scorm_progreso_tenant")
 }
 
+model CursoLogrosEmpleado {
+  idLogro        Int       @id @default(autoincrement())
+  idTenant       Int
+  idEmpresa      Int
+  idEmpleado     Int
+  codigo         String    @db.VarChar(40)
+  fechaObtencion DateTime  @db.DateTime(0)
+  vistoEn        DateTime? @db.DateTime(0)
+
+  @@unique([idEmpleado, codigo], map: "uk_logro_empleado")
+  @@index([idTenant], map: "idx_logro_tenant")
+}
+
+model CursoTiempoDiario {
+  idParticipante Int
+  fecha          DateTime @db.Date
+  idTenant       Int
+  segundos       Int      @default(0)
+
+  @@id([idParticipante, fecha])
+  @@index([idTenant], map: "idx_tiempo_tenant")
+}
+
 model SolicitudesIncidencias {
   idSolicitud                                                         Int                              @id @default(autoincrement())
   idTenant                                                            Int
@@ -3373,6 +3396,7 @@ enum CursoAsistencias_metodoRegistro {
   qr_autoatendido
   manual_instructor
   link_web
+  app_movil
 }
 
 enum CursoSesiones_tipoInstructor {

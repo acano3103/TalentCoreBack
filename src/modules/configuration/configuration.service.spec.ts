@@ -1,5 +1,8 @@
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { reiniciarAvisosUmbral } from '../career-plan/career-plan.avance';
 import { ConfigurationService } from './configuration.service';
+import { UpdateTrainingSettingsDto } from './dto/update-training-settings.dto';
 
 jest.mock('../../prisma/prisma.service', () => ({
   __esModule: true,
@@ -16,6 +19,7 @@ describe('ConfigurationService', () => {
   };
 
   beforeEach(async () => {
+    reiniciarAvisosUmbral();
     configuracionEmpresa = {
       findUnique: jest.fn(),
       upsert: jest.fn(),
@@ -32,10 +36,10 @@ describe('ConfigurationService', () => {
   });
 
   describe('getTrainingSettings', () => {
-    it('devuelve umbral default 8 cuando no existe configuracion', async () => {
+    it('devuelve umbral default 70 cuando no existe configuracion', async () => {
       configuracionEmpresa.findUnique.mockResolvedValue(null);
       await expect(service.getTrainingSettings(1)).resolves.toEqual({
-        calificacionAprobatoria: 8,
+        calificacionAprobatoria: 70,
       });
     });
 
@@ -50,15 +54,38 @@ describe('ConfigurationService', () => {
       });
     });
 
-    it('devuelve 8 ante un valor no numerico', async () => {
+    it('devuelve 70 ante un valor no numerico', async () => {
       configuracionEmpresa.findUnique.mockResolvedValue({
         idEmpresa: 1,
         clave: 'calificacion_aprobatoria',
         valor: 'abc',
       });
       await expect(service.getTrainingSettings(1)).resolves.toEqual({
-        calificacionAprobatoria: 8,
+        calificacionAprobatoria: 70,
       });
+    });
+
+    it('interpreta un 8 guardado como 80 y avisa una sola vez', async () => {
+      const warn = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation(() => undefined);
+      configuracionEmpresa.findUnique.mockResolvedValue({
+        idEmpresa: 1,
+        clave: 'calificacion_aprobatoria',
+        valor: '8',
+      });
+
+      await expect(service.getTrainingSettings(1)).resolves.toEqual({
+        calificacionAprobatoria: 80,
+      });
+      await expect(service.getTrainingSettings(1)).resolves.toEqual({
+        calificacionAprobatoria: 80,
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain(
+        'calificacion_aprobatoria=8',
+      );
+      warn.mockRestore();
     });
   });
 
@@ -76,12 +103,12 @@ describe('ConfigurationService', () => {
       configuracionEmpresa.findUnique.mockResolvedValue({
         idEmpresa: 1,
         clave: 'calificacion_aprobatoria',
-        valor: '9',
+        valor: '85',
       });
 
       const result = await service.updateTrainingSettings(
         1,
-        { calificacionAprobatoria: 9 },
+        { calificacionAprobatoria: 85 },
         activeUser as never,
       );
 
@@ -92,12 +119,53 @@ describe('ConfigurationService', () => {
         create: expect.objectContaining({
           idEmpresa: 1,
           clave: 'calificacion_aprobatoria',
-          valor: '9',
+          valor: '85',
           activo: true,
         }),
-        update: expect.objectContaining({ valor: '9' }),
+        update: expect.objectContaining({ valor: '85' }),
       });
-      expect(result.calificacionAprobatoria).toBe(9);
+      expect(result.calificacionAprobatoria).toBe(85);
+    });
+  });
+
+  describe('UpdateTrainingSettingsDto', () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+
+    it('acepta de 0 a 100 y rechaza lo que queda fuera', async () => {
+      await expect(
+        pipe.transform(
+          { calificacionAprobatoria: 0 },
+          { type: 'body', metatype: UpdateTrainingSettingsDto },
+        ),
+      ).resolves.toEqual({ calificacionAprobatoria: 0 });
+      await expect(
+        pipe.transform(
+          { calificacionAprobatoria: 70 },
+          { type: 'body', metatype: UpdateTrainingSettingsDto },
+        ),
+      ).resolves.toEqual({ calificacionAprobatoria: 70 });
+      await expect(
+        pipe.transform(
+          { calificacionAprobatoria: 100 },
+          { type: 'body', metatype: UpdateTrainingSettingsDto },
+        ),
+      ).resolves.toEqual({ calificacionAprobatoria: 100 });
+      await expect(
+        pipe.transform(
+          { calificacionAprobatoria: 101 },
+          { type: 'body', metatype: UpdateTrainingSettingsDto },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        pipe.transform(
+          { calificacionAprobatoria: -1 },
+          { type: 'body', metatype: UpdateTrainingSettingsDto },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

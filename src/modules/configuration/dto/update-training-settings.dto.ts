@@ -3,8 +3,9 @@ import { IsInt, Max, Min } from 'class-validator';
 
 export class UpdateTrainingSettingsDto {
   @ApiProperty({
-    description: 'Calificación mínima aprobatoria de cursos (0-100)',
-    example: 8,
+    description:
+      'Calificación mínima aprobatoria (0-100). Un valor de 10 o menos se lee como la escala antigua 0-10.',
+    example: 70,
     minimum: 0,
     maximum: 100,
   })

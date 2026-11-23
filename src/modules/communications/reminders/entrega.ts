@@ -40,6 +40,14 @@ export function aplicarPlantilla(plantilla: string, variables: Record<string, st
     return plantilla.replace(/\{([a-zA-Z0-9_]+)\}/g, (token, clave: string) => variables[clave.toLowerCase()] ?? token);
 }
 
+/** Si la plantilla no coloca `{calificacion}` y el cierre dejó una, se agrega al final. */
+export function mensajeDePlantilla(plantilla: string, variables: Record<string, string>): string {
+    const mensaje = aplicarPlantilla(plantilla, variables);
+    const calificacion = variables.calificacion?.trim();
+    if (!calificacion || /\{calificacion\}/i.test(plantilla)) return mensaje;
+    return `${mensaje} Calificación: ${calificacion}.`;
+}
+
 /**
  * Los primeros N del día salen uno por uno. El resto se junta en «Tienes N pendientes».
  * N cuenta también los que ya se habían agrupado hoy.

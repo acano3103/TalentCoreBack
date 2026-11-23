@@ -60,7 +60,7 @@ export class CourseLearningController {
     @Post(':sessionId/lessons/:lessonId/progress')
     @ApiOperation({ summary: 'Complete a lesson: grades the quiz on the server and saves progress', description: SWAGGER_AUTH_DESCRIPTION })
     @ApiResponse({ status: 201, description: 'Progress saved' })
-    @ApiResponse({ status: 400, description: 'Invalid answers, lesson locked or course not available' })
+    @ApiResponse({ status: 400, description: 'Invalid answers, lesson locked, course not available or video not finished (VIDEO_PENDIENTE)' })
     @ApiResponse({ status: 404, description: 'Course or lesson not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     submitProgress(
@@ -73,11 +73,11 @@ export class CourseLearningController {
         return this.courseLearningService.submitLessonProgress(companyId, sessionId, lessonId, submitLessonProgressDto, activeUser);
     }
 
-    // Endpoint para registrar actividad del empleado (abrir lección o latido cada 60 s) para el seguimiento
+    // Endpoint para registrar actividad del empleado (abrir lección, latido cada 60 s o video_progreso) para el seguimiento
     @Post(':sessionId/activity')
-    @ApiOperation({ summary: 'Register employee activity in the course (open lesson or heartbeat) for tracking', description: SWAGGER_AUTH_DESCRIPTION })
-    @ApiResponse({ status: 201, description: 'Activity registered' })
-    @ApiResponse({ status: 400, description: 'Invalid activity or lesson locked' })
+    @ApiOperation({ summary: 'Register employee activity in the course (open lesson, heartbeat or video_progreso) for tracking', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 201, description: 'Activity registered. video_progreso marks the video as watched at 90%.' })
+    @ApiResponse({ status: 400, description: 'Invalid activity, lesson locked or video progress out of range' })
     @ApiResponse({ status: 404, description: 'Course or lesson not found' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     registerActivity(

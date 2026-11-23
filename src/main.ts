@@ -75,6 +75,10 @@ async function bootstrap() {
         tags: ['Mobile Auth', 'Mobile Dashboard', 'Mobile Attendance', 'Mobile Devices', 'Mobile Incidents', 'Mobile Comms'],
       },
       {
+        name: 'Mobile Training',
+        tags: ['Mobile Training'],
+      },
+      {
         name: 'Web App',
         tags: ['Users', 'Employees', 'Employees Schedules', 'Attendance Dashboard', 'Work Shifts', 'Logbook', 'Incidents', 'Vacations', 'Permissions'],
       },

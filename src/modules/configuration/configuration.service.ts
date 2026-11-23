@@ -1,14 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CALIFICACION_APROBATORIA } from '../career-plan/career-plan.constants';
+import { resolverUmbralAprobatorio } from '../career-plan/career-plan.avance';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { UpdateTrainingSettingsDto } from './dto/update-training-settings.dto';
 
 @Injectable()
 export class ConfigurationService {
+  private readonly logger = new Logger(ConfigurationService.name);
+
   constructor(private prismaService: PrismaService) {}
 
-  // Obtiene los ajustes de capacitacion (umbral aprobatorio dinamico por empresa)
+  // Umbral efectivo (0-100). Sin configurar es 70; un valor <= 10 se lee como escala 0-10.
   async getTrainingSettings(companyId: number) {
     const config = await this.prismaService.configuracionEmpresa.findUnique({
       where: {
@@ -19,9 +22,12 @@ export class ConfigurationService {
       },
     });
 
-    const umbral = Number(config?.valor ?? 8);
     return {
-      calificacionAprobatoria: Number.isFinite(umbral) ? umbral : 8,
+      calificacionAprobatoria: resolverUmbralAprobatorio(
+        config?.valor,
+        companyId,
+        this.logger,
+      ),
     };
   }
 

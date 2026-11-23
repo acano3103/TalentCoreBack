@@ -1,10 +1,17 @@
-/** Destino lógico para web y app. DeepLink se conserva con la ruta anterior. */
+/**
+ * Destino lógico para web y app. DeepLink se conserva con la ruta anterior.
+ * El push lo repite en `data.destino` como JSON `{ tipo, id? }`.
+ *
+ * Contrato de la app: `MI_CURSO` abre el curso (`id` = idSesion).
+ * `MIS_CLASES` abre la clase (`id` = idFechaClase).
+ */
 
 export const TIPOS_DESTINO = [
     'CHECADOR',
     'MIS_ASISTENCIAS',
     'MI_EXPEDIENTE',
     'MI_CURSO',
+    'MIS_CLASES',
     'APROBACIONES',
     'MI_SOLICITUD',
     'MI_COMUNICADO',

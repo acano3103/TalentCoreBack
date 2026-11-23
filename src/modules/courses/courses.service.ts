@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { COMMS_EVENTO_CURSO, emitirHecho } from 'src/common/events/comms-hechos';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -10,6 +10,7 @@ import { CreateCourseSessionDto } from './dto/create-course-session.dto';
 import { AssignParticipantsDto } from './dto/assign-participants.dto';
 import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from 'src/common/utils/encryption.util';
+import { estadoPaginaPublica, ventanaAsistencia } from './attendance/ventana-asistencia';
 import { RegisterAttendanceDto } from './dto/register-attendance.dto';
 
 @Injectable()
@@ -842,28 +843,15 @@ export class CoursesService {
         };
       });
 
-    const now = new Date();
-    const startTime = new Date(clase.fechaHoraInicio);
-    const endTime = new Date(clase.fechaHoraFin);
-
-    // Margen de tolerancia (15 minutos antes por defecto o la tolerancia configurada en la sesión)
-    const toleranceMinutes = clase.CursoSesiones.minutosToleranciaQr || 15;
-    const allowedStartTime = new Date(startTime.getTime() - toleranceMinutes * 60000);
-
-    let status: 'active' | 'not_started' | 'finished' = 'active';
-    let message = 'Pase de lista abierto.';
-
-    if (now < allowedStartTime) {
-      status = 'not_started';
-      message = `El pase de lista estará disponible ${toleranceMinutes} minutos antes del inicio (${startTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}).`;
-    } else if (now > endTime) {
-      status = 'finished';
-      message = `La clase finalizó a las ${endTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}.`;
-    }
+    const ventana = ventanaAsistencia({
+      fechaHoraInicio: clase.fechaHoraInicio,
+      fechaHoraFin: clase.fechaHoraFin,
+      minutosToleranciaQr: clase.CursoSesiones.minutosToleranciaQr,
+    });
 
     return {
-      status,
-      message,
+      status: estadoPaginaPublica(ventana.estado),
+      message: ventana.mensaje,
       curso: {
         nombreCurso: clase.CursoSesiones.CatCursos.Descripcion,
         tituloClase: clase.tituloClase,
@@ -889,10 +877,22 @@ export class CoursesService {
 
     const clase = await this.prismaService.cursoFechasClase.findUnique({
       where: { idFechaClase: Number(decryptedClassId) },
+      include: {
+        CursoSesiones: { select: { minutosToleranciaQr: true } },
+      },
     });
 
     if (!clase) {
       throw new NotFoundException('Clase no encontrada.');
+    }
+
+    const ventana = ventanaAsistencia({
+      fechaHoraInicio: clase.fechaHoraInicio,
+      fechaHoraFin: clase.fechaHoraFin,
+      minutosToleranciaQr: clase.CursoSesiones?.minutosToleranciaQr,
+    });
+    if (ventana.estado !== 'abierta') {
+      throw new ConflictException(ventana.mensaje);
     }
 
     // Registrar o actualizar el registro de asistencia usando el índice compuesto de Prisma

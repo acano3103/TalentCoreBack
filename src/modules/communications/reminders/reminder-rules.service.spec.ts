@@ -71,6 +71,19 @@ describe('ReminderRulesService', () => {
         expect(r1?.variables.map((variable) => variable.token)).toEqual(['{nombre}', '{hora_entrada}']);
         expect(respuesta.reglas.find((regla) => regla.codigo === 'R3')?.campos[0]).toMatchObject({ clave: 'horaCorte', tipo: 'hora' });
         expect(respuesta.reglas.find((regla) => regla.codigo === 'R12')?.campos[0].clave).toBe('minutosAntes');
+        const codigos = respuesta.reglas.map((regla) => regla.codigo);
+        expect(codigos.indexOf('R13')).toBe(codigos.indexOf('R8') + 1);
+        expect(codigos.indexOf('R14')).toBe(codigos.indexOf('R13') + 1);
+        expect(respuesta.reglas.find((regla) => regla.codigo === 'R13')).toMatchObject({
+            nombre: 'Clase por iniciar',
+            activo: true,
+            plantilla: '{nombre}, tu clase de {curso} empieza a las {hora}.',
+        });
+        expect(respuesta.reglas.find((regla) => regla.codigo === 'R14')).toMatchObject({
+            nombre: 'Curso aprobado',
+            activo: true,
+            descripcion: expect.stringContaining('calificación'),
+        });
     });
 
     it('el catálogo rechaza llaves ajenas y variables que el motor no sustituye', () => {
