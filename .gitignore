@@ -63,3 +63,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Reportes locales del script de evidencias
 /scripts/logs/
+
+# Archivos de comunicados guardados antes de usar MEDIA_ROOT_PATH
+/comms-media
