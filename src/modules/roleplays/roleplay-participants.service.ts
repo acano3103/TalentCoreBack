@@ -1,15 +1,62 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { AssignRoleplayParticipantsDto } from './dto/assign-roleplay-participants.dto';
 import { UpdateRoleplayParticipantDto } from './dto/update-roleplay-participant.dto';
 import { EstatusRoleplay, resumirIntentos } from './roleplay-progress.util';
+import { ExportRoleplayParticipantsDto } from './dto/export-roleplay-participants.dto';
+
+const ESTATUS_TEXTO: Record<EstatusRoleplay, string> = {
+    pendiente: 'Pendiente',
+    en_progreso: 'En progreso',
+    aprobado: 'Aprobado',
+    vencido: 'Vencido',
+    sin_intentos: 'Sin intentos',
+};
 
 @Injectable()
 export class RoleplayParticipantsService {
     private readonly logger = new Logger(RoleplayParticipantsService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
+
+    // Excel con los mismos filtros de la pestaña (búsqueda y estatus)
+    async export(companyId: number, roleplayId: number, filtros: ExportRoleplayParticipantsDto, user: ActiveUserDto) {
+        const { roleplay, participantes } = await this.findAll(companyId, roleplayId, user);
+        const busqueda = this.normalizar(filtros.search ?? '');
+        type Fila = (typeof participantes)[number];
+        const filas = participantes.filter(
+            (p) =>
+                (!filtros.estatus || p.estatus === filtros.estatus) &&
+                (!busqueda || this.normalizar(`${p.empleado} ${p.numeroEmpleado ?? ''}`).includes(busqueda)),
+        );
+
+        const fecha = (d: Date | null) =>
+            d ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(d) : '';
+        const pct = (v: number | null) => (v === null ? '' : v);
+
+        const columns: ExcelColumn<Fila>[] = [
+            { header: 'No. empleado', key: 'numeroEmpleado', width: 14, value: (r) => r.numeroEmpleado ?? '' },
+            { header: 'Empleado', key: 'empleado', width: 34 },
+            { header: 'Estatus', key: 'estatus', width: 14, value: (r) => ESTATUS_TEXTO[r.estatus] },
+            { header: 'Intentos', key: 'intentos', width: 10 },
+            { header: 'Intentos máximos', key: 'intentosMaximos', width: 16, value: (r) => r.intentosMaximos ?? 'Sin límite' },
+            { header: 'Mejor calificación (%)', key: 'mejorCalificacion', width: 20, value: (r) => pct(r.mejorCalificacion) },
+            { header: 'Última calificación (%)', key: 'ultimaCalificacion', width: 20, value: (r) => pct(r.ultimaCalificacion) },
+            { header: 'Calificación mínima (%)', key: 'minima', width: 20, value: () => roleplay.CalificacionMinima ?? 'Sin mínima' },
+            { header: 'Fecha de asignación', key: 'fechaAsignacion', width: 18, value: (r) => fecha(r.fechaAsignacion) },
+            { header: 'Fecha límite', key: 'fechaLimite', width: 14, value: (r) => fecha(r.fechaLimite) },
+            { header: 'Último intento', key: 'ultimoIntento', width: 14, value: (r) => fecha(r.ultimoIntento) },
+            { header: 'Acceso al sistema', key: 'tieneUsuario', width: 16, value: (r) => (r.tieneUsuario ? 'Sí' : 'No') },
+        ];
+
+        const buffer = await this.excelExportService.generate({ sheetName: 'Participantes', columns, rows: filas });
+        return { buffer, nombre: `Participantes_${this.nombreArchivo(roleplay.Titulo)}` };
+    }
 
     async findAll(companyId: number, roleplayId: number, user: ActiveUserDto) {
         const idTenant = this.tenantDe(user);
@@ -238,5 +285,13 @@ export class RoleplayParticipantsService {
                 fechaCreacion: new Date(),
             },
         });
+    }
+
+    private normalizar(texto: string) {
+        return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    }
+
+    private nombreArchivo(texto: string) {
+        return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 50) || 'Roleplay';
     }
 }

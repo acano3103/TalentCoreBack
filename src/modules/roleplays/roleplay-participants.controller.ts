@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { ExcelExportService } from 'src/common/services/excel-export.service';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetActiveUser } from '../auth/decorators/active-user.decorator';
@@ -7,12 +9,31 @@ import { SWAGGER_AUTH_DESCRIPTION } from 'src/constants/docs.constants';
 import { RoleplayParticipantsService } from './roleplay-participants.service';
 import { AssignRoleplayParticipantsDto } from './dto/assign-roleplay-participants.dto';
 import { UpdateRoleplayParticipantDto } from './dto/update-roleplay-participant.dto';
+import { ExportRoleplayParticipantsDto } from './dto/export-roleplay-participants.dto';
 
 @ApiTags('Roleplays - Participantes')
 @UseGuards(JwtAuthGuard)
 @Controller('companies/:companyId/roleplays/:roleplayId/participants')
 export class RoleplayParticipantsController {
-    constructor(private readonly participantsService: RoleplayParticipantsService) { }
+    constructor(
+        private readonly participantsService: RoleplayParticipantsService,
+        private readonly excelExportService: ExcelExportService,
+    ) { }
+
+    @Get('export')
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Export role play participants to Excel', description: SWAGGER_AUTH_DESCRIPTION })
+    @ApiResponse({ status: 200, description: 'Excel file generated successfully' })
+    async export(
+        @GetActiveUser() user: ActiveUserDto,
+        @Param('companyId', ParseIntPipe) companyId: number,
+        @Param('roleplayId', ParseIntPipe) roleplayId: number,
+        @Query() query: ExportRoleplayParticipantsDto,
+        @Res() res: Response,
+    ) {
+        const { buffer, nombre } = await this.participantsService.export(companyId, roleplayId, query, user);
+        this.excelExportService.send(res, buffer, nombre);
+    }
 
     @Get()
     @ApiBearerAuth()
