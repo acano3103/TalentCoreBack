@@ -17,15 +17,12 @@ export interface DestinoArchivo {
 export interface ArchivoLeido {
     buffer: Buffer;
     mime: string;
-    /** Nombre en disco (uuid + base saneada). */
     nombre: string;
     ruta: string;
 }
 
 export interface EnlaceArchivo {
-    /** Absoluta si `COMMS_PUBLIC_BASE_URL` está definida. Si no, empieza en `/api/v2/`. */
     url: string;
-    /** Relativa a `api/v2`: `public/comms/files/:firma`. */
     ruta: string;
 }
 
@@ -36,6 +33,7 @@ export class CommsStorageService implements OnModuleInit {
     constructor(private readonly config: ConfigService) {}
 
     onModuleInit(): void {
+        this.logger.log(`Archivos de comunicados en ${resolve(this.base())}`);
         const base = (this.config.get<string>('COMMS_PUBLIC_BASE_URL') ?? '').trim();
         if (!base) {
             this.logger.warn(
@@ -99,7 +97,10 @@ export class CommsStorageService implements OnModuleInit {
     }
 
     private base(): string {
-        return this.config.get<string>('COMMS_MEDIA_BASE_PATH') || 'comms-media';
+        const sub = (this.config.get<string>('COMMS_MEDIA_BASE_PATH') || 'comms-media').trim();
+        if (isAbsolute(sub)) return sub;
+        const raiz = (this.config.get<string>('MEDIA_ROOT_PATH') || '').trim() || resolve(process.cwd(), 'media');
+        return resolve(raiz, sub);
     }
 
     private secreto(): string {
