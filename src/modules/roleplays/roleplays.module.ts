@@ -10,11 +10,13 @@ import { RoleplayParticipantsService } from './roleplay-participants.service';
 import { RoleplayAccessService } from './roleplay-access.service';
 import { MyRoleplaysController } from './my-roleplays.controller';
 import { MyRoleplaysService } from './my-roleplays.service';
+import { RoleplayDashboardController } from './roleplay-dashboard.controller';
+import { RoleplayDashboardService } from './roleplay-dashboard.service';
 
 @Module({
   imports: [IntegrationsModule, ExcelExportModule],
-  controllers: [RoleplaysController, RoleplayCallsController, RoleplayParticipantsController, MyRoleplaysController],
-  providers: [RoleplaysService, RoleplayCallsService, RoleplayParticipantsService, RoleplayAccessService, MyRoleplaysService],
+  controllers: [RoleplaysController, RoleplayCallsController, RoleplayParticipantsController, MyRoleplaysController, RoleplayDashboardController],
+  providers: [RoleplaysService, RoleplayCallsService, RoleplayParticipantsService, RoleplayAccessService, MyRoleplaysService, RoleplayDashboardService],
   exports: [RoleplaysService, RoleplayCallsService],
 })
 export class RoleplaysModule {}
