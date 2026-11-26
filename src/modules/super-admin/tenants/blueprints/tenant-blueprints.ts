@@ -8,6 +8,7 @@ export interface ModuleBlueprint {
 export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     // Estructura Organizacional
     { codigo: 'organizational-structure', descripcion: 'Estructura Organizacional', codigoPadre: null },
+    { codigo: 'organizational-dashboard', descripcion: 'Dashboard', codigoPadre: 'organizational-structure' },
     { codigo: 'companies', descripcion: 'Empresas', codigoPadre: 'organizational-structure' },
     { codigo: 'locations', descripcion: 'Ubicaciones', codigoPadre: 'organizational-structure' },
     { codigo: 'operating-units', descripcion: 'Unidades Operativas', codigoPadre: 'organizational-structure' },
@@ -23,6 +24,7 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
 
     // Reclutamiento
     { codigo: 'recruitment', descripcion: 'Reclutamiento', codigoPadre: null },
+    { codigo: 'recluitment-dashboard', descripcion: 'Dashboard', codigoPadre: 'recruitment' },
     { codigo: 'requisitions', descripcion: 'Requisiciones', codigoPadre: 'recruitment' },
     { codigo: 'job-board', descripcion: 'Bolsa de trabajo', codigoPadre: 'recruitment' },
     { codigo: 'vacancies', descripcion: 'Vacantes', codigoPadre: 'recruitment' },
@@ -30,6 +32,7 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
 
     // Expedientes digitales
     { codigo: 'digital-files', descripcion: 'Expedientes digitales', codigoPadre: null },
+    { codigo: 'digital-files-dashboard', descripcion: 'Dashboard', codigoPadre: 'digital-files' },
     { codigo: 'required-documents', descripcion: 'Documentos requeridos', codigoPadre: 'digital-files' },
     { codigo: 'case-files', descripcion: 'Expedientes', codigoPadre: 'digital-files' },
     { codigo: 'digital-contracts', descripcion: 'Contratos digitales', codigoPadre: 'digital-files' },
@@ -37,6 +40,7 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
 
     // Administración de personal
     { codigo: 'personnel-administration', descripcion: 'Administración de personal', codigoPadre: null },
+    { codigo: 'personnel-dashboard', descripcion: 'Dashboard', codigoPadre: 'personnel-administration' },
     { codigo: 'my-information', descripcion: 'Mi información', codigoPadre: 'personnel-administration' },
     { codigo: 'employees', descripcion: 'Empleados', codigoPadre: 'personnel-administration' },
     { codigo: 'incidents', descripcion: 'Incidencias', codigoPadre: 'personnel-administration' },
@@ -47,8 +51,8 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
 
     // Control de asistencia
     { codigo: 'attendance-tracking', descripcion: 'Control de asistencia', codigoPadre: null },
-    { codigo: 'my-attendance', descripcion: 'Mis asistencias', codigoPadre: 'attendance-tracking' },
     { codigo: 'attendance-dashboard', descripcion: 'Dashboard', codigoPadre: 'attendance-tracking' },
+    { codigo: 'my-attendance', descripcion: 'Mis asistencias', codigoPadre: 'attendance-tracking' },
     { codigo: 'logbook', descripcion: 'Bitácora', codigoPadre: 'attendance-tracking' },
     { codigo: 'work-shifts', descripcion: 'Jornadas', codigoPadre: 'attendance-tracking' },
     { codigo: 'geofences', descripcion: 'Geocercas', codigoPadre: 'attendance-tracking' },
@@ -67,14 +71,6 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     { codigo: 'skills-matrix', descripcion: 'Matriz de Habilidades', codigoPadre: 'training' },
     { codigo: 'career-plan', descripcion: 'Plan de Carrera', codigoPadre: 'training' },
 
-    // Configuración
-    { codigo: 'configuration', descripcion: 'Configuración', codigoPadre: null },
-    { codigo: 'roles-permissions', descripcion: 'Roles y permisos', codigoPadre: 'configuration' },
-    { codigo: 'user-administration', descripcion: 'Admin. de usuarios', codigoPadre: 'configuration' },
-    { codigo: 'integrations', descripcion: 'Integraciones', codigoPadre: 'configuration' },
-    { codigo: 'document-templates', descripcion: 'Plantillas Documentos', codigoPadre: 'configuration' },
-    { codigo: 'settings', descripcion: 'Ajustes', codigoPadre: 'configuration' },
-
     // Comunicación interna
     { codigo: 'internal-comms', descripcion: 'Comunicación interna', codigoPadre: null },
     { codigo: 'comms-my', descripcion: 'Mis comunicados', codigoPadre: 'internal-comms' },
@@ -82,6 +78,14 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     { codigo: 'comms-audiences', descripcion: 'Audiencias', codigoPadre: 'internal-comms' },
     { codigo: 'comms-reminders', descripcion: 'Recordatorios', codigoPadre: 'internal-comms' },
     { codigo: 'comms-channels', descripcion: 'Canales y consumo', codigoPadre: 'internal-comms' },
+
+    // Configuración
+    { codigo: 'configuration', descripcion: 'Configuración', codigoPadre: null },
+    { codigo: 'roles-permissions', descripcion: 'Roles y permisos', codigoPadre: 'configuration' },
+    { codigo: 'user-administration', descripcion: 'Admin. de usuarios', codigoPadre: 'configuration' },
+    { codigo: 'integrations', descripcion: 'Integraciones', codigoPadre: 'configuration' },
+    { codigo: 'document-templates', descripcion: 'Plantillas Documentos', codigoPadre: 'configuration' },
+    { codigo: 'settings', descripcion: 'Ajustes', codigoPadre: 'configuration' },
 ];
 
 export const ROLE_NAMES = ['Admin', 'RH', 'Finanzas', 'Reclutador', 'Manager', 'Empleado'];
@@ -100,6 +104,7 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     // ROL: ADMIN (Acceso total a todos los módulos)
     // =========================================================================
     { rolName: 'Admin', moduloCodigo: 'organizational-structure', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'organizational-dashboard', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'companies', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'locations', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'operating-units', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
@@ -113,16 +118,19 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Admin', moduloCodigo: 'authorized-organizational-chart', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'nominal-organization-chart', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'recruitment', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'recluitment-dashboard', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'requisitions', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'job-board', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'vacancies', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'interviews', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'digital-files', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'digital-files-dashboard', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'required-documents', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'case-files', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'digital-contracts', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'due-date-tracking', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'personnel-administration', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Admin', moduloCodigo: 'personnel-dashboard', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'my-information', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'employees', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Admin', moduloCodigo: 'incidents', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
@@ -165,6 +173,7 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     // ROL: RH
     // =========================================================================
     { rolName: 'RH', moduloCodigo: 'organizational-structure', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'organizational-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'companies', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'locations', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'operating-units', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
@@ -178,16 +187,19 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'RH', moduloCodigo: 'authorized-organizational-chart', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'nominal-organization-chart', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'recruitment', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'recluitment-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'requisitions', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'RH', moduloCodigo: 'job-board', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'vacancies', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'interviews', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'digital-files', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'digital-files-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'required-documents', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'case-files', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'digital-contracts', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'due-date-tracking', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'personnel-administration', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'RH', moduloCodigo: 'personnel-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'my-information', puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'RH', moduloCodigo: 'employees', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'RH', moduloCodigo: 'incidents', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
@@ -230,6 +242,7 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     // ROL: FINANZAS
     // =========================================================================
     { rolName: 'Finanzas', moduloCodigo: 'organizational-structure', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'organizational-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'companies', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'locations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'operating-units', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
@@ -243,16 +256,19 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Finanzas', moduloCodigo: 'authorized-organizational-chart', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'nominal-organization-chart', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'recruitment', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'recluitment-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'requisitions', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'job-board', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'vacancies', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'interviews', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'digital-files', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'digital-files-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'required-documents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'case-files', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'digital-contracts', puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'due-date-tracking', puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'personnel-administration', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Finanzas', moduloCodigo: 'personnel-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'my-information', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'employees', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Finanzas', moduloCodigo: 'incidents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
@@ -295,6 +311,7 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     // ROL: RECLUTADOR
     // =========================================================================
     { rolName: 'Reclutador', moduloCodigo: 'organizational-structure', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'organizational-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'companies', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'locations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'operating-units', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
@@ -308,16 +325,19 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Reclutador', moduloCodigo: 'authorized-organizational-chart', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'nominal-organization-chart', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'recruitment', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
+    { rolName: 'Reclutador', moduloCodigo: 'recluitment-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'requisitions', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'job-board', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Reclutador', moduloCodigo: 'vacancies', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Reclutador', moduloCodigo: 'interviews', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Reclutador', moduloCodigo: 'digital-files', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'digital-files-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'required-documents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'case-files', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'digital-contracts', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'due-date-tracking', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'personnel-administration', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Reclutador', moduloCodigo: 'personnel-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'my-information', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'employees', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Reclutador', moduloCodigo: 'incidents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
@@ -360,6 +380,7 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     // ROL: MANAGER
     // =========================================================================
     { rolName: 'Manager', moduloCodigo: 'organizational-structure', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'organizational-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'companies', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'locations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'operating-units', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
@@ -373,16 +394,19 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Manager', moduloCodigo: 'authorized-organizational-chart', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'nominal-organization-chart', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'recruitment', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'recluitment-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'requisitions', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: true },
     { rolName: 'Manager', moduloCodigo: 'job-board', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'vacancies', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'interviews', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'digital-files', puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'digital-files-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'required-documents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'case-files', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'digital-contracts', puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'due-date-tracking', puedeVer: true, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'personnel-administration', puedeVer: true, puedeCrear: true, puedeActualizar: true, puedeEliminar: false },
+    { rolName: 'Manager', moduloCodigo: 'personnel-dashboard', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'my-information', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'employees', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Manager', moduloCodigo: 'incidents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
@@ -425,6 +449,7 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     // ROL: EMPLEADO
     // =========================================================================
     { rolName: 'Empleado', moduloCodigo: 'organizational-structure', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'organizational-dashboard', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'companies', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'locations', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'operating-units', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
@@ -438,16 +463,19 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     { rolName: 'Empleado', moduloCodigo: 'authorized-organizational-chart', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'nominal-organization-chart', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'recruitment', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'recluitment-dashboard', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'requisitions', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'job-board', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'vacancies', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'interviews', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'digital-files', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'digital-files-dashboard', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'required-documents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'case-files', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'digital-contracts', puedeVer: false, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'due-date-tracking', puedeVer: false, puedeCrear: false, puedeActualizar: true, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'personnel-administration', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
+    { rolName: 'Empleado', moduloCodigo: 'personnel-dashboard', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'my-information', puedeVer: true, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'employees', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },
     { rolName: 'Empleado', moduloCodigo: 'incidents', puedeVer: false, puedeCrear: false, puedeActualizar: false, puedeEliminar: false },

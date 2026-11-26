@@ -1,6 +1,5 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform, Type, plainToInstance } from 'class-transformer';
 import {
-    Allow,
     ArrayMaxSize,
     IsArray,
     IsInt,
@@ -86,7 +85,13 @@ export class CreateStaffReductionMovementDto {
     bajaDatos!: Record<string, string>;
 
     @IsOptional()
-    @Transform(({ value }) => value === '' || value == null ? [] : parseJsonField(value))
+    @Transform(({ value }) => {
+        if (value === '' || value == null) return [];
+        const parsed = parseJsonField(value);
+        return Array.isArray(parsed)
+            ? plainToInstance(StaffReductionFileMetadataDto, parsed)
+            : parsed;
+    })
     @IsArray()
     @ArrayMaxSize(20)
     @ValidateNested({ each: true })
@@ -94,7 +99,19 @@ export class CreateStaffReductionMovementDto {
     archivosMetadata?: StaffReductionFileMetadataDto[];
 
     @IsOptional()
-    @Transform(({ value }) => value === '' || value == null ? {} : parseJsonField(value))
+    @Transform(({ value }) => {
+        if (value === '' || value == null) return {};
+        const parsed = parseJsonField(value);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return parsed;
+        }
+        return Object.fromEntries(
+            Object.entries(parsed).map(([key, doc]) => [
+                key,
+                plainToInstance(BajaDocumentoGeneradoDto, doc),
+            ]),
+        );
+    })
     @IsObject()
     bajaDocumentosGenerados?: Record<string, BajaDocumentoGeneradoDto>;
 }
