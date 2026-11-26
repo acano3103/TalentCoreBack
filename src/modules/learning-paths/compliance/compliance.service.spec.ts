@@ -163,6 +163,72 @@ describe('ComplianceService', () => {
     );
     expect(prisma.comRecordatoriosEnviados.createMany).toHaveBeenCalled();
   });
+
+  it('una ruta en borrador no aparece en la matriz', async () => {
+    const prisma = base();
+    permitir(prisma);
+    prisma.catSites.findFirst.mockResolvedValue({
+      zonaHoraria: 'America/Mexico_City',
+    });
+    prisma.empleados.findMany.mockResolvedValue([]);
+    prisma.rutaAsignacionCurso.findMany.mockResolvedValue([]);
+    prisma.rutaAsignacion.groupBy.mockResolvedValue([]);
+    prisma.cursoConstanciaDc3.findMany.mockResolvedValue([]);
+    prisma.rutaAprendizaje.findMany.mockImplementation(
+      (args: { where?: { RutaVersiones?: { some?: { estado?: string } } } }) => {
+        const publicada =
+          args?.where?.RutaVersiones?.some?.estado === 'publicada';
+        const rutas = [
+          {
+            idRutaAprendizaje: 1,
+            nombre: 'Inducción',
+            proposito: 'ingreso',
+            activo: true,
+            RutaVersiones: [{ estado: 'publicada', RutaAlcances: [] }],
+          },
+          {
+            idRutaAprendizaje: 2,
+            nombre: 'Borrador de puesto',
+            proposito: 'ingreso',
+            activo: true,
+            RutaVersiones: [{ estado: 'borrador', RutaAlcances: [] }],
+          },
+        ];
+        return Promise.resolve(
+          rutas
+            .filter(
+              (ruta) =>
+                !publicada ||
+                ruta.RutaVersiones.some((version) => version.estado === 'publicada'),
+            )
+            .map((ruta) => ({
+              idRutaAprendizaje: ruta.idRutaAprendizaje,
+              nombre: ruta.nombre,
+              proposito: ruta.proposito,
+              RutaVersiones: ruta.RutaVersiones.filter(
+                (version) => version.estado === 'publicada',
+              ),
+            })),
+        );
+      },
+    );
+    const servicio = crear(prisma);
+
+    const tablero = await servicio.tablero(usuario, 1, {});
+
+    expect(prisma.rutaAprendizaje.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          idEmpresa: 1,
+          activo: true,
+          RutaVersiones: { some: { estado: 'publicada' } },
+        }),
+      }),
+    );
+    expect(tablero.matriz.columnas.map((columna) => columna.nombre)).toEqual([
+      'Inducción',
+    ]);
+  });
 });
 
 function crear(
@@ -221,6 +287,9 @@ function base() {
     comRecordatoriosEnviados: { findMany: jest.fn(), createMany: jest.fn() },
     catRoles: { findMany: jest.fn() },
     auth_user: { findMany: jest.fn() },
+    rutaAprendizaje: { findMany: jest.fn() },
+    rutaAsignacion: { groupBy: jest.fn() },
+    rutaAsignacionCurso: { findMany: jest.fn() },
   };
 }
 

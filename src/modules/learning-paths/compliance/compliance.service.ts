@@ -1205,7 +1205,11 @@ export class ComplianceService {
 
   private async rutasPublicadas(companyId: number) {
     const rutas = await this.prisma.rutaAprendizaje.findMany({
-      where: { idEmpresa: companyId, activo: true },
+      where: {
+        idEmpresa: companyId,
+        activo: true,
+        RutaVersiones: { some: { estado: 'publicada' } },
+      },
       select: {
         idRutaAprendizaje: true,
         nombre: true,
