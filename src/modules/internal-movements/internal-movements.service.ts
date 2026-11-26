@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { COMMS_EVENTO_EMPLEADO, COMMS_EVENTO_ESTATUS, emitirHecho, HechoEmpleado } from 'src/common/events/comms-hechos';
+import { emitirHechoCarrera } from 'src/common/events/career-hechos';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateInternalMovementDto } from './dto/create-internal-movement.dto';
@@ -1071,6 +1072,17 @@ export class InternalMovementsService {
       };
     });
     if (hecho) emitirHecho(this.eventos, COMMS_EVENTO_EMPLEADO, hecho);
+    const movimiento = resultado.data.movimiento;
+    if (movimiento.idPlanCarrera != null) {
+      await emitirHechoCarrera(this.eventos, {
+        tipo: 'APLICADO',
+        idEmpresa: movimiento.idEmpresa,
+        idPlanCarrera: movimiento.idPlanCarrera,
+        idMovimiento: movimiento.idMovimiento,
+        idUsuario: user?.id,
+        fechaEfectiva: movimiento.fechaEfectiva,
+      });
+    }
     return resultado;
   }
 

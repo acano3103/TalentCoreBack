@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger, UnauthorizedException, Inject, forwardRef, ConsoleLogger, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { COMMS_EVENTO_APROBACION, COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
+import { emitirHechoCarrera } from 'src/common/events/career-hechos';
 import { ActionApprovalDto } from './dto/approve-reject-action.dto';
 import { ModuloOrigenEnum, AccionAprobacionEnum, AccionCancelacionEnum } from './enums/approval-origin.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -535,6 +536,9 @@ export class ApprovalsService {
                     };
                 }
             });
+            if (respuesta.estatus === 'RECHAZADA') {
+                await this.avisarPlanCarrera(solicitud, activeUser);
+            }
             this.avisarDecision(activeUser.idTenant, companyId, 'MOVIMIENTO_INTERNO', solicitud.idMovimiento, solicitud.idEmpleado, respuesta);
             return { message: respuesta.message };
         }
@@ -671,6 +675,8 @@ export class ApprovalsService {
                         solicitadoPorIdEmpleado: true,
                         estatus: true,
                         motivo: true,
+                        idPlanCarrera: true,
+                        fechaEfectiva: true,
                     },
                 });
 
@@ -722,6 +728,10 @@ export class ApprovalsService {
                 idOrigen: solicitud.idMovimiento,
                 estatus: 'CANCELADA' as const,
             };
+            await this.avisarPlanCarrera(
+                { ...solicitud, idEmpresa: companyId },
+                activeUser,
+            );
             this.avisarDecision(activeUser.idTenant, companyId, 'MOVIMIENTO_INTERNO', solicitud.idMovimiento, solicitud.idEmpleado, respuesta);
             return respuesta;
         }
@@ -729,6 +739,27 @@ export class ApprovalsService {
         throw new BadRequestException(
             'Módulo de origen no reconocido.',
         );
+    }
+
+    /** Si el movimiento cierra un plan, el plan vuelve a listo para ascenso. */
+    private async avisarPlanCarrera(
+        movimiento: {
+            idPlanCarrera: number | null;
+            idEmpresa: number;
+            idMovimiento: number;
+            fechaEfectiva?: Date | null;
+        },
+        user?: ActiveUserDto,
+    ): Promise<void> {
+        if (movimiento.idPlanCarrera == null) return;
+        await emitirHechoCarrera(this.eventos, {
+            tipo: 'RECHAZADO',
+            idEmpresa: movimiento.idEmpresa,
+            idPlanCarrera: movimiento.idPlanCarrera,
+            idMovimiento: movimiento.idMovimiento,
+            idUsuario: user?.id,
+            fechaEfectiva: movimiento.fechaEfectiva,
+        });
     }
 
     /** Avisa el cambio de estatus o el paso pendiente. Un fallo no altera la respuesta HTTP. */
