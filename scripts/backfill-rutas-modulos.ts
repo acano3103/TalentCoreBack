@@ -40,6 +40,7 @@ export interface ModuloRuta {
     codigo: string;
     descripcion: string;
     idPadre: number | null;
+    activo?: boolean;
 }
 
 export interface RolTenant {
@@ -73,6 +74,7 @@ export interface PermisoNuevo {
 export interface ResumenBackfillTenant {
     idTenant: number;
     modulosCreados: number;
+    modulosActivados: number;
     permisosCreados: number;
     rolesActualizados: number;
 }
@@ -81,6 +83,7 @@ export interface BackfillRutasStore {
     listarTenants(): Promise<number[]>;
     listarModulos(idTenant: number, codigos: readonly string[]): Promise<ModuloRuta[]>;
     insertarModulo(modulo: ModuloNuevo): Promise<ModuloRuta>;
+    activarModulo(idModulo: number): Promise<void>;
     listarRoles(idTenant: number): Promise<RolTenant[]>;
     listarPermisos(idRoles: readonly number[], idModulos: readonly number[]): Promise<PermisoExistente[]>;
     insertarPermisos(permisos: readonly PermisoNuevo[]): Promise<void>;
@@ -111,6 +114,7 @@ export async function aplicarBackfillRutas(store: BackfillRutasStore): Promise<R
         }
 
         let modulosCreados = 0;
+        let modulosActivados = 0;
         const padresCreados = new Set<string>();
 
         for (const codigoPadre of padres) {
@@ -142,6 +146,14 @@ export async function aplicarBackfillRutas(store: BackfillRutasStore): Promise<R
                 porCodigo.set(hijo.codigo, creado);
                 modulosCreados += 1;
             }
+        }
+
+        for (const codigo of CODIGOS_RUTAS) {
+            const modulo = porCodigo.get(codigo);
+            if (!modulo || modulo.activo !== false) continue;
+            await store.activarModulo(modulo.idModulo);
+            modulo.activo = true;
+            modulosActivados += 1;
         }
 
         const roles = await store.listarRoles(idTenant);
@@ -188,6 +200,7 @@ export async function aplicarBackfillRutas(store: BackfillRutasStore): Promise<R
         resumen.push({
             idTenant,
             modulosCreados,
+            modulosActivados,
             permisosCreados: nuevos.length,
             rolesActualizados: new Set(nuevos.map((permiso) => permiso.idRol)).size,
         });
@@ -208,7 +221,7 @@ function storeDePrisma(prisma: PrismaClient): BackfillRutasStore {
         async listarModulos(idTenant, codigos) {
             const filas = await prisma.catModulos.findMany({
                 where: { idTenant, Codigo: { in: [...codigos] } },
-                select: { idModulo: true, idTenant: true, Codigo: true, Descripcion: true, idPadre: true },
+                select: { idModulo: true, idTenant: true, Codigo: true, Descripcion: true, idPadre: true, Activo: true },
                 orderBy: { idModulo: 'asc' },
             });
             return filas.flatMap((fila) =>
@@ -220,6 +233,7 @@ function storeDePrisma(prisma: PrismaClient): BackfillRutasStore {
                               codigo: fila.Codigo,
                               descripcion: fila.Descripcion ?? '',
                               idPadre: fila.idPadre,
+                              activo: fila.Activo !== false,
                           },
                       ]
                     : [],
@@ -241,7 +255,14 @@ function storeDePrisma(prisma: PrismaClient): BackfillRutasStore {
                 codigo: modulo.codigo,
                 descripcion: modulo.descripcion,
                 idPadre: modulo.idPadre,
+                activo: true,
             };
+        },
+        async activarModulo(idModulo) {
+            await prisma.catModulos.update({
+                where: { idModulo },
+                data: { Activo: true },
+            });
         },
         async listarRoles(idTenant) {
             const roles = await prisma.catRoles.findMany({
@@ -281,14 +302,15 @@ function storeDePrisma(prisma: PrismaClient): BackfillRutasStore {
 function imprimirResumen(resumen: ResumenBackfillTenant[]) {
     for (const fila of resumen) {
         console.log(
-            `Tenant ${fila.idTenant}: módulos creados ${fila.modulosCreados}, permisos creados ${fila.permisosCreados}, roles actualizados ${fila.rolesActualizados}`,
+            `Tenant ${fila.idTenant}: módulos creados ${fila.modulosCreados}, módulos activados ${fila.modulosActivados}, permisos creados ${fila.permisosCreados}, roles actualizados ${fila.rolesActualizados}`,
         );
     }
     const modulos = resumen.reduce((suma, fila) => suma + fila.modulosCreados, 0);
+    const activados = resumen.reduce((suma, fila) => suma + fila.modulosActivados, 0);
     const permisos = resumen.reduce((suma, fila) => suma + fila.permisosCreados, 0);
     const roles = resumen.reduce((suma, fila) => suma + fila.rolesActualizados, 0);
     console.log(
-        `Backfill de rutas listo. Módulos creados: ${modulos}. Permisos creados: ${permisos}. Roles actualizados: ${roles}.`,
+        `Backfill de rutas listo. Módulos creados: ${modulos}. Módulos activados: ${activados}. Permisos creados: ${permisos}. Roles actualizados: ${roles}.`,
     );
 }
 
