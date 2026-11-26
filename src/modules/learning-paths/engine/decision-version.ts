@@ -1,3 +1,5 @@
+import { calificacionAprobada } from '../../../common/utils/calificacion';
+
 export type EstatusAsignacionPrevia =
   'por_aprobar' | 'activa' | 'completada' | 'sustituida' | 'cancelada';
 
@@ -84,7 +86,7 @@ export function estadoDeElemento(entrada: {
   const acredita = entrada.acreditacion;
   if (
     acredita &&
-    aprobada(acredita.calificacion, entrada.umbral) &&
+    calificacionAprobada(acredita.calificacion, entrada.umbral) &&
     (acredita.vence == null || acredita.vence >= entrada.hoy)
   ) {
     return {
@@ -107,9 +109,4 @@ export function estadoDeElemento(entrada: {
     };
   }
   return { estado: 'inscrito', motivo: null, reconocidoDe: null };
-}
-
-function aprobada(calificacion: number | null, umbral: number): boolean {
-  if (calificacion == null) return true;
-  return calificacion >= umbral;
 }

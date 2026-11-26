@@ -277,6 +277,19 @@ describe('CareerPlanService', () => {
       });
     });
 
+    it('una calificación 9.5 cumple el requisito cuando el umbral es 70', async () => {
+      mocks.cursoParticipantes.findMany.mockResolvedValue([
+        participacionCurso(1, 9.5),
+      ]);
+
+      const {
+        colaboradores: [result],
+      } = await service.findColaboradores(1);
+
+      expect(result.cursosAprobados).toBe(1);
+      expect(result.porcentajeAvance).toBe(25);
+    });
+
     it('respeta el umbral configurado por empresa (calificacion 50 < umbral 90 no cuenta)', async () => {
       mocks.configuracionEmpresa.findMany.mockResolvedValue([
         {

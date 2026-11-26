@@ -1,3 +1,4 @@
+import { calificacionAprobada } from '../../common/utils/calificacion';
 import { UMBRAL_APROBATORIO_DEFAULT } from './career-plan.constants';
 
 export type EstatusCursoPlan =
@@ -106,8 +107,7 @@ export function evaluarCursos(
         ? Number(reg.part.calificacionFinal)
         : null;
     const aprobado =
-      estatus === 'completado' &&
-      (calificacion === null || calificacion >= umbral);
+      estatus === 'completado' && calificacionAprobada(calificacion, umbral);
     const delCurso = sesiones.filter(
       (sesion) =>
         sesion.idCurso === idCurso && sesionesDelEmpleado.has(sesion.idSesion),
