@@ -1127,6 +1127,7 @@ function includeVersion() {
             CatCursos: {
               select: {
                 Descripcion: true,
+                esNormativoStps: true,
                 CursoSesiones: {
                   orderBy: { creadoEn: 'desc' as const },
                   take: 1,
@@ -1185,6 +1186,7 @@ function mapearVersion(version: {
       vigenciaMeses: number | null;
       CatCursos: {
         Descripcion: string | null;
+        esNormativoStps: boolean;
         CursoSesiones: {
           modalidad: string;
           CursoContenidos: { tipoContenido: string } | null;
@@ -1228,6 +1230,7 @@ function mapearVersion(version: {
             ? (cursoDeElemento.get(elemento.idElementoPrerrequisito) ?? null)
             : null,
           vigenciaMeses: elemento.vigenciaMeses,
+          esNormativoStps: elemento.CatCursos?.esNormativoStps ?? false,
         };
       }),
     })),

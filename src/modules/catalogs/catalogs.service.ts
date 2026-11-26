@@ -205,7 +205,7 @@ export class CatalogsService {
       case 'cursos':
         return this.prisma.catCursos.findMany({
           where: { idEmpresa: companyId, activo: true },
-          select: { idCursos: true, idEmpresa: true, idTipoCurso: true, Descripcion: true, idArea: true },
+          select: { idCursos: true, idEmpresa: true, idTipoCurso: true, Descripcion: true, idArea: true, esNormativoStps: true },
           orderBy: { idCursos: 'asc' },
         });
 
