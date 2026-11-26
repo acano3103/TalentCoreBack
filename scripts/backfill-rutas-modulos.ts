@@ -1,6 +1,6 @@
 /**
- * Crea, en cada tenant que ya existe, los módulos de rutas de aprendizaje
- * y el de configuración de capacitación, con los permisos del blueprint.
+ * Crea, en cada tenant que ya existe, los módulos de rutas de aprendizaje,
+ * el plan de carrera y el de configuración de capacitación, con los permisos del blueprint.
  * Idempotente: una segunda corrida no duplica filas y no pisa permisos guardados a mano.
  *
  *   npm run backfill:rutas-modulos
@@ -19,6 +19,7 @@ export const CODIGOS_RUTAS = [
     'learning-paths',
     'training-pending',
     'training-compliance',
+    'career-plan',
     'training-config',
 ] as const;
 
@@ -73,6 +74,7 @@ export interface ResumenBackfillTenant {
     idTenant: number;
     modulosCreados: number;
     permisosCreados: number;
+    rolesActualizados: number;
 }
 
 export interface BackfillRutasStore {
@@ -187,6 +189,7 @@ export async function aplicarBackfillRutas(store: BackfillRutasStore): Promise<R
             idTenant,
             modulosCreados,
             permisosCreados: nuevos.length,
+            rolesActualizados: new Set(nuevos.map((permiso) => permiso.idRol)).size,
         });
     }
 
@@ -278,12 +281,15 @@ function storeDePrisma(prisma: PrismaClient): BackfillRutasStore {
 function imprimirResumen(resumen: ResumenBackfillTenant[]) {
     for (const fila of resumen) {
         console.log(
-            `Tenant ${fila.idTenant}: módulos creados ${fila.modulosCreados}, permisos creados ${fila.permisosCreados}`,
+            `Tenant ${fila.idTenant}: módulos creados ${fila.modulosCreados}, permisos creados ${fila.permisosCreados}, roles actualizados ${fila.rolesActualizados}`,
         );
     }
     const modulos = resumen.reduce((suma, fila) => suma + fila.modulosCreados, 0);
     const permisos = resumen.reduce((suma, fila) => suma + fila.permisosCreados, 0);
-    console.log(`Backfill de rutas listo. Módulos creados: ${modulos}. Permisos creados: ${permisos}.`);
+    const roles = resumen.reduce((suma, fila) => suma + fila.rolesActualizados, 0);
+    console.log(
+        `Backfill de rutas listo. Módulos creados: ${modulos}. Permisos creados: ${permisos}. Roles actualizados: ${roles}.`,
+    );
 }
 
 async function main() {

@@ -112,7 +112,13 @@ describe('backfill de módulos de rutas', () => {
     it('reutiliza los módulos nuevos y sus permisos del blueprint', () => {
         expect(MODULOS_RUTAS.map((modulo) => modulo.codigo)).toEqual(codigos);
         expect(PERMISOS_RUTAS.map((permiso) => permiso.moduloCodigo)).toEqual(
-            ['Admin', 'RH', 'Finanzas', 'Reclutador', 'Manager', 'Empleado'].flatMap(() => codigos),
+            ['Admin', 'RH', 'Finanzas', 'Reclutador', 'Manager', 'Empleado'].flatMap(() => [
+                'career-plan',
+                'learning-paths',
+                'training-pending',
+                'training-compliance',
+                'training-config',
+            ]),
         );
         expect(codigoModuloCanonico('career-plan-config')).toBe('training-config');
         expect(PERMISOS_RUTAS.find((permiso) => permiso.rolName === 'Manager' && permiso.moduloCodigo === 'learning-paths')).toMatchObject({
@@ -138,8 +144,8 @@ describe('backfill de módulos de rutas', () => {
 
         const primera = await aplicarBackfillRutas(memoria);
         expect(primera).toEqual([
-            { idTenant: 1, modulosCreados: 4, permisosCreados: 8 },
-            { idTenant: 2, modulosCreados: 4, permisosCreados: 8 },
+            { idTenant: 1, modulosCreados: 5, permisosCreados: 10, rolesActualizados: 2 },
+            { idTenant: 2, modulosCreados: 5, permisosCreados: 10, rolesActualizados: 2 },
         ]);
 
         const modulosTenant1 = memoria.modulos.filter((modulo) => modulo.idTenant === 1 && codigos.includes(modulo.codigo));
@@ -150,6 +156,10 @@ describe('backfill de módulos de rutas', () => {
         });
         expect(modulosTenant1.find((modulo) => modulo.codigo === 'training-pending')?.idPadre).toBe(800);
         expect(modulosTenant1.find((modulo) => modulo.codigo === 'training-compliance')?.idPadre).toBe(800);
+        expect(modulosTenant1.find((modulo) => modulo.codigo === 'career-plan')).toMatchObject({
+            descripcion: 'Plan de Carrera',
+            idPadre: 800,
+        });
         expect(modulosTenant1.find((modulo) => modulo.codigo === 'training-config')).toMatchObject({
             descripcion: 'Capacitación',
             idPadre: 801,
@@ -189,8 +199,8 @@ describe('backfill de módulos de rutas', () => {
         const conteos = { modulos: memoria.modulos.length, permisos: memoria.permisos.length };
         const segunda = await aplicarBackfillRutas(memoria);
         expect(segunda).toEqual([
-            { idTenant: 1, modulosCreados: 0, permisosCreados: 0 },
-            { idTenant: 2, modulosCreados: 0, permisosCreados: 0 },
+            { idTenant: 1, modulosCreados: 0, permisosCreados: 0, rolesActualizados: 0 },
+            { idTenant: 2, modulosCreados: 0, permisosCreados: 0, rolesActualizados: 0 },
         ]);
         expect({ modulos: memoria.modulos.length, permisos: memoria.permisos.length }).toEqual(conteos);
     });
@@ -218,12 +228,17 @@ describe('backfill de módulos de rutas', () => {
             activo: true,
         });
         const resumen = await aplicarBackfillRutas(memoria);
-        expect(resumen).toEqual([{ idTenant: 4, modulosCreados: 3, permisosCreados: 3 }]);
+        expect(resumen).toEqual([{ idTenant: 4, modulosCreados: 4, permisosCreados: 4, rolesActualizados: 1 }]);
 
         const hijosNuevos = memoria.modulos.filter(
             (modulo) => modulo.idTenant === 4 && modulo.codigo !== 'training' && modulo.codigo !== 'configuration' && modulo.codigo !== 'learning-paths',
         );
-        expect(hijosNuevos.map((modulo) => modulo.codigo)).toEqual(['training-pending', 'training-compliance', 'training-config']);
+        expect(hijosNuevos.map((modulo) => modulo.codigo)).toEqual([
+            'training-pending',
+            'training-compliance',
+            'career-plan',
+            'training-config',
+        ]);
         expect(hijosNuevos.filter((modulo) => modulo.codigo !== 'training-config').every((modulo) => modulo.idPadre === 70)).toBe(true);
         expect(hijosNuevos.find((modulo) => modulo.codigo === 'training-config')?.idPadre).toBe(71);
         expect(memoria.permisos.find((permiso) => permiso.idRol === 40 && permiso.idModulo === 72)).toMatchObject({
@@ -235,7 +250,7 @@ describe('backfill de módulos de rutas', () => {
         expect(memoria.permisos.some((permiso) => permiso.idRol === 41)).toBe(false);
 
         const otra = await aplicarBackfillRutas(memoria);
-        expect(otra).toEqual([{ idTenant: 4, modulosCreados: 0, permisosCreados: 0 }]);
+        expect(otra).toEqual([{ idTenant: 4, modulosCreados: 0, permisosCreados: 0, rolesActualizados: 0 }]);
         expect(memoria.permisos.find((permiso) => permiso.idRol === 40 && permiso.idModulo === 72)?.puedeCrear).toBe(false);
     });
 
@@ -252,7 +267,7 @@ describe('backfill de módulos de rutas', () => {
         });
 
         const resumen = await aplicarBackfillRutas(memoria);
-        expect(resumen).toEqual([{ idTenant: 5, modulosCreados: 5, permisosCreados: 5 }]);
+        expect(resumen).toEqual([{ idTenant: 5, modulosCreados: 6, permisosCreados: 6, rolesActualizados: 1 }]);
 
         const training = memoria.modulos.find((modulo) => modulo.codigo === 'training');
         expect(training).toMatchObject({ descripcion: 'Capacitación', idPadre: null });
@@ -265,6 +280,6 @@ describe('backfill de módulos de rutas', () => {
         });
 
         const otra = await aplicarBackfillRutas(memoria);
-        expect(otra).toEqual([{ idTenant: 5, modulosCreados: 0, permisosCreados: 0 }]);
+        expect(otra).toEqual([{ idTenant: 5, modulosCreados: 0, permisosCreados: 0, rolesActualizados: 0 }]);
     });
 });
