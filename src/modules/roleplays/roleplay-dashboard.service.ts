@@ -55,6 +55,7 @@ export class RoleplayDashboardService {
                 where: {
                     idRolePlay: { in: ids }, idEmpresa: companyId, idTenant, Activo: true,
                     ...(q.desde || q.hasta ? { FechaRegistro: rango } : {}),
+                    ...(q.idSite ? { Empleados: { idSite: q.idSite } } : {}),
                 },
                 select: {
                     idRolePlay: true, idEmpleado: true, FechaRegistro: true, FechaLimite: true, IntentosMaximos: true,
