@@ -33,6 +33,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CoursesModule } from './modules/courses/courses.module';
 import { RoleplaysModule } from './modules/roleplays/roleplays.module';
 import { CareerPlanModule } from './modules/career-plan/career-plan.module';
+import { LearningPathsModule } from './modules/learning-paths/learning-paths.module';
 import { ConfigurationModule } from './modules/configuration/configuration.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { GeofencesService } from './modules/geofences/geofences.service';
@@ -57,7 +58,9 @@ import { CommunicationsModule } from './modules/communications/communications.mo
 // Determina dinámicamente la ruta correcta de public
 const publicDistPath = join(process.cwd(), 'dist', 'public');
 const publicSrcPath = join(process.cwd(), 'src', 'public');
-const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrcPath;
+const staticPublicPath = existsSync(publicDistPath)
+  ? publicDistPath
+  : publicSrcPath;
 
 @Module({
   imports: [
@@ -68,7 +71,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60_000, limit: 20 }],
-      errorMessage: 'Demasiadas solicitudes. Espera un momento e intenta de nuevo.',
+      errorMessage:
+        'Demasiadas solicitudes. Espera un momento e intenta de nuevo.',
     }),
     EventEmitterModule.forRoot({ ignoreErrors: true }),
     ServeStaticModule.forRoot(
@@ -88,7 +92,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
         serveRoot: '/media',
         // D6: las selfies de asistencia no son públicas; se leen por MediaController.
         exclude: ['/media/attendance/(.*)'],
-      }
+      },
     ),
     PrismaModule,
     AuthModule,
@@ -119,6 +123,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     CoursesModule,
     RoleplaysModule,
     CareerPlanModule,
+    LearningPathsModule,
     ConfigurationModule,
     SuperAdminModule,
     GeofencesModule,
@@ -140,4 +145,4 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
   controllers: [],
   providers: [GeofencesService],
 })
-export class AppModule { }
+export class AppModule {}
