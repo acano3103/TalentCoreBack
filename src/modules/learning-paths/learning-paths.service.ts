@@ -201,6 +201,7 @@ export class LearningPathsService {
       fechaRegistro: ruta.fechaRegistro,
       versionPublicada: publicada ? mapearVersion(publicada) : null,
       versionBorrador: borrador ? mapearVersion(borrador) : null,
+      disparadores: disparadoresDeRuta(publicada != null || borrador != null),
     };
   }
 
@@ -1148,6 +1149,16 @@ function includeVersion() {
         CatUnidadesOperativas: { select: { Nombre: true } },
       },
     },
+  };
+}
+
+/** Misma regla del motor: alta, movimiento, publicación y el cron aplican a la ruta vigente, sin mirar el propósito. */
+export function disparadoresDeRuta(vigente: boolean) {
+  return {
+    alta: vigente,
+    movimiento: vigente,
+    publicacion: vigente,
+    programado: vigente,
   };
 }
 

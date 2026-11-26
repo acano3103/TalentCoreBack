@@ -193,6 +193,8 @@ export class AssignmentEngineService {
         return;
       }
       if (hecho.tipo !== 'ALTA' && hecho.tipo !== 'MOVIMIENTO') return;
+      // Alta y movimiento evalúan el alcance de todas las rutas publicadas,
+      // sin filtrar por el propósito de la ruta.
       await this.asignar({
         idEmpresa: hecho.idEmpresa,
         idTenant: hecho.idTenant,
@@ -569,6 +571,7 @@ export class AssignmentEngineService {
     }
     return publicadas.filter((version) => {
       if (!coincide(empleado.alcance, version.alcance)) return false;
+      // En movimiento se omite la ruta que la persona ya tiene. No depende del propósito.
       if (entrada.disparador !== 'movimiento') return true;
       return !previas.some(
         (previa) =>
