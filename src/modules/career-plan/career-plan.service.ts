@@ -294,6 +294,15 @@ export class CareerPlanService {
       caminos: caminos.map((camino) => {
         const lista = porRuta.get(camino.idRuta) ?? [];
         const destino = plazas.get(camino.idPuestoDestino);
+        const nivelOrigen =
+          puestoMap.get(camino.idPuestoOrigen)?.IdNivelSalario ?? null;
+        const nivelDestino =
+          puestoMap.get(camino.idPuestoDestino)?.IdNivelSalario ?? null;
+        const tipo =
+          nivelOrigen != null && nivelDestino != null
+            ? tipoDeNiveles(nivelOrigen, nivelDestino)
+            : camino.tipo;
+        const distinto = tipo !== camino.tipo;
         return {
           idRuta: camino.idRuta,
           idPuestoOrigen: camino.idPuestoOrigen,
@@ -302,7 +311,10 @@ export class CareerPlanService {
             puestoMap.get(camino.idPuestoOrigen)?.NombrePuesto ?? null,
           puestoDestino:
             puestoMap.get(camino.idPuestoDestino)?.NombrePuesto ?? null,
-          tipo: camino.tipo,
+          tipo,
+          ...(distinto
+            ? { tipoGuardado: camino.tipo, inconsistente: true as const }
+            : {}),
           antiguedadMinimaMeses:
             camino.antiguedadMinimaMeses ??
             config.carreraAntiguedadDefaultMeses,

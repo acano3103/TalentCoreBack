@@ -929,6 +929,106 @@ describe('CareerPlanService', () => {
         listosAhora: 0,
         plazasLibresDestino: 0,
       });
+      expect(mapa.caminos[0]).not.toHaveProperty('inconsistente');
+      expect(mapa.caminos[0]).not.toHaveProperty('tipoGuardado');
+    });
+
+    it('calcula el tipo con los niveles y marca los caminos viejos', async () => {
+      mocks.relPuestoRuta.findMany.mockResolvedValue([
+        {
+          idRuta: 1,
+          idEmpresa: 1,
+          idPuestoOrigen: 41,
+          idPuestoDestino: 40,
+          activo: true,
+          tipo: 'ascenso',
+          antiguedadMinimaMeses: null,
+          idRutaAprendizaje: null,
+        },
+        {
+          idRuta: 2,
+          idEmpresa: 1,
+          idPuestoOrigen: 50,
+          idPuestoDestino: 51,
+          activo: true,
+          tipo: 'ascenso',
+          antiguedadMinimaMeses: null,
+          idRutaAprendizaje: null,
+        },
+        {
+          idRuta: 3,
+          idEmpresa: 1,
+          idPuestoOrigen: 52,
+          idPuestoDestino: 40,
+          activo: true,
+          tipo: 'ascenso',
+          antiguedadMinimaMeses: null,
+          idRutaAprendizaje: null,
+        },
+      ]);
+      mocks.catPuestos.findMany.mockResolvedValue([
+        {
+          idPuesto: 41,
+          NombrePuesto: 'Product Owner',
+          IdNivelSalario: 3,
+          idArea: null,
+        },
+        {
+          idPuesto: 40,
+          NombrePuesto: 'Desarrollador Full Stack Senior',
+          IdNivelSalario: 2,
+          idArea: null,
+        },
+        {
+          idPuesto: 50,
+          NombrePuesto: 'Director General',
+          IdNivelSalario: 5,
+          idArea: null,
+        },
+        {
+          idPuesto: 51,
+          NombrePuesto: 'Líder Técnico de Desarrollo',
+          IdNivelSalario: 3,
+          idArea: null,
+        },
+        {
+          idPuesto: 52,
+          NombrePuesto: 'Diseñador UI/UX Senior',
+          IdNivelSalario: 2,
+          idArea: null,
+        },
+      ]);
+      mocks.planCarreraColaborador.findMany.mockResolvedValue([]);
+      mocks.configuracionEmpresa.findMany.mockResolvedValue([]);
+
+      const mapa = await service.findMap(1, undefined, activeUser as never);
+
+      expect(mapa.caminos).toEqual([
+        expect.objectContaining({
+          idRuta: 1,
+          puestoOrigen: 'Product Owner',
+          puestoDestino: 'Desarrollador Full Stack Senior',
+          tipo: 'menor',
+          tipoGuardado: 'ascenso',
+          inconsistente: true,
+        }),
+        expect.objectContaining({
+          idRuta: 2,
+          puestoOrigen: 'Director General',
+          puestoDestino: 'Líder Técnico de Desarrollo',
+          tipo: 'menor',
+          tipoGuardado: 'ascenso',
+          inconsistente: true,
+        }),
+        expect.objectContaining({
+          idRuta: 3,
+          puestoOrigen: 'Diseñador UI/UX Senior',
+          puestoDestino: 'Desarrollador Full Stack Senior',
+          tipo: 'lateral',
+          tipoGuardado: 'ascenso',
+          inconsistente: true,
+        }),
+      ]);
     });
   });
 
