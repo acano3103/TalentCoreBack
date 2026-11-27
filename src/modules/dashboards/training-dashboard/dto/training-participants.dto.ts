@@ -11,6 +11,7 @@ export class TrainingParticipantsFiltersDto {
     @ApiPropertyOptional() @IsOptional() @IsString() idCurso?: string;
     @ApiPropertyOptional() @IsOptional() @IsString() idArea?: string;
     @ApiPropertyOptional({ enum: ['presencial', 'online_sincrono', 'online_asincrono'] }) @IsOptional() @IsString() modalidad?: string;
+    @ApiPropertyOptional({ description: 'Ubicación (sitio principal del empleado)' }) @IsOptional() @IsString() idSite?: string;
 
     @ApiPropertyOptional({ enum: ESTATUS_FILTRO })
     @IsOptional()

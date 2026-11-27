@@ -10,6 +10,7 @@ export interface TrainingDashboardFilters {
     idCurso?: string;
     idArea?: string;
     modalidad?: string;
+    idSite?: string;
 }
 
 // Una participación (empleado inscrito en una sesión) tal como sale de la consulta
@@ -98,11 +99,12 @@ export class TrainingDashboardService {
         const idCurso = this.parseEnteroOpcional(filtros.idCurso, 'idCurso');
         const idArea = this.parseEnteroOpcional(filtros.idArea, 'idArea');
         const modalidad = this.parseModalidad(filtros.modalidad);
+        const idSite = this.parseEnteroOpcional(filtros.idSite, 'idSite');
 
         try {
-            const [actuales, anteriores, cursosOpcion, areasOpcion] = await Promise.all([
-                this.obtenerParticipaciones(companyId, idTenant, desde, hasta, idCurso, idArea, modalidad),
-                this.obtenerParticipaciones(companyId, idTenant, anteriorDesde, anteriorHasta, idCurso, idArea, modalidad),
+            const [actuales, anteriores, cursosOpcion, areasOpcion, ubicacionesOpcion] = await Promise.all([
+                this.obtenerParticipaciones(companyId, idTenant, desde, hasta, idCurso, idArea, modalidad, idSite),
+                this.obtenerParticipaciones(companyId, idTenant, anteriorDesde, anteriorHasta, idCurso, idArea, modalidad, idSite),
                 this.prisma.$queryRaw<{ idCurso: number; nombre: string | null }[]>`
                     SELECT c.idCursos AS idCurso, c.Descripcion AS nombre
                     FROM CatCursos c
@@ -117,6 +119,14 @@ export class TrainingDashboardService {
                         AND (a.idTenant = ${idTenant} OR a.idTenant IS NULL)
                         AND (a.Activo IS NULL OR a.Activo = 1)
                     ORDER BY a.Descripcion ASC
+                `,
+                this.prisma.$queryRaw<{ idSite: number; nombre: string | null }[]>`
+                    SELECT s.idSite, s.Descripcion AS nombre
+                    FROM CatSites s
+                    WHERE s.idEmpresa = ${companyId}
+                        AND (s.idTenant = ${idTenant} OR s.idTenant = 0)
+                        AND (s.Activo IS NULL OR s.Activo = 1)
+                    ORDER BY s.Descripcion ASC
                 `,
             ]);
 
@@ -143,6 +153,7 @@ export class TrainingDashboardService {
                 opciones: {
                     cursos: cursosOpcion.map((c) => ({ idCurso: Number(c.idCurso), nombre: c.nombre || `Curso #${c.idCurso}` })),
                     areas: areasOpcion.map((a) => ({ idArea: Number(a.idArea), nombre: a.nombre || `Área #${a.idArea}` })),
+                    ubicaciones: ubicacionesOpcion.map((s) => ({ idSite: Number(s.idSite), nombre: s.nombre || `Ubicación #${s.idSite}` })),
                 },
             };
         } catch (error) {
@@ -165,6 +176,7 @@ export class TrainingDashboardService {
             this.parseEnteroOpcional(filtros.idCurso, 'idCurso'),
             this.parseEnteroOpcional(filtros.idArea, 'idArea'),
             this.parseModalidad(filtros.modalidad),
+            this.parseEnteroOpcional(filtros.idSite, 'idSite'),
         );
         return { desde, hasta, participaciones };
     }
@@ -183,7 +195,7 @@ export class TrainingDashboardService {
             LIMIT 1
         `;
         if (!dueno) throw new NotFoundException('No se encontró la inscripción.');
-        return this.obtenerParticipaciones(companyId, user.idTenant, '', '', null, null, null, Number(dueno.idEmpleado));
+        return this.obtenerParticipaciones(companyId, user.idTenant, '', '', null, null, null, null, Number(dueno.idEmpleado));
     }
 
     // Estatus de una inscripción para el reporte (mismas reglas que los indicadores)
@@ -237,7 +249,7 @@ export class TrainingDashboardService {
     // ---------- Consulta ----------
 
     // Participaciones de las sesiones (no canceladas) que inician dentro del periodo, con su seguimiento,
-    // avance SCORM y asistencias presenciales. El área es la del empleado (por su puesto).
+    // avance SCORM y asistencias presenciales. El área es la del empleado (por su puesto) y la ubicación, su sitio principal.
     private async obtenerParticipaciones(
         companyId: number,
         idTenant: number,
@@ -246,6 +258,7 @@ export class TrainingDashboardService {
         idCurso: number | null,
         idArea: number | null,
         modalidad: ModalidadCurso | null,
+        idSite: number | null = null,
         idEmpleado: number | null = null,
     ): Promise<Participacion[]> {
         const filas = await this.prisma.$queryRaw<ParticipacionRaw[]>`
@@ -289,6 +302,7 @@ export class TrainingDashboardService {
                 ${idCurso ? Prisma.sql`AND s.idCurso = ${idCurso}` : Prisma.empty}
                 ${idArea ? Prisma.sql`AND pu.idArea = ${idArea}` : Prisma.empty}
                 ${modalidad ? Prisma.sql`AND s.modalidad = ${modalidad}` : Prisma.empty}
+                ${idSite ? Prisma.sql`AND e.idSite = ${idSite}` : Prisma.empty}
         `;
         return filas.map((f) => this.normalizar(f));
     }
