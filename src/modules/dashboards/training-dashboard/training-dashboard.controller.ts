@@ -28,6 +28,7 @@ export class TrainingDashboardController {
   @ApiQuery({ name: 'idCurso', required: false })
   @ApiQuery({ name: 'idArea', required: false, description: "Employee's area (from the position)" })
   @ApiQuery({ name: 'modalidad', required: false, enum: ['presencial', 'online_sincrono', 'online_asincrono'] })
+  @ApiQuery({ name: 'idSite', required: false, description: "Employee's main location" })
   @ApiResponse({ status: 200, description: 'Metrics calculated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid filters' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -39,8 +40,9 @@ export class TrainingDashboardController {
     @Query('idCurso') idCurso?: string,
     @Query('idArea') idArea?: string,
     @Query('modalidad') modalidad?: string,
+    @Query('idSite') idSite?: string,
   ) {
-    return this.trainingDashboardService.getMetrics(user, companyId, { desde, hasta, idCurso, idArea, modalidad });
+    return this.trainingDashboardService.getMetrics(user, companyId, { desde, hasta, idCurso, idArea, modalidad, idSite });
   }
 
   // Reporte de participantes: una fila por inscripción, paginado y ordenado en el servidor
