@@ -54,6 +54,9 @@ import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { TimeClockModule } from './modules/time-clock/time-clock.module';
 import { KiosksModule } from './modules/kiosks/kiosks.module';
 import { CommunicationsModule } from './modules/communications/communications.module';
+import { PersonnelDashboardModule } from './modules/dashboards/personnel-dashboard/personnel-dashboard.module';
+import { DigitalFileDashboardModule } from './modules/dashboards/digital-files-dashboard/digital-files-dashboard.module';
+import { RecruitmentDashboardModule } from './modules/dashboards/recluitment-dashboard/recluitment-dashboard.module';
 
 // Determina dinámicamente la ruta correcta de public
 const publicDistPath = join(process.cwd(), 'dist', 'public');
@@ -138,6 +141,9 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     ApprovalsModule,
     TimeClockModule,
     KiosksModule,
+    PersonnelDashboardModule,
+    DigitalFileDashboardModule,
+    RecruitmentDashboardModule,
   ],
   controllers: [],
   providers: [GeofencesService],
