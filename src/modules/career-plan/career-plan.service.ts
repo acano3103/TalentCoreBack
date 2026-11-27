@@ -144,6 +144,7 @@ interface AvanceEvaluado {
   correo: string | null;
   idSite: number | null;
   idJefeInmediato: number | null;
+  antiguedadMeses: number;
 }
 
 export interface FichaAprendizaje {
@@ -664,12 +665,13 @@ export class CareerPlanService {
       );
     }
     const hoy = await this.hoyEmpresa(companyId);
+    const sitios = await this.nombresDeSites(filas.map((fila) => fila.idSite));
     return {
-      colaboradores: filas.map((fila) => {
-        const { idSite, ...resto } = fila;
-        void idSite;
-        return resto;
-      }),
+      colaboradores: filas.map((fila) => ({
+        ...fila,
+        nombreSite:
+          fila.idSite != null ? sitios.get(fila.idSite) || null : null,
+      })),
       kpis: this.kpisDe(filas, hoy),
     };
   }
@@ -946,6 +948,7 @@ export class CareerPlanService {
       0,
     );
     const historial = await this.historialDe(companyId, planId);
+    const sitios = await this.nombresDeSites([avance?.idSite]);
     return {
       idPlanCarrera: postulacion.idPlanCarrera,
       idEmpleado: postulacion.idEmpleado,
@@ -959,6 +962,10 @@ export class CareerPlanService {
       estatus: avance?.estatus ?? postulacion.estatus,
       porcentajeAvance: avance?.porcentaje ?? 0,
       porcentaje: avance?.porcentaje ?? 0,
+      idSite: avance?.idSite ?? null,
+      nombreSite:
+        avance?.idSite != null ? sitios.get(avance.idSite) || null : null,
+      antiguedadMeses: avance?.antiguedadMeses ?? null,
       nivelPreparacion: avance?.nivelPreparacion ?? 'en_desarrollo',
       requisitos: avance?.requisitos ?? [],
       cursos: (avance?.cursos ?? []).map((curso) => ({
@@ -1542,6 +1549,7 @@ export class CareerPlanService {
         correo: empleado?.correo ?? null,
         idSite: empleado?.idSite ?? null,
         idJefeInmediato: empleado?.idJefeInmediato ?? null,
+        antiguedadMeses: meses,
       });
     }
     return salida;
@@ -1969,6 +1977,22 @@ export class CareerPlanService {
         fechaCreacion: new Date(),
       },
     });
+  }
+
+  private async nombresDeSites(
+    ids: Array<number | null | undefined>,
+  ): Promise<Map<number, string>> {
+    const unicos = [...new Set(ids.filter((id): id is number => id != null))];
+    if (unicos.length === 0) return new Map();
+    const sites = await this.prismaService.catSites.findMany({
+      where: { idSite: { in: unicos } },
+      select: { idSite: true, Descripcion: true },
+    });
+    return new Map(
+      sites
+        .filter((site) => site.Descripcion?.trim())
+        .map((site) => [site.idSite, site.Descripcion.trim()]),
+    );
   }
 
   private async zonaDe(companyId: number): Promise<string> {

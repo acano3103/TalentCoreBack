@@ -460,6 +460,30 @@ describe('CareerPlanService', () => {
       expect(mocks.planCarreraColaborador.update).not.toHaveBeenCalled();
     });
 
+    it('devuelve la planta del colaborador', async () => {
+      conRequisitosListos();
+      mocks.cursoParticipantes.findMany.mockResolvedValue([]);
+
+      const {
+        colaboradores: [result],
+      } = await service.findColaboradores(1);
+
+      expect(result.idSite).toBe(5);
+      expect(result.nombreSite).toBe('Planta');
+    });
+
+    it('filtra por la planta sin quitar el dato de la fila', async () => {
+      conRequisitosListos();
+      mocks.cursoParticipantes.findMany.mockResolvedValue([]);
+
+      const porPlanta = await service.findColaboradores(1, { idSite: 5 });
+      const otra = await service.findColaboradores(1, { idSite: 9 });
+
+      expect(porPlanta.colaboradores).toHaveLength(1);
+      expect(porPlanta.colaboradores[0].idSite).toBe(5);
+      expect(otra.colaboradores).toHaveLength(0);
+    });
+
     it('devuelve [] cuando no hay rutas', async () => {
       mocks.relPuestoRuta.findMany.mockResolvedValue([]);
       await expect(service.findColaboradores(1)).resolves.toEqual({
@@ -721,6 +745,59 @@ describe('CareerPlanService', () => {
         estatus: 'pendiente',
         aprobado: false,
       });
+    });
+
+    it('devuelve planta y la misma antigüedad del requisito', async () => {
+      mocks.planCarreraColaborador.findUnique.mockResolvedValue(postulacion());
+      mocks.empleados.findFirst.mockResolvedValue({
+        idEmpleado: 10,
+        nombre: 'Ana',
+        primerApellido: 'Lopez',
+        segundoApellido: null,
+      });
+      mocks.empleados.findMany.mockResolvedValue([
+        {
+          idEmpleado: 10,
+          nombre: 'Ana',
+          primerApellido: 'Lopez',
+          segundoApellido: null,
+          idPuesto: 100,
+          correo: 'a@x.com',
+          idSite: 5,
+          fechaIngreso: new Date('2024-03-26'),
+          idJefeInmediato: null,
+        },
+      ]);
+      mocks.catSites.findMany.mockResolvedValue([
+        { idSite: 5, Descripcion: 'Planta Norte' },
+      ]);
+      mocks.catPuestos.findUnique.mockResolvedValue({ NombrePuesto: 'Líder' });
+      mocks.catPuestos.findMany.mockResolvedValue([
+        { idPuesto: 100, NombrePuesto: 'Analista' },
+        { idPuesto: 200, NombrePuesto: 'Líder' },
+      ]);
+      mocks.relPuestoRuta.findMany.mockResolvedValue([
+        {
+          idRuta: 1,
+          idPuestoOrigen: 100,
+          idPuestoDestino: 200,
+          antiguedadMinimaMeses: 12,
+          idRutaAprendizaje: null,
+        },
+      ]);
+      mocks.relPuestoCurso.findMany.mockResolvedValue([]);
+      mocks.configuracionEmpresa.findMany.mockResolvedValue([]);
+      mocks.movimientosInternos.findMany.mockResolvedValue([]);
+
+      const result = await service.findColaborador(1, 1);
+      const requisito = result.requisitos.find(
+        (item) => item.tipo === 'antiguedad',
+      );
+
+      expect(result.idSite).toBe(5);
+      expect(result.nombreSite).toBe('Planta Norte');
+      expect(result.antiguedadMeses).toBe(requisito?.detalle?.meses);
+      expect(result.antiguedadMeses).toBeGreaterThan(0);
     });
   });
 
