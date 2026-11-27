@@ -23,7 +23,8 @@
     "backfill:comunicacion-modulos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/backfill-comunicacion-modulos.ts",
     "backfill:rutas-modulos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/backfill-rutas-modulos.ts",
     "backfill:rutas-desde-puestos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/backfill-rutas-desde-puestos.ts",
-    "fix:comunicacion-nombres-adjuntos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/fix-comunicacion-nombres-adjuntos.ts"
+    "fix:comunicacion-nombres-adjuntos": "ts-node --transpile-only --project scripts/tsconfig.json scripts/fix-comunicacion-nombres-adjuntos.ts",
+    "revisar:caminos-carrera": "ts-node --transpile-only --project scripts/tsconfig.json scripts/revisar-caminos-carrera.ts"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.68.0",
