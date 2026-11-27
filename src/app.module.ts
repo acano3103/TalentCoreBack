@@ -43,6 +43,7 @@ import { LegalWorkdayModule } from './modules/legal-workday/legal-workday.module
 import { LogbookModule } from './modules/logbook/logbook.module';
 import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashboard/attendance-dashboard.module';
 import { TrainingDashboardModule } from './modules/dashboards/training-dashboard/training-dashboard.module';
+import { OrganizationalDashboardModule } from './modules/dashboards/organizational-dashboard/organizational-dashboard.module';
 import { AttendanceTrackingConfigModule } from './modules/config/attendance-config/attendance-config.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { existsSync } from 'fs';
@@ -128,6 +129,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     LogbookModule,
     AttendanceDashboardModule,
     TrainingDashboardModule,
+    OrganizationalDashboardModule,
     AttendanceTrackingConfigModule,
     AttendanceModule,
     AttendanceReportsModule,
