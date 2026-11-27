@@ -737,9 +737,11 @@ export class CareerPlanService {
       planes.find((plan) => plan.estatus !== 'promovido') ?? planes[0];
     if (!elegido) return null;
     return {
+      idPlanCarrera: elegido.idPlanCarrera,
       puestoObjetivo: elegido.puestoObjetivo,
       porcentaje: elegido.porcentaje,
       estatus: elegido.estatus,
+      nivelPreparacion: elegido.nivelPreparacion,
     };
   }
 

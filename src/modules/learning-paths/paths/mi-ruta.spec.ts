@@ -23,6 +23,8 @@ function curso(
     sesionProgramada: null,
     venceEn: null,
     vigenciaMeses: null,
+    calificacion: null,
+    fechaCompletado: null,
     ...parcial,
   };
 }
@@ -169,5 +171,71 @@ describe('learning-path', () => {
     expect(origenDe(empleado, [{ modo: 'incluir' }], 'Data Voice')).toBe(
       'Data Voice',
     );
+  });
+
+  it('una calificación 9.5 con umbral 70 cuenta como completado y trae su fecha', () => {
+    const ruta = armarMiRuta(
+      [
+        curso({
+          idRuta: 1,
+          idCurso: 7,
+          nombre: 'Seguridad',
+          estado: 'completado',
+          calificacion: 9.5,
+          fechaCompletado: '2026-11-20',
+        }),
+        curso({
+          idRuta: 1,
+          idCurso: 8,
+          nombre: 'Reprobado',
+          estado: 'completado',
+          calificacion: 5,
+          fechaCompletado: '2026-11-18',
+        }),
+      ],
+      HOY,
+      30,
+      70,
+    );
+
+    expect(ruta.avance).toEqual({ completados: 1, total: 2 });
+    expect(ruta.etapas[0].estado).toBe('en_curso');
+    expect(ruta.etapas[0].fechaCompletada).toBeNull();
+    expect(ruta.etapas[0].cursos.find((fila) => fila.idCurso === 7)).toEqual(
+      expect.objectContaining({
+        estado: 'completado',
+        calificacion: 9.5,
+        fechaCompletado: '2026-11-20',
+      }),
+    );
+    expect(ruta.etapas[0].cursos.find((fila) => fila.idCurso === 8)).toEqual(
+      expect.objectContaining({
+        estado: 'pendiente',
+        calificacion: null,
+        fechaCompletado: null,
+      }),
+    );
+
+    const solo = armarMiRuta(
+      [
+        curso({
+          idRuta: 1,
+          idCurso: 7,
+          estado: 'completado',
+          calificacion: 9.5,
+          fechaCompletado: '2026-11-20',
+        }),
+      ],
+      HOY,
+      30,
+      70,
+    );
+    expect(solo.etapas[0].estado).toBe('completada');
+    expect(solo.etapas[0].fechaCompletada).toBe('2026-11-20');
+    expect(solo.etapas[0].cursos[0]).toMatchObject({
+      estado: 'completado',
+      calificacion: 9.5,
+      fechaCompletado: '2026-11-20',
+    });
   });
 });

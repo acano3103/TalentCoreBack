@@ -586,9 +586,11 @@ describe('CareerPlanService', () => {
       });
       await expect(service.contarRutasCompletas(1, 10)).resolves.toBe(1);
       await expect(service.resumenEmpleado(1, 10)).resolves.toEqual({
+        idPlanCarrera: 1,
         puestoObjetivo: 'Líder',
         porcentaje: 100,
         estatus: 'listo_para_ascenso',
+        nivelPreparacion: 'listo_ahora',
       });
     });
   });

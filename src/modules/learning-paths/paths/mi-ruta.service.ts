@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { hoy as hoyEnZona } from 'src/common/utils/dias-habiles';
+import { localDateString } from 'src/modules/attendance/utils/timezone.util';
 import { zonaValida } from 'src/modules/communications/reminders/zona-reloj';
 import { ConfigurationService } from 'src/modules/configuration/configuration.service';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -66,9 +67,20 @@ export class MiRutaService {
                       fechaUltimoGuardado: true,
                     },
                   },
+                  CursoSeguimientoParticipante: {
+                    select: { fechaConclusion: true },
+                  },
                 },
               },
-              ReconocidoDe: { select: { idSesion: true } },
+              ReconocidoDe: {
+                select: {
+                  idSesion: true,
+                  calificacionFinal: true,
+                  CursoSeguimientoParticipante: {
+                    select: { fechaConclusion: true },
+                  },
+                },
+              },
             },
           },
         },
@@ -107,6 +119,7 @@ export class MiRutaService {
         const etapa = elemento?.RutaEtapa;
         if (!elemento || !etapa) continue;
         const participante = curso.CursoParticipantes;
+        const reconocido = curso.ReconocidoDe;
         const sesion = participante?.CursoSesiones ?? null;
         const modalidad = modalidadDe(
           sesion?.modalidad ?? modalidades.get(curso.idCurso) ?? null,
@@ -138,10 +151,27 @@ export class MiRutaService {
             ? diaAlmacenado(curso.venceVigencia)
             : null,
           vigenciaMeses: elemento.vigenciaMeses,
+          calificacion: notaDe(
+            participante?.calificacionFinal,
+            reconocido?.calificacionFinal,
+          ),
+          fechaCompletado: diaCompletado(
+            [
+              curso.fechaCompletado,
+              participante?.CursoSeguimientoParticipante?.fechaConclusion,
+              reconocido?.CursoSeguimientoParticipante?.fechaConclusion,
+            ],
+            zona,
+          ),
         });
       }
     }
-    return armarMiRuta(fuentes, hoyEnZona(zona), config.vigenciaVentanaDias);
+    return armarMiRuta(
+      fuentes,
+      hoyEnZona(zona),
+      config.vigenciaVentanaDias,
+      config.calificacionAprobatoria,
+    );
   }
 
   private async empleado(
@@ -304,6 +334,24 @@ export class MiRutaService {
     });
     return zonaValida(sitio?.zonaHoraria || ZONA);
   }
+}
+
+function notaDe(
+  propia: { toString(): string } | number | null | undefined,
+  reconocida: { toString(): string } | number | null | undefined,
+): number | null {
+  const cruda = propia ?? reconocida;
+  if (cruda == null) return null;
+  const numero = Number(cruda);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function diaCompletado(
+  marcas: Array<Date | null | undefined>,
+  zona: string,
+): string | null {
+  const marca = marcas.find((fecha) => fecha != null);
+  return marca ? localDateString(marca, zona) : null;
 }
 
 function alcanceVacio(idEmpresa: number): EmpleadoAlcance {

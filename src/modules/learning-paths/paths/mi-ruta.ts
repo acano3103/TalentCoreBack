@@ -1,3 +1,5 @@
+import { calificacionAprobada } from '../../../common/utils/calificacion';
+import { UMBRAL_APROBATORIO_DEFAULT } from '../../career-plan/career-plan.constants';
 import {
   EmpleadoAlcance,
   ReglaVisible,
@@ -43,6 +45,10 @@ export interface CursoFuente {
   sesionProgramada: { fecha: string; lugar: string | null } | null;
   venceEn: string | null;
   vigenciaMeses: number | null;
+  /** Valor guardado, sin normalizar. Null si el curso no tiene nota. */
+  calificacion: number | null;
+  /** `YYYY-MM-DD`. Null si todavía no hay fecha de cierre. */
+  fechaCompletado: string | null;
 }
 
 export interface CursoRuta {
@@ -55,6 +61,10 @@ export interface CursoRuta {
   progreso: number;
   fechaLimite: string | null;
   sesionProgramada: { fecha: string; lugar: string | null } | null;
+  /** Valor guardado, sin normalizar. Solo cuando el estado es `completado` o `reconocido`. */
+  calificacion: number | null;
+  /** `YYYY-MM-DD`. Solo cuando el estado es `completado` o `reconocido`. */
+  fechaCompletado: string | null;
 }
 
 export interface EtapaRuta {
@@ -62,6 +72,8 @@ export interface EtapaRuta {
   orden: number;
   estado: EstadoEtapaRuta;
   fechaLimite: string | null;
+  /** `YYYY-MM-DD`. La más reciente de los cursos obligatorios. Solo si la etapa está `completada`. */
+  fechaCompletada: string | null;
   cursos: CursoRuta[];
 }
 
@@ -141,6 +153,7 @@ export function armarMiRuta(
   cursos: CursoFuente[],
   hoy: string,
   ventanaDias: number,
+  umbral = UMBRAL_APROBATORIO_DEFAULT,
 ): MiRuta {
   const vivos = cursos.filter((curso) => curso.estado !== 'cancelado');
   const rutas: MiRuta['rutas'] = [];
@@ -185,7 +198,7 @@ export function armarMiRuta(
   const etapas: EtapaRuta[] = ordenados.map((grupo) => {
     const presentados = grupo.cursos
       .sort((a, b) => a.ordenCurso - b.ordenCurso || a.idCurso - b.idCurso)
-      .map(presentar);
+      .map((fila) => presentar(fila, umbral));
     const obligatorios = presentados.filter((curso) => curso.obligatorio);
     const base = obligatorios.length > 0 ? obligatorios : presentados;
     const completa =
@@ -200,6 +213,7 @@ export function armarMiRuta(
       orden: grupo.orden,
       estado,
       fechaLimite: limiteDe(presentados),
+      fechaCompletada: fechaCompletadaDe(presentados, estado),
       cursos: presentados,
     };
   });
@@ -208,7 +222,7 @@ export function armarMiRuta(
     (curso) => curso.obligatorio,
   );
   const avance = {
-    completados: obligatorios.filter((curso) => HECHO.has(curso.estado)).length,
+    completados: obligatorios.filter((curso) => cuenta(curso, umbral)).length,
     total: obligatorios.length,
   };
 
@@ -216,7 +230,7 @@ export function armarMiRuta(
     rutas,
     avance,
     etapas,
-    porRenovar: porRenovarDe(vivos, hoy, ventanaDias),
+    porRenovar: porRenovarDe(vivos, hoy, ventanaDias, umbral),
   };
 }
 
@@ -275,12 +289,19 @@ function rank(estado: CursoFuente['estado']): number {
   return 3;
 }
 
-function presentar(fila: CursoFuente): CursoRuta {
-  const estado = estadoVisible(fila);
-  const progreso =
-    estado === 'reconocido' || estado === 'completado'
-      ? 100
-      : Math.max(0, Math.min(100, Math.round(fila.progreso)));
+function cuenta(fila: CursoFuente, umbral: number): boolean {
+  return (
+    (fila.estado === 'completado' || fila.estado === 'reconocido') &&
+    calificacionAprobada(fila.calificacion, umbral)
+  );
+}
+
+function presentar(fila: CursoFuente, umbral: number): CursoRuta {
+  const estado = estadoVisible(fila, umbral);
+  const hecho = estado === 'reconocido' || estado === 'completado';
+  const progreso = hecho
+    ? 100
+    : Math.max(0, Math.min(100, Math.round(fila.progreso)));
   return {
     idCurso: fila.idCurso,
     idSesion: fila.idSesion,
@@ -291,12 +312,14 @@ function presentar(fila: CursoFuente): CursoRuta {
     progreso,
     fechaLimite: fila.fechaLimite,
     sesionProgramada: estado === 'agendado' ? fila.sesionProgramada : null,
+    calificacion: hecho ? fila.calificacion : null,
+    fechaCompletado: hecho ? fila.fechaCompletado : null,
   };
 }
 
-function estadoVisible(fila: CursoFuente): EstadoCursoRuta {
-  if (fila.estado === 'reconocido') return 'reconocido';
-  if (fila.estado === 'completado') return 'completado';
+function estadoVisible(fila: CursoFuente, umbral: number): EstadoCursoRuta {
+  if (fila.estado === 'reconocido' && cuenta(fila, umbral)) return 'reconocido';
+  if (fila.estado === 'completado' && cuenta(fila, umbral)) return 'completado';
   if (fila.estado === 'vencido') return 'vencido';
   const enVivo =
     fila.modalidad === 'presencial' || fila.modalidad === 'online_sincrono';
@@ -321,15 +344,29 @@ function limiteDe(cursos: CursoRuta[]): string | null {
   return abiertos.length > 0 ? fechas[0] : fechas[fechas.length - 1];
 }
 
+function fechaCompletadaDe(
+  cursos: CursoRuta[],
+  estado: EstadoEtapaRuta,
+): string | null {
+  if (estado !== 'completada') return null;
+  const obligatorios = cursos.filter((curso) => curso.obligatorio);
+  const base = obligatorios.length > 0 ? obligatorios : cursos;
+  const fechas = base
+    .map((curso) => curso.fechaCompletado)
+    .filter((fecha): fecha is string => !!fecha)
+    .sort();
+  return fechas.at(-1) ?? null;
+}
+
 function porRenovarDe(
   cursos: CursoFuente[],
   hoy: string,
   ventanaDias: number,
+  umbral: number,
 ): PorRenovar[] {
   const porCurso = new Map<number, PorRenovar>();
   for (const curso of cursos) {
-    if (curso.estado !== 'completado' && curso.estado !== 'reconocido')
-      continue;
+    if (!cuenta(curso, umbral)) continue;
     if (!curso.venceEn || curso.vigenciaMeses == null) continue;
     const dias = diasHasta(hoy, curso.venceEn);
     if (dias < 0 || dias > ventanaDias) continue;
