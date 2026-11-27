@@ -2021,9 +2021,10 @@ export class CareerPlanService {
       select: { idSite: true, Descripcion: true },
     });
     return new Map(
-      sites
-        .filter((site) => site.Descripcion?.trim())
-        .map((site) => [site.idSite, site.Descripcion.trim()]),
+      sites.flatMap((site) => {
+        const nombre = site.Descripcion?.trim();
+        return nombre ? [[site.idSite, nombre] as const] : [];
+      }),
     );
   }
 
