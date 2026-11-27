@@ -650,6 +650,11 @@ describe('CareerPlanService', () => {
     });
 
     it('crea con snapshots de puestos y registra historico', async () => {
+      mocks.catPuestos.findMany.mockResolvedValue([
+        { idPuesto: 100, NombrePuesto: 'Analista' },
+        { idPuesto: 200, NombrePuesto: 'Líder' },
+      ]);
+
       const result = await service.createPostulacion(
         1,
         { idEmpleado: 10, idRuta: 1 },
@@ -667,7 +672,11 @@ describe('CareerPlanService', () => {
           origen: 'rh',
         },
       });
-      expect(mocks.historicoMovimientos.create).toHaveBeenCalled();
+      expect(mocks.historicoMovimientos.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          descripcion: 'Postulado por Ana Lopez: Analista → Líder',
+        }),
+      });
       expect(result.idPlanCarrera).toBe(1);
     });
   });
@@ -745,6 +754,44 @@ describe('CareerPlanService', () => {
         estatus: 'pendiente',
         aprobado: false,
       });
+    });
+
+    it('traduce el historial guardado con ids de puesto', async () => {
+      mocks.planCarreraColaborador.findUnique.mockResolvedValue(postulacion());
+      mocks.empleados.findFirst.mockResolvedValue({
+        idEmpleado: 10,
+        nombre: 'Ana',
+        primerApellido: 'Lopez',
+        segundoApellido: null,
+      });
+      mocks.historicoMovimientos.findMany.mockResolvedValue([
+        {
+          accion: 'POSTULAR',
+          fechaCreacion: new Date('2026-03-01T00:00:00.000Z'),
+          descripcion:
+            'Colaborador 136 postulado a la ruta (puesto 41 -> 40) por Michael Guevara',
+        },
+      ]);
+      mocks.catPuestos.findMany.mockResolvedValue([
+        { idPuesto: 41, NombrePuesto: 'Product Owner' },
+        { idPuesto: 40, NombrePuesto: 'Desarrollador Full Stack Senior' },
+      ]);
+      mocks.relPuestoRuta.findMany.mockResolvedValue([
+        {
+          idRuta: 1,
+          idPuestoOrigen: 41,
+          idPuestoDestino: 40,
+          idRutaAprendizaje: null,
+        },
+      ]);
+      mocks.configuracionEmpresa.findMany.mockResolvedValue([]);
+
+      const result = await service.findColaborador(1, 1);
+
+      expect(result.historial[0].descripcion).toBe(
+        'Postulado por Michael Guevara: Product Owner → Desarrollador Full Stack Senior',
+      );
+      expect(mocks.historicoMovimientos.create).not.toHaveBeenCalled();
     });
 
     it('devuelve planta y la misma antigüedad del requisito', async () => {

@@ -44,6 +44,11 @@ import {
   tipoDeNiveles,
   vigenciaDe,
 } from './career-plan.evaluacion';
+import {
+  describirHistorial,
+  idsPuestosDeHistorial,
+  textoPostulacion,
+} from './career-plan.historial';
 
 const ZONA = 'America/Mexico_City';
 const MODULO = 'career-plan';
@@ -787,6 +792,10 @@ export class CareerPlanService {
       );
     }
     const idVersionRuta = await this.versionPublicada(route.idRutaAprendizaje);
+    const nombresPuesto = await this.nombresDePuestos([
+      route.idPuestoOrigen,
+      route.idPuestoDestino,
+    ]);
     const plan = await this.prismaService.planCarreraColaborador.create({
       data: {
         idEmpleado,
@@ -805,7 +814,13 @@ export class CareerPlanService {
       'POSTULAR',
       'PlanCarreraColaborador',
       plan.idPlanCarrera,
-      `Colaborador ${idEmpleado} postulado a la ruta (puesto ${route.idPuestoOrigen} -> ${route.idPuestoDestino}) por ${user.first_name} ${user.last_name}`,
+      textoPostulacion(
+        `${user.first_name ?? ''} ${user.last_name ?? ''}`,
+        nombresPuesto.get(route.idPuestoOrigen) ||
+          `Puesto ${route.idPuestoOrigen}`,
+        nombresPuesto.get(route.idPuestoDestino) ||
+          `Puesto ${route.idPuestoDestino}`,
+      ),
     );
     this.logger.log(
       `Postulacion creada: plan=${plan.idPlanCarrera} empleado=${idEmpleado} ruta=${idRuta} origen=${origen}`,
@@ -1951,11 +1966,28 @@ export class CareerPlanService {
       },
       orderBy: { fechaCreacion: 'asc' },
     });
+    const puestos = await this.nombresDePuestos(
+      (filas ?? []).flatMap((fila) => idsPuestosDeHistorial(fila.descripcion)),
+    );
     return (filas ?? []).map((fila) => ({
       tipo: TIPO_BITACORA[fila.accion] ?? fila.accion.toLowerCase(),
       fecha: fila.fechaCreacion,
-      descripcion: fila.descripcion,
+      descripcion: describirHistorial(fila.descripcion, puestos),
     }));
+  }
+
+  private async nombresDePuestos(ids: number[]): Promise<Map<number, string>> {
+    const unicos = [...new Set(ids)];
+    if (unicos.length === 0) return new Map();
+    const puestos = await this.prismaService.catPuestos.findMany({
+      where: { idPuesto: { in: unicos } },
+      select: { idPuesto: true, NombrePuesto: true },
+    });
+    return new Map(
+      puestos
+        .filter((puesto) => puesto.NombrePuesto?.trim())
+        .map((puesto) => [puesto.idPuesto, puesto.NombrePuesto.trim()]),
+    );
   }
 
   private async bitacora(
