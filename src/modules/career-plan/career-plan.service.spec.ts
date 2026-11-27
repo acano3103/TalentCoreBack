@@ -77,6 +77,9 @@ function buildMockPrisma() {
     catEmpresas: {
       findUnique: jest.fn().mockResolvedValue({ razon_social: 'ACME' }),
     },
+    catAreas: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     historicoMovimientos: {
       create: jest.fn().mockResolvedValue({}),
       findMany: jest.fn().mockResolvedValue([]),
@@ -717,6 +720,88 @@ describe('CareerPlanService', () => {
         idCurso: 1001,
         estatus: 'pendiente',
         aprobado: false,
+      });
+    });
+  });
+
+  describe('findMap', () => {
+    it('agrega el área del puesto y deja la ruta como ficha corta', async () => {
+      mocks.relPuestoRuta.findMany.mockResolvedValue([
+        {
+          idRuta: 7,
+          idEmpresa: 1,
+          idPuestoOrigen: 41,
+          idPuestoDestino: 40,
+          activo: true,
+          tipo: 'ascenso',
+          antiguedadMinimaMeses: 12,
+          idRutaAprendizaje: 3,
+          fechaRegistro: new Date('2026-01-01'),
+        },
+      ]);
+      mocks.catPuestos.findMany.mockResolvedValue([
+        {
+          idPuesto: 41,
+          NombrePuesto: 'Product Owner',
+          IdNivelSalario: 3,
+          idArea: 8,
+        },
+        {
+          idPuesto: 40,
+          NombrePuesto: 'Desarrollador Full Stack Senior',
+          IdNivelSalario: 5,
+          idArea: 8,
+        },
+      ]);
+      mocks.catAreas.findMany.mockResolvedValue([
+        { idArea: 8, Descripcion: 'Tecnología' },
+      ]);
+      mocks.rutaAprendizaje.findMany.mockResolvedValue([
+        { idRutaAprendizaje: 3, nombre: 'Ruta senior' },
+      ]);
+      mocks.rutaVersion.findMany.mockResolvedValue([
+        { idVersion: 9, idRutaAprendizaje: 3, numero: 1 },
+      ]);
+      mocks.rutaElemento.groupBy.mockResolvedValue([
+        { idVersion: 9, _count: { _all: 4 } },
+      ]);
+      mocks.planCarreraColaborador.findMany.mockResolvedValue([]);
+      mocks.configuracionEmpresa.findMany.mockResolvedValue([]);
+
+      const mapa = await service.findMap(1, undefined, activeUser as never);
+
+      expect(mapa.nodos).toEqual([
+        expect.objectContaining({
+          idPuesto: 41,
+          nombre: 'Product Owner',
+          nivel: 3,
+          idArea: 8,
+          nombreArea: 'Tecnología',
+          personas: 0,
+          plazasLibres: { total: 0, porSite: [] },
+        }),
+        expect.objectContaining({
+          idPuesto: 40,
+          nombre: 'Desarrollador Full Stack Senior',
+          nivel: 5,
+          idArea: 8,
+          nombreArea: 'Tecnología',
+        }),
+      ]);
+      expect(mapa.caminos).toHaveLength(1);
+      expect(mapa.caminos[0].rutaAprendizaje).toEqual({
+        idRutaAprendizaje: 3,
+        nombre: 'Ruta senior',
+      });
+      expect(mapa.caminos[0]).toMatchObject({
+        idRuta: 7,
+        idPuestoOrigen: 41,
+        idPuestoDestino: 40,
+        tipo: 'ascenso',
+        antiguedadMinimaMeses: 12,
+        enPlan: 0,
+        listosAhora: 0,
+        plazasLibresDestino: 0,
       });
     });
   });

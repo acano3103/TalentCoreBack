@@ -217,10 +217,27 @@ export class CareerPlanService {
         idPuesto: true,
         NombrePuesto: true,
         IdNivelSalario: true,
+        idArea: true,
       },
     });
     const puestoMap = new Map(
       puestos.map((puesto) => [puesto.idPuesto, puesto]),
+    );
+    const areaIds = [
+      ...new Set(
+        puestos
+          .map((puesto) => puesto.idArea)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+    const areas = areaIds.length
+      ? await this.prismaService.catAreas.findMany({
+          where: { idArea: { in: areaIds } },
+          select: { idArea: true, Descripcion: true },
+        })
+      : [];
+    const nombreArea = new Map(
+      areas.map((area) => [area.idArea, area.Descripcion]),
     );
     const personas = await this.conteoPersonas(companyId, [...ids]);
     const plazas = await this.plazasPorPuesto(companyId, [...ids]);
@@ -251,6 +268,11 @@ export class CareerPlanService {
           idPuesto,
           nombre: puesto?.NombrePuesto ?? null,
           nivel: puesto?.IdNivelSalario ?? null,
+          idArea: puesto?.idArea ?? null,
+          nombreArea:
+            puesto?.idArea != null
+              ? (nombreArea.get(puesto.idArea) ?? null)
+              : null,
           personas: personas.get(idPuesto) ?? 0,
           plazasLibres: { total: cupo.total, porSite: cupo.porSite },
         };
@@ -278,9 +300,11 @@ export class CareerPlanService {
           antiguedadMinimaMeses:
             camino.antiguedadMinimaMeses ??
             config.carreraAntiguedadDefaultMeses,
-          rutaAprendizaje: camino.idRutaAprendizaje
-            ? (fichas.get(camino.idRutaAprendizaje) ?? null)
-            : null,
+          rutaAprendizaje: this.fichaDelMapa(
+            camino.idRutaAprendizaje
+              ? fichas.get(camino.idRutaAprendizaje)
+              : null,
+          ),
           enPlan: lista.filter(
             (avance) =>
               avance.estatus !== 'promovido' && avance.estatus !== 'cancelado',
@@ -1674,6 +1698,16 @@ export class CareerPlanService {
       if (fila.idPuesto != null) mapa.set(fila.idPuesto, fila._count._all);
     }
     return mapa;
+  }
+
+  private fichaDelMapa(
+    ficha: FichaAprendizaje | null | undefined,
+  ): { idRutaAprendizaje: number; nombre: string } | null {
+    if (!ficha) return null;
+    return {
+      idRutaAprendizaje: ficha.idRutaAprendizaje,
+      nombre: ficha.nombre,
+    };
   }
 
   private async fichasAprendizaje(ids: number[]) {
