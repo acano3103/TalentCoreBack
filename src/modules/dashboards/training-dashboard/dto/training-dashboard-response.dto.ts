@@ -41,5 +41,6 @@ export interface TrainingDashboardResponseDto {
     opciones: {
         cursos: { idCurso: number; nombre: string }[];
         areas: { idArea: number; nombre: string }[];
+        ubicaciones: { idSite: number; nombre: string }[];
     };
 }

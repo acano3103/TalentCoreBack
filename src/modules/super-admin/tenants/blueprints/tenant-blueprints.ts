@@ -12,6 +12,11 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     codigoPadre: null,
   },
   {
+    codigo: 'organizational-dashboard',
+    descripcion: 'Dashboard',
+    codigoPadre: 'organizational-structure',
+  },
+  {
     codigo: 'companies',
     descripcion: 'Empresas',
     codigoPadre: 'organizational-structure',
@@ -75,6 +80,11 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
   // Reclutamiento
   { codigo: 'recruitment', descripcion: 'Reclutamiento', codigoPadre: null },
   {
+    codigo: 'recluitment-dashboard',
+    descripcion: 'Dashboard',
+    codigoPadre: 'recruitment',
+  },
+  {
     codigo: 'requisitions',
     descripcion: 'Requisiciones',
     codigoPadre: 'recruitment',
@@ -96,6 +106,11 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     codigo: 'digital-files',
     descripcion: 'Expedientes digitales',
     codigoPadre: null,
+  },
+  {
+    codigo: 'digital-files-dashboard',
+    descripcion: 'Dashboard',
+    codigoPadre: 'digital-files',
   },
   {
     codigo: 'required-documents',
@@ -123,6 +138,11 @@ export const MODULE_BLUEPRINTS: ModuleBlueprint[] = [
     codigo: 'personnel-administration',
     descripcion: 'Administración de personal',
     codigoPadre: null,
+  },
+  {
+    codigo: 'personnel-dashboard',
+    descripcion: 'Dashboard',
+    codigoPadre: 'personnel-administration',
   },
   {
     codigo: 'my-information',
@@ -367,6 +387,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Admin',
+    moduloCodigo: 'organizational-dashboard',
+    puedeVer: true,
+    puedeCrear: true,
+    puedeActualizar: true,
+    puedeEliminar: true,
+  },
+  {
+    rolName: 'Admin',
     moduloCodigo: 'companies',
     puedeVer: true,
     puedeCrear: true,
@@ -471,6 +499,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Admin',
+    moduloCodigo: 'recluitment-dashboard',
+    puedeVer: true,
+    puedeCrear: true,
+    puedeActualizar: true,
+    puedeEliminar: true,
+  },
+  {
+    rolName: 'Admin',
     moduloCodigo: 'requisitions',
     puedeVer: true,
     puedeCrear: true,
@@ -511,6 +547,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Admin',
+    moduloCodigo: 'digital-files-dashboard',
+    puedeVer: true,
+    puedeCrear: true,
+    puedeActualizar: true,
+    puedeEliminar: true,
+  },
+  {
+    rolName: 'Admin',
     moduloCodigo: 'required-documents',
     puedeVer: true,
     puedeCrear: true,
@@ -544,6 +588,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   {
     rolName: 'Admin',
     moduloCodigo: 'personnel-administration',
+    puedeVer: true,
+    puedeCrear: true,
+    puedeActualizar: true,
+    puedeEliminar: true,
+  },
+  {
+    rolName: 'Admin',
+    moduloCodigo: 'personnel-dashboard',
     puedeVer: true,
     puedeCrear: true,
     puedeActualizar: true,
@@ -891,6 +943,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'RH',
+    moduloCodigo: 'organizational-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'RH',
     moduloCodigo: 'companies',
     puedeVer: true,
     puedeCrear: true,
@@ -995,6 +1055,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'RH',
+    moduloCodigo: 'recluitment-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'RH',
     moduloCodigo: 'requisitions',
     puedeVer: true,
     puedeCrear: true,
@@ -1035,6 +1103,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'RH',
+    moduloCodigo: 'digital-files-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'RH',
     moduloCodigo: 'required-documents',
     puedeVer: true,
     puedeCrear: true,
@@ -1071,6 +1147,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     puedeVer: true,
     puedeCrear: true,
     puedeActualizar: true,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'RH',
+    moduloCodigo: 'personnel-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
     puedeEliminar: false,
   },
   {
@@ -1415,6 +1499,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Finanzas',
+    moduloCodigo: 'organizational-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Finanzas',
     moduloCodigo: 'companies',
     puedeVer: false,
     puedeCrear: false,
@@ -1519,6 +1611,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Finanzas',
+    moduloCodigo: 'recluitment-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Finanzas',
     moduloCodigo: 'requisitions',
     puedeVer: false,
     puedeCrear: false,
@@ -1559,6 +1659,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Finanzas',
+    moduloCodigo: 'digital-files-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Finanzas',
     moduloCodigo: 'required-documents',
     puedeVer: false,
     puedeCrear: false,
@@ -1592,6 +1700,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   {
     rolName: 'Finanzas',
     moduloCodigo: 'personnel-administration',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Finanzas',
+    moduloCodigo: 'personnel-dashboard',
     puedeVer: true,
     puedeCrear: false,
     puedeActualizar: false,
@@ -1939,6 +2055,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Reclutador',
+    moduloCodigo: 'organizational-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Reclutador',
     moduloCodigo: 'companies',
     puedeVer: true,
     puedeCrear: false,
@@ -2043,6 +2167,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Reclutador',
+    moduloCodigo: 'recluitment-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Reclutador',
     moduloCodigo: 'requisitions',
     puedeVer: true,
     puedeCrear: true,
@@ -2083,6 +2215,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Reclutador',
+    moduloCodigo: 'digital-files-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Reclutador',
     moduloCodigo: 'required-documents',
     puedeVer: false,
     puedeCrear: false,
@@ -2116,6 +2256,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   {
     rolName: 'Reclutador',
     moduloCodigo: 'personnel-administration',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Reclutador',
+    moduloCodigo: 'personnel-dashboard',
     puedeVer: true,
     puedeCrear: false,
     puedeActualizar: false,
@@ -2463,6 +2611,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Manager',
+    moduloCodigo: 'organizational-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Manager',
     moduloCodigo: 'companies',
     puedeVer: false,
     puedeCrear: false,
@@ -2567,6 +2723,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Manager',
+    moduloCodigo: 'recluitment-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Manager',
     moduloCodigo: 'requisitions',
     puedeVer: true,
     puedeCrear: true,
@@ -2607,6 +2771,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Manager',
+    moduloCodigo: 'digital-files-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Manager',
     moduloCodigo: 'required-documents',
     puedeVer: false,
     puedeCrear: false,
@@ -2643,6 +2815,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     puedeVer: true,
     puedeCrear: true,
     puedeActualizar: true,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Manager',
+    moduloCodigo: 'personnel-dashboard',
+    puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
     puedeEliminar: false,
   },
   {
@@ -2987,6 +3167,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Empleado',
+    moduloCodigo: 'organizational-dashboard',
+    puedeVer: false,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Empleado',
     moduloCodigo: 'companies',
     puedeVer: false,
     puedeCrear: false,
@@ -3091,6 +3279,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   },
   {
     rolName: 'Empleado',
+    moduloCodigo: 'recluitment-dashboard',
+    puedeVer: false,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Empleado',
     moduloCodigo: 'requisitions',
     puedeVer: false,
     puedeCrear: false,
@@ -3124,6 +3320,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
   {
     rolName: 'Empleado',
     moduloCodigo: 'digital-files',
+    puedeVer: false,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Empleado',
+    moduloCodigo: 'digital-files-dashboard',
     puedeVer: false,
     puedeCrear: false,
     puedeActualizar: false,
@@ -3165,6 +3369,14 @@ export const PERMISSION_BLUEPRINTS: PermissionBlueprint[] = [
     rolName: 'Empleado',
     moduloCodigo: 'personnel-administration',
     puedeVer: true,
+    puedeCrear: false,
+    puedeActualizar: false,
+    puedeEliminar: false,
+  },
+  {
+    rolName: 'Empleado',
+    moduloCodigo: 'personnel-dashboard',
+    puedeVer: false,
     puedeCrear: false,
     puedeActualizar: false,
     puedeEliminar: false,
