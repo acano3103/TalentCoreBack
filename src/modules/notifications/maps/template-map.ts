@@ -13,12 +13,17 @@ export const TEMPLATE_MAP = {
         'INTERVIEW_RESCHEDULED': 'resend_entrevista',
         'INTERVIEW_RESCHEDULED_INTERVIEWER': 'resend_entrevista_entrevistador',
         'DOCUMENT_REJECTED': 'documentacion-rechazada',
-         'DOCUMENT_EXPIRING': 'documentos-por-vencer',
-        'CONTRACT_SIGN': 'link_firmar_contrato'
+        'DOCUMENT_EXPIRING': 'documentos-por-vencer',
+        'CONTRACT_SIGN': 'link_firmar_contrato',
+        'STAFF_REDUCTION_DOCUMENT_SIGN': 'link_firma_documento_baja',
+        'RECRUITMENT_DOCUMENT_SIGN': 'reclutamiento_pendiente_firma',
+        'RECRUITMENT_DOCUMENT_READ': 'reclutamiento_pendiente_leer',
+        'COMUNICADO': 'comunicado',
     },
     WHATSAPP: {
         'CONTRACT_SIGN': '75d01c5d-7fe9-4709-b838-12bcab8ad68e',
-        'CONTRACT_SIGN_TOKEN': 'ce2b090f-ad9b-4a0b-9cc5-ae70acf99f30'
+        'CONTRACT_SIGN_TOKEN': 'ce2b090f-ad9b-4a0b-9cc5-ae70acf99f30',
+        'STAFF_REDUCTION_DOCUMENT_SIGN': '09f4120f-4651-449c-a868-ef6598343d94',
     },
     SOCKETS: {
         'POSITION_STATUS_UPDATE': 'puesto_estado_stream',

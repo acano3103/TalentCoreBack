@@ -20,6 +20,7 @@ import { QueryInternalMovementsDto } from './dto/query-internal-movements.dto';
 import { GetInternalMovementRequestDetailDto } from './dto/get-internal-movement-request.detail.dto';
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { CreateStaffReductionMovementDto } from './dto/create-staff-reduction-movement.dto';
+import { NotifyStaffReductionDocumentDto } from './dto/notify-staff-reduction-document.dto';
 
 @ApiTags('Internal Movements')
 @ApiBearerAuth()
@@ -85,5 +86,21 @@ export class InternalMovementsController {
     @GetActiveUser() activeUser: ActiveUserDto,
   ) {
     return this.internalMovementsService.createStaffReductionMovement(activeUser, companyId, createStaffReductionMovementDto, archivos);
+  }
+
+  // Envía al empleado la notificación para firmar un documento generado durante una baja.
+  @Post('staff-reduction/documents/:documentId/notify-signature')
+  @ApiOperation({ summary: 'Notify employee to sign a staff reduction document', description: 'Sends the signature link for a generated document associated with a staff reduction process.' })
+  @ApiResponse({ status: 200, description: 'Signature notification sent successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid document or employee data.' })
+  @ApiResponse({ status: 404, description: 'Generated document or employee not found.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized. Invalid credentials.' })
+  notifyStaffReductionDocument(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Body() dto: NotifyStaffReductionDocumentDto,
+    @GetActiveUser() activeUser: ActiveUserDto,
+  ) {
+    return this.internalMovementsService.notifyStaffReductionDocument(activeUser, companyId, documentId, dto);
   }
 }

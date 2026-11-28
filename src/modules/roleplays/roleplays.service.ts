@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Injectable,
     Logger,
     NotFoundException,
@@ -9,6 +10,8 @@ import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { CreateRoleplayDto } from './dto/create-roleplay.dto';
 import { UpdateRoleplayDto } from './dto/update-roleplay.dto';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
+import { Prisma } from 'generated/prisma/client';
+import { FindAllRoleplaysParams } from './interfaces/roleplays.interfaces';
 
 @Injectable()
 export class RoleplaysService {
@@ -16,26 +19,59 @@ export class RoleplaysService {
 
     constructor(private readonly prisma: PrismaService) { }
 
-    async findAll(companyId: number, user: ActiveUserDto, isActive?: boolean) {
+    async findAll(
+        companyId: number,
+        user: ActiveUserDto,
+        params: FindAllRoleplaysParams = {},
+    ) {
         if (!user.idTenant) {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
-        const whereCondition: any = {
+        const page = Math.max(1, params.page ?? 1);
+        const limit = Math.max(1, params.limit ?? 10);
+        const search = params.search?.trim() ?? '';
+        const isActive = params.isActive;
+
+        const whereCondition: Prisma.RolePlaysWhereInput = {
             idEmpresa: companyId,
             idTenant: user.idTenant,
             ...(isActive !== undefined ? { Activo: isActive } : {}),
+            ...(search
+                ? {
+                    OR: [
+                        {
+                            Titulo: { contains: search, },
+                        },
+                        {
+                            Descripcion: { contains: search, },
+                        },
+                    ],
+                }
+                : {}),
         };
 
-        const rolePlays = await this.prisma.rolePlays.findMany({
-            where: whereCondition,
-            include: {
-                EvaluationCriteria: { orderBy: { Orden: 'asc' } },
-            },
-            orderBy: { FechaRegistro: 'desc' },
-        });
+        const [rolePlays, total] = await Promise.all([
+            this.prisma.rolePlays.findMany({
+                where: whereCondition,
+                include: {
+                    EvaluationCriteria: {
+                        orderBy: { Orden: 'asc' },
+                    },
+                },
+                orderBy: { FechaRegistro: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            this.prisma.rolePlays.count({
+                where: whereCondition,
+            }),
+        ]);
 
-        return rolePlays;
+        return {
+            data: rolePlays,
+            total,
+        };
     }
 
     async findOne(companyId: number, roleplayId: number, user: ActiveUserDto) {
@@ -80,6 +116,7 @@ export class RoleplaysService {
                         AiScript: dto.AiScript,
                         ObjetivosAprendizaje: dto.ObjetivosAprendizaje || null,
                         DuracionMinutos: dto.DuracionMinutos ?? 15,
+                        CalificacionMinima: dto.CalificacionMinima ?? null,
                         idUsuarioCreador: user.id,
                         FechaRegistro: new Date(),
                         Activo: true,
@@ -132,16 +169,25 @@ export class RoleplaysService {
             throw new NotFoundException(`Role play con id ${roleplayId} no encontrado.`);
         }
 
+        const { Criterios, ...rolePlayData } = dto;
+        const planCriterios = Criterios !== undefined ? await this.planCriterios(roleplayId, Criterios) : null;
+
         try {
             await this.prisma.$transaction(async (tx) => {
-                const { Criterios, ...rolePlayData } = dto;
-
-                if (Criterios !== undefined) {
-                    await tx.evaluationCriteria.deleteMany({ where: { idRolePlay: roleplayId } });
-                    if (Criterios.length > 0) {
-                        await tx.evaluationCriteria.createMany({
-                            data: this.mapCriterios(Criterios, roleplayId, idTenant),
+                if (planCriterios && Criterios) {
+                    if (planCriterios.eliminar.length) {
+                        await tx.evaluationCriteria.deleteMany({ where: { idCriterio: { in: planCriterios.eliminar } } });
+                    }
+                    for (const [i, c] of Criterios.entries()) {
+                        if (!c.idCriterio) continue;
+                        await tx.evaluationCriteria.update({
+                            where: { idCriterio: c.idCriterio },
+                            data: { Nombre: c.Nombre, Descripcion: c.Descripcion, PuntosMaximos: c.PuntosMaximos, Orden: i, Tipo: c.Tipo },
                         });
+                    }
+                    const nuevos = Criterios.map((c, i) => ({ ...c, Orden: i })).filter((c) => !c.idCriterio);
+                    if (nuevos.length) {
+                        await tx.evaluationCriteria.createMany({ data: this.mapCriterios(nuevos, roleplayId, idTenant) });
                     }
                 }
 
@@ -218,6 +264,35 @@ export class RoleplaysService {
             this.logger.error(`Error al cambiar el estatus del role play ${roleplayId}: ${error.message}`, error.stack);
             throw new InternalServerErrorException('Error al actualizar el estatus del role play.');
         }
+    }
+
+    // Los criterios ya evaluados se editan, pero no se pueden borrar
+    private async planCriterios(roleplayId: number, criterios: CreateCriterionDto[]) {
+        const actuales = await this.prisma.evaluationCriteria.findMany({
+            where: { idRolePlay: roleplayId },
+            select: { idCriterio: true, Nombre: true },
+        });
+        const idsActuales = new Set(actuales.map((c) => c.idCriterio));
+        const idsRecibidos = criterios.map((c) => c.idCriterio).filter((id): id is number => !!id);
+
+        if (idsRecibidos.some((id) => !idsActuales.has(id))) {
+            throw new BadRequestException('Uno de los criterios no pertenece a este role play.');
+        }
+
+        const eliminar = actuales.filter((c) => !idsRecibidos.includes(c.idCriterio));
+        if (eliminar.length) {
+            const evaluados = await this.prisma.rolePlayEvaluacionCriterios.findMany({
+                where: { idCriterio: { in: eliminar.map((c) => c.idCriterio) } },
+                select: { idCriterio: true },
+                distinct: ['idCriterio'],
+            });
+            if (evaluados.length) {
+                const nombres = eliminar.filter((c) => evaluados.some((e) => e.idCriterio === c.idCriterio)).map((c) => `"${c.Nombre}"`);
+                throw new BadRequestException(`No se puede eliminar ${nombres.join(', ')} porque ya tiene evaluaciones registradas.`);
+            }
+        }
+
+        return { eliminar: eliminar.map((c) => c.idCriterio) };
     }
 
     private mapCriterios(criterios: CreateCriterionDto[], idRolePlay: number, idTenant: number) {

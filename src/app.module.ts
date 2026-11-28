@@ -28,9 +28,12 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { InternalMovementsModule } from './modules/internal-movements/internal-movements.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CoursesModule } from './modules/courses/courses.module';
 import { RoleplaysModule } from './modules/roleplays/roleplays.module';
 import { CareerPlanModule } from './modules/career-plan/career-plan.module';
+import { LearningPathsModule } from './modules/learning-paths/learning-paths.module';
 import { ConfigurationModule } from './modules/configuration/configuration.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { GeofencesService } from './modules/geofences/geofences.service';
@@ -41,6 +44,7 @@ import { LegalWorkdayModule } from './modules/legal-workday/legal-workday.module
 import { LogbookModule } from './modules/logbook/logbook.module';
 import { AttendanceDashboardModule } from './modules/dashboards/attendance-dashboard/attendance-dashboard.module';
 import { TrainingDashboardModule } from './modules/dashboards/training-dashboard/training-dashboard.module';
+import { OrganizationalDashboardModule } from './modules/dashboards/organizational-dashboard/organizational-dashboard.module';
 import { AttendanceTrackingConfigModule } from './modules/config/attendance-config/attendance-config.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { existsSync } from 'fs';
@@ -50,11 +54,17 @@ import { IncidentsModule } from './modules/incidents/incidents.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { TimeClockModule } from './modules/time-clock/time-clock.module';
 import { KiosksModule } from './modules/kiosks/kiosks.module';
+import { CommunicationsModule } from './modules/communications/communications.module';
+import { PersonnelDashboardModule } from './modules/dashboards/personnel-dashboard/personnel-dashboard.module';
+import { DigitalFileDashboardModule } from './modules/dashboards/digital-files-dashboard/digital-files-dashboard.module';
+import { RecruitmentDashboardModule } from './modules/dashboards/recluitment-dashboard/recluitment-dashboard.module';
 
 // Determina dinámicamente la ruta correcta de public
 const publicDistPath = join(process.cwd(), 'dist', 'public');
 const publicSrcPath = join(process.cwd(), 'src', 'public');
-const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrcPath;
+const staticPublicPath = existsSync(publicDistPath)
+  ? publicDistPath
+  : publicSrcPath;
 
 @Module({
   imports: [
@@ -63,6 +73,12 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
       validationSchema: envValidationSchema,
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 20 }],
+      errorMessage:
+        'Demasiadas solicitudes. Espera un momento e intenta de nuevo.',
+    }),
+    EventEmitterModule.forRoot({ ignoreErrors: true }),
     ServeStaticModule.forRoot(
       {
         rootPath: staticPublicPath,
@@ -80,7 +96,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
         serveRoot: '/media',
         // D6: las selfies de asistencia no son públicas; se leen por MediaController.
         exclude: ['/media/attendance/(.*)'],
-      }
+      },
     ),
     PrismaModule,
     AuthModule,
@@ -98,6 +114,8 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     CostCenterModule,
     EventsModule,
     HeadcountModule,
+    // Antes que Roles: GET /roles/comms-capabilities no debe caer en GET /roles/:id.
+    CommunicationsModule,
     RolesModule,
     VacanciesModule,
     ActivityLogsModule,
@@ -109,6 +127,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     CoursesModule,
     RoleplaysModule,
     CareerPlanModule,
+    LearningPathsModule,
     ConfigurationModule,
     SuperAdminModule,
     GeofencesModule,
@@ -118,6 +137,7 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     LogbookModule,
     AttendanceDashboardModule,
     TrainingDashboardModule,
+    OrganizationalDashboardModule,
     AttendanceTrackingConfigModule,
     AttendanceModule,
     AttendanceReportsModule,
@@ -125,9 +145,12 @@ const staticPublicPath = existsSync(publicDistPath) ? publicDistPath : publicSrc
     IncidentsModule,
     ApprovalsModule,
     TimeClockModule,
-    KiosksModule
+    KiosksModule,
+    PersonnelDashboardModule,
+    DigitalFileDashboardModule,
+    RecruitmentDashboardModule,
   ],
   controllers: [],
   providers: [GeofencesService],
 })
-export class AppModule { }
+export class AppModule {}

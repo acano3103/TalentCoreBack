@@ -85,11 +85,22 @@ export class NfcService {
                 primerApellido: true,
                 segundoApellido: true,
                 artemisUserId: true,
+                CatPuestos: {
+                    select: {
+                        idPuesto: true,
+                        NombrePuesto: true,
+                    },
+                },
             },
             orderBy: {
                 nombre: 'asc',
             },
         });
+
+        const employeesResponse = employees.map(({ CatPuestos, ...employee }) => ({
+            ...employee,
+            puesto: CatPuestos?.NombrePuesto ?? null,
+        }));
 
         this.logger.log(
             `Retrieved ${employees.length} authorized NFC employees for tenant ${tenantId} at location ${locationId}.`,
@@ -99,7 +110,7 @@ export class NfcService {
             tenantId,
             locationId,
             total: employees.length,
-            employees,
+            employees: employeesResponse,
         };
     }
 }

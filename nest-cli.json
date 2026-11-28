@@ -16,6 +16,10 @@
       {
         "include": "media/**/*",
         "outDir": "dist"
+      },
+      {
+        "include": "modules/mobile/mobile-training/scorm/**/*.js",
+        "outDir": "dist/src"
       }
     ],
     "watchAssets": true

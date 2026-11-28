@@ -1,4 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, UnauthorizedException, Inject, forwardRef, ConsoleLogger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, UnauthorizedException, Inject, forwardRef, ConsoleLogger, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_APROBACION, COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
+import { emitirHechoCarrera } from 'src/common/events/career-hechos';
 import { ActionApprovalDto } from './dto/approve-reject-action.dto';
 import { ModuloOrigenEnum, AccionAprobacionEnum, AccionCancelacionEnum } from './enums/approval-origin.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -20,6 +23,7 @@ export class ApprovalsService {
         private readonly incidentsService: IncidentsService,
         @Inject(forwardRef(() => InternalMovementsService))
         private readonly internalMovementsService: InternalMovementsService,
+        @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
     ) { }
 
     // BANDEJA UNIFICADA: Listado de pendientes que requieren la aprobación del usuario
@@ -388,7 +392,7 @@ export class ApprovalsService {
             const pasoConfig = flujo.pasos.find((p: any) => p.paso === pasoActual);
 
             // Registrar auditoría en la nueva tabla PasosAprobacionIncidencia
-            return await this.prisma.$transaction(async (tx) => {
+            const respuesta = await this.prisma.$transaction(async (tx) => {
                 const estatusPaso = dto.accion === AccionAprobacionEnum.APROBAR ? 'APROBADA' : 'RECHAZADA';
 
                 await tx.pasosAprobacionIncidencia.create({
@@ -415,7 +419,7 @@ export class ApprovalsService {
                             fechaRespuesta: new Date(),
                         },
                     });
-                    return { message: 'Solicitud rechazada exitosamente' };
+                    return { message: 'Solicitud rechazada exitosamente', estatus: 'RECHAZADA' as const, pasoSiguiente: null as number | null };
                 }
 
                 // Si aprobó: verificamos si era el último paso o pasa al siguiente
@@ -428,7 +432,7 @@ export class ApprovalsService {
                             fechaRespuesta: new Date(),
                         },
                     });
-                    return { message: 'Solicitud aprobada y finalizada con éxito' };
+                    return { message: 'Solicitud aprobada y finalizada con éxito', estatus: 'APROBADA' as const, pasoSiguiente: null as number | null };
                 } else {
                     await tx.solicitudesIncidencias.update({
                         where: { idSolicitud: solicitud.idSolicitud },
@@ -436,9 +440,15 @@ export class ApprovalsService {
                             pasoActual: pasoActual + 1,
                         },
                     });
-                    return { message: `Aprobado el paso ${pasoActual}. Pasa al paso ${pasoActual + 1}` };
+                    return {
+                        message: `Aprobado el paso ${pasoActual}. Pasa al paso ${pasoActual + 1}`,
+                        estatus: 'PENDIENTE' as const,
+                        pasoSiguiente: pasoActual + 1,
+                    };
                 }
             });
+            this.avisarDecision(activeUser.idTenant, companyId, 'INCIDENCIA', solicitud.idSolicitud, solicitud.idEmpleado, respuesta);
+            return { message: respuesta.message };
         }
 
         // C. Manejo para MOVIMIENTOS INTERNOS
@@ -467,7 +477,7 @@ export class ApprovalsService {
             const pasoConfig = flujo.pasos.find((p: any) => p.paso === pasoActual);
 
             // Registrar auditoría en la nueva tabla PasosAprobacionMovimiento
-            return await this.prisma.$transaction(async (tx) => {
+            const respuesta = await this.prisma.$transaction(async (tx) => {
                 const estatusPaso = dto.accion === AccionAprobacionEnum.APROBAR ? 'APROBADA' : 'RECHAZADA';
 
                 await tx.pasosAprobacionMovimientoInterno.create({
@@ -494,7 +504,7 @@ export class ApprovalsService {
                             fechaRespuesta: new Date(),
                         },
                     });
-                    return { message: 'Solicitud rechazada exitosamente' };
+                    return { message: 'Solicitud rechazada exitosamente', estatus: 'RECHAZADA' as const, pasoSiguiente: null as number | null };
                 }
 
                 // Si aprobó: verificamos si era el último paso o pasa al siguiente
@@ -511,7 +521,7 @@ export class ApprovalsService {
                     // Actualizamos la información del empleado que se aprobó
                     await this.internalMovementsService.aplicarMovimientoAEmpleado(solicitud.idMovimiento, activeUser);
 
-                    return { message: 'Solicitud aprobada y finalizada con éxito' };
+                    return { message: 'Solicitud aprobada y finalizada con éxito', estatus: 'APROBADA' as const, pasoSiguiente: null as number | null };
                 } else {
                     await tx.movimientosInternos.update({
                         where: { idMovimiento: solicitud.idMovimiento },
@@ -519,9 +529,18 @@ export class ApprovalsService {
                             pasoActual: pasoActual + 1,
                         },
                     });
-                    return { message: `Aprobado el paso ${pasoActual}. Pasa al paso ${pasoActual + 1}` };
+                    return {
+                        message: `Aprobado el paso ${pasoActual}. Pasa al paso ${pasoActual + 1}`,
+                        estatus: 'PENDIENTE' as const,
+                        pasoSiguiente: pasoActual + 1,
+                    };
                 }
             });
+            if (respuesta.estatus === 'RECHAZADA') {
+                await this.avisarPlanCarrera(solicitud, activeUser);
+            }
+            this.avisarDecision(activeUser.idTenant, companyId, 'MOVIMIENTO_INTERNO', solicitud.idMovimiento, solicitud.idEmpleado, respuesta);
+            return { message: respuesta.message };
         }
 
         throw new BadRequestException('Módulo de origen no reconocido');
@@ -632,11 +651,13 @@ export class ApprovalsService {
                 });
             });
 
-            return {
+            const respuesta = {
                 message: 'Solicitud cancelada exitosamente',
                 idOrigen: solicitud.idSolicitud,
-                estatus: 'CANCELADA',
+                estatus: 'CANCELADA' as const,
             };
+            this.avisarDecision(activeUser.idTenant, companyId, 'INCIDENCIA', solicitud.idSolicitud, solicitud.idEmpleado, respuesta);
+            return respuesta;
         }
 
         // G. Manejo para MOVIMIENTOS INTERNOS
@@ -654,6 +675,8 @@ export class ApprovalsService {
                         solicitadoPorIdEmpleado: true,
                         estatus: true,
                         motivo: true,
+                        idPlanCarrera: true,
+                        fechaEfectiva: true,
                     },
                 });
 
@@ -700,16 +723,78 @@ export class ApprovalsService {
                 });
             });
 
-            return {
+            const respuesta = {
                 message: 'Movimiento interno cancelado exitosamente',
                 idOrigen: solicitud.idMovimiento,
-                estatus: 'CANCELADA',
+                estatus: 'CANCELADA' as const,
             };
+            await this.avisarPlanCarrera(
+                { ...solicitud, idEmpresa: companyId },
+                activeUser,
+            );
+            this.avisarDecision(activeUser.idTenant, companyId, 'MOVIMIENTO_INTERNO', solicitud.idMovimiento, solicitud.idEmpleado, respuesta);
+            return respuesta;
         }
 
         throw new BadRequestException(
             'Módulo de origen no reconocido.',
         );
+    }
+
+    /** Si el movimiento cierra un plan, el plan vuelve a listo para ascenso. */
+    private async avisarPlanCarrera(
+        movimiento: {
+            idPlanCarrera: number | null;
+            idEmpresa: number;
+            idMovimiento: number;
+            fechaEfectiva?: Date | null;
+        },
+        user?: ActiveUserDto,
+    ): Promise<void> {
+        if (movimiento.idPlanCarrera == null) return;
+        await emitirHechoCarrera(this.eventos, {
+            tipo: 'RECHAZADO',
+            idEmpresa: movimiento.idEmpresa,
+            idPlanCarrera: movimiento.idPlanCarrera,
+            idMovimiento: movimiento.idMovimiento,
+            idUsuario: user?.id,
+            fechaEfectiva: movimiento.fechaEfectiva,
+        });
+    }
+
+    /** Avisa el cambio de estatus o el paso pendiente. Un fallo no altera la respuesta HTTP. */
+    private avisarDecision(
+        idTenant: number | null | undefined,
+        idEmpresa: number,
+        origen: 'INCIDENCIA' | 'MOVIMIENTO_INTERNO',
+        idSolicitud: number,
+        idEmpleado: number,
+        respuesta: { estatus: string; pasoSiguiente?: number | null },
+    ): void {
+        if (!idTenant) return;
+        const solicitud = origen === 'INCIDENCIA' ? 'incidencia' : 'movimiento interno';
+        if (respuesta.estatus && respuesta.estatus !== 'PENDIENTE') {
+            emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+                origen,
+                idTenant,
+                idEmpresa,
+                idEmpleado,
+                idSolicitud,
+                estatus: respuesta.estatus,
+                solicitud,
+            });
+        }
+        if (respuesta.pasoSiguiente) {
+            emitirHecho(this.eventos, COMMS_EVENTO_APROBACION, {
+                idTenant,
+                idEmpresa,
+                idEmpleado,
+                idSolicitud,
+                origen,
+                paso: respuesta.pasoSiguiente,
+                solicitud,
+            });
+        }
     }
 
     async getApprovalRequestDetail(

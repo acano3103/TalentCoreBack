@@ -1,11 +1,15 @@
 import {
     BadRequestException,
+    Inject,
     Injectable,
     InternalServerErrorException,
     Logger,
     NotFoundException,
+    Optional,
     UnauthorizedException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { PersonnelConfigService } from 'src/modules/config/personnel-config/personnel-config.service';
 import { EmployeesService } from 'src/modules/employees/employees.service';
@@ -27,6 +31,7 @@ export class PermissionsService {
         private readonly personnelConfig: PersonnelConfigService,
         private mediaPathService: MediaPathService,
         private approvalsService: ApprovalsService,
+        @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
     ) { }
 
     // Obtiene el balance de permisos de un empleado
@@ -579,6 +584,26 @@ export class PermissionsService {
             tipoMovimiento.idTipoMovimiento,
             solicitud.idSolicitud,
         );
+
+        try {
+            const vigente = await this.prisma.solicitudesIncidencias.findUnique({
+                where: { idSolicitud: solicitud.idSolicitud },
+                select: { estatus: true },
+            });
+            if (vigente?.estatus && vigente.estatus !== 'PENDIENTE' && activeUser.idTenant) {
+                emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+                    origen: 'PERMISO',
+                    idTenant: activeUser.idTenant,
+                    idEmpresa: companyId,
+                    idEmpleado: dto.idEmpleado,
+                    idSolicitud: solicitud.idSolicitud,
+                    estatus: vigente.estatus,
+                    solicitud: 'permiso',
+                });
+            }
+        } catch {
+            // La solicitud ya quedó registrada.
+        }
 
         return {
             message: 'Solicitud de permiso registrada con éxito.',

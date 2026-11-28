@@ -1,19 +1,31 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginatedLogbookResponseDto, LogbookItemDto } from './dto/logbook-response.dto';
 import { Prisma } from 'generated/prisma/client';
 import { ExcelColumn, ExcelExportService } from 'src/common/services/excel-export.service';
+import { urlEvidencia } from 'src/modules/attendance/utils/evidencia-url.util';
 
 // Zona horaria del negocio (CDMX, sin horario de verano desde 2022)
 const TZ_NEGOCIO = 'America/Mexico_City';
 const OFFSET_NEGOCIO = '-06:00';
+const CANALES = new Set([
+    'APP_MOVIL',
+    'IVR',
+    'BIOMETRICO',
+    'NFC',
+    'WEB_MANUAL',
+    'CLOCK_WEB',
+    'KIOSCO',
+]);
 const CANAL_LABELS: Record<string, string> = {
     BIOMETRICO: 'Biométrico',
     NFC: 'NFC',
     IVR: 'IVR',
     APP_MOVIL: 'App móvil',
     WEB_MANUAL: 'Web manual',
+    CLOCK_WEB: 'Reloj web',
+    KIOSCO: 'Kiosco',
 };
 
 @Injectable()
@@ -35,6 +47,8 @@ export class LogbookService {
         search?: string,
         idSite?: string,
         idUnidadOperativa?: string,
+        canal?: string,
+        incluirAnulados = false,
     ): Promise<Prisma.RegistrosAsistenciaWhereInput> {
         // Filtro por ubicación / unidad operativa (idSite gana si vienen ambos)
         let siteFilter: number[] | undefined;
@@ -70,10 +84,17 @@ export class LogbookService {
             ];
         }
 
+        const canalNormalizado = canal?.trim().toUpperCase();
+        if (canalNormalizado && !CANALES.has(canalNormalizado)) {
+            throw new BadRequestException('El canal indicado no es válido.');
+        }
+
         return {
             idEmpresa: companyId,
             ...(user.idTenant && { idTenant: user.idTenant }),
             Empleados: { is: empleadoWhere },
+            ...(canalNormalizado ? { canal: canalNormalizado as Prisma.RegistrosAsistenciaWhereInput['canal'] } : {}),
+            ...(!incluirAnulados ? { estatusProcesamiento: { not: 'ANULADO' as const } } : {}),
         };
     }
 
@@ -86,10 +107,20 @@ export class LogbookService {
         search?: string,
         idSite?: string,
         idUnidadOperativa?: string,
+        canal?: string,
+        incluirAnulados = false,
     ): Promise<PaginatedLogbookResponseDto> {
         const skip = (page - 1) * limit;
 
-        const where = await this.buildWhere(user, companyId, search, idSite, idUnidadOperativa);
+        const where = await this.buildWhere(
+            user,
+            companyId,
+            search,
+            idSite,
+            idUnidadOperativa,
+            canal,
+            incluirAnulados,
+        );
 
         if (startDate) {
             const parsedDate = new Date(startDate);
@@ -118,6 +149,13 @@ export class LogbookService {
                                 nombre: true,
                                 primerApellido: true,
                                 segundoApellido: true,
+                            },
+                        },
+                        KioscosAsistencia: {
+                            select: {
+                                idKiosco: true,
+                                codigo: true,
+                                nombre: true,
                             },
                         },
                     },
@@ -152,6 +190,8 @@ export class LogbookService {
                 );
             }
 
+            const fotos = await this.fotosDe(registros);
+
             // 3. Mapeo limpio para el frontend integrando la resolución
             const data: LogbookItemDto[] = registros.map((reg) => {
                 const emp = reg.Empleados;
@@ -160,13 +200,22 @@ export class LogbookService {
                     .join(' ');
 
                 // Prioridad: 
+                // 0) Coordenadas
                 // 1) Nombre del sitio si idSitioDetectado existe y se encuentra en CatSites
                 // 2) Fallback a 'Sitio #ID' si idSitioDetectado existe pero no se encontró en la BD
                 // 3) Nombre del dispositivo
                 // 4) null
-                const ubicacionDispositivo = reg.idSitioDetectado
-                    ? (sitesMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
-                    : (reg.nombreDispositivo ?? null);
+                const tieneCoordenadas =
+                    reg.latitud !== null &&
+                    reg.latitud !== undefined &&
+                    reg.longitud !== null &&
+                    reg.longitud !== undefined;
+
+                const ubicacionDispositivo = tieneCoordenadas
+                    ? `${reg.latitud}, ${reg.longitud}`
+                    : reg.idSitioDetectado
+                        ? (sitesMap.get(reg.idSitioDetectado) ?? `Sitio #${reg.idSitioDetectado}`)
+                        : (reg.nombreDispositivo ?? null);
 
                 // si ubicacionDispositivo sigue null regresamos la latitud y longitud si aplica 
 
@@ -186,16 +235,22 @@ export class LogbookService {
                         latitud: reg.latitud ? Number(reg.latitud) : null,
                         longitud: reg.longitud ? Number(reg.longitud) : null,
                     },
-                    evidencia: {
-                        tieneFoto: Boolean(reg.urlFoto),
-                        urlFoto: reg.urlFoto ?? null,
-                    },
+                    evidencia: this.evidenciaDe(reg, fotos),
                     sync: {
                         esOffline: Boolean(reg.esOffline),
                         fechaHoraRecepcion: reg.fechaHoraRecepcion,
                         label: this.resolveSyncLabel(reg),
                     },
                     estatusProcesamiento: reg.estatusProcesamiento,
+                    kiosco: reg.KioscosAsistencia
+                        ? {
+                            idKiosco: reg.KioscosAsistencia.idKiosco,
+                            codigo: reg.KioscosAsistencia.codigo,
+                            nombre: reg.KioscosAsistencia.nombre,
+                        }
+                        : null,
+                    requiereRevision: reg.requiereRevision,
+                    banderasRevision: banderasDe(reg.banderasRevision),
                 };
             });
 
@@ -225,13 +280,29 @@ export class LogbookService {
     async exportLogbook(
         user: ActiveUserDto,
         companyId: number,
-        filters: { search?: string; idSite?: string; idUnidadOperativa?: string; fechaDesde?: string; fechaHasta?: string },
+        filters: {
+            search?: string;
+            idSite?: string;
+            idUnidadOperativa?: string;
+            fechaDesde?: string;
+            fechaHasta?: string;
+            canal?: string;
+            incluirAnulados?: boolean;
+        },
     ): Promise<Buffer> {
         if (!user.idTenant) {
             throw new BadRequestException('El usuario no tiene un tenant asignado');
         }
 
-        const where = await this.buildWhere(user, companyId, filters.search, filters.idSite, filters.idUnidadOperativa);
+        const where = await this.buildWhere(
+            user,
+            companyId,
+            filters.search,
+            filters.idSite,
+            filters.idUnidadOperativa,
+            filters.canal,
+            filters.incluirAnulados === true,
+        );
 
         const esFecha = (f?: string) => !!f && /^\d{4}-\d{2}-\d{2}$/.test(f);
         if (esFecha(filters.fechaDesde) || esFecha(filters.fechaHasta)) {
@@ -253,10 +324,14 @@ export class LogbookService {
                         segundoApellido: true,
                     },
                 },
+                KioscosAsistencia: {
+                    select: { codigo: true, nombre: true },
+                },
             },
         });
 
         type RegistroExport = (typeof registros)[number];
+        const fotos = await this.fotosDe(registros);
 
         const formatFecha = (d: Date | null) =>
             d ? d.toLocaleDateString('es-MX', { timeZone: TZ_NEGOCIO, day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
@@ -275,9 +350,12 @@ export class LogbookService {
             { header: 'Canal', key: 'canal', width: 16, value: (r) => (r.canal ? CANAL_LABELS[r.canal] ?? this.humanize(r.canal) : '') },
             { header: 'Ubicación', key: 'ubicacion', width: 28, value: (r) => this.resolveUbicacion(r) },
             { header: 'Geocerca', key: 'geocerca', width: 16, value: (r) => this.humanize(r.resultadoGeocerca) },
-            { header: 'Evidencia', key: 'evidencia', width: 12, value: (r) => (r.urlFoto ? 'Sí' : 'No') },
+            { header: 'Evidencia', key: 'evidencia', width: 12, value: (r) => (this.evidenciaDe(r, fotos).tieneFoto ? 'Sí' : 'No') },
             { header: 'Sync', key: 'sync', width: 12, value: (r) => this.resolveSyncLabel(r) },
             { header: 'Estatus', key: 'estatus', width: 16, value: (r) => this.humanize(r.estatusProcesamiento) },
+            { header: 'Kiosco', key: 'kiosco', width: 24, value: (r) => r.KioscosAsistencia?.nombre ?? '' },
+            { header: 'Requiere revisión', key: 'revision', width: 18, value: (r) => (r.requiereRevision ? 'Sí' : 'No') },
+            { header: 'Banderas', key: 'banderas', width: 24, value: (r) => banderasDe(r.banderasRevision)?.join(', ') ?? '' },
         ];
 
         return this.excelExportService.generate({
@@ -287,7 +365,301 @@ export class LogbookService {
         });
     }
 
+    async findOne(
+        user: ActiveUserDto,
+        companyId: number,
+        logbookId: number,
+    ) {
+        if (!user.idTenant) {
+            throw new BadRequestException(
+                'El usuario no tiene un tenant asignado.',
+            );
+        }
+
+        try {
+            // Aplicamos las mismas validaciones base que en findAll:
+            // empresa, tenant y empleado activo.
+            const where = await this.buildWhere(
+                user,
+                companyId,
+            );
+
+            // Buscar el registro específico de asistencia.
+            const registro = await this.prisma.registrosAsistencia.findFirst({
+                where: {
+                    ...where,
+                    idRegistro: logbookId,
+                },
+                include: {
+                    Empleados: {
+                        select: {
+                            idEmpleado: true,
+                            numeroEmpleado: true,
+                            nombre: true,
+                            primerApellido: true,
+                            segundoApellido: true,
+                        },
+                    },
+                },
+            });
+
+            if (!registro) {
+                throw new NotFoundException(
+                    'El registro de asistencia no existe o no pertenece a esta empresa.',
+                );
+            }
+
+            const emp = registro.Empleados;
+
+            const nombreCompleto = [
+                emp?.nombre,
+                emp?.primerApellido,
+                emp?.segundoApellido,
+            ]
+                .filter(Boolean)
+                .join(' ');
+
+            // Verificamos si la asistencia tiene coordenadas propias.
+            const tieneCoordenadasPersonalizadas =
+                registro.latitud !== null &&
+                registro.latitud !== undefined &&
+                registro.longitud !== null &&
+                registro.longitud !== undefined;
+
+            let ubicacionDetalle: {
+                tipo: 'PERSONALIZADA' | 'SUCURSAL' | 'SIN_UBICACION';
+                mensaje: string;
+                latitud: number | null;
+                longitud: number | null;
+                idSite: number | null;
+                nombre: string | null;
+                direccion: string | null;
+            };
+
+            let ubicacionDispositivo: string | null = null;
+
+            // --------------------------------------------------
+            // CASO 1: LA ASISTENCIA TIENE COORDENADAS PROPIAS
+            // --------------------------------------------------
+            if (tieneCoordenadasPersonalizadas) {
+                const latitud = Number(registro.latitud);
+                const longitud = Number(registro.longitud);
+
+                ubicacionDetalle = {
+                    tipo: 'PERSONALIZADA',
+                    mensaje: 'Ubicación personalizada obtenida del dispositivo.',
+                    latitud,
+                    longitud,
+                    idSite: null,
+                    nombre: null,
+                    direccion: null,
+                };
+
+                ubicacionDispositivo = `${latitud}, ${longitud}`;
+            }
+
+            // --------------------------------------------------
+            // CASO 2: NO TIENE COORDENADAS, PERO TIENE UN SITE
+            // --------------------------------------------------
+            else if (registro.idSitioDetectado) {
+                const site = await this.prisma.catSites.findFirst({
+                    where: {
+                        idSite: registro.idSitioDetectado,
+                        idEmpresa: companyId,
+                        idTenant: user.idTenant,
+                    },
+                    select: {
+                        idSite: true,
+                        Descripcion: true,
+                        Calle: true,
+                        NoExterior: true,
+                        NoInterior: true,
+                        Colonia: true,
+                        MunicipioDelegacion: true,
+                        Estado: true,
+                        CodigoPostal: true,
+                        Pais: true,
+                        Latitud: true,
+                        Longitud: true,
+                    },
+                });
+
+                if (site) {
+                    const direccion = [
+                        site.Calle,
+                        site.NoExterior ? `No. ${site.NoExterior}` : null,
+                        site.NoInterior ? `Int. ${site.NoInterior}` : null,
+                        site.Colonia,
+                        site.CodigoPostal,
+                        site.MunicipioDelegacion,
+                        site.Estado,
+                        site.Pais,
+                    ]
+                        .filter(Boolean)
+                        .join(', ');
+
+                    const tieneCoordenadasSite =
+                        site.Latitud !== null &&
+                        site.Latitud !== undefined &&
+                        site.Longitud !== null &&
+                        site.Longitud !== undefined;
+
+                    ubicacionDetalle = {
+                        tipo: 'SUCURSAL',
+                        mensaje: tieneCoordenadasSite
+                            ? 'Se devuelve la ubicación geográfica de la sucursal donde se registró la asistencia.'
+                            : 'La asistencia está relacionada con una sucursal, pero esta no tiene coordenadas registradas.',
+                        latitud: tieneCoordenadasSite
+                            ? Number(site.Latitud)
+                            : null,
+                        longitud: tieneCoordenadasSite
+                            ? Number(site.Longitud)
+                            : null,
+                        idSite: site.idSite,
+                        nombre: site.Descripcion,
+                        direccion: direccion || null,
+                    };
+
+                    ubicacionDispositivo =
+                        site.Descripcion ?? `Sitio #${site.idSite}`;
+                } else {
+                    // El registro tiene un ID de sitio, pero no encontramos
+                    // ese sitio dentro de la empresa y tenant actuales.
+                    ubicacionDetalle = {
+                        tipo: 'SUCURSAL',
+                        mensaje: 'El registro está relacionado con una sucursal, pero no fue posible encontrar sus datos.',
+                        latitud: null,
+                        longitud: null,
+                        idSite: registro.idSitioDetectado,
+                        nombre: null,
+                        direccion: null,
+                    };
+
+                    ubicacionDispositivo =
+                        `Sitio #${registro.idSitioDetectado}`;
+                }
+            }
+
+            // --------------------------------------------------
+            // CASO 3: NO TIENE COORDENADAS NI SITE
+            // --------------------------------------------------
+            else {
+                ubicacionDetalle = {
+                    tipo: 'SIN_UBICACION',
+                    mensaje: 'No existe una ubicación geográfica personalizada ni una sucursal relacionada con este registro.',
+                    latitud: null,
+                    longitud: null,
+                    idSite: null,
+                    nombre: registro.nombreDispositivo ?? null,
+                    direccion: null,
+                };
+
+                ubicacionDispositivo =
+                    registro.nombreDispositivo ?? null;
+            }
+
+            // --------------------------------------------------
+            // RESPUESTA FINAL
+            // Conservamos la estructura del findAll y agregamos
+            // ubicacionDetalle para el modal de información.
+            // --------------------------------------------------
+            return {
+                idRegistro: registro.idRegistro.toString(),
+
+                empleado: {
+                    idEmpleado: emp?.idEmpleado ?? registro.idEmpleado,
+                    numeroEmpleado: emp?.numeroEmpleado ?? null,
+                    nombreCompleto,
+                },
+
+                fechaHoraRegistro: registro.fechaHoraRegistro,
+                tipo: registro.tipo,
+                canal: registro.canal,
+
+                ubicacionDispositivo,
+
+                // Información resuelta para mostrar el mapa y el mensaje.
+                ubicacionDetalle,
+
+                // Se conservan las coordenadas originales de la asistencia.
+                geocerca: {
+                    resultado: registro.resultadoGeocerca,
+                    latitud:
+                        registro.latitud !== null &&
+                            registro.latitud !== undefined
+                            ? Number(registro.latitud)
+                            : null,
+                    longitud:
+                        registro.longitud !== null &&
+                            registro.longitud !== undefined
+                            ? Number(registro.longitud)
+                            : null,
+                },
+
+                evidencia: this.evidenciaDe(registro, await this.fotosDe([registro])),
+
+                sync: {
+                    esOffline: Boolean(registro.esOffline),
+                    fechaHoraRecepcion: registro.fechaHoraRecepcion,
+                    label: this.resolveSyncLabel(registro),
+                },
+
+                estatusProcesamiento: registro.estatusProcesamiento,
+            };
+
+        } catch (error) {
+            if (
+                error instanceof NotFoundException ||
+                error instanceof BadRequestException
+            ) {
+                throw error;
+            }
+
+            this.logger.error(
+                `Error al consultar el registro de bitácora ${logbookId} de la empresa ${companyId}`,
+                error,
+            );
+
+            throw error;
+        }
+    }
+
+
     // --- Helpers compartidos entre tabla y exportación ---
+
+    /**
+     * Una sola consulta por página: solo las filas sin urlFoto y con idEvidencia.
+     */
+    private async fotosDe(
+        registros: Array<{ urlFoto?: string | null; idEvidencia?: number | null }>,
+    ): Promise<Map<number, string | null>> {
+        const ids = [...new Set(
+            registros
+                .filter((reg) => !reg.urlFoto?.trim() && reg.idEvidencia != null)
+                .map((reg) => reg.idEvidencia as number),
+        )];
+        const mapa = new Map<number, string | null>();
+        if (ids.length === 0) return mapa;
+
+        const evidencias = await this.prisma.asistenciaEvidencias.findMany({
+            where: { idEvidencia: { in: ids } },
+            select: { idEvidencia: true, rutaArchivo: true },
+        });
+        for (const evidencia of evidencias) {
+            mapa.set(evidencia.idEvidencia, evidencia.rutaArchivo);
+        }
+        return mapa;
+    }
+
+    private evidenciaDe(
+        reg: { urlFoto?: string | null; idEvidencia?: number | null },
+        fotos: Map<number, string | null>,
+    ): { tieneFoto: boolean; urlFoto: string | null } {
+        const propia = reg.urlFoto?.trim() ? reg.urlFoto : null;
+        const cruda = propia ?? (reg.idEvidencia != null ? fotos.get(reg.idEvidencia) ?? null : null);
+        const publica = urlEvidencia(cruda);
+        return { tieneFoto: publica != null, urlFoto: publica };
+    }
 
     private resolveUbicacion(reg: { nombreDispositivo?: string | null; idSitioDetectado?: number | null }): string | null {
         return reg.nombreDispositivo ?? (reg.idSitioDetectado ? `Sitio #${reg.idSitioDetectado}` : null);
@@ -312,4 +684,11 @@ export class LogbookService {
         const text = value.replace(/_/g, ' ').toLowerCase();
         return text.charAt(0).toUpperCase() + text.slice(1);
     }
+}
+
+function banderasDe(valor: unknown): string[] | null {
+    if (valor == null) return null;
+    if (!Array.isArray(valor)) return null;
+    const banderas = valor.filter((item): item is string => typeof item === 'string');
+    return banderas.length > 0 ? banderas : null;
 }

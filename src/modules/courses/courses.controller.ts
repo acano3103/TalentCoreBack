@@ -37,7 +37,7 @@ export class CoursesController {
   @Post('attendance/check-in')
   @ApiResponse({ status: 200, description: 'Attendance registered successfully' })
   @ApiResponse({ status: 404, description: 'Class date not found or no longer active' })
-  @ApiResponse({ status: 409, description: 'Employee already attended' })
+  @ApiResponse({ status: 409, description: 'El pase de lista está fuera de la ventana de tolerancia.' })
   @ApiOperation({ summary: 'Register attendance for an employee' })
   registerAttendance(
     @Body() body: RegisterAttendanceDto,

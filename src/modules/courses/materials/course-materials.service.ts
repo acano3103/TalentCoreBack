@@ -8,7 +8,7 @@ import { MediaPathService } from 'src/common/services/media-path.service';
 import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { CourseContentService } from '../content/course-content.service';
 import { CourseLearningService } from '../learning/course-learning.service';
-import { ARCHIVO_MATERIAL_REGEX, CourseMaterial, MATERIAL_TIPOS, materialesSubfolder } from './course-materials.constants';
+import { ARCHIVO_MATERIAL_REGEX, CourseMaterial, MATERIAL_TIPOS, MIME_POR_EXTENSION, disposicionInline, materialesSubfolder } from './course-materials.constants';
 
 // Multer entrega el nombre en latin1; lo regresamos a UTF-8 (acentos, ñ)
 const nombreUtf8 = (nombre: string) => {
@@ -80,19 +80,40 @@ export class CourseMaterialsService {
 
     // Empleado: solo si está inscrito y el archivo pertenece a una lección del curso
     async sendForEmployee(companyId: number, sessionId: number, archivo: string, user: ActiveUserDto, res: Response) {
+        const { idTenant } = await this.materialDelEmpleado(companyId, sessionId, archivo, user);
+        await this.send(idTenant, sessionId, archivo, res);
+    }
+
+    // Misma validación que la web, con Content-Type y filename* para el visor de la app
+    async sendForMobileEmployee(companyId: number, sessionId: number, archivo: string, user: ActiveUserDto, res: Response) {
+        const { idTenant, nombre } = await this.materialDelEmpleado(companyId, sessionId, archivo, user);
+        const extension = path.extname(archivo).toLowerCase();
+        await this.send(idTenant, sessionId, archivo, res, {
+            'Content-Type': MIME_POR_EXTENSION[extension] ?? 'application/octet-stream',
+            'Content-Disposition': disposicionInline(nombre),
+        });
+    }
+
+    private async materialDelEmpleado(companyId: number, sessionId: number, archivo: string, user: ActiveUserDto) {
         const { idTenant } = await this.courseLearningService.getParticipation(companyId, sessionId, user);
         const lecciones = await this.prismaService.cursoLecciones.findMany({
             where: { idTenant, CursoModulos: { CursoContenidos: { idSesion: sessionId, activo: true } } },
             select: { materiales: true },
         });
-        const existe = lecciones.some((l) =>
-            Array.isArray(l.materiales) && (l.materiales as unknown as CourseMaterial[]).some((m) => m?.archivo === archivo),
-        );
-        if (!existe) throw new NotFoundException('Archivo no encontrado.');
-        await this.send(idTenant, sessionId, archivo, res);
+        let nombre: string | null = null;
+        for (const leccion of lecciones) {
+            if (!Array.isArray(leccion.materiales)) continue;
+            const material = (leccion.materiales as unknown as CourseMaterial[]).find((m) => m?.archivo === archivo);
+            if (material) {
+                nombre = material.nombre || archivo;
+                break;
+            }
+        }
+        if (!nombre) throw new NotFoundException('Archivo no encontrado.');
+        return { idTenant, nombre };
     }
 
-    private async send(idTenant: number, sessionId: number, archivo: string, res: Response) {
+    private async send(idTenant: number, sessionId: number, archivo: string, res: Response, extra?: Record<string, string>) {
         if (!ARCHIVO_MATERIAL_REGEX.test(archivo)) throw new NotFoundException('Archivo no encontrado.');
         const raiz = path.resolve(process.env.MEDIA_ROOT_PATH || path.resolve(process.cwd(), 'media'));
         const carpeta = await this.mediaPathService.getTenantPath(raiz, idTenant, materialesSubfolder(sessionId));
@@ -101,10 +122,13 @@ export class CourseMaterialsService {
             throw new NotFoundException('Archivo no encontrado.');
         }
 
+        const headers = {
+            'Cache-Control': 'private, max-age=300',
+            'X-Content-Type-Options': 'nosniff',
+            ...extra,
+        };
         await new Promise<void>((ok, fail) =>
-            res.sendFile(absoluto, { dotfiles: 'deny', headers: { 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' } }, (err) =>
-                err ? fail(err) : ok(),
-            ),
+            res.sendFile(absoluto, { dotfiles: 'deny', headers }, (err) => (err ? fail(err) : ok())),
         ).catch((err) => {
             if (!res.headersSent) res.status(404).json({ success: false, statusCode: 404, message: 'Archivo no encontrado.' });
             this.logger.warn(`Error enviando material ${absoluto}: ${err.message}`);

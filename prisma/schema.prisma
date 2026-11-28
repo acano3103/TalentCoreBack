@@ -62,6 +62,7 @@ model CatAreas {
   AsignacionAprobador AsignacionAprobador[]
   CatCursos           CatCursos[]
   RelAreasUbicaciones RelAreasUbicaciones[]
+  RutaAlcances        RutaAlcance[]
 }
 
 model CatCampa_a {
@@ -119,17 +120,25 @@ model CatCriterios {
 }
 
 model CatCursos {
-  idCursos                Int             @id @default(autoincrement())
+  idCursos                Int                   @id @default(autoincrement())
   idTenant                Int?
   idEmpresa               Int
-  idTipoCurso             Int             @default(1)
-  Descripcion             String?         @db.VarChar(300)
-  activo                  Boolean?        @default(true)
+  idTipoCurso             Int                   @default(1)
+  Descripcion             String?               @db.VarChar(300)
+  activo                  Boolean?              @default(true)
   idArea                  Int?
   calificacionAprobatoria Int?
-  CatAreas                CatAreas?       @relation(fields: [idArea], references: [idArea], map: "FK_Cursos_Area")
-  CatTipoCurso            CatTipoCurso    @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
+  CatAreas                CatAreas?             @relation(fields: [idArea], references: [idArea], map: "FK_Cursos_Area")
+  CatTipoCurso            CatTipoCurso          @relation(fields: [idTipoCurso], references: [idTipoCurso], map: "FK_Cursos_TipoCurso")
+  /// Curso sujeto a la norma STPS (constancia DC-3).
+  esNormativoStps         Boolean               @default(false)
+  duracionHoras           Decimal?              @db.Decimal(5, 2)
+  /// Clave del catálogo de áreas temáticas de la DC-3.
+  areaTematicaStps        String?               @db.VarChar(10)
   CursoSesiones           CursoSesiones[]
+  RutaElementos           RutaElemento[]
+  RutaAsignacionCursos    RutaAsignacionCurso[]
+  CursoConstanciasDc3     CursoConstanciaDc3[]
 
   @@index([idTipoCurso], map: "FK_Cursos_TipoCurso")
   @@index([idArea], map: "FK_Cursos_Area")
@@ -176,6 +185,18 @@ model CatEmpresas {
   Integraciones          Integraciones[]
   RelUsuarioEmpresa      RelUsuarioEmpresa[]
   Vacantes               Vacantes[]
+  RutaAprendizajes       RutaAprendizaje[]
+  RutaLotes              RutaLote[]
+  RutaAsignaciones       RutaAsignacion[]
+  CursoConstanciasDc3    CursoConstanciaDc3[]
+  ReportesDc4            ReporteDc4[]
+  ComAudiencias          ComAudiencias[]
+  ComComunicados         ComComunicados[]
+  ComPerfilesCanal       ComPerfilesCanal[]
+  ComConfigEmpresa       ComConfigEmpresa?
+  ComReglasRecordatorio  ComReglasRecordatorio[]
+  WaConsumo              WaConsumo[]
+  WaTopes                WaTopes[]
 }
 
 model CatEquipo {
@@ -309,6 +330,8 @@ model CatPuestos {
   idEmpresa             Int                     @default(1)
   NombrePuesto          String                  @db.VarChar(200)
   idTipoPuesto          Int?
+  // TODO: volver NOT NULL cuando RH clasifique los puestos. El DTO lo exige desde CA2.
+  idTipoPersonal        Int?
   idArea                Int?
   idTipoContratacion    Int?
   idModalidad           Int?
@@ -326,6 +349,9 @@ model CatPuestos {
   comentarios           String?                 @db.Text
   CatNivelesSalario     CatNivelesSalario?      @relation(fields: [IdNivelSalario], references: [IdNivelSalario], onDelete: Restrict, map: "FK_Puestos_NivelSalario")
   CatSites              CatSites?               @relation(fields: [idSite], references: [idSite], onDelete: Restrict, map: "FK_Puestos_Sites")
+  CatTiposPersonal      CatTiposPersonal?       @relation(fields: [idTipoPersonal], references: [idTipoPersonal], onDelete: Restrict, onUpdate: NoAction, map: "FK_Puestos_TipoPersonal")
+  RelPuestoEtiqueta     RelPuestoEtiqueta[]
+  RutaAlcances          RutaAlcance[]
   CompetenciasPuesto    CompetenciasPuesto[]
   Empleados             Empleados[]
   FuncionesPuesto       FuncionesPuesto[]
@@ -335,6 +361,7 @@ model CatPuestos {
 
   @@index([IdNivelSalario], map: "FK_Puestos_NivelSalario")
   @@index([idSite], map: "FK_Puestos_Sites_idx")
+  @@index([idTipoPersonal], map: "FK_Puestos_TipoPersonal")
 }
 
 model CatSites {
@@ -375,6 +402,8 @@ model CatSites {
   RelSitesHorarios              RelSitesHorarios[]
   RelUsuarioSite                RelUsuarioSite[]
   Vacantes                      Vacantes[]
+  RutaAlcances                  RutaAlcance[]
+  ReportesDc4                   ReporteDc4[]
 
   @@index([idTipoUbicacion], map: "FK_Sites_TipoUbicacion")
   @@index([idUnidadOperativa], map: "FK_Sites_UnidadOperativa")
@@ -702,6 +731,16 @@ model Notificaciones {
   notification_type_id   Int?
   title                  String?                  @db.VarChar(255)
   message                String?                  @db.Text
+  idTenant               Int?
+  idEmpresa              Int?
+  Categoria              String?                  @db.VarChar(30)
+  Prioridad              ComPrioridad             @default(NORMAL)
+  DeepLink               String?                  @db.VarChar(500)
+  Destino                Json?
+  OrigenTipo             String?                  @db.VarChar(40)
+  OrigenId               String?                  @db.VarChar(40)
+  ClaveAgrupacion        String?                  @db.VarChar(120)
+  ExpiraEn               DateTime?                @db.DateTime(0)
   created_at             DateTime?                @default(now()) @db.Timestamp(0)
   read_at                DateTime?                @db.Timestamp(0)
   CatTipoNotificacion    CatTipoNotificacion?     @relation(fields: [notification_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "Notificaciones_ibfk_2")
@@ -709,6 +748,7 @@ model Notificaciones {
 
   @@index([notification_type_id], map: "notification_type_id")
   @@index([user_uuid], map: "user_uuid")
+  @@index([idTenant, idEmpresa], map: "IDX_Notificaciones_Tenant_Empresa")
 }
 
 model NotificacionesEntregas {
@@ -718,6 +758,9 @@ model NotificacionesEntregas {
   status                   String?                  @db.VarChar(20)
   sent_at                  DateTime?                @db.Timestamp(0)
   error_message            String?                  @db.Text
+  ProveedorMsgId           String?                  @db.VarChar(80)
+  Intento                  Int                      @default(1)
+  Costo                    Decimal?                 @db.Decimal(10, 4)
   Notificaciones           Notificaciones           @relation(fields: [notification_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_1")
   CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "NotificacionesEntregas_ibfk_2")
 
@@ -768,21 +811,22 @@ model PesoCategoriaPuesto {
 }
 
 model Postulaciones {
-  idPostulacion   Int       @id @default(autoincrement())
-  uuid            String    @default(dbgenerated("(uuid())")) @db.VarChar(36)
-  idEstatus       Int?      @default(1)
-  idVacante       Int
-  nombre          String    @db.VarChar(100)
-  primerApellido  String    @db.VarChar(100)
-  segundoApellido String?   @db.VarChar(100)
-  correo          String    @db.VarChar(250)
-  telefono        String    @db.VarChar(10)
-  curp            String?   @db.VarChar(45)
-  utmSource       String?   @db.VarChar(100)
-  rutaCV          String    @db.VarChar(500)
-  fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
-  idCampa_a       Int?      @map("idCampaña")
-  Vacantes        Vacantes  @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+  idPostulacion             Int                        @id @default(autoincrement())
+  uuid                      String                     @default(dbgenerated("(uuid())")) @db.VarChar(36)
+  idEstatus                 Int?                       @default(1)
+  idVacante                 Int
+  nombre                    String                     @db.VarChar(100)
+  primerApellido            String                     @db.VarChar(100)
+  segundoApellido           String?                    @db.VarChar(100)
+  correo                    String                     @db.VarChar(250)
+  telefono                  String                     @db.VarChar(10)
+  curp                      String?                    @db.VarChar(45)
+  utmSource                 String?                    @db.VarChar(100)
+  rutaCV                    String                     @db.VarChar(500)
+  fechaRegistro             DateTime?                  @default(now()) @db.Timestamp(0)
+  idCampa_a                 Int?                       @map("idCampaña")
+  Vacantes                  Vacantes                   @relation(fields: [idVacante], references: [idVacante], map: "fk_postulacion_vacante")
+  RelEmpleadosPostulaciones RelEmpleadosPostulaciones?
 
   @@index([idVacante], map: "fk_postulacion_vacante")
 }
@@ -791,13 +835,15 @@ model PreferenciasNotificacionesUsuario {
   id                       Int                      @id @default(autoincrement())
   user_uuid                String                   @db.VarChar(36)
   channel_id               Int
+  /// NULL solo en filas del dispatcher anterior. La matriz siempre escribe la categoría.
+  categoria                String?                  @db.VarChar(30)
   enabled                  Boolean?                 @default(true)
   created_at               DateTime?                @default(now()) @db.Timestamp(0)
   updated_at               DateTime?                @db.Timestamp(0)
   auth_user                auth_user                @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_1")
   CatCanalesNotificaciones CatCanalesNotificaciones @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "PreferenciasNotificacionesUsuario_ibfk_2")
 
-  @@unique([user_uuid, channel_id], map: "user_uuid")
+  @@unique([user_uuid, channel_id, categoria], map: "UK_PrefNotif_Usuario_Canal_Cat")
   @@index([channel_id], map: "channel_id")
 }
 
@@ -1108,6 +1154,7 @@ model Empleados {
   idEmpresa                                                                                  Int?
   idUsuario                                                                                  String?                            @db.VarChar(36)
   idPuesto                                                                                   Int?
+  idTipoPersonalOverride                                                                     Int?
   idJefeInmediato                                                                            Int?
   idSite                                                                                     Int?
   nombre                                                                                     String?                            @db.VarChar(100)
@@ -1140,11 +1187,17 @@ model Empleados {
   artemisUserId                                                                              String?                            @db.VarChar(50)
   artemisSyncedAt                                                                            DateTime?                          @db.DateTime(0)
   ArchivosSolicitudes                                                                        ArchivosSolicitudes[]
+  CalendarioLaboralEmpleado                                                                  CalendarioLaboralEmpleado[]
   Contratos                                                                                  Contratos[]
   CursoParticipantes                                                                         CursoParticipantes[]
+  CursoConstanciasDc3                                                                        CursoConstanciaDc3[]
   CursoSesiones                                                                              CursoSesiones[]
+  RutaAsignaciones                                                                           RutaAsignacion[]
   DispositivosAsistencia                                                                     DispositivosAsistencia[]
+  DocumentosGenerados                                                                        DocumentosGenerados[]
+  EmpleadoIdentificadoresExternos                                                            EmpleadoIdentificadoresExternos[]
   CatPuestos                                                                                 CatPuestos?                        @relation(fields: [idPuesto], references: [idPuesto], onDelete: Restrict, map: "FK_Empleados_CatPuestos")
+  CatTiposPersonal                                                                           CatTiposPersonal?                  @relation(fields: [idTipoPersonalOverride], references: [idTipoPersonal], onDelete: Restrict, onUpdate: NoAction, map: "FK_Empleados_TipoPersonal")
   Empleados                                                                                  Empleados?                         @relation("EmpleadosToEmpleados", fields: [idJefeInmediato], references: [idEmpleado], map: "FK_Empleados_JefeInmediato")
   other_Empleados                                                                            Empleados[]                        @relation("EmpleadosToEmpleados")
   auth_user                                                                                  auth_user?                         @relation(fields: [idUsuario], references: [uuid], map: "FK_Empleados_Usuarios")
@@ -1163,6 +1216,7 @@ model Empleados {
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoCandidatoToEmpleados")
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados  RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoAsignadoToEmpleados")
   RegistrosKioscoPorIdentificar_RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados   RegistrosKioscoPorIdentificar[]    @relation("RegistrosKioscoPorIdentificar_idEmpleadoRevisorToEmpleados")
+  RelEmpleadosPostulaciones                                                                  RelEmpleadosPostulaciones[]
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados       RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoNuevoToEmpleados")
   RevisionesRegistroAsistencia_RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados     RevisionesRegistroAsistencia[]     @relation("RevisionesRegistroAsistencia_idEmpleadoRevisorToEmpleados")
   RolePlayAsignaciones                                                                       RolePlayAsignaciones[]
@@ -1171,11 +1225,18 @@ model Empleados {
   SolicitudesIncidencias_SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados           SolicitudesIncidencias[]           @relation("SolicitudesIncidencias_solicitadoPorIdEmpleadoToEmpleados")
   Vacantes                                                                                   Vacantes[]
   Vacantes_Vacantes_idReclutadorAsignadoToEmpleados                                          Vacantes[]                         @relation("Vacantes_idReclutadorAsignadoToEmpleados")
+  ComAudienciaPersonas                                                                       ComAudienciaPersonas[]
+  ComDestinatarios                                                                           ComDestinatarios[]
+  ComAcuses                                                                                  ComAcuses[]
+  ComPreguntas                                                                               ComPreguntas[]
+  ComRecordatoriosEnviados                                                                   ComRecordatoriosEnviados[]
+  PushTokens                                                                                 PushTokens[]
 
   @@unique([idTenant, numeroEmpleado], map: "UK_Empleado_Tenant_Numero")
   @@index([idJefeInmediato], map: "FK_Empleados_JefeInmediato")
   @@index([idUsuario], map: "FK_Empleados_Usuarios")
   @@index([idPuesto], map: "FK_Empleados_CatPuestos_idx")
+  @@index([idTipoPersonalOverride], map: "FK_Empleados_TipoPersonal")
 }
 
 model Expedientes {
@@ -1242,6 +1303,7 @@ model Vacantes {
   comentarios                                        String?              @db.Text
   fechaCreacion                                      DateTime?            @default(now()) @db.Timestamp(0)
   fechaActualizacion                                 DateTime?            @default(now()) @db.Timestamp(0)
+  fechaCierre                                        DateTime?            @db.DateTime(0)
   Entrevistas                                        Entrevistas[]
   Postulaciones                                      Postulaciones[]
   CatEmpresas                                        CatEmpresas          @relation(fields: [idEmpresa], references: [idEmpresa], map: "fk_vacante_empresa")
@@ -1287,24 +1349,27 @@ model PlantillasDocumentos {
 }
 
 model CamposPlantilla {
-  id            Int                  @id @default(autoincrement())
-  idPlantilla   Int
-  identificador String               @db.VarChar(100)
-  nombreCampo   String               @db.VarChar(200)
-  tipoDato      String               @default("texto") @db.VarChar(50)
-  requerido     Boolean              @default(true)
-  orden         Int                  @default(0)
-  valorDefault  String?              @db.VarChar(500)
-  textoOriginal String?              @db.Text
-  alto          Float?               @map("alto")
-  ancho         Float?               @map("ancho")
-  pagina        Int?                 @map("pagina")
-  posicionX     Float?               @map("posicionX")
-  posicionY     Float?               @map("posicionY")
-  plantilla     PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Cascade, map: "fk_campo_plantilla")
+  id                 Int                  @id @default(autoincrement())
+  idPlantilla        Int
+  idCampoCatalogo    Int?
+  identificador      String               @db.VarChar(100)
+  nombreCampo        String               @db.VarChar(200)
+  tipoDato           String               @default("texto") @db.VarChar(50)
+  requerido          Boolean              @default(true)
+  orden              Int                  @default(0)
+  valorDefault       String?              @db.VarChar(500)
+  textoOriginal      String?              @db.Text
+  alto               Float?               @map("alto")
+  ancho              Float?               @map("ancho")
+  pagina             Int?                 @map("pagina")
+  posicionX          Float?               @map("posicionX")
+  posicionY          Float?               @map("posicionY")
+  plantilla          PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], onDelete: Cascade, map: "fk_campo_plantilla")
+  CatCamposPlantilla CatCamposPlantilla?  @relation(fields: [idCampoCatalogo], references: [id], onDelete: Restrict, map: "fk_campo_plantilla_catalogo")
 
   @@unique([idPlantilla, identificador], map: "uk_plantilla_identificador")
   @@index([idPlantilla], map: "idx_campo_plantilla")
+  @@index([idCampoCatalogo], map: "idx_campo_plantilla_catalogo")
 }
 
 model DocumentosGenerados {
@@ -1313,13 +1378,22 @@ model DocumentosGenerados {
   idPlantilla            Int
   idVacante              Int?
   idCandidato            Int?
+  idEmpleado             Int?
   datosJson              Json?
   archivoGenerado        String?              @db.VarChar(500)
   estatus                String               @default("pendiente") @db.VarChar(50)
   fechaGeneracion        DateTime?            @default(now()) @db.Timestamp(0)
   idUsuarioGenero        Int
   tokenFirma             String?              @unique(map: "tokenFirma") @db.VarChar(100)
+  tokenValidacion        String?              @db.VarChar(10)
+  fechaToken             DateTime?            @db.Timestamp(0)
   firmado                Boolean              @default(false)
+  firmaConfigurada       Boolean              @default(false)
+  firmaPagina            Int?
+  firmaX                 Decimal?             @db.Decimal(8, 4)
+  firmaY                 Decimal?             @db.Decimal(8, 4)
+  firmaAncho             Decimal?             @db.Decimal(8, 4)
+  firmaAlto              Decimal?             @db.Decimal(8, 4)
   datosFirma             Json?
   idContrato             Int?
   codigoValidacionNOM151 String?              @db.VarChar(100)
@@ -1327,12 +1401,14 @@ model DocumentosGenerados {
   archivoNom151          String?              @db.VarChar(500)
   fechaSellado           DateTime?            @db.Timestamp(0)
   contrato               Contratos?           @relation(fields: [idContrato], references: [idContrato], map: "fk_docgen_contrato")
+  Empleados              Empleados?           @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_docgen_empleado")
   plantilla              PlantillasDocumentos @relation(fields: [idPlantilla], references: [id], map: "fk_docgen_plantilla")
 
   @@index([idPlantilla], map: "idx_docgen_plantilla")
   @@index([idVacante], map: "idx_docgen_vacante")
   @@index([idCandidato], map: "idx_docgen_candidato")
   @@index([idContrato], map: "idx_docgen_contrato")
+  @@index([idEmpleado], map: "idx_docgen_empleado")
 }
 
 model CatEstatusPostulacion {
@@ -1349,11 +1425,12 @@ model CatTiposPublicacion {
 }
 
 model CatRoles {
-  idRol          Int              @id @default(autoincrement())
-  idTenant       Int?
-  descripcion    String           @db.VarChar(100)
-  activo         Boolean          @default(true)
-  RelRolPermisos RelRolPermisos[]
+  idRol              Int                  @id @default(autoincrement())
+  idTenant           Int?
+  descripcion        String               @db.VarChar(100)
+  activo             Boolean              @default(true)
+  RelRolPermisos     RelRolPermisos[]
+  RelRolComCapacidad RelRolComCapacidad[]
 }
 
 model RelUsuarioRol {
@@ -1361,6 +1438,8 @@ model RelUsuarioRol {
   idUsuario Int
   idRol     Int
   activo    Boolean @default(true)
+
+  @@index([idUsuario, activo], map: "IDX_RelUsuarioRol_Usuario_Activo")
 }
 
 model CatEstatusSolicitudPuesto {
@@ -1391,16 +1470,16 @@ model SolicitudPuesto {
 }
 
 model HistoricoMovimientos {
-  id            Int       @id @default(autoincrement())
-  idUsuario     Int
-  idEmpresa     Int
-  accion        String    @db.VarChar(50)
-  tablaOrigen   String    @db.VarChar(100)
-  idRegistro    String    @db.VarChar(36)
-  descripcion   String    @db.Text
+  id            Int        @id @default(autoincrement())
+  idUsuario     Int?
+  idEmpresa     Int?
+  accion        String     @db.VarChar(50)
+  tablaOrigen   String     @db.VarChar(100)
+  idRegistro    String     @db.VarChar(36)
+  descripcion   String     @db.Text
   detalles_json Json?
-  fechaCreacion DateTime? @default(now()) @db.Timestamp(0)
-  auth_user     auth_user @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
+  fechaCreacion DateTime?  @default(now()) @db.Timestamp(0)
+  auth_user     auth_user? @relation(fields: [idUsuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_historico_usuario")
 
   @@index([fechaCreacion], map: "idx_creado_at")
   @@index([tablaOrigen, idRegistro], map: "idx_polimorfico")
@@ -1551,6 +1630,7 @@ model MovimientosInternos {
   Empleados_MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados Empleados                          @relation("MovimientosInternos_solicitadoPorIdEmpleadoToEmpleados", fields: [solicitadoPorIdEmpleado], references: [idEmpleado], map: "FK_MovInternos_Solicitante")
   CatTipoMovimiento                                                CatTipoMovimiento                  @relation(fields: [idTipoMovimiento], references: [idTipoMovimiento], map: "FK_MovInternos_TipoMovimiento")
   PasosAprobacionMovimientoInterno                                 PasosAprobacionMovimientoInterno[]
+  PlanesCarrera                                                    PlanCarreraColaborador[]
 
   @@index([idEmpleado], map: "FK_MovInternos_Empleado_idx")
   @@index([idAprobador], map: "FK_MovInternos_Aprobador_idx")
@@ -1560,31 +1640,49 @@ model MovimientosInternos {
 }
 
 model RelPuestoRuta {
-  idRuta          Int       @id @default(autoincrement())
-  idPuestoOrigen  Int
-  idPuestoDestino Int
-  activo          Boolean?  @default(true)
-  fechaRegistro   DateTime? @default(now()) @db.Timestamp(0)
-  usuarioRegistro String?   @db.VarChar(45)
-  idEmpresa       Int
+  idRuta                Int               @id @default(autoincrement())
+  idPuestoOrigen        Int
+  idPuestoDestino       Int
+  activo                Boolean?          @default(true)
+  fechaRegistro         DateTime?         @default(now()) @db.Timestamp(0)
+  usuarioRegistro       String?           @db.VarChar(45)
+  idEmpresa             Int
+  tipo                  RelPuestoRutaTipo @default(ascenso)
+  antiguedadMinimaMeses Int?
+  /// Ruta de propósito promocion que se exige para este camino. Null: cursos tipo 3 del destino.
+  idRutaAprendizaje     Int?
+  RutaAprendizaje       RutaAprendizaje?  @relation(fields: [idRutaAprendizaje], references: [idRutaAprendizaje], onDelete: SetNull, onUpdate: NoAction, map: "FK_RelPuestoRuta_RutaAprendizaje")
 
   @@unique([idEmpresa, idPuestoOrigen, idPuestoDestino], map: "unique_ruta_origen_destino")
   @@index([idPuestoDestino], map: "idx_ruta_destino")
+  @@index([idRutaAprendizaje], map: "FK_RelPuestoRuta_RutaAprendizaje")
 }
 
 model PlanCarreraColaborador {
-  idPlanCarrera    Int                @id @default(autoincrement())
-  idEmpleado       Int
-  idRuta           Int
-  idPuestoActual   Int
-  idPuestoObjetivo Int
-  estatus          PlanCarreraEstatus @default(en_preparacion)
-  fechaInscripcion DateTime?          @default(now()) @db.Timestamp(0)
-  fechaPromocion   DateTime?          @db.Timestamp(0)
-  usuarioRegistro  String?            @db.VarChar(45)
+  idPlanCarrera         Int                  @id @default(autoincrement())
+  idEmpleado            Int
+  idRuta                Int
+  idPuestoActual        Int
+  idPuestoObjetivo      Int
+  estatus               PlanCarreraEstatus   @default(en_preparacion)
+  fechaInscripcion      DateTime?            @default(now()) @db.Timestamp(0)
+  fechaPromocion        DateTime?            @db.Timestamp(0)
+  usuarioRegistro       String?              @db.VarChar(45)
+  origen                PlanCarreraOrigen    @default(rh)
+  fechaListo            DateTime?            @db.Timestamp(0)
+  fechaRiesgo           DateTime?            @db.Timestamp(0)
+  fechaLimiteRenovacion DateTime?            @db.Date
+  idMovimiento          Int?
+  /// Versión de la ruta de promoción con la que se evalúa. Queda fija.
+  idVersionRuta         Int?
+  MovimientosInternos   MovimientosInternos? @relation(fields: [idMovimiento], references: [idMovimiento], onDelete: SetNull, onUpdate: NoAction, map: "FK_PlanCarrera_Movimiento")
+  RutaVersion           RutaVersion?         @relation(fields: [idVersionRuta], references: [idVersion], onDelete: SetNull, onUpdate: NoAction, map: "FK_PlanCarrera_VersionRuta")
 
   @@unique([idEmpleado, idRuta], map: "unique_empleado_ruta")
   @@index([idRuta], map: "idx_plan_ruta")
+  @@index([estatus], map: "idx_plan_carrera_estatus")
+  @@index([idMovimiento], map: "FK_PlanCarrera_Movimiento")
+  @@index([idVersionRuta], map: "FK_PlanCarrera_VersionRuta")
 }
 
 model ConfiguracionEmpresa {
@@ -1640,19 +1738,26 @@ model CursoFechasClase {
 }
 
 model CursoParticipantes {
-  idParticipante               Int                                   @id @default(autoincrement())
-  idSesion                     Int
-  idEmpleado                   Int
-  estatusAsignacion            CursoParticipantes_estatusAsignacion? @default(inscrito)
-  calificacionFinal            Decimal?                              @db.Decimal(5, 2)
-  creadoEn                     DateTime?                             @default(now()) @db.Timestamp(0)
-  CursoBitacoraActividad       CursoBitacoraActividad[]
-  CursoIntentosQuiz            CursoIntentosQuiz[]
-  CursoLeccionProgresos        CursoLeccionProgresos[]
-  Empleados                    Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
-  CursoSesiones                CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
-  CursoScormProgresos          CursoScormProgresos?
-  CursoSeguimientoParticipante CursoSeguimientoParticipante?
+  idParticipante                  Int                                   @id @default(autoincrement())
+  idSesion                        Int
+  idEmpleado                      Int
+  estatusAsignacion               CursoParticipantes_estatusAsignacion? @default(inscrito)
+  calificacionFinal               Decimal?                              @db.Decimal(5, 2)
+  creadoEn                        DateTime?                             @default(now()) @db.Timestamp(0)
+  /// Plazo individual que pone el motor de rutas.
+  /// La fecha de término no se duplica: el cierre la escribe CourseLearningService
+  /// en CursoSeguimientoParticipante.fechaConclusion.
+  fechaLimite                     DateTime?                             @db.Date
+  CursoBitacoraActividad          CursoBitacoraActividad[]
+  CursoIntentosQuiz               CursoIntentosQuiz[]
+  CursoLeccionProgresos           CursoLeccionProgresos[]
+  Empleados                       Empleados                             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "fk_curso_participantes_empleado")
+  CursoSesiones                   CursoSesiones                         @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction, map: "fk_part_sesion")
+  CursoScormProgresos             CursoScormProgresos?
+  CursoSeguimientoParticipante    CursoSeguimientoParticipante?
+  RutaAsignacionCursos            RutaAsignacionCurso[]                 @relation("RutaCursoInscripcion")
+  RutaAsignacionCursosReconocidos RutaAsignacionCurso[]                 @relation("RutaCursoReconocido")
+  CursoConstanciaDc3              CursoConstanciaDc3?
 
   @@unique([idSesion, idEmpleado], map: "uk_sesion_empleado")
   @@index([idEmpleado], map: "idx_curso_participantes_empleado")
@@ -1674,6 +1779,9 @@ model CursoSesiones {
   minutosToleranciaQr        Int                          @default(15)
   porcentajeAsistenciaMinimo Decimal?                     @default(80.00) @db.Decimal(5, 2)
   estatus                    CursoSesiones_estatus        @default(programado)
+  /// Sesión siempre abierta de un curso asíncrono: fechaFinPeriodo queda null.
+  /// No entra en las listas de sesiones de RH salvo el filtro «permanentes».
+  esPermanente               Boolean                      @default(false)
   creadoEn                   DateTime?                    @default(now()) @db.Timestamp(0)
   CursoContenidos            CursoContenidos?
   CursoFechasClase           CursoFechasClase[]
@@ -1762,21 +1870,22 @@ model AsignacionAprobador {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model CatUnidadesOperativas {
-  idUnidadOperativa   Int         @id @default(autoincrement())
+  idUnidadOperativa   Int           @id @default(autoincrement())
   idEmpresa           Int
-  Codigo              String?     @db.VarChar(50)
-  Nombre              String      @db.VarChar(200)
-  Descripcion         String?     @db.Text
-  EsExterna           Boolean?    @default(false)
-  ResponsableContacto String?     @db.VarChar(150)
-  TelefonoContacto    String?     @db.VarChar(20)
-  CorreoContacto      String?     @db.VarChar(200)
-  Activo              Boolean?    @default(true)
-  FechaRegistro       DateTime?   @default(now()) @db.DateTime(0)
-  UsuarioRegistro     String?     @db.VarChar(100)
-  idTenant            Int         @default(0)
+  Codigo              String?       @db.VarChar(50)
+  Nombre              String        @db.VarChar(200)
+  Descripcion         String?       @db.Text
+  EsExterna           Boolean?      @default(false)
+  ResponsableContacto String?       @db.VarChar(150)
+  TelefonoContacto    String?       @db.VarChar(20)
+  CorreoContacto      String?       @db.VarChar(200)
+  Activo              Boolean?      @default(true)
+  FechaRegistro       DateTime?     @default(now()) @db.DateTime(0)
+  UsuarioRegistro     String?       @db.VarChar(100)
+  idTenant            Int           @default(0)
   CatSites            CatSites[]
-  CatEmpresas         CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, map: "FK_UnidadesOperativas_Empresas")
+  RutaAlcances        RutaAlcance[]
+  CatEmpresas         CatEmpresas   @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: Cascade, map: "FK_UnidadesOperativas_Empresas")
 
   @@index([idEmpresa], map: "FK_UnidadesOperativas_Empresas")
 }
@@ -1920,6 +2029,26 @@ model RolePlays {
   @@index([idTenant], map: "idx_roleplays_idTenant")
 }
 
+model RolePlayAsignaciones {
+  idAsignacion       Int       @id @default(autoincrement())
+  idRolePlay         Int
+  idEmpleado         Int
+  idTenant           Int
+  idEmpresa          Int
+  FechaLimite        DateTime? @db.DateTime(0)
+  IntentosMaximos    Int?
+  Activo             Boolean   @default(true)
+  idUsuarioAsigno    Int
+  FechaRegistro      DateTime? @default(now()) @db.DateTime(0)
+  FechaActualizacion DateTime? @db.DateTime(0)
+  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_Empleado")
+  RolePlays          RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_RolePlay")
+
+  @@unique([idRolePlay, idEmpleado], map: "UK_RolePlayAsignaciones_RolePlay_Empleado")
+  @@index([idEmpleado], map: "idx_roleasig_idEmpleado")
+  @@index([idTenant], map: "idx_roleasig_idTenant")
+}
+
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model CatSitesDids {
   idSiteDid         Int       @id @default(autoincrement())
@@ -2019,6 +2148,11 @@ model RegistrosAsistencia {
   idKiosco                                                    Int?
   idEmpleadoRegistra                                          Int?
   numeroEmpleadoCapturado                                     String?                                  @db.VarChar(20)
+  metodoIdentificacion                                        String?                                  @db.VarChar(30)
+  rostroDetectado                                             Boolean?
+  deteccionRostroActiva                                       Boolean?
+  requiereRevision                                            Boolean                                  @default(false)
+  banderasRevision                                            Json?
   idRegistroOrigen                                            BigInt?
   canal                                                       RegistrosAsistencia_canal
   telefonoOrigen                                              String?                                  @db.VarChar(20)
@@ -2459,6 +2593,29 @@ model CursoScormProgresos {
   @@index([idTenant], map: "idx_scorm_progreso_tenant")
 }
 
+model CursoLogrosEmpleado {
+  idLogro        Int       @id @default(autoincrement())
+  idTenant       Int
+  idEmpresa      Int
+  idEmpleado     Int
+  codigo         String    @db.VarChar(40)
+  fechaObtencion DateTime  @db.DateTime(0)
+  vistoEn        DateTime? @db.DateTime(0)
+
+  @@unique([idEmpleado, codigo], map: "uk_logro_empleado")
+  @@index([idTenant], map: "idx_logro_tenant")
+}
+
+model CursoTiempoDiario {
+  idParticipante Int
+  fecha          DateTime @db.Date
+  idTenant       Int
+  segundos       Int      @default(0)
+
+  @@id([idParticipante, fecha])
+  @@index([idTenant], map: "idx_tiempo_tenant")
+}
+
 model SolicitudesIncidencias {
   idSolicitud                                                         Int                              @id @default(autoincrement())
   idTenant                                                            Int
@@ -2476,6 +2633,7 @@ model SolicitudesIncidencias {
   fechaRespuesta                                                      DateTime?                        @db.DateTime(0)
   motivoRechazo                                                       String?                          @db.Text
   comentarios                                                         String?                          @db.Text
+  esForzada                                                           Boolean                          @default(false)
   fechaRegistro                                                       DateTime                         @default(now()) @db.Timestamp(0)
   PasosAprobacionIncidencia                                           PasosAprobacionIncidencia[]
   SolicitudesIncapacidadesDetalle                                     SolicitudesIncapacidadesDetalle?
@@ -2548,25 +2706,27 @@ model SolicitudesPermisosDetalle {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model ArchivosSolicitudes {
-  idArchivoSolicitud Int       @id @default(autoincrement())
-  idTenant           Int
-  idEmpresa          Int
-  idEmpleado         Int
-  moduloSolicitud    String    @db.VarChar(30)
-  idSolicitud        Int
-  nombreOriginal     String    @db.VarChar(255)
-  nombreAlmacenado   String    @db.VarChar(255)
-  rutaRelativa       String    @db.VarChar(700)
-  mimeType           String?   @db.VarChar(150)
-  tamanoBytes        BigInt    @default(0) @db.UnsignedBigInt
-  usuarioRegistro    String?   @db.VarChar(100)
-  fechaRegistro      DateTime  @default(now()) @db.DateTime(0)
-  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_archivos_empleado")
+  idArchivoSolicitud  Int       @id @default(autoincrement())
+  idTenant            Int
+  idEmpresa           Int
+  idEmpleado          Int
+  moduloSolicitud     String    @db.VarChar(30)
+  idSolicitud         Int
+  nombreOriginal      String    @db.VarChar(255)
+  nombreAlmacenado    String    @db.VarChar(255)
+  rutaRelativa        String?   @db.VarChar(700)
+  idDocumentoGenerado Int?
+  mimeType            String?   @db.VarChar(150)
+  tamanoBytes         BigInt    @default(0) @db.UnsignedBigInt
+  usuarioRegistro     String?   @db.VarChar(100)
+  fechaRegistro       DateTime  @default(now()) @db.DateTime(0)
+  Empleados           Empleados @relation(fields: [idEmpleado], references: [idEmpleado], map: "fk_archivos_empleado")
 
   @@index([idEmpleado], map: "fk_archivos_empleado")
   @@index([idTenant, idEmpresa, idEmpleado], map: "idx_archivos_empleado")
   @@index([idTenant, idEmpresa], map: "idx_archivos_empresa")
   @@index([moduloSolicitud, idSolicitud], map: "idx_archivos_solicitud")
+  @@index([idDocumentoGenerado], map: "idx_archivos_documento_generado")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -2676,6 +2836,10 @@ model KioscosAsistencia {
   identificadorDispositivo      String?                         @unique(map: "UK_Kiosco_Dispositivo") @db.VarChar(150)
   tokenJti                      String?                         @unique(map: "UK_Kiosco_TokenJti") @db.VarChar(100)
   ultimoLatido                  DateTime?                       @db.DateTime(0)
+  plataforma                    String?                         @db.VarChar(20)
+  modelo                        String?                         @db.VarChar(120)
+  versionApp                    String?                         @db.VarChar(20)
+  pendientesReportados          Int                             @default(0)
   politicas                     Json
   fechaCreacion                 DateTime                        @default(now()) @db.DateTime(0)
   fechaActualizacion            DateTime                        @default(now()) @db.DateTime(0)
@@ -2709,6 +2873,9 @@ model RegistrosKioscoPorIdentificar {
   longitud                                                               Decimal?                                     @db.Decimal(11, 8)
   idEvidencia                                                            Int?
   uuidCliente                                                            String                                       @unique(map: "UK_Kiosco_Identificar_UUID") @db.VarChar(64)
+  metodoIdentificacion                                                   String?                                      @db.VarChar(30)
+  esOffline                                                              Boolean                                      @default(false)
+  desfaseRelojSegundos                                                   Int?
   estatus                                                                RegistrosKioscoPorIdentificar_estatus        @default(PENDIENTE)
   idEmpleadoAsignado                                                     Int?
   agregarEmpleadoSite                                                    Boolean                                      @default(false)
@@ -2763,24 +2930,725 @@ model RevisionesRegistroAsistencia {
   @@index([idEmpleadoRevisor], map: "IDX_Revision_Revisor")
 }
 
-model RolePlayAsignaciones {
-  idAsignacion       Int       @id @default(autoincrement())
-  idRolePlay         Int
-  idEmpleado         Int
-  idTenant           Int
-  idEmpresa          Int
-  FechaLimite        DateTime? @db.DateTime(0)
-  IntentosMaximos    Int?
-  Activo             Boolean   @default(true)
-  idUsuarioAsigno    Int
-  FechaRegistro      DateTime? @default(now()) @db.DateTime(0)
-  FechaActualizacion DateTime? @db.DateTime(0)
-  Empleados          Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_Empleado")
-  RolePlays          RolePlays @relation(fields: [idRolePlay], references: [idRolePlay], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePlayAsignaciones_RolePlay")
+// --- Comunicación interna (CA1). Catálogos globales no llevan idTenant. ---
+// Las tablas hijas (versiones, acuses, destinatarios, preguntas, enlaces, personas
+// de audiencia fija y RelPuestoEtiqueta) tampoco: cuelgan del padre, como en el contrato.
 
-  @@unique([idRolePlay, idEmpleado], map: "UK_RolePlayAsignaciones_RolePlay_Empleado")
-  @@index([idEmpleado], map: "idx_roleasig_idEmpleado")
-  @@index([idTenant], map: "idx_roleasig_idTenant")
+model CatTiposPersonal {
+  idTipoPersonal Int          @id @default(autoincrement())
+  idTenant       Int
+  Codigo         String       @db.VarChar(30)
+  Nombre         String       @db.VarChar(80)
+  Activo         Boolean      @default(true)
+  CatPuestos     CatPuestos[]
+  Empleados      Empleados[]
+
+  @@unique([idTenant, Codigo], map: "UK_CatTiposPersonal_Tenant_Codigo")
+  @@index([idTenant], map: "IDX_CatTiposPersonal_Tenant")
+}
+
+model CatEtiquetasPuesto {
+  idEtiqueta        Int                 @id @default(autoincrement())
+  idTenant          Int
+  Nombre            String              @db.VarChar(60)
+  Activo            Boolean             @default(true)
+  RelPuestoEtiqueta RelPuestoEtiqueta[]
+
+  @@unique([idTenant, Nombre], map: "UK_CatEtiquetasPuesto_Tenant_Nombre")
+  @@index([idTenant], map: "IDX_CatEtiquetasPuesto_Tenant")
+}
+
+model RelPuestoEtiqueta {
+  idPuesto           Int
+  idEtiqueta         Int
+  CatPuestos         CatPuestos         @relation(fields: [idPuesto], references: [idPuesto], onDelete: Cascade, onUpdate: NoAction, map: "FK_RelPuestoEtiqueta_Puesto")
+  CatEtiquetasPuesto CatEtiquetasPuesto @relation(fields: [idEtiqueta], references: [idEtiqueta], onDelete: Cascade, onUpdate: NoAction, map: "FK_RelPuestoEtiqueta_Etiqueta")
+
+  @@id([idPuesto, idEtiqueta])
+  @@index([idEtiqueta], map: "FK_RelPuestoEtiqueta_Etiqueta")
+}
+
+model ComAudiencias {
+  idAudiencia          Int                    @id @default(autoincrement())
+  idTenant             Int
+  idEmpresa            Int
+  Nombre               String                 @db.VarChar(120)
+  Tipo                 ComAudienciaTipo
+  Criterios            Json
+  CreadoPor            String                 @db.VarChar(36)
+  FechaRegistro        DateTime               @default(now()) @db.DateTime(0)
+  FechaActualizacion   DateTime?              @db.DateTime(0)
+  Activo               Boolean                @default(true)
+  CatEmpresas          CatEmpresas            @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComAudiencias_Empresa")
+  ComAudienciaPersonas ComAudienciaPersonas[]
+  ComComunicados       ComComunicados[]
+
+  @@index([idTenant, idEmpresa], map: "IDX_ComAudiencias_Tenant_Empresa")
+  @@index([idEmpresa], map: "FK_ComAudiencias_Empresa")
+}
+
+model ComAudienciaPersonas {
+  idAudiencia   Int
+  idEmpleado    Int
+  ComAudiencias ComAudiencias @relation(fields: [idAudiencia], references: [idAudiencia], onDelete: Cascade, onUpdate: NoAction, map: "FK_ComAudienciaPersonas_Audiencia")
+  Empleados     Empleados     @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComAudienciaPersonas_Empleado")
+
+  @@id([idAudiencia, idEmpleado])
+  @@index([idEmpleado], map: "FK_ComAudienciaPersonas_Empleado")
+}
+
+model ComTiposComunicado {
+  idTipo           Int              @id @default(autoincrement())
+  idTenant         Int
+  Codigo           String           @db.VarChar(40)
+  Nombre           String           @db.VarChar(80)
+  PrioridadDefault ComPrioridad
+  AcuseDefault     ComAcuseModo
+  ModalDefault     Boolean
+  IdentidadDefault Boolean
+  EsCorto          Boolean          @default(false)
+  Activo           Boolean          @default(true)
+  ComComunicados   ComComunicados[]
+
+  @@unique([idTenant, Codigo], map: "UK_ComTiposComunicado_Tenant_Codigo")
+  @@index([idTenant], map: "IDX_ComTiposComunicado_Tenant")
+}
+
+model ComComunicados {
+  idComunicado           Int                      @id @default(autoincrement())
+  idTenant               Int
+  idEmpresa              Int
+  idTipo                 Int
+  Estado                 ComEstado
+  Prioridad              ComPrioridad
+  AcuseModo              ComAcuseModo
+  MostrarModal           Boolean                  @default(false)
+  RequiereIdentidad      Boolean                  @default(false)
+  IncluirNuevos          Boolean                  @default(false)
+  PermitePregunta        Boolean                  @default(false)
+  CanalesForzados        Json?
+  Escalamiento           Json?
+  RecordatorioCadaDias   Int?
+  RecordatorioMax        Int?
+  CtaTipo                String?                  @db.VarChar(40)
+  CtaTexto               String?                  @db.VarChar(60)
+  CtaDestino             String?                  @db.VarChar(500)
+  Categoria              String?                  @db.VarChar(60)
+  idAudiencia            Int?
+  CriteriosAudiencia     Json
+  ProgramadoPara         DateTime?                @db.DateTime(0)
+  EnviadoEn              DateTime?                @db.DateTime(0)
+  VigenteHasta           DateTime?                @db.DateTime(0)
+  VersionActual          Int                      @default(1)
+  TotalDestinatarios     Int                      @default(0)
+  EnvioPendiente         Boolean                  @default(false)
+  EnvioPendienteDesde    DateTime?                @db.DateTime(0)
+  CreadoPor              String                   @db.VarChar(36)
+  FechaRegistro          DateTime                 @default(now()) @db.DateTime(0)
+  ArchivadoEn            DateTime?                @db.DateTime(0)
+  CatEmpresas            CatEmpresas              @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComComunicados_Empresa")
+  ComTiposComunicado     ComTiposComunicado       @relation(fields: [idTipo], references: [idTipo], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComComunicados_Tipo")
+  ComAudiencias          ComAudiencias?           @relation(fields: [idAudiencia], references: [idAudiencia], onDelete: SetNull, onUpdate: NoAction, map: "FK_ComComunicados_Audiencia")
+  ComComunicadoVersiones ComComunicadoVersiones[]
+  ComDestinatarios       ComDestinatarios[]
+  ComAcuses              ComAcuses[]
+  ComPreguntas           ComPreguntas[]
+
+  @@index([idTenant, idEmpresa, Estado], map: "IDX_ComComunicados_Tenant_Emp_Est")
+  @@index([idEmpresa], map: "FK_ComComunicados_Empresa")
+  @@index([idTipo], map: "FK_ComComunicados_Tipo")
+  @@index([idAudiencia], map: "FK_ComComunicados_Audiencia")
+}
+
+model ComComunicadoVersiones {
+  idVersion             Int                     @id @default(autoincrement())
+  idComunicado          Int
+  NumVersion            Int
+  Titulo                String                  @db.VarChar(120)
+  Resumen               String                  @db.VarChar(200)
+  CuerpoHtml            String                  @db.Text
+  PortadaRuta           String?                 @db.VarChar(500)
+  CreadoPor             String                  @db.VarChar(36)
+  FechaRegistro         DateTime                @default(now()) @db.DateTime(0)
+  EsCorreccionMenor     Boolean                 @default(false)
+  ComComunicados        ComComunicados          @relation(fields: [idComunicado], references: [idComunicado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComVersiones_Comunicado")
+  ComComunicadoAdjuntos ComComunicadoAdjuntos[]
+  ComAcuses             ComAcuses[]
+
+  @@unique([idComunicado, NumVersion], map: "UK_ComVersiones_Com_Num")
+  @@index([idComunicado], map: "FK_ComVersiones_Comunicado")
+}
+
+model ComComunicadoAdjuntos {
+  idAdjunto              Int                    @id @default(autoincrement())
+  idVersion              Int
+  Nombre                 String                 @db.VarChar(255)
+  Ruta                   String                 @db.VarChar(500)
+  Mime                   String                 @db.VarChar(120)
+  TamanoBytes            Int
+  ComComunicadoVersiones ComComunicadoVersiones @relation(fields: [idVersion], references: [idVersion], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComAdjuntos_Version")
+
+  @@index([idVersion], map: "FK_ComAdjuntos_Version")
+}
+
+model ComDestinatarios {
+  idDestinatario        Int                 @id @default(autoincrement())
+  idComunicado          Int
+  idEmpleado            Int
+  idUsuario             String?             @db.VarChar(36)
+  idSite                Int?
+  idArea                Int?
+  idPuesto              Int?
+  idTipoPersonal        Int?
+  idJefe                Int?
+  CanalesEfectivos      Json
+  Estado                ComDestEstado
+  LeidoEn               DateTime?           @db.DateTime(0)
+  ConfirmadoEn          DateTime?           @db.DateTime(0)
+  VersionConfirmada     Int?
+  RecordatoriosEnviados Int                 @default(0)
+  UltimoIntentoEn       DateTime?           @db.DateTime(0)
+  EscaladoA             Json?
+  ComComunicados        ComComunicados      @relation(fields: [idComunicado], references: [idComunicado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComDestinatarios_Comunicado")
+  Empleados             Empleados           @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComDestinatarios_Empleado")
+  ComAcuses             ComAcuses[]
+  ComEnlacesSeguros     ComEnlacesSeguros[]
+
+  @@unique([idComunicado, idEmpleado], map: "UK_ComDestinatarios_Com_Emp")
+  @@index([idEmpleado, Estado], map: "IDX_ComDestinatarios_Emp_Estado")
+  @@index([idComunicado, Estado], map: "IDX_ComDestinatarios_Com_Estado")
+  @@index([idComunicado, idSite], map: "IDX_ComDestinatarios_Com_Site")
+  @@index([idComunicado], map: "FK_ComDestinatarios_Comunicado")
+  @@index([idEmpleado], map: "FK_ComDestinatarios_Empleado")
+}
+
+// Evidencia append-only. Las FK van en ON DELETE RESTRICT: un acuse no se borra en cascada.
+model ComAcuses {
+  idAcuse                Int                    @id @default(autoincrement())
+  idComunicado           Int
+  idVersion              Int
+  idDestinatario         Int
+  idEmpleado             Int
+  FechaUtc               DateTime               @db.DateTime(0)
+  ZonaHoraria            String                 @db.VarChar(50)
+  Canal                  ComCanal
+  Metodo                 String                 @db.VarChar(40)
+  Ip                     String?                @db.VarChar(45)
+  UserAgent              String?                @db.VarChar(300)
+  Dispositivo            String?                @db.VarChar(120)
+  ComComunicados         ComComunicados         @relation(fields: [idComunicado], references: [idComunicado], onDelete: Restrict, onUpdate: NoAction, map: "FK_ComAcuses_Comunicado")
+  ComComunicadoVersiones ComComunicadoVersiones @relation(fields: [idVersion], references: [idVersion], onDelete: Restrict, onUpdate: NoAction, map: "FK_ComAcuses_Version")
+  ComDestinatarios       ComDestinatarios       @relation(fields: [idDestinatario], references: [idDestinatario], onDelete: Restrict, onUpdate: NoAction, map: "FK_ComAcuses_Destinatario")
+  Empleados              Empleados              @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Restrict, onUpdate: NoAction, map: "FK_ComAcuses_Empleado")
+
+  @@unique([idDestinatario, idVersion], map: "UK_ComAcuses_Dest_Version")
+  @@index([idComunicado], map: "FK_ComAcuses_Comunicado")
+  @@index([idVersion], map: "FK_ComAcuses_Version")
+  @@index([idDestinatario], map: "FK_ComAcuses_Destinatario")
+  @@index([idEmpleado], map: "FK_ComAcuses_Empleado")
+}
+
+model ComPreguntas {
+  idPregunta     Int            @id @default(autoincrement())
+  idComunicado   Int
+  idEmpleado     Int
+  Pregunta       String         @db.Text
+  Respuesta      String?        @db.Text
+  RespondidoPor  String?        @db.VarChar(36)
+  FechaPregunta  DateTime       @default(now()) @db.DateTime(0)
+  FechaRespuesta DateTime?      @db.DateTime(0)
+  ComComunicados ComComunicados @relation(fields: [idComunicado], references: [idComunicado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComPreguntas_Comunicado")
+  Empleados      Empleados      @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComPreguntas_Empleado")
+
+  @@index([idComunicado], map: "FK_ComPreguntas_Comunicado")
+  @@index([idEmpleado], map: "FK_ComPreguntas_Empleado")
+}
+
+model ComEnlacesSeguros {
+  idEnlace         Int              @id @default(autoincrement())
+  idDestinatario   Int
+  TokenHash        String           @unique(map: "UK_ComEnlacesSeguros_TokenHash") @db.Char(64)
+  ExpiraEn         DateTime         @db.DateTime(0)
+  Intentos         Int              @default(0)
+  BloqueadoHasta   DateTime?        @db.DateTime(0)
+  VerificadoEn     DateTime?        @db.DateTime(0)
+  ComDestinatarios ComDestinatarios @relation(fields: [idDestinatario], references: [idDestinatario], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComEnlaces_Destinatario")
+
+  @@index([idDestinatario], map: "FK_ComEnlaces_Destinatario")
+}
+
+model PushTokens {
+  idPushToken  Int        @id @default(autoincrement())
+  user_uuid    String     @db.VarChar(36)
+  idEmpleado   Int?
+  Token        String     @unique(map: "UK_PushTokens_Token") @db.VarChar(255)
+  Plataforma   String     @db.VarChar(20)
+  Dispositivo  String?    @db.VarChar(120)
+  Activo       Boolean    @default(true)
+  UltimoUso    DateTime?  @db.DateTime(0)
+  FechaBaja    DateTime?  @db.DateTime(0)
+  MotivoBaja   String?    @db.VarChar(60)
+  UltimoTicket String?    @db.VarChar(80)
+  Empleados    Empleados? @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: SetNull, onUpdate: NoAction, map: "FK_PushTokens_Empleado")
+
+  @@index([user_uuid], map: "IDX_PushTokens_Usuario")
+  @@index([idEmpleado], map: "FK_PushTokens_Empleado")
+  @@index([UltimoTicket], map: "IDX_PushTokens_UltimoTicket")
+}
+
+model ComPerfilesCanal {
+  idPerfil     Int            @id @default(autoincrement())
+  idTenant     Int
+  idEmpresa    Int
+  Nivel        ComNivelPerfil
+  idReferencia Int
+  Canales      Json
+  Nota         String?        @db.VarChar(200)
+  CatEmpresas  CatEmpresas    @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComPerfilesCanal_Empresa")
+
+  @@unique([idEmpresa, Nivel, idReferencia], map: "UK_ComPerfilesCanal_Emp_Nivel_Ref")
+  @@index([idTenant], map: "IDX_ComPerfilesCanal_Tenant")
+  @@index([idEmpresa], map: "FK_ComPerfilesCanal_Empresa")
+}
+
+model ComConfigEmpresa {
+  idEmpresa                 Int         @id
+  idTenant                  Int
+  PoliticaWhatsApp          String      @default("IMPORTANTE_CRITICA") @db.VarChar(30)
+  EscalaImportanteMin       Int         @default(240)
+  EscalaCriticaMin          Int         @default(120)
+  EscalaCorreoMin           Int         @default(240)
+  SilencioActivo            Boolean     @default(true)
+  SilencioInicio            String      @default("21:00") @db.VarChar(5)
+  SilencioFin               String      @default("07:00") @db.VarChar(5)
+  LimiteDiarioRecordatorios Int         @default(5)
+  JefesAvisoEquipo          Boolean     @default(true)
+  PlantillasWhatsApp        Json?
+  CatEmpresas               CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComConfigEmpresa_Empresa")
+
+  @@index([idTenant], map: "IDX_ComConfigEmpresa_Tenant")
+}
+
+model ComReglasRecordatorio {
+  idRegla             Int         @id @default(autoincrement())
+  idTenant            Int
+  idEmpresa           Int
+  Codigo              String      @db.VarChar(5)
+  Activo              Boolean
+  Parametros          Json
+  Canales             Json
+  Plantilla           String      @db.VarChar(500)
+  AplicaTiposPersonal Json?
+  ExcluyeSites        Json?
+  CatEmpresas         CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComReglasRecordatorio_Empresa")
+
+  @@unique([idEmpresa, Codigo], map: "UK_ComReglasRecordatorio_Emp_Codigo")
+  @@index([idTenant], map: "IDX_ComReglasRecordatorio_Tenant")
+  @@index([idEmpresa], map: "FK_ComReglasRecordatorio_Empresa")
+}
+
+model ComRecordatoriosEnviados {
+  id         BigInt    @id @default(autoincrement())
+  idEmpresa  Int
+  Codigo     String    @db.VarChar(5)
+  idEmpleado Int
+  Referencia String    @db.VarChar(80)
+  Intento    Int
+  EnviadoEn  DateTime  @default(now()) @db.DateTime(0)
+  Empleados  Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ComRecordatoriosEnviados_Empleado")
+
+  @@index([idEmpleado, EnviadoEn], map: "IDX_ComRecordatorios_Emp_Fecha")
+  @@index([idEmpresa], map: "IDX_ComRecordatorios_Empresa")
+  @@index([idEmpleado], map: "FK_ComRecordatoriosEnviados_Empleado")
+}
+
+model CatComCapacidades {
+  idCapacidad        Int                  @id @default(autoincrement())
+  Codigo             String               @unique(map: "UK_CatComCapacidades_Codigo") @db.VarChar(40)
+  Descripcion        String               @db.VarChar(200)
+  Fase               Int                  @default(1)
+  RelRolComCapacidad RelRolComCapacidad[]
+}
+
+model RelRolComCapacidad {
+  id                 Int               @id @default(autoincrement())
+  idTenant           Int
+  idRol              Int
+  idCapacidad        Int
+  Alcance            ComAlcance
+  Referencias        Json?
+  TiposPermitidos    Json?
+  RequiereAprobacion Boolean           @default(false)
+  CatRoles           CatRoles          @relation(fields: [idRol], references: [idRol], onDelete: Cascade, onUpdate: NoAction, map: "FK_RelRolComCapacidad_Rol")
+  CatComCapacidades  CatComCapacidades @relation(fields: [idCapacidad], references: [idCapacidad], onDelete: NoAction, onUpdate: NoAction, map: "FK_RelRolComCapacidad_Capacidad")
+
+  @@unique([idRol, idCapacidad], map: "UK_RelRolComCapacidad_Rol_Cap")
+  @@index([idTenant], map: "IDX_RelRolComCapacidad_Tenant")
+  @@index([idRol], map: "FK_RelRolComCapacidad_Rol")
+  @@index([idCapacidad], map: "FK_RelRolComCapacidad_Capacidad")
+}
+
+model WaConsumo {
+  id               BigInt      @id @default(autoincrement())
+  idTenant         Int
+  idEmpresa        Int
+  idEntrega        String?     @db.VarChar(36)
+  Plantilla        String      @db.VarChar(80)
+  CategoriaInterna String      @db.VarChar(20)
+  CategoriaMeta    String?     @db.VarChar(20)
+  OrigenTipo       String      @db.VarChar(20)
+  OrigenId         String      @db.VarChar(40)
+  TelefonoUlt4     String      @db.Char(4)
+  ProveedorMsgId   String?     @db.VarChar(80)
+  Estatus          String      @db.VarChar(20)
+  PrecioUnitario   Decimal     @db.Decimal(10, 4)
+  Moneda           String      @db.Char(3)
+  Costo            Decimal     @db.Decimal(10, 4)
+  EnviadoEn        DateTime    @default(now()) @db.DateTime(0)
+  CatEmpresas      CatEmpresas @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_WaConsumo_Empresa")
+
+  @@index([idTenant, EnviadoEn], map: "IDX_WaConsumo_Tenant_Fecha")
+  @@index([idEmpresa], map: "FK_WaConsumo_Empresa")
+}
+
+model WaPrecios {
+  id               Int      @id @default(autoincrement())
+  idTenant         Int?
+  PrecioBase       Decimal  @db.Decimal(10, 4)
+  PreciosCategoria Json?
+  Moneda           String   @default("MXN") @db.Char(3)
+  VigenteDesde     DateTime @db.DateTime(0)
+  CreadoPor        String   @db.VarChar(36)
+  FechaRegistro    DateTime @default(now()) @db.DateTime(0)
+
+  @@index([idTenant, VigenteDesde], map: "IDX_WaPrecios_Tenant_Vigencia")
+}
+
+model WaTopes {
+  id          Int          @id @default(autoincrement())
+  idTenant    Int
+  idEmpresa   Int?
+  TopeMensual Decimal      @db.Decimal(12, 2)
+  Accion      String       @default("BLOQUEAR") @db.VarChar(20)
+  Activo      Boolean      @default(true)
+  Aviso80Mes  String?      @db.Char(7)
+  CatEmpresas CatEmpresas? @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_WaTopes_Empresa")
+
+  @@index([idTenant], map: "IDX_WaTopes_Tenant")
+  @@index([idEmpresa], map: "FK_WaTopes_Empresa")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model CalendarioLaboralEmpleado {
+  idCalendario                     BigInt                             @id @default(autoincrement())
+  idEmpleado                       Int
+  fecha                            DateTime                           @db.Date
+  tipoDia                          String                             @default("LABORAL") @db.VarChar(20)
+  observaciones                    String?                            @db.VarChar(500)
+  fechaRegistro                    DateTime?                          @default(now()) @db.Timestamp(0)
+  fechaActualizacion               DateTime?                          @default(now()) @db.Timestamp(0)
+  Empleados                        Empleados                          @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "FK_Calendario_Empleado")
+  DetalleCalendarioLaboralEmpleado DetalleCalendarioLaboralEmpleado[]
+
+  @@unique([idEmpleado, fecha], map: "UK_Calendario_Empleado_Fecha")
+  @@index([fecha], map: "IDX_Calendario_Fecha")
+}
+
+model DetalleCalendarioLaboralEmpleado {
+  idDetalle                 BigInt                    @id @default(autoincrement())
+  idCalendario              BigInt
+  numeroTurno               Int                       @default(1) @db.UnsignedSmallInt
+  HoraEntrada               DateTime                  @db.Time(0)
+  HoraSalida                DateTime                  @db.Time(0)
+  Modalidad                 String                    @default("PRESENCIAL") @db.VarChar(100)
+  fechaRegistro             DateTime?                 @default(now()) @db.Timestamp(0)
+  CalendarioLaboralEmpleado CalendarioLaboralEmpleado @relation(fields: [idCalendario], references: [idCalendario], onDelete: Cascade, map: "FK_Detalle_Calendario")
+
+  @@unique([idCalendario, numeroTurno], map: "UK_Calendario_NumeroTurno")
+  @@index([idCalendario], map: "IDX_Detalle_Calendario")
+}
+
+model CatCamposPlantilla {
+  id              Int               @id @default(autoincrement())
+  clave           String            @unique(map: "uk_cat_campos_plantilla_clave") @db.VarChar(150)
+  nombre          String            @db.VarChar(200)
+  grupo           String            @db.VarChar(100)
+  entidad         String            @db.VarChar(50)
+  descripcion     String?           @db.VarChar(500)
+  activo          Boolean           @default(true)
+  orden           Int               @default(0)
+  fechaCreacion   DateTime?         @default(now()) @db.Timestamp(0)
+  CamposPlantilla CamposPlantilla[]
+
+  @@index([activo], map: "idx_cat_campos_plantilla_activo")
+  @@index([grupo], map: "idx_cat_campos_plantilla_grupo")
+}
+
+model RelEmpleadosPostulaciones {
+  idRelacion    Int           @id @default(autoincrement())
+  idEmpleado    Int
+  idPostulacion Int           @unique(map: "UK_RelEmpleadosPostulaciones_Postulacion")
+  fechaRegistro DateTime?     @default(now()) @db.Timestamp(0)
+  Empleados     Empleados     @relation(fields: [idEmpleado], references: [idEmpleado], map: "FK_RelEmpPost_Empleado")
+  Postulaciones Postulaciones @relation(fields: [idPostulacion], references: [idPostulacion], map: "FK_RelEmpPost_Postulacion")
+
+  @@index([idEmpleado], map: "IDX_RelEmpleadosPostulaciones_Empleado")
+}
+
+model EmpleadoIdentificadoresExternos {
+  idIdentificadorExterno Int       @id @default(autoincrement())
+  idTenant               Int
+  idEmpleado             Int
+  sistemaOrigen          String    @default("NOMINA") @db.VarChar(100)
+  empresaOrigen          String    @db.VarChar(150)
+  tipoIdentificador      String    @default("NUMERO_EMPLEADO") @db.VarChar(100)
+  identificador          String    @db.VarChar(100)
+  activo                 Boolean   @default(true)
+  fechaRegistro          DateTime? @default(now()) @db.Timestamp(0)
+  Empleados              Empleados @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: Cascade, map: "FK_Identificadores_Empleados")
+
+  @@unique([idEmpleado, sistemaOrigen, empresaOrigen, tipoIdentificador], map: "UK_Empleado_Sistema_Externo")
+  @@unique([idTenant, sistemaOrigen, empresaOrigen, tipoIdentificador, identificador], map: "UK_Identificador_Externo")
+  @@index([idEmpleado], map: "IDX_Identificadores_Empleado")
+}
+
+/// Ruta de aprendizaje. El PK no se llama idRuta: ese nombre ya lo usa RelPuestoRuta.
+model RutaAprendizaje {
+  idRutaAprendizaje Int              @id @default(autoincrement())
+  idTenant          Int?
+  idEmpresa         Int
+  nombre            String           @db.VarChar(200)
+  descripcion       String?          @db.Text
+  proposito         RutaProposito
+  activo            Boolean          @default(true)
+  fechaRegistro     DateTime         @default(now()) @db.Timestamp(0)
+  usuarioRegistro   String?          @db.VarChar(45)
+  CatEmpresas       CatEmpresas      @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAprendizaje_Empresa")
+  RutaVersiones     RutaVersion[]
+  RutaLotes         RutaLote[]
+  RutaAsignaciones  RutaAsignacion[]
+  RelPuestoRutas    RelPuestoRuta[]
+
+  @@index([idEmpresa, nombre, proposito], map: "idx_ruta_aprendizaje_empresa_nombre")
+  @@index([idTenant], map: "idx_ruta_aprendizaje_tenant")
+}
+
+model RutaVersion {
+  idVersion          Int                      @id @default(autoincrement())
+  idRutaAprendizaje  Int
+  numero             Int
+  /// A lo más una versión borrador y una publicada por ruta.
+  /// Lo garantiza la columna generada estadoVigente de la migración BR1.
+  estado             RutaVersionEstado
+  basadaEnVersion    Int?
+  publicadaEn        DateTime?                @db.Timestamp(0)
+  publicadaPor       String?                  @db.VarChar(36)
+  notas              String?                  @db.Text
+  RutaAprendizaje    RutaAprendizaje          @relation(fields: [idRutaAprendizaje], references: [idRutaAprendizaje], onDelete: Cascade, onUpdate: NoAction, map: "FK_RutaVersion_Ruta")
+  VersionOrigen      RutaVersion?             @relation("RutaVersionBase", fields: [basadaEnVersion], references: [idVersion], onDelete: SetNull, onUpdate: NoAction, map: "FK_RutaVersion_Base")
+  VersionesDerivadas RutaVersion[]            @relation("RutaVersionBase")
+  RutaEtapas         RutaEtapa[]
+  RutaAlcances       RutaAlcance[]
+  RutaLotes          RutaLote[]
+  RutaAsignaciones   RutaAsignacion[]
+  PlanesCarrera      PlanCarreraColaborador[]
+
+  @@unique([idRutaAprendizaje, numero], map: "uk_ruta_version_numero")
+  @@index([basadaEnVersion], map: "FK_RutaVersion_Base")
+}
+
+model RutaEtapa {
+  idEtapa               Int            @id @default(autoincrement())
+  idVersion             Int
+  nombre                String         @db.VarChar(200)
+  orden                 Int
+  /// Días desde la fecha base de la asignación.
+  diaInicio             Int
+  diaFin                Int
+  requiereEtapaAnterior Boolean        @default(false)
+  RutaVersion           RutaVersion    @relation(fields: [idVersion], references: [idVersion], onDelete: Cascade, onUpdate: NoAction, map: "FK_RutaEtapa_Version")
+  RutaElementos         RutaElemento[]
+
+  @@index([idVersion, orden], map: "idx_ruta_etapa_version_orden")
+}
+
+model RutaElemento {
+  idElemento              Int                   @id @default(autoincrement())
+  idEtapa                 Int
+  /// Misma versión que la etapa. Sin FK para no cruzar dos cascadas;
+  /// el índice único impide repetir el curso dentro de la versión.
+  idVersion               Int
+  idCurso                 Int
+  orden                   Int
+  obligatorio             Boolean               @default(true)
+  idElementoPrerrequisito Int?
+  /// Null: el curso no vence.
+  vigenciaMeses           Int?
+  RutaEtapa               RutaEtapa             @relation(fields: [idEtapa], references: [idEtapa], onDelete: Cascade, onUpdate: NoAction, map: "FK_RutaElemento_Etapa")
+  CatCursos               CatCursos             @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaElemento_Curso")
+  Prerrequisito           RutaElemento?         @relation("RutaElementoPrerrequisito", fields: [idElementoPrerrequisito], references: [idElemento], onDelete: SetNull, onUpdate: NoAction, map: "FK_RutaElemento_Prerrequisito")
+  Dependientes            RutaElemento[]        @relation("RutaElementoPrerrequisito")
+  RutaAsignacionCursos    RutaAsignacionCurso[]
+
+  @@unique([idVersion, idCurso], map: "uk_ruta_elemento_version_curso")
+  @@index([idEtapa, orden], map: "idx_ruta_elemento_etapa_orden")
+  @@index([idCurso], map: "FK_RutaElemento_Curso")
+  @@index([idElementoPrerrequisito], map: "FK_RutaElemento_Prerrequisito")
+}
+
+/// Alcance de una versión. Los campos null significan «cualquiera».
+/// Una regla sin ningún campo significa «toda la empresa».
+model RutaAlcance {
+  idAlcance             Int                    @id @default(autoincrement())
+  idVersion             Int
+  modo                  RutaAlcanceModo
+  idUnidadOperativa     Int?
+  estado                String?                @db.VarChar(150)
+  idSite                Int?
+  idPuesto              Int?
+  idArea                Int?
+  RutaVersion           RutaVersion            @relation(fields: [idVersion], references: [idVersion], onDelete: Cascade, onUpdate: NoAction, map: "FK_RutaAlcance_Version")
+  CatUnidadesOperativas CatUnidadesOperativas? @relation(fields: [idUnidadOperativa], references: [idUnidadOperativa], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAlcance_Unidad")
+  CatSites              CatSites?              @relation(fields: [idSite], references: [idSite], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAlcance_Site")
+  CatPuestos            CatPuestos?            @relation(fields: [idPuesto], references: [idPuesto], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAlcance_Puesto")
+  CatAreas              CatAreas?              @relation(fields: [idArea], references: [idArea], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAlcance_Area")
+
+  @@index([idVersion], map: "idx_ruta_alcance_version")
+  @@index([idUnidadOperativa], map: "FK_RutaAlcance_Unidad")
+  @@index([idSite], map: "FK_RutaAlcance_Site")
+  @@index([idPuesto], map: "FK_RutaAlcance_Puesto")
+  @@index([idArea], map: "FK_RutaAlcance_Area")
+}
+
+model RutaLote {
+  idLote            Int              @id @default(autoincrement())
+  idTenant          Int?
+  idEmpresa         Int
+  idRutaAprendizaje Int
+  idVersion         Int
+  disparador        RutaDisparador
+  descripcion       String?          @db.VarChar(255)
+  estatus           RutaLoteEstatus
+  personas          Int              @default(0)
+  cursos            Int              @default(0)
+  creadoEn          DateTime         @default(now()) @db.Timestamp(0)
+  creadoPor         String?          @db.VarChar(36)
+  resueltoEn        DateTime?        @db.Timestamp(0)
+  resueltoPor       String?          @db.VarChar(36)
+  motivoRechazo     String?          @db.Text
+  CatEmpresas       CatEmpresas      @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaLote_Empresa")
+  RutaAprendizaje   RutaAprendizaje  @relation(fields: [idRutaAprendizaje], references: [idRutaAprendizaje], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaLote_Ruta")
+  RutaVersion       RutaVersion      @relation(fields: [idVersion], references: [idVersion], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaLote_Version")
+  RutaAsignaciones  RutaAsignacion[]
+
+  @@index([idEmpresa], map: "idx_ruta_lote_empresa")
+  @@index([idTenant], map: "idx_ruta_lote_tenant")
+  @@index([idRutaAprendizaje], map: "FK_RutaLote_Ruta")
+  @@index([idVersion], map: "FK_RutaLote_Version")
+}
+
+model RutaAsignacion {
+  idAsignacion      Int                   @id @default(autoincrement())
+  idTenant          Int?
+  idEmpresa         Int
+  idEmpleado        Int
+  idRutaAprendizaje Int
+  idVersion         Int
+  idLote            Int?
+  disparador        RutaDisparador
+  estatus           RutaAsignacionEstatus
+  fechaBase         DateTime              @db.Date
+  fechaAsignacion   DateTime              @default(now()) @db.Timestamp(0)
+  fechaCompletada   DateTime?             @db.Timestamp(0)
+  CatEmpresas       CatEmpresas           @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAsignacion_Empresa")
+  Empleados         Empleados             @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAsignacion_Empleado")
+  RutaAprendizaje   RutaAprendizaje       @relation(fields: [idRutaAprendizaje], references: [idRutaAprendizaje], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAsignacion_Ruta")
+  RutaVersion       RutaVersion           @relation(fields: [idVersion], references: [idVersion], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAsignacion_Version")
+  RutaLote          RutaLote?             @relation(fields: [idLote], references: [idLote], onDelete: SetNull, onUpdate: NoAction, map: "FK_RutaAsignacion_Lote")
+  Cursos            RutaAsignacionCurso[]
+
+  @@unique([idEmpleado, idVersion], map: "uk_ruta_asignacion_empleado_version")
+  @@index([idEmpresa], map: "idx_ruta_asignacion_empresa")
+  @@index([idTenant], map: "idx_ruta_asignacion_tenant")
+  @@index([idRutaAprendizaje], map: "FK_RutaAsignacion_Ruta")
+  @@index([idVersion], map: "FK_RutaAsignacion_Version")
+  @@index([idLote], map: "FK_RutaAsignacion_Lote")
+  @@index([idEmpleado], map: "FK_RutaAsignacion_Empleado")
+}
+
+model RutaAsignacionCurso {
+  idAsignacionCurso        Int                 @id @default(autoincrement())
+  idAsignacion             Int
+  idElemento               Int
+  idCurso                  Int
+  estado                   RutaCursoEstado
+  idParticipante           Int?
+  fechaLimite              DateTime            @db.Date
+  fechaCompletado          DateTime?           @db.DateTime(0)
+  venceVigencia            DateTime?           @db.Date
+  reconocidoDeParticipante Int?
+  RutaAsignacion           RutaAsignacion      @relation(fields: [idAsignacion], references: [idAsignacion], onDelete: Cascade, onUpdate: NoAction, map: "FK_RutaAsignacionCurso_Asignacion")
+  RutaElemento             RutaElemento        @relation(fields: [idElemento], references: [idElemento], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAsignacionCurso_Elemento")
+  CatCursos                CatCursos           @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "FK_RutaAsignacionCurso_Curso")
+  CursoParticipantes       CursoParticipantes? @relation("RutaCursoInscripcion", fields: [idParticipante], references: [idParticipante], onDelete: SetNull, onUpdate: NoAction, map: "FK_RutaAsignacionCurso_Participante")
+  ReconocidoDe             CursoParticipantes? @relation("RutaCursoReconocido", fields: [reconocidoDeParticipante], references: [idParticipante], onDelete: SetNull, onUpdate: NoAction, map: "FK_RutaAsignacionCurso_Reconocido")
+
+  @@index([idAsignacion], map: "idx_ruta_asignacion_curso_asignacion")
+  @@index([idElemento], map: "FK_RutaAsignacionCurso_Elemento")
+  @@index([idCurso], map: "FK_RutaAsignacionCurso_Curso")
+  @@index([idParticipante], map: "FK_RutaAsignacionCurso_Participante")
+  @@index([reconocidoDeParticipante], map: "FK_RutaAsignacionCurso_Reconocido")
+  @@index([estado, fechaLimite], map: "idx_ruta_asignacion_curso_limite")
+  @@index([venceVigencia], map: "idx_ruta_asignacion_curso_vigencia")
+}
+
+model CursoConstanciaDc3 {
+  idConstancia       Int                  @id @default(autoincrement())
+  idTenant           Int?
+  idEmpresa          Int
+  idParticipante     Int                  @unique(map: "uk_constancia_dc3_participante")
+  idEmpleado         Int
+  idCurso            Int
+  fechaTerminoCurso  DateTime             @db.Date
+  fechaLimiteEntrega DateTime             @db.Date
+  estatus            ConstanciaDc3Estatus @default(pendiente)
+  fechaGenerada      DateTime?            @db.DateTime(0)
+  fechaEntregada     DateTime?            @db.DateTime(0)
+  archivo            String?              @db.VarChar(500)
+  idReporteDc4       Int?
+  CatEmpresas        CatEmpresas          @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ConstanciaDc3_Empresa")
+  CursoParticipantes CursoParticipantes   @relation(fields: [idParticipante], references: [idParticipante], onDelete: NoAction, onUpdate: NoAction, map: "FK_ConstanciaDc3_Participante")
+  Empleados          Empleados            @relation(fields: [idEmpleado], references: [idEmpleado], onDelete: NoAction, onUpdate: NoAction, map: "FK_ConstanciaDc3_Empleado")
+  CatCursos          CatCursos            @relation(fields: [idCurso], references: [idCursos], onDelete: NoAction, onUpdate: NoAction, map: "FK_ConstanciaDc3_Curso")
+  ReporteDc4         ReporteDc4?          @relation(fields: [idReporteDc4], references: [idReporteDc4], onDelete: SetNull, onUpdate: NoAction, map: "FK_ConstanciaDc3_ReporteDc4")
+
+  @@index([idEmpresa], map: "idx_constancia_dc3_empresa")
+  @@index([idEmpresa, estatus, fechaLimiteEntrega], map: "idx_constancia_dc3_limite")
+  @@index([idTenant], map: "idx_constancia_dc3_tenant")
+  @@index([idEmpleado], map: "FK_ConstanciaDc3_Empleado")
+  @@index([idCurso], map: "FK_ConstanciaDc3_Curso")
+  @@index([idReporteDc4], map: "FK_ConstanciaDc3_ReporteDc4")
+}
+
+model ReporteDc4 {
+  idReporteDc4        Int                  @id @default(autoincrement())
+  idTenant            Int?
+  idEmpresa           Int
+  idSite              Int
+  anio                Int
+  fechaCierreEtapa    DateTime             @db.Date
+  fechaLimite         DateTime             @db.Date
+  estatus             ReporteDc4Estatus    @default(borrador)
+  archivo             String?              @db.VarChar(500)
+  fechaPresentado     DateTime?            @db.DateTime(0)
+  CatEmpresas         CatEmpresas          @relation(fields: [idEmpresa], references: [idEmpresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ReporteDc4_Empresa")
+  CatSites            CatSites             @relation(fields: [idSite], references: [idSite], onDelete: NoAction, onUpdate: NoAction, map: "FK_ReporteDc4_Site")
+  CursoConstanciasDc3 CursoConstanciaDc3[]
+
+  @@unique([idEmpresa, idSite, anio], map: "uk_reporte_dc4_site_anio")
+  @@index([idEmpresa, idSite, anio], map: "idx_reporte_dc4_empresa_site_anio")
+  @@index([idSite], map: "FK_ReporteDc4_Site")
+  @@index([idTenant], map: "idx_reporte_dc4_tenant")
 }
 
 enum Entrevistas_interview_type {
@@ -2816,6 +3684,7 @@ enum CursoAsistencias_metodoRegistro {
   qr_autoatendido
   manual_instructor
   link_web
+  app_movil
 }
 
 enum CursoSesiones_tipoInstructor {
@@ -2840,6 +3709,80 @@ enum PlanCarreraEstatus {
   en_preparacion
   listo_para_ascenso
   promovido
+  nominado
+  en_riesgo
+  cancelado
+}
+
+enum PlanCarreraOrigen {
+  rh
+  jefe
+}
+
+enum RutaProposito {
+  ingreso
+  puesto
+  promocion
+  cumplimiento
+}
+
+enum RutaVersionEstado {
+  borrador
+  publicada
+  retirada
+}
+
+enum RutaAlcanceModo {
+  incluir
+  excluir
+}
+
+enum RutaDisparador {
+  publicacion
+  alta
+  movimiento
+  recertificacion
+  manual
+}
+
+enum RutaLoteEstatus {
+  por_aprobar
+  aprobado
+  rechazado
+  aplicado
+}
+
+enum RutaAsignacionEstatus {
+  por_aprobar
+  activa
+  completada
+  sustituida
+  cancelada
+}
+
+enum RutaCursoEstado {
+  reconocido
+  inscrito
+  por_programar
+  completado
+  vencido
+  cancelado
+}
+
+enum RelPuestoRutaTipo {
+  ascenso
+  lateral
+}
+
+enum ConstanciaDc3Estatus {
+  pendiente
+  generada
+  entregada
+}
+
+enum ReporteDc4Estatus {
+  borrador
+  presentado
 }
 
 enum CatGeocercas_Tipo {
@@ -3090,4 +4033,63 @@ enum RegistrosAsistencia_estatusProcesamiento {
   DUPLICADO
   RECHAZADO
   ANULADO
+}
+
+enum ComAudienciaTipo {
+  DINAMICA
+  FIJA
+}
+
+enum ComPrioridad {
+  NORMAL
+  IMPORTANTE
+  CRITICA
+}
+
+enum ComAcuseModo {
+  NINGUNO
+  LEIDO
+  LEI_ENTENDI
+}
+
+enum ComEstado {
+  BORRADOR
+  PROGRAMADO
+  ENVIANDO
+  ENVIADO
+  EXPIRADO
+  CANCELADO
+  ARCHIVADO
+}
+
+enum ComDestEstado {
+  PENDIENTE
+  ENTREGADO
+  LEIDO
+  CONFIRMADO
+  FALLIDO
+  SIN_CANAL
+  EXPIRADO
+}
+
+enum ComCanal {
+  APP
+  WEB
+  ENLACE
+  KIOSCO
+}
+
+enum ComNivelPerfil {
+  TIPO_PERSONAL
+  UBICACION
+  EMPLEADO
+}
+
+enum ComAlcance {
+  TENANT
+  EMPRESAS
+  UNIDADES
+  UBICACIONES
+  ESTRUCTURA
+  EQUIPO_DIRECTO
 }

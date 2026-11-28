@@ -15,7 +15,11 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
     const ctx = context.switchToHttp();
     const request = ctx.getRequest();
 
-    if (request.url.includes('/api/v2/media') || request.url.includes('/media')) {
+    if (
+      request.url.includes('/api/v2/media') ||
+      request.url.includes('/media') ||
+      request.url.includes('/public/comms/files/')
+    ) {
       return next.handle();
     }
 

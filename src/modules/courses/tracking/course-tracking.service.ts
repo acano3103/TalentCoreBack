@@ -1,4 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { localDateString, localDateToPrismaDate } from 'src/modules/attendance/utils/timezone.util';
+import { zonaValida } from 'src/modules/communications/reminders/zona-reloj';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 
@@ -20,6 +22,7 @@ const SEGUNDOS_MAX_POR_LATIDO = 90; // el player avisa cada 60 s; huecos mayores
 const MINUTOS_NUEVA_SESION = 30; // más de 30 min sin actividad = nuevo bloque de estudio
 const DIAS_ABANDONO = 3; // 3 días o más sin actividad = lo dejó; al volver, "retomó"
 const CALIFICACION_APROBATORIA_DEFAULT = 70;
+const ZONA_DEFAULT = 'America/Mexico_City';
 
 interface Participante {
     idTenant: number;
@@ -78,7 +81,11 @@ export class CourseTrackingService {
         const data: Record<string, unknown> = { fechaUltimaActividad: ahora, actualizadoEn: ahora };
 
         if (huecoSegundos <= SEGUNDOS_MAX_POR_LATIDO) {
-            data.tiempoTotalSegundos = { increment: Math.round(huecoSegundos) };
+            const segundos = Math.round(huecoSegundos);
+            if (segundos > 0) {
+                data.tiempoTotalSegundos = { increment: segundos };
+                await this.sumarTiempoDiario(db, p, ahora, segundos);
+            }
         }
         if (huecoSegundos > MINUTOS_NUEVA_SESION * 60) {
             data.totalSesionesEstudio = { increment: 1 };
@@ -93,6 +100,35 @@ export class CourseTrackingService {
         }
 
         await db.cursoSeguimientoParticipante.update({ where: { idParticipante: p.idParticipante }, data });
+    }
+
+    // El latido no deja un evento por minuto: el tiempo del día local de la empresa es el que arma horas y racha.
+    private async sumarTiempoDiario(db: Db, p: Participante, ahora: Date, segundos: number) {
+        const participacion = await db.cursoParticipantes.findUnique({
+            where: { idParticipante: p.idParticipante },
+            select: { CursoSesiones: { select: { idEmpresa: true } } },
+        });
+        const idEmpresa = participacion?.CursoSesiones?.idEmpresa;
+        if (!idEmpresa) return;
+        const fecha = localDateToPrismaDate(localDateString(ahora, await this.zonaEmpresa(db, idEmpresa)));
+        await db.cursoTiempoDiario.upsert({
+            where: { idParticipante_fecha: { idParticipante: p.idParticipante, fecha } },
+            create: { idParticipante: p.idParticipante, fecha, idTenant: p.idTenant, segundos },
+            update: { segundos: { increment: segundos } },
+        });
+    }
+
+    private async zonaEmpresa(db: Db, idEmpresa: number): Promise<string> {
+        const principal = await db.catSites.findFirst({
+            where: { idEmpresa, EsPrincipal: true },
+            select: { zonaHoraria: true },
+        });
+        if (principal?.zonaHoraria) return zonaValida(principal.zonaHoraria);
+        const sitio = await db.catSites.findFirst({
+            where: { idEmpresa },
+            select: { zonaHoraria: true },
+        });
+        return zonaValida(sitio?.zonaHoraria || ZONA_DEFAULT);
     }
 
     // Abrir una lección: si ya estaba completada cuenta como repaso

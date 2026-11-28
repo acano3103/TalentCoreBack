@@ -17,6 +17,9 @@ export const envValidationSchema = Joi.object({
     // Apagar cuando exista la pantalla de aprobación de RH.
     MOBILE_DEVICES_AUTO_APPROVE: Joi.boolean().default(false),
     MOBILE_MIN_APP_VERSION: Joi.string().default('1.0.0'),
+    // Token del equipo de kiosco. No reutilizar JWT_SECRET.
+    KIOSK_JWT_SECRET: Joi.string().required(),
+    KIOSK_MIN_APP_VERSION: Joi.string().default('0.1.0'),
     ALLOW_CONCURRENT_SESSIONS: Joi.boolean().default(true),
     MAIL_HOST: Joi.string().required(),
     MAIL_PORT: Joi.number().required(),
@@ -24,6 +27,8 @@ export const envValidationSchema = Joi.object({
     MAIL_PASS: Joi.string().required(),
     MAIL_FROM: Joi.string().required(),
     JWT_SECRET: Joi.string().required(),
+    // Token corto del launcher SCORM en la app. Si falta, se usa JWT_SECRET.
+    SCORM_PLAY_SECRET: Joi.string().optional().allow(''),
     ENCRYPTION_KEY: Joi.string().required(),
     FRONT_URL: Joi.string().required(),
     HUME_API_KEY: Joi.string().required(),
@@ -32,6 +37,8 @@ export const envValidationSchema = Joi.object({
     OPENAI_API_KEY: Joi.string().required(),
     MEDIA_PATH_PREFIX: Joi.string().default('media'),
     MEDIA_ROOT_PATH: Joi.string().required(),
+    // Prefijo con el que el front abre archivos privados (el proxy agrega la cookie).
+    MEDIA_PUBLIC_URL_BASE: Joi.string().optional().default('/api/proxy-v2'),
     NUBARIUM_BASE_URL: Joi.string().required(),
     NUBARIUM_USERNAME: Joi.string().required(),
     NUBARIUM_PASSWORD: Joi.string().required(),
@@ -57,7 +64,17 @@ export const envValidationSchema = Joi.object({
     GUPSHUP_APP_NAME: Joi.string().required(),
     IVR_API_KEY: Joi.string().required(),
     ARTEMIS_API_KEY: Joi.string().required(),
-    ZKBIO_BASE_URL: Joi.string().uri().optional(),
+    ZKBIO_BASE_URL: Joi.string().uri().required(),
     ATTENDANCE_ENGINE_ENABLED: Joi.string().valid('true', 'false').default('true'),
     ATTENDANCE_JOBS_ENABLED: Joi.string().valid('true', 'false').default('true'),
+    GOOGLE_MAPS_API_KEY: Joi.string().required(),
+    // Comunicación interna. Defaults para no frenar el arranque antes de que el módulo envíe.
+    COMMS_MEDIA_BASE_PATH: Joi.string().default('comms-media'),
+    COMMS_PUBLIC_BASE_URL: Joi.string().allow('').default(''),
+    EXPO_ACCESS_TOKEN: Joi.string().optional().allow(''),
+    // Secreto del webhook de estados de Gupshup. Si falta, el callback responde 503.
+    GUPSHUP_WEBHOOK_SECRET: Joi.string().optional().allow(''),
+    // Vista previa de audiencias. Sin valor se guarda en memoria del proceso.
+    REDIS_URL: Joi.string().optional().allow(''),
+    LIBREOFFICE_PATH: Joi.string().required(),
 });

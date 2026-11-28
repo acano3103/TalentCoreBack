@@ -103,14 +103,14 @@ export class CreateLocationDto {
     zonaFronteriza?: number;
 
     @ApiPropertyOptional({
-        example: 'NFC',
-        enum: ['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC'],
+        example: 'KIOSCO',
+        enum: ['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC', 'KIOSCO'],
         nullable: true,
         description: 'Mecanismo de marcaje de asistencia de la sucursal (null si no maneja asistencia)'
     })
     @IsOptional()
-    @IsIn(['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC', null])
-    tipoAsistencia?: 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | 'NFC' | null;
+    @IsIn(['IVR', 'BIOMETRICO', 'APP_MOVIL', 'NFC', 'KIOSCO', null])
+    tipoAsistencia?: 'IVR' | 'BIOMETRICO' | 'APP_MOVIL' | 'NFC' | 'KIOSCO' | null;
 
     @ApiPropertyOptional({
         example: ['5512345678', '5598765432'],

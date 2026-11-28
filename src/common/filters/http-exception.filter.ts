@@ -20,6 +20,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let details = null;
     let code: string | undefined;
     let detail: unknown;
+    let ventana: unknown;
 
     if (esLimiteMulter(exception)) {
       const errorResponse = {
@@ -47,6 +48,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
         if ((exceptionResponse as any).detail !== undefined) {
           detail = (exceptionResponse as any).detail;
         }
+        if ((exceptionResponse as any).ventana !== undefined) {
+          ventana = (exceptionResponse as any).ventana;
+        }
       }
     } else if (exception instanceof Error) {
       message = exception.message;
@@ -66,6 +70,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
     if (code) errorResponse.code = code;
     if (detail !== undefined) errorResponse.detail = detail;
+    if (ventana !== undefined) errorResponse.ventana = ventana;
 
     response.status(statusCode).json(errorResponse);
   }

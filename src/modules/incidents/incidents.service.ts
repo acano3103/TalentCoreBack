@@ -415,26 +415,20 @@ export class IncidentsService {
             );
         }
 
-        const empleado =
-            incidencia.Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
+        const empleado = incidencia.Empleados_SolicitudesIncidencias_idEmpleadoToEmpleados;
 
         const nombreCompleto = [
             empleado?.nombre,
             empleado?.primerApellido,
             empleado?.segundoApellido,
-        ]
-            .filter(Boolean)
-            .join(' ');
+        ].filter(Boolean).join(' ');
 
         const request = {
             idOrigen: incidencia.idSolicitud,
             origenModulo: ModuloOrigenEnum.INCIDENCIA,
             idEmpleado: empleado?.idEmpleado ?? incidencia.idEmpleado,
             empleadoNombreCompleto: nombreCompleto,
-            empleadoIniciales: obtenerIniciales(
-                empleado?.nombre ?? '',
-                empleado?.primerApellido ?? '',
-            ),
+            empleadoIniciales: obtenerIniciales(empleado?.nombre ?? '', empleado?.primerApellido ?? ''),
             comentarioOMotivo: incidencia.comentarios ?? null,
             idTipoMovimiento: incidencia.idTipoMovimiento,
             tipoMovimientoNombre: incidencia.CatTipoMovimiento?.nombre ?? 'Incidencia',
@@ -571,9 +565,7 @@ export class IncidentsService {
         request: any,
         soloPendientes: boolean = false,
     ) {
-        const codigo = String(
-            request.codigoTipoSolicitud ?? '',
-        ).trim().toUpperCase();
+        const codigo = String(request.codigoTipoSolicitud ?? '').trim().toUpperCase();
 
         // Resolver el tipo de incidencia.
         const esVacaciones = codigo === 'VACACIONES' || request.idTipoMovimiento === 6;
@@ -611,6 +603,7 @@ export class IncidentsService {
                     fechaRespuesta: true,
                     motivoRechazo: true,
                     comentarios: true,
+                    esForzada: true,
                     fechaRegistro: true,
                 },
             });

@@ -15,6 +15,7 @@ import { UsersModule } from './modules/users/users.module';
 import { INCIDENTS_SUBMODULES, IncidentsModule } from './modules/incidents/incidents.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { NfcModule } from './modules/integrations/providers/attendance/artemis/nfc/nfc.module';
+import { EmployeeSchedulesService } from './modules/employees/employee-schedules/employee-schedules.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -45,6 +46,10 @@ async function bootstrap() {
     .setDescription('API documentation for the second version of the Talent Core backend in Nest JS')
     .setVersion('2.0')
     .addBearerAuth()
+    .addTag(
+      'Comunicación interna',
+      'Comunicados, audiencias, acuses, enlace seguro, kiosco y consumo de WhatsApp. Las respuestas exitosas llegan como { success, data }.',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
@@ -67,11 +72,15 @@ async function bootstrap() {
     .addExtension('x-tagGroups', [
       {
         name: 'Mobile App',
-        tags: ['Mobile Auth', 'Mobile Dashboard', 'Mobile Attendance', 'Mobile Devices', 'Mobile Incidents'],
+        tags: ['Mobile Auth', 'Mobile Dashboard', 'Mobile Attendance', 'Mobile Devices', 'Mobile Incidents', 'Mobile Comms'],
+      },
+      {
+        name: 'Mobile Training',
+        tags: ['Mobile Training'],
       },
       {
         name: 'Web App',
-        tags: ['Users', 'Employees', 'Attendance Dashboard', 'Work Shifts', 'Logbook', 'Incidents', 'Vacations', 'Permissions'],
+        tags: ['Users', 'Employees', 'Employees Schedules', 'Attendance Dashboard', 'Work Shifts', 'Logbook', 'Incidents', 'Vacations', 'Permissions'],
       },
       {
         name: 'Integrations',
@@ -81,7 +90,7 @@ async function bootstrap() {
     .build();
 
   const mobileDocument = SwaggerModule.createDocument(app, mobileConfig, {
-    include: [MobileModule, ...MOBILE_SUBMODULES, EmployeesModule, AttendanceModule, WorkShiftsModule, LogbookModule, AttendanceDashboardModule, UsersModule, IncidentsModule, ...INCIDENTS_SUBMODULES, NfcModule],
+    include: [MobileModule, ...MOBILE_SUBMODULES, EmployeesModule, EmployeeSchedulesService, AttendanceModule, WorkShiftsModule, LogbookModule, AttendanceDashboardModule, UsersModule, IncidentsModule, ...INCIDENTS_SUBMODULES, NfcModule],
   });
 
   // 3. Montar Scalar para la App Móvil

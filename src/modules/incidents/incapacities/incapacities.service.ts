@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { COMMS_EVENTO_ESTATUS, emitirHecho } from 'src/common/events/comms-hechos';
 import { ActiveUserDto } from 'src/modules/auth/dto/active-user.dto';
 import { CreateIncapacityDto } from './dto/create-incapacity.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -13,6 +15,7 @@ export class IncapacitiesService {
         private readonly mediaPathService: MediaPathService,
         private readonly permissionsService: PermissionsService,
         private approvalsService: ApprovalsService,
+        @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
     ) { }
 
     async createIncapacity(
@@ -177,14 +180,8 @@ export class IncapacitiesService {
             'OTRO',
         ];
 
-        if (
-            !tiposIncapacidadPermitidos.includes(
-                tipoIncapacidad,
-            )
-        ) {
-            throw new BadRequestException(
-                `El tipo de incapacidad "${dto.tipoIncapacidad}" no es válido.`,
-            );
+        if (!tiposIncapacidadPermitidos.includes(tipoIncapacidad)) {
+            throw new BadRequestException(`El tipo de incapacidad "${dto.tipoIncapacidad}" no es válido.`);
         }
 
         // 9. Buscar el tipo de movimiento.
@@ -202,9 +199,7 @@ export class IncapacitiesService {
             });
 
         if (!tipoMovimiento) {
-            throw new NotFoundException(
-                'No se encontró el tipo de movimiento activo INCAPACIDAD en el catálogo.',
-            );
+            throw new NotFoundException('No se encontró el tipo de movimiento activo INCAPACIDAD en el catálogo.');
         }
 
         // 10. Crear la solicitud general y su detalle en una transacción.
@@ -216,40 +211,25 @@ export class IncapacitiesService {
                             idTenant: activeUser.idTenant,
                             idEmpresa: companyId,
                             idEmpleado: dto.idEmpleado,
-                            idTipoMovimiento:
-                                tipoMovimiento.idTipoMovimiento,
-                            solicitadoPorIdEmpleado:
-                                requesterEmployee.idEmpleado,
+                            idTipoMovimiento: tipoMovimiento.idTipoMovimiento,
+                            solicitadoPorIdEmpleado: requesterEmployee.idEmpleado,
                             fechaInicio: startDate,
                             fechaFin: endDate,
-
-                            // IMPORTANTE:
-                            // Se guarda exactamente el valor
-                            // calculado por el frontend.
+                            // IMPORTANTE: Se guarda exactamente el valor calculado por el frontend.
                             totalDiasLaborales,
-
                             estatus: 'PENDIENTE',
-                            comentarios:
-                                dto.observaciones?.trim() ||
-                                null,
+                            comentarios: dto.observaciones?.trim() || null,
                         },
                     });
 
                 await tx.solicitudesIncapacidadesDetalle.create({
                     data: {
-                        idSolicitud:
-                            nuevaSolicitud.idSolicitud,
+                        idSolicitud: nuevaSolicitud.idSolicitud,
                         tipoIncapacidad,
-                        numeroCertificado:
-                            dto.numeroCertificado?.trim() ||
-                            null,
-                        institucionMedica:
-                            dto.institucionMedica?.trim() ||
-                            null,
-                        observaciones:
-                            dto.observaciones?.trim() || null,
-                        solicitadoPorLider:
-                            dto.solicitadoPorLider,
+                        numeroCertificado: dto.numeroCertificado?.trim() || null,
+                        institucionMedica: dto.institucionMedica?.trim() || null,
+                        observaciones: dto.observaciones?.trim() || null,
+                        solicitadoPorLider: dto.solicitadoPorLider,
                     },
                 });
 
@@ -262,13 +242,8 @@ export class IncapacitiesService {
 
         try {
             if (archivo) {
-                if (
-                    !archivo.buffer ||
-                    archivo.buffer.length === 0
-                ) {
-                    throw new BadRequestException(
-                        'El archivo recibido no contiene datos.',
-                    );
+                if (!archivo.buffer || archivo.buffer.length === 0) {
+                    throw new BadRequestException('El archivo recibido no contiene datos.');
                 }
 
                 const archivoGuardado =
@@ -276,14 +251,11 @@ export class IncapacitiesService {
                         archivo,
                         {
                             idTenant: activeUser.idTenant,
-                            subfolder:
-                                `solicitudes/incidencias/incapacidades/${solicitud.idSolicitud}`,
+                            subfolder: `solicitudes/incidencias/incapacidades/${solicitud.idSolicitud}`,
                         },
                     );
 
-                rutasArchivosGuardados.push(
-                    archivoGuardado.rutaRelativa,
-                );
+                rutasArchivosGuardados.push(archivoGuardado.rutaRelativa);
 
                 await this.prisma.archivosSolicitudes.create({
                     data: {
@@ -292,17 +264,11 @@ export class IncapacitiesService {
                         idEmpleado: dto.idEmpleado,
                         moduloSolicitud: 'INCIDENCIAS',
                         idSolicitud: solicitud.idSolicitud,
-                        nombreOriginal:
-                            archivoGuardado.nombreOriginal,
-                        nombreAlmacenado:
-                            archivoGuardado.nombreAlmacenado,
-                        rutaRelativa:
-                            archivoGuardado.rutaRelativa,
-                        mimeType:
-                            archivoGuardado.mimeType,
-                        tamanoBytes: BigInt(
-                            archivoGuardado.tamanoBytes,
-                        ),
+                        nombreOriginal: archivoGuardado.nombreOriginal,
+                        nombreAlmacenado: archivoGuardado.nombreAlmacenado,
+                        rutaRelativa: archivoGuardado.rutaRelativa,
+                        mimeType: archivoGuardado.mimeType,
+                        tamanoBytes: BigInt(archivoGuardado.tamanoBytes),
                         usuarioRegistro: activeUser.uuid,
                     },
                 });
@@ -313,9 +279,7 @@ export class IncapacitiesService {
                 rutasArchivosGuardados.map(
                     async (ruta) => {
                         try {
-                            await this.mediaPathService.deleteFile(
-                                ruta,
-                            );
+                            await this.mediaPathService.deleteFile(ruta);
                         } catch {
                             // Conservamos el error original.
                         }
@@ -351,16 +315,11 @@ export class IncapacitiesService {
                 });
             });
 
-            if (
-                error instanceof BadRequestException ||
-                error instanceof NotFoundException
-            ) {
+            if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
             }
 
-            throw new InternalServerErrorException(
-                'No fue posible guardar el comprobante de la incapacidad.',
-            );
+            throw new InternalServerErrorException('No fue posible guardar el comprobante de la incapacidad.');
         }
 
         // 12. Consultar los archivos asociados a la solicitud.
@@ -390,6 +349,26 @@ export class IncapacitiesService {
             tipoMovimiento.idTipoMovimiento,
             solicitud.idSolicitud,
         );
+
+        try {
+            const vigente = await this.prisma.solicitudesIncidencias.findUnique({
+                where: { idSolicitud: solicitud.idSolicitud },
+                select: { estatus: true },
+            });
+            if (vigente?.estatus && vigente.estatus !== 'PENDIENTE' && activeUser.idTenant) {
+                emitirHecho(this.eventos, COMMS_EVENTO_ESTATUS, {
+                    origen: 'INCIDENCIA',
+                    idTenant: activeUser.idTenant,
+                    idEmpresa: companyId,
+                    idEmpleado: dto.idEmpleado,
+                    idSolicitud: solicitud.idSolicitud,
+                    estatus: vigente.estatus,
+                    solicitud: 'incapacidad',
+                });
+            }
+        } catch {
+            // La solicitud ya quedó registrada.
+        }
 
         // 13. Respuesta.
         return {

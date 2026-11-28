@@ -2,6 +2,7 @@ import { Injectable, InternalServerErrorException, BadRequestException, Logger }
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActiveUserDto } from '../auth/dto/active-user.dto';
 import { IntegrationsFactory } from '../integrations/providers/factory.service';
+import { RoleplayAccessService } from './roleplay-access.service';
 
 @Injectable()
 export class RoleplayCallsService {
@@ -10,6 +11,7 @@ export class RoleplayCallsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly integrationFactory: IntegrationsFactory,
+        private readonly access: RoleplayAccessService,
     ) { }
 
     // Busca la integración de IA activa de la empresa, y regresa el proveedor correspondiente ya resuelto
@@ -38,6 +40,7 @@ export class RoleplayCallsService {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
+        await this.access.assertCanStart(companyId, idRolePlay, user);
         const aiProvider = await this.getAiProvider(companyId);
         return aiProvider.startRoleplayCall(companyId, user.idTenant, idRolePlay, user.id);
     }
@@ -47,6 +50,7 @@ export class RoleplayCallsService {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
+        await this.access.assertCallAccess(companyId, idLlamada, user, true);
         const aiProvider = await this.getAiProvider(companyId);
         return aiProvider.processRoleplayTurn(companyId, user.idTenant, idLlamada, agentMessage);
     }
@@ -56,13 +60,7 @@ export class RoleplayCallsService {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
-        const llamada = await this.prisma.rolePlayLlamadas.findFirst({
-            where: { idLlamada, idEmpresa: companyId, idTenant: user.idTenant },
-        });
-
-        if (!llamada) {
-            throw new BadRequestException('La sesión de práctica no existe.');
-        }
+        const llamada = await this.access.assertCallAccess(companyId, idLlamada, user, true);
         if (llamada.Estatus !== 'EN_CURSO') {
             throw new BadRequestException('La sesión de práctica no está en curso.');
         }
@@ -80,6 +78,7 @@ export class RoleplayCallsService {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
+        await this.access.assertCallAccess(companyId, idLlamada, user);
         const aiProvider = await this.getAiProvider(companyId);
         return aiProvider.evaluateRoleplayCall(companyId, user.idTenant, idLlamada);
     }
@@ -89,6 +88,7 @@ export class RoleplayCallsService {
             throw new InternalServerErrorException('El usuario no tiene un tenant asignado.');
         }
 
+        await this.access.assertCallAccess(companyId, idLlamada, user);
         const evaluacion = await this.prisma.rolePlayEvaluaciones.findFirst({
             where: { idLlamada, idTenant: user.idTenant },
             include: {

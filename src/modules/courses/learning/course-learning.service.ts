@@ -1,12 +1,16 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { avisarCursoAprobado } from '../avisar-aprobado';
 import { ActiveUserDto } from '../../auth/dto/active-user.dto';
 import { SubmitLessonProgressDto } from './dto/submit-lesson-progress.dto';
-import { RegisterActivityDto } from './dto/register-activity.dto';
+import { RegisterActivityDto, TOLERANCIA_SEGUNDOS_VIDEO } from './dto/register-activity.dto';
 import { CourseTrackingService } from '../tracking/course-tracking.service';
 import { QuizQuestion, Slide } from '../content/interfaces/course-content.interface';
+import { ARCHIVO_MATERIAL_REGEX } from '../materials/course-materials.constants';
 
 const CALIFICACION_APROBATORIA_DEFAULT = 70;
+export const PORCENTAJE_VIDEO_VISTO = 0.9;
 
 type ModoAvance = 'libre' | 'video_completo' | 'aprobar_quiz' | 'video_y_quiz';
 
@@ -14,6 +18,12 @@ interface ProgresoLeccion {
     idLeccion: number;
     calificacionQuiz: unknown;
     fechaCompletado: Date | null;
+    videoVisto?: boolean;
+}
+
+interface LeccionConVideo {
+    urlVideo?: string | null;
+    estatusVideo?: string | null;
 }
 
 // Lógica del lado del empleado (el "player"): ver sus cursos asignados, tomarlos y guardar su avance.
@@ -25,6 +35,7 @@ export class CourseLearningService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly trackingService: CourseTrackingService,
+        @Optional() @Inject(EventEmitter2) private readonly eventos?: EventEmitter2,
     ) { }
 
     // HELPERS PRIVADOS
@@ -104,8 +115,7 @@ export class CourseLearningService {
 
     // El curso solo se puede tomar dentro del periodo y si la sesión no está cancelada ni finalizada
     // fechaFinPeriodo en null = periodo indeterminado: el curso no vence
-    getAvailability(session: { estatus: string; fechaInicioPeriodo: Date; fechaFinPeriodo: Date | null }) {
-        const ahora = new Date();
+    getAvailability(session: { estatus: string; fechaInicioPeriodo: Date; fechaFinPeriodo: Date | null }, ahora = new Date()) {
         const fecha = (d: Date) => d.toISOString().slice(0, 10);
 
         if (session.estatus === 'cancelado') return { disponible: false, motivo: 'La sesión fue cancelada.' };
@@ -125,6 +135,41 @@ export class CourseLearningService {
 
     private requiresPassing(modo: ModoAvance) {
         return modo === 'aprobar_quiz' || modo === 'video_y_quiz';
+    }
+
+    // Solo estos modos frenan la lección hasta ver el video, y solo si ya hay un video listo para reproducir.
+    private exigeVideo(modo: ModoAvance) {
+        return modo === 'video_completo' || modo === 'video_y_quiz';
+    }
+
+    private videoListo(leccion: LeccionConVideo) {
+        return leccion.estatusVideo === 'listo' && !!leccion.urlVideo?.trim();
+    }
+
+    private requiereVideo(modo: ModoAvance, leccion: LeccionConVideo) {
+        return this.exigeVideo(modo) && this.videoListo(leccion);
+    }
+
+    // Archivo propio → ruta de materiales del empleado. Enlace externo → se respeta. Si el video no está listo, null.
+    private urlVideoReproducible(companyId: number, sessionId: number, leccion: LeccionConVideo): string | null {
+        if (!this.videoListo(leccion)) return null;
+        const valor = leccion.urlVideo!.trim();
+        if (/^https?:\/\//i.test(valor)) return valor;
+
+        const segmento = this.segmentoFinal(valor);
+        if (ARCHIVO_MATERIAL_REGEX.test(segmento)) {
+            return `companies/${companyId}/my-courses/${sessionId}/materials/${encodeURIComponent(segmento)}`;
+        }
+        return valor;
+    }
+
+    private segmentoFinal(valor: string) {
+        const segmento = valor.split('?')[0].split('/').filter(Boolean).pop() ?? '';
+        try {
+            return decodeURIComponent(segmento);
+        } catch {
+            return segmento;
+        }
     }
 
     private asQuiz(value: unknown): QuizQuestion[] {
@@ -260,7 +305,7 @@ export class CourseLearningService {
         const modo = contenido.modoAvance as ModoAvance;
         const progresos = await this.prismaService.cursoLeccionProgresos.findMany({
             where: { idParticipante: participacion.idParticipante, idTenant },
-            select: { idLeccion: true, calificacionQuiz: true, fechaCompletado: true },
+            select: { idLeccion: true, calificacionQuiz: true, fechaCompletado: true, videoVisto: true },
         });
         const progressMap = new Map(progresos.map((p) => [p.idLeccion, p]));
         const lessonIds = this.flattenLessons(contenido).map((l) => l.idLeccion);
@@ -296,10 +341,13 @@ export class CourseLearningService {
                             // Solo pregunta y opciones: la respuesta correcta se queda en el servidor
                             quiz: bloqueada ? [] : quiz.map((q) => ({ question: q.question, options: q.options })),
                             materiales: bloqueada || !Array.isArray(leccion.materiales) ? [] : leccion.materiales,
+                            urlVideo: this.urlVideoReproducible(companyId, sessionId, leccion),
+                            requiereVideo: this.requiereVideo(modo, leccion),
                             progreso: {
                                 completada: !!progreso?.fechaCompletado,
                                 calificacionQuiz: this.toNumber(progreso?.calificacionQuiz),
                                 fechaCompletado: progreso?.fechaCompletado ?? null,
+                                videoVisto: !!progreso?.videoVisto,
                             },
                         };
                     }),
@@ -319,7 +367,7 @@ export class CourseLearningService {
         dto: SubmitLessonProgressDto,
         user: ActiveUserDto,
     ) {
-        const { participacion, idTenant } = await this.getParticipation(companyId, sessionId, user);
+        const { participacion, idTenant, idEmpleado } = await this.getParticipation(companyId, sessionId, user);
         const sesion = participacion.CursoSesiones;
 
         const { disponible, motivo } = this.getAvailability(sesion);
@@ -343,12 +391,19 @@ export class CourseLearningService {
 
         const progresos = await this.prismaService.cursoLeccionProgresos.findMany({
             where: { idParticipante: participacion.idParticipante, idTenant },
-            select: { idProgreso: true, idLeccion: true, calificacionQuiz: true, fechaCompletado: true },
+            select: { idProgreso: true, idLeccion: true, calificacionQuiz: true, fechaCompletado: true, videoVisto: true },
         });
         const progressMap = new Map(progresos.map((p) => [p.idLeccion, p]));
 
         if (this.getLockedIds(lessonIds, progressMap, modo).has(lessonId)) {
             throw new BadRequestException('Primero completa la lección anterior para desbloquear esta.');
+        }
+
+        if (this.requiereVideo(modo, leccion) && !progressMap.get(lessonId)?.videoVisto) {
+            throw new BadRequestException({
+                code: 'VIDEO_PENDIENTE',
+                message: 'Termina de ver el video para completar la lección.',
+            });
         }
 
         // 1. Calificar el quiz (si la lección tiene)
@@ -407,7 +462,7 @@ export class CourseLearningService {
                 },
                 select: { idLeccion: true, calificacionQuiz: true, fechaCompletado: true },
             });
-            progressMap.set(lessonId, { ...guardado, idProgreso: anterior?.idProgreso ?? 0 });
+            progressMap.set(lessonId, { ...guardado, idProgreso: anterior?.idProgreso ?? 0, videoVisto: !!anterior?.videoVisto });
 
             // Seguimiento: se guarda CADA intento (no solo el mejor) y el momento en que completa la lección
             if (calificacion != null) {
@@ -480,6 +535,20 @@ export class CourseLearningService {
         if (cambioEstatus) {
             this.logger.log(`Participante #${participacion.idParticipante} terminó la sesión #${sessionId}: ${curso.estatusAsignacion}`);
         }
+        try {
+            avisarCursoAprobado(this.eventos, {
+                idTenant,
+                idEmpresa: companyId,
+                idEmpleado,
+                idSesion: sessionId,
+                curso: sesion.CatCursos?.Descripcion?.trim() || 'curso',
+                calificacion: curso.calificacionFinal,
+                anterior: participacion.estatusAsignacion,
+                nuevo: curso.estatusAsignacion,
+            });
+        } catch {
+            // El avance ya quedó guardado.
+        }
 
         const siguiente = lecciones[posicion + 1] ?? null;
 
@@ -500,9 +569,9 @@ export class CourseLearningService {
     }
 
     
-    // SEGUIMIENTO DE ACTIVIDAD (PARA REPORTES)  
-    // El player avisa cuando abre una lección y cada 60 s mientras está visible (latido).
-    // Solo registra seguimiento; no cambia el avance ni la calificación.
+    // SEGUIMIENTO DE ACTIVIDAD (PARA REPORTES)
+    // El player avisa cuando abre una lección, cada 60 s mientras está visible (latido)
+    // y cuánto del video lleva visto (video_progreso). El 90 % marca videoVisto.
     async registerActivity(companyId: number, sessionId: number, dto: RegisterActivityDto, user: ActiveUserDto) {
         const { participacion, idTenant } = await this.getParticipation(companyId, sessionId, user);
         const participante = { idTenant, idParticipante: participacion.idParticipante };
@@ -511,6 +580,10 @@ export class CourseLearningService {
         if (dto.tipo === 'latido') {
             await this.trackingService.touchActivity(this.prismaService, participante, ahora);
             return { registrado: true };
+        }
+
+        if (dto.tipo === 'video_progreso') {
+            return this.registrarProgresoVideo(sessionId, dto, participante, ahora);
         }
 
         const contenido = await this.getContent(sessionId, idTenant);
@@ -535,6 +608,76 @@ export class CourseLearningService {
             this.trackingService.registerLessonOpen(tx, participante, dto.idLeccion!, yaCompletada, ahora),
         );
         return { registrado: true, repaso: yaCompletada };
+    }
+
+    // segundosVistos / duracionSegundos ≥ 90 % deja el video como visto. También cuenta como actividad.
+    private async registrarProgresoVideo(
+        sessionId: number,
+        dto: RegisterActivityDto,
+        participante: { idTenant: number; idParticipante: number },
+        ahora: Date,
+    ) {
+        const datos = this.leerVideoProgreso(dto);
+        const { idLeccion, segundosVistos, duracionSegundos } = datos;
+
+        const contenido = await this.getContent(sessionId, participante.idTenant);
+        if (!contenido) throw new BadRequestException('El curso aún no tiene contenido.');
+
+        const lecciones = this.flattenLessons(contenido);
+        if (!lecciones.some((l) => l.idLeccion === idLeccion)) {
+            throw new NotFoundException(`La lección #${idLeccion} no pertenece a este curso.`);
+        }
+
+        const lessonIds = lecciones.map((l) => l.idLeccion);
+        const progresos = await this.prismaService.cursoLeccionProgresos.findMany({
+            where: { idParticipante: participante.idParticipante, idTenant: participante.idTenant },
+            select: { idLeccion: true, calificacionQuiz: true, fechaCompletado: true, videoVisto: true },
+        });
+        const progressMap = new Map(progresos.map((p) => [p.idLeccion, p]));
+        if (this.getLockedIds(lessonIds, progressMap, contenido.modoAvance as ModoAvance).has(idLeccion)) {
+            throw new BadRequestException('Primero completa la lección anterior para desbloquear esta.');
+        }
+
+        const visto = duracionSegundos > 0 && segundosVistos / duracionSegundos >= PORCENTAJE_VIDEO_VISTO;
+        await this.prismaService.$transaction(async (tx) => {
+            await this.trackingService.touchActivity(tx, participante, ahora);
+            if (!visto) return;
+            await tx.cursoLeccionProgresos.upsert({
+                where: {
+                    idParticipante_idLeccion: { idParticipante: participante.idParticipante, idLeccion },
+                },
+                create: {
+                    idTenant: participante.idTenant,
+                    idParticipante: participante.idParticipante,
+                    idLeccion,
+                    videoVisto: true,
+                },
+                update: { videoVisto: true, actualizadoEn: ahora },
+            });
+        });
+
+        return { registrado: true, videoVisto: !!progressMap.get(idLeccion)?.videoVisto || visto };
+    }
+
+    private leerVideoProgreso(dto: RegisterActivityDto): { idLeccion: number; segundosVistos: number; duracionSegundos: number } {
+        const { idLeccion, segundosVistos, duracionSegundos } = dto;
+        if (
+            typeof idLeccion !== 'number' ||
+            typeof segundosVistos !== 'number' ||
+            typeof duracionSegundos !== 'number' ||
+            !Number.isInteger(idLeccion) ||
+            !Number.isInteger(segundosVistos) ||
+            !Number.isInteger(duracionSegundos)
+        ) {
+            throw new BadRequestException('El avance del video requiere idLeccion, segundosVistos y duracionSegundos enteros.');
+        }
+        if (segundosVistos < 0 || duracionSegundos < 0) {
+            throw new BadRequestException('Los segundos vistos y la duración deben ser enteros mayores o iguales a 0.');
+        }
+        if (segundosVistos > duracionSegundos + TOLERANCIA_SEGUNDOS_VIDEO) {
+            throw new BadRequestException('Los segundos vistos no pueden superar la duración del video.');
+        }
+        return { idLeccion, segundosVistos, duracionSegundos };
     }
 
     // Nombre del empleado logueado para el saludo de Mis cursos

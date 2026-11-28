@@ -78,6 +78,12 @@ function crearMemoria() {
         return false;
       }
       if (where.tipo && registro.tipo !== where.tipo) return false;
+      if (where.canal?.not != null && registro.canal === where.canal.not) {
+        return false;
+      }
+      if (typeof where.canal === 'string' && registro.canal !== where.canal) {
+        return false;
+      }
       if (
         where.estatusProcesamiento &&
         registro.estatusProcesamiento !== where.estatusProcesamiento
@@ -115,7 +121,10 @@ function crearMemoria() {
 
   const prisma = {
     empleados: {
-      findUnique: jest.fn(async () => empleado),
+      findUnique: jest.fn(async ({ where }: any) => {
+        if (where?.idEmpleado == null) return null;
+        return { ...empleado, idEmpleado: where.idEmpleado };
+      }),
     },
     relEmpleadosSites: {
       findFirst: jest.fn(async ({ where }: any) => {
@@ -179,6 +188,12 @@ function crearMemoria() {
           ...data,
         };
         registros.push(registro);
+        return registro;
+      }),
+      update: jest.fn(async ({ where, data }: any) => {
+        const registro = registros.find((r) => r.idRegistro === where.idRegistro);
+        if (!registro) throw new Error('registro no encontrado');
+        Object.assign(registro, data);
         return registro;
       }),
     },
@@ -797,5 +812,341 @@ describe('AttendanceEngineService', () => {
     expect(memoria.registros[0].estatusProcesamiento).toBe('RECHAZADO');
     expect(memoria.registros[0].resultadoGeocerca).toBe('FUERA_BLOQUEADA');
     expect(memoria.jornadas).toHaveLength(0);
+  });
+
+  function kiosco(
+    parcial: Partial<CanonicalCheck> = {},
+  ): CanonicalCheck {
+    return checada({
+      canal: 'KIOSCO',
+      modoInferencia: 'EXPLICITO',
+      tipo: 'ENTRADA',
+      idKiosco: 4,
+      idSitioKiosco: 9,
+      idEmpleadoRegistra: 3,
+      numeroEmpleadoCapturado: '1008',
+      metodoIdentificacion: 'NUMERO',
+      ...parcial,
+    });
+  }
+
+  it('KIOSCO con tipo válido queda NO_APLICA en el site del kiosco', async () => {
+    const resultado = await service.registerCheck(
+      kiosco({ uuidCliente: 'kiosco-site' }),
+    );
+
+    expect(resultado.rechazado).toBe(false);
+    expect(resultado.duplicado).toBe(false);
+    expect(resultado.tipo).toBe('ENTRADA');
+    expect(resultado.resultadoGeocerca).toBe('NO_APLICA');
+    expect(resultado.requiereRevision).toBe(false);
+    expect(memoria.registros[0].idSitioDetectado).toBe(9);
+    expect(memoria.registros[0].idKiosco).toBe(4);
+    expect(memoria.registros[0].idEmpleadoRegistra).toBe(3);
+    expect(memoria.registros[0].numeroEmpleadoCapturado).toBe('1008');
+    expect(memoria.registros[0].metodoIdentificacion).toBe('NUMERO');
+    expect(memoria.registros[0].requiereRevision).toBe(false);
+    expect(memoria.registros[0].banderasRevision).toBeUndefined();
+  });
+
+  it('en kiosco consume la evidencia y le asigna el empleado', async () => {
+    memoria.state.evidencias.push({
+      idEvidencia: 15,
+      idEmpleado: null,
+      consumida: false,
+      rutaArchivo: 'fotos/kiosco.jpg',
+    });
+
+    const resultado = await service.registerCheck(
+      kiosco({ uuidCliente: 'kiosco-foto', idEvidencia: 15 }),
+    );
+
+    expect(resultado.rechazado).toBe(false);
+    expect(memoria.state.evidencias[0].consumida).toBe(true);
+    expect(memoria.state.evidencias[0].idEmpleado).toBe(10);
+    expect(memoria.registros[0].idEvidencia).toBe(15);
+    expect(memoria.registros[0].urlFoto).toBe('fotos/kiosco.jpg');
+  });
+
+  it('en kiosco sin evidencia no exige foto', async () => {
+    const resultado = await service.registerCheck(
+      kiosco({ uuidCliente: 'kiosco-sin-foto' }),
+    );
+
+    expect(resultado.rechazado).toBe(false);
+    expect(resultado.duplicado).toBe(false);
+    expect(memoria.registros[0].idEvidencia).toBeNull();
+    expect(memoria.state.evidencias).toHaveLength(0);
+  });
+
+  it('NFC 07:58 y kiosco 08:01 quedan ambas, la segunda con DOBLE_CANAL', async () => {
+    config.kiosco.ventanaDobleCanalSegundos = 300;
+
+    const nfc = await service.registerCheck(
+      checada({
+        canal: 'NFC',
+        modoInferencia: 'ALTERNANTE_SIMPLE',
+        tipo: null,
+        uuidCliente: 'nfc-0758',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 7, 58),
+      }),
+    );
+    const kioscoCheck = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-0801',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 1),
+      }),
+    );
+
+    expect(nfc.tipo).toBe('ENTRADA');
+    expect(nfc.duplicado).toBe(false);
+    expect(kioscoCheck.duplicado).toBe(false);
+    expect(kioscoCheck.rechazado).toBe(false);
+    expect(kioscoCheck.tipo).toBe('ENTRADA');
+    expect(kioscoCheck.requiereRevision).toBe(true);
+    expect(kioscoCheck.resultadoGeocerca).toBe('NO_APLICA');
+    expect(memoria.registros).toHaveLength(2);
+    expect(memoria.registros[0].estatusProcesamiento).toBe('PROCESADO');
+    expect(memoria.registros[0].canal).toBe('NFC');
+    expect(memoria.registros[1].estatusProcesamiento).toBe('PROCESADO');
+    expect(memoria.registros[1].banderasRevision).toEqual(['DOBLE_CANAL']);
+    expect(memoria.registros[1].requiereRevision).toBe(true);
+    expect(memoria.registros[1].idSitioDetectado).toBe(9);
+  });
+
+  it('el antirebote del mismo canal del kiosco sigue marcando DUPLICADO', async () => {
+    const inicio = enMexico(2026, 9, 21, 8, 0);
+    await service.registerCheck(
+      kiosco({ uuidCliente: 'kiosco-t0', fechaHoraRegistro: inicio }),
+    );
+    const repetida = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-t30',
+        fechaHoraRegistro: new Date(inicio.getTime() + 30_000),
+      }),
+    );
+
+    expect(repetida.duplicado).toBe(true);
+    expect(repetida.motivoDuplicado).toBe('ANTIREBOTE');
+    expect(memoria.registros[1].estatusProcesamiento).toBe('DUPLICADO');
+    expect(memoria.registros[1].requiereRevision).toBe(false);
+  });
+
+  it('un kiosco 30 s después de NFC no es antirebote y sí DOBLE_CANAL', async () => {
+    config.kiosco.ventanaDobleCanalSegundos = 300;
+    const inicio = enMexico(2026, 9, 21, 8, 0);
+    await service.registerCheck(
+      checada({
+        canal: 'NFC',
+        modoInferencia: 'ALTERNANTE_SIMPLE',
+        uuidCliente: 'nfc-cerca',
+        fechaHoraRegistro: inicio,
+      }),
+    );
+    const seguido = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-cerca',
+        fechaHoraRegistro: new Date(inicio.getTime() + 30_000),
+      }),
+    );
+
+    expect(seguido.duplicado).toBe(false);
+    expect(seguido.requiereRevision).toBe(true);
+    expect(memoria.registros[1].estatusProcesamiento).toBe('PROCESADO');
+    expect(memoria.registros[1].banderasRevision).toEqual(['DOBLE_CANAL']);
+  });
+
+  it('SIN_ROSTRO solo si la detección de rostro está activa', async () => {
+    const sinDeteccion = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-sin-deteccion',
+        deteccionRostroActiva: false,
+        rostroDetectado: false,
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 0),
+      }),
+    );
+    const conDeteccion = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-sin-rostro',
+        deteccionRostroActiva: true,
+        rostroDetectado: false,
+        fechaHoraRegistro: enMexico(2026, 9, 22, 8, 0),
+      }),
+    );
+
+    expect(sinDeteccion.requiereRevision).toBe(false);
+    expect(memoria.registros[0].banderasRevision).toBeUndefined();
+    expect(conDeteccion.requiereRevision).toBe(true);
+    expect(memoria.registros[1].banderasRevision).toEqual(['SIN_ROSTRO']);
+    expect(memoria.registros[1].requiereRevision).toBe(true);
+    expect(memoria.registros[1].rostroDetectado).toBe(false);
+    expect(memoria.registros[1].deteccionRostroActiva).toBe(true);
+  });
+
+  it('el muestreo al 100 % marca MUESTREO y al 0 % no marca nada', async () => {
+    service.generadorAleatorio = () => 0;
+
+    config.kiosco.porcentajeMuestreo = 100;
+    const seguro = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-muestra-100',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 0),
+      }),
+    );
+
+    config.kiosco.porcentajeMuestreo = 0;
+    const nunca = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-muestra-0',
+        fechaHoraRegistro: enMexico(2026, 9, 22, 8, 0),
+      }),
+    );
+
+    expect(seguro.requiereRevision).toBe(true);
+    expect(memoria.registros[0].banderasRevision).toEqual(['MUESTREO']);
+    expect(nunca.requiereRevision).toBe(false);
+    expect(memoria.registros[1].banderasRevision).toBeUndefined();
+    expect(memoria.registros[1].requiereRevision).toBe(false);
+  });
+
+  it('con otra bandera el muestreo al 100 % no se agrega', async () => {
+    service.generadorAleatorio = () => 0;
+    config.kiosco.porcentajeMuestreo = 100;
+
+    await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-rostro-y-muestra',
+        deteccionRostroActiva: true,
+        rostroDetectado: false,
+      }),
+    );
+
+    expect(memoria.registros[0].banderasRevision).toEqual(['SIN_ROSTRO']);
+  });
+
+  it('DESFASE_RELOJ y OFFLINE solo cruzan su umbral', async () => {
+    config.kiosco.umbralDesfaseRelojSegundos = 300;
+    config.kiosco.horasOfflineParaBandera = 24;
+
+    const enUmbral = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-desfase-justo',
+        desfaseRelojSegundos: 300,
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 0),
+      }),
+    );
+    const desfasado = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-desfase',
+        desfaseRelojSegundos: -301,
+        fechaHoraRegistro: enMexico(2026, 9, 22, 8, 0),
+      }),
+    );
+    const viejoEnLinea = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-viejo-online',
+        esOffline: false,
+        fechaHoraRegistro: enMexico(2026, 9, 23, 8, 0),
+      }),
+    );
+    const offline = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-offline',
+        esOffline: true,
+        fechaHoraRegistro: enMexico(2026, 9, 24, 8, 0),
+      }),
+    );
+
+    expect(enUmbral.requiereRevision).toBe(false);
+    expect(desfasado.requiereRevision).toBe(true);
+    expect(memoria.registros[1].banderasRevision).toEqual(['DESFASE_RELOJ']);
+    expect(viejoEnLinea.requiereRevision).toBe(false);
+    expect(offline.requiereRevision).toBe(true);
+    expect(memoria.registros[3].banderasRevision).toEqual(['OFFLINE']);
+  });
+
+  it('anularRegistro recalcula la jornada, ignora el ANULADO y es idempotente', async () => {
+    const entrada = await service.registerCheck(
+      checada({
+        modoInferencia: 'EXPLICITO',
+        tipo: 'ENTRADA',
+        uuidCliente: 'anular-entrada',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 10),
+      }),
+    );
+    expect(memoria.jornadas[0].horaEntradaReal).toEqual(
+      enMexico(2026, 9, 21, 8, 10),
+    );
+
+    await service.anularRegistro(entrada.idRegistro, 'Checó la persona equivocada', 'usr-rh');
+    expect(memoria.registros[0].estatusProcesamiento).toBe('ANULADO');
+    expect(memoria.jornadas[0].horaEntradaReal).toBeNull();
+    expect(memoria.jornadas[0].minutosTrabajados).toBe(0);
+    expect(memoria.jornadas[0].estatusJornada).toBe('ABIERTA');
+
+    await service.anularRegistro(entrada.idRegistro, 'Checó la persona equivocada', 'usr-rh');
+    expect(memoria.registros).toHaveLength(1);
+    expect(memoria.registros[0].estatusProcesamiento).toBe('ANULADO');
+    expect(memoria.jornadas[0].horaEntradaReal).toBeNull();
+
+    const otra = await service.registerCheck(
+      checada({
+        modoInferencia: 'EXPLICITO',
+        tipo: 'ENTRADA',
+        uuidCliente: 'anular-nueva',
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 20),
+      }),
+    );
+
+    expect(otra.rechazado).toBe(false);
+    expect(otra.tipo).toBe('ENTRADA');
+    expect(memoria.jornadas[0].horaEntradaReal).toEqual(
+      enMexico(2026, 9, 21, 8, 20),
+    );
+    expect(memoria.registros[1].estatusProcesamiento).toBe('PROCESADO');
+  });
+
+  it('registrarDesdeOrigen copia hora, tipo, canal, kiosco y evidencia', async () => {
+    memoria.state.evidencias.push({
+      idEvidencia: 21,
+      idEmpleado: null,
+      consumida: false,
+      rutaArchivo: 'fotos/origen.jpg',
+    });
+    const origen = await service.registerCheck(
+      kiosco({
+        uuidCliente: 'kiosco-origen',
+        idEvidencia: 21,
+        fechaHoraRegistro: enMexico(2026, 9, 21, 8, 5),
+      }),
+    );
+
+    const copia = await service.registrarDesdeOrigen(
+      origen.idRegistro,
+      20,
+      'usr-revisor',
+    );
+
+    expect(copia.duplicado).toBe(false);
+    expect(copia.tipo).toBe('ENTRADA');
+    expect(copia.resultadoGeocerca).toBe('NO_APLICA');
+    expect(memoria.registros).toHaveLength(2);
+    expect(memoria.registros[1].idEmpleado).toBe(20);
+    expect(memoria.registros[1].idRegistroOrigen).toBe(memoria.registros[0].idRegistro);
+    expect(memoria.registros[1].canal).toBe('KIOSCO');
+    expect(memoria.registros[1].tipo).toBe('ENTRADA');
+    expect(memoria.registros[1].idKiosco).toBe(4);
+    expect(memoria.registros[1].idEvidencia).toBe(21);
+    expect(memoria.registros[1].urlFoto).toBe('fotos/origen.jpg');
+    expect(memoria.registros[1].fechaHoraRegistro).toEqual(
+      enMexico(2026, 9, 21, 8, 5),
+    );
+    expect(memoria.registros[1].idUsuarioRegistro).toBe('usr-revisor');
+    expect(memoria.registros[1].estatusProcesamiento).toBe('PROCESADO');
+    expect(memoria.jornadas).toHaveLength(2);
+    expect(memoria.jornadas[1].idEmpleado).toBe(20);
+    expect(memoria.jornadas[1].horaEntradaReal).toEqual(
+      enMexico(2026, 9, 21, 8, 5),
+    );
   });
 });

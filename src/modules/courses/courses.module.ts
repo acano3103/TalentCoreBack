@@ -17,10 +17,13 @@ import { CourseScormService } from './scorm/course-scorm.service';
 import { MediaPathModule } from 'src/common/services/media-path.module';
 import { CourseMaterialsController } from './materials/course-materials.controller';
 import { CourseMaterialsService } from './materials/course-materials.service';
+import { CourseCertificateController } from './learning/certificate/course-certificate.controller';
+import { CourseCertificateService } from './learning/certificate/course-certificate.service';
 
 @Module({
   imports: [IntegrationsModule, MediaPathModule],
-  controllers: [CoursesController, CourseContentController, CourseLearningController, CourseTrackingController, CourseNativeContentController, CourseScormController, CourseMaterialsController],
-  providers: [CoursesService, CourseContentService, CourseLearningService, CourseTrackingService, CourseNativeContentService, CourseScormService, CourseMaterialsService, ConfigService, EncryptionService],
+  controllers: [CoursesController, CourseContentController, CourseLearningController, CourseTrackingController, CourseNativeContentController, CourseScormController, CourseMaterialsController, CourseCertificateController],
+  providers: [CoursesService, CourseContentService, CourseLearningService, CourseTrackingService, CourseNativeContentService, CourseScormService, CourseMaterialsService, CourseCertificateService, ConfigService, EncryptionService],
+  exports: [CoursesService, CourseLearningService, CourseMaterialsService, CourseScormService, EncryptionService],
 })
 export class CoursesModule { }

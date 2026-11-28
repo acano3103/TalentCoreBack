@@ -87,6 +87,8 @@ export class OrganizationChartQueries {
             SELECT 
                 CONCAT('EMP_', e.idEmpleado) AS uid,
                 e.idEmpleado,
+                e.telefonoMovil,
+                e.correo,
                 CONCAT(e.nombre, ' ', e.primerApellido, ' ', COALESCE(e.segundoApellido, '')) AS nombreCompleto,
                 e.idJefeInmediato,
                 CASE 
