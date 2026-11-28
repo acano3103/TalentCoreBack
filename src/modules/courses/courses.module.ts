@@ -24,6 +24,6 @@ import { CourseCertificateService } from './learning/certificate/course-certific
   imports: [IntegrationsModule, MediaPathModule],
   controllers: [CoursesController, CourseContentController, CourseLearningController, CourseTrackingController, CourseNativeContentController, CourseScormController, CourseMaterialsController, CourseCertificateController],
   providers: [CoursesService, CourseContentService, CourseLearningService, CourseTrackingService, CourseNativeContentService, CourseScormService, CourseMaterialsService, CourseCertificateService, ConfigService, EncryptionService],
-  exports: [CourseLearningService, CourseMaterialsService, CourseScormService, EncryptionService],
+  exports: [CoursesService, CourseLearningService, CourseMaterialsService, CourseScormService, EncryptionService],
 })
 export class CoursesModule { }
